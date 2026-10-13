@@ -2,14 +2,19 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# litellm-smoke-test — smoke-test every model deployed on a LiteLLM
-# server (e.g. http://localhost:4000): list /v1/models, send one small
-# chat completion per model, retry with exponential backoff while the
+# litellm-smoke-test — smoke-test models deployed on a LiteLLM server
+# (e.g. http://localhost:4000): list /v1/models, send one small chat
+# completion per model, retry with exponential backoff while the
 # backend ramps up (llama-swap / llama-server on-demand loading takes
 # minutes for multi-GB models), and write a CSV report plus a log file
 # (next to the CSV) that records every step — each model is logged
 # before its first request so the log shows progress even when the
 # host is OOM-killed mid-test.
+#
+# The run is incremental: models recorded in the state file by a
+# previous run are not tested again; after each model completes its id
+# is appended to the state file (default: the CSV path with .state).
+# --force ignores the state file and tests every model.
 set -euo pipefail
 
 # Defaults overridable via environment: the --test-one child process
@@ -18,6 +23,8 @@ BASE_URL="${LITELLM_SMOKE_TEST_URL:-http://localhost:4000}"
 API_KEY="${LITELLM_API_KEY:-sk-smoke-test}"
 CSV_OUT="${LITELLM_SMOKE_TEST_OUT:-litellm-smoke-test.csv}"
 LOG_OUT="${LITELLM_SMOKE_TEST_LOG:-}"
+STATE_OUT="${LITELLM_SMOKE_TEST_STATE:-}"
+FORCE=0
 ATTEMPTS="${LITELLM_SMOKE_TEST_ATTEMPTS:-4}"
 TIMEOUT="${LITELLM_SMOKE_TEST_TIMEOUT:-300}"
 BACKOFF="${LITELLM_SMOKE_TEST_BACKOFF:-15}"
@@ -31,10 +38,15 @@ usage() {
     cat <<EOF
 Usage: litellm-smoke-test [options]
 
-Smoke-test all models of a LiteLLM server. Discovers models via
+Smoke-test models of a LiteLLM server. Discovers models via
 GET \$BASE_URL/v1/models, then sends one minimal chat-completion request
 per model, retrying with exponential backoff to give on-demand backends
 (llama-swap, llama-server router) time to load the model into VRAM.
+
+The run is incremental: models recorded in the state file by a previous
+run are skipped, so only new models are probed. After each model
+completes (ok or failed) its id is appended to the state file; use
+--force to ignore the state file and retest everything.
 
 Results are written to a CSV (default: ./litellm-smoke-test.csv) and a
 log file next to it (default: same path with .log instead of the CSV
@@ -46,6 +58,9 @@ Options:
   -u, --url URL          LiteLLM base URL (default: http://localhost:4000)
   -o, --out FILE         CSV output path (default: litellm-smoke-test.csv)
   -l, --log FILE         Log output path (default: CSV path with .log)
+  -s, --state FILE       State file of previously tested models
+                         (default: CSV path with .state)
+  -f, --force            Ignore the state file and test all models
   -a, --attempts N       Attempts per model (default: $ATTEMPTS)
   -t, --timeout SECONDS  Per-attempt request timeout (default: $TIMEOUT)
   -b, --backoff SECONDS  Initial backoff between attempts (default: $BACKOFF)
@@ -56,7 +71,8 @@ Options:
   -h, --help             This help
 
 Environment:
-  LITELLM_API_KEY        Bearer token for the server (default: sk-smoke-test)
+  LITELLM_API_KEY            Bearer token for the server (default: sk-smoke-test)
+  LITELLM_SMOKE_TEST_STATE   State file path (default: CSV path with .state)
 EOF
     exit 0
 }
@@ -74,6 +90,13 @@ while (($#)); do
         -l | --log)
             shift
             LOG_OUT="$1"
+            ;;
+        -s | --state)
+            shift
+            STATE_OUT="$1"
+            ;;
+        -f | --force)
+            FORCE=1
             ;;
         -a | --attempts)
             shift
@@ -139,8 +162,12 @@ if [[ -z $LOG_OUT ]]; then
     LOG_OUT="$(dirname "$CSV_OUT")/$(basename "$CSV_OUT")"
     LOG_OUT="${LOG_OUT%.*}.log"
 fi
+if [[ -z $STATE_OUT ]]; then
+    STATE_OUT="$(dirname "$CSV_OUT")/$(basename "$CSV_OUT")"
+    STATE_OUT="${STATE_OUT%.*}.state"
+fi
 if [[ -z ${TEST_ONE_MODEL:-} ]]; then
-    log "litellm-smoke-test starting: url=$BASE_URL csv=$CSV_OUT log=$LOG_OUT attempts=$ATTEMPTS timeout=$TIMEOUT"
+    log "litellm-smoke-test starting: url=$BASE_URL csv=$CSV_OUT log=$LOG_OUT state=$STATE_OUT force=$FORCE attempts=$ATTEMPTS timeout=$TIMEOUT"
 fi
 
 # ---------------------------------------------------------------- models
@@ -158,6 +185,30 @@ if [[ -z ${TEST_ONE_MODEL:-} ]]; then
 
     MODEL_COUNT=$(wc -l <<<"$MODELS")
     log "found $MODEL_COUNT models"
+
+    # Incremental mode: keep only the models not recorded in the state
+    # file by a previous run; with --force, test everything.
+    if ((FORCE)); then
+        TO_TEST=$MODELS
+    elif [[ -f $STATE_OUT && -s $STATE_OUT ]]; then
+        TO_TEST=$(comm -23 <(printf '%s\n' "$MODELS") <(sort -u "$STATE_OUT"))
+        [[ -n $TO_TEST ]] || TO_TEST=""
+    else
+        TO_TEST=$MODELS
+    fi
+
+    if [[ -z $TO_TEST ]]; then
+        log "all $MODEL_COUNT models already tested (state: $STATE_OUT) — nothing to do; existing report left in place: $CSV_OUT"
+        exit 0
+    fi
+
+    TESTED_COUNT=$(($(wc -l <<<"$TO_TEST")))
+    SKIPPED=$((MODEL_COUNT - TESTED_COUNT))
+    if ((SKIPPED > 0)); then
+        log "skipping $SKIPPED previously tested model(s); testing $TESTED_COUNT model(s)"
+    else
+        log "testing $TESTED_COUNT model(s)"
+    fi
 fi
 
 # ---------------------------------------------------------------- runner
@@ -237,6 +288,7 @@ test_one() {
 # a single model and exit before any server discovery.
 if [[ -n ${TEST_ONE_MODEL:-} ]]; then
     test_one "$TEST_ONE_MODEL"
+    printf '%s\n' "$TEST_ONE_MODEL" >>"$STATE_OUT"
     exit 0
 fi
 {
@@ -249,19 +301,21 @@ fi
             LITELLM_SMOKE_TEST_TIMEOUT="$TIMEOUT" \
             LITELLM_SMOKE_TEST_BACKOFF="$BACKOFF" \
             LITELLM_SMOKE_TEST_LOG="$LOG_OUT" \
+            LITELLM_SMOKE_TEST_STATE="$STATE_OUT" \
             API_KEY PROMPT MAX_TOKENS BACKOFF_FACTOR BACKOFF_CAP
         # shellcheck disable=SC2016  # the $-expansion must happen in the child bash
-        printf '%s\n' "$MODELS" | xargs -P "$CONCURRENCY" -I{} \
+        printf '%s\n' "$TO_TEST" | xargs -P "$CONCURRENCY" -I{} \
             env litellm_smoke_test="$(readlink -f "${BASH_SOURCE[0]}")" \
             bash -c '"$litellm_smoke_test" --test-one "$1"' _ {}
     else
         while IFS= read -r model; do
             test_one "$model"
-        done <<<"$MODELS"
+            printf '%s\n' "$model" >>"$STATE_OUT"
+        done <<<"$TO_TEST"
     fi
 } | tee "$CSV_OUT"
 
 # ---------------------------------------------------------------- summary
 failed=$(grep -c ',failed,' "$CSV_OUT" || true)
-log "done: $MODEL_COUNT models, $failed failed — report: $CSV_OUT log: $LOG_OUT"
+log "done: $TESTED_COUNT of $MODEL_COUNT models tested ($SKIPPED skipped as previously tested), $failed failed — report: $CSV_OUT log: $LOG_OUT"
 ((failed == 0))
