@@ -26,7 +26,9 @@
 //!    value grammar `parse_krun_cpus`/`parse_krun_ram_mib` accept
 //!    (the keys are backend-agnostic, config.md D23 — a value a VM
 //!    cannot express is refused, never rounded, exactly as on
-//!    podman-krun).
+//!    podman-krun). A `--verbose` caller (mysbx forwards its own
+//!    flag) adds `--verbose` right after, the launcher's timing and
+//!    setup-log switch.
 //! 1. `--rootfs DIR` — the Nix-built plain directory shared
 //!    read-only over virtiofs as KRUN_FS_ROOT_TAG (D3: it bakes only
 //!    the guest entry path — the static busybox, the guest init,
@@ -213,6 +215,13 @@ pub struct Params<'a> {
     /// shape as the git trust files). `None` attaches no disk: the
     /// run keeps the plain ro store share, no silent RAM fallback.
     pub scratch: Option<&'a str>,
+    /// Whether the caller passed `--verbose` (cli.md D10): the argv
+    /// forwards it to the launcher, which then logs its phase
+    /// timings and setup detail (the dlopen'd lib, the manifest,
+    /// the fd limits) and escalates libkrun's log to info. The
+    /// guest init's own step trace stays gated on
+    /// `MYSBX_KRUN_TRACE` — verbose is the LAUNCHER's verbosity.
+    pub verbose: bool,
 }
 
 /// The two trust TEXTS of a run's git trust (bd myconfig-dak.8):
@@ -452,6 +461,9 @@ struct Spec {
     /// on the ROOT device. The git trust is the first consumer — no
     /// sidecar file, no stage slot, no init placement.
     overlays: Vec<(String, u32, String)>,
+    /// Whether the caller passed `--verbose`: forwarded to the
+    /// launcher for its phase timings and setup logs.
+    verbose: bool,
 }
 
 /// The staging-tree BINDS of a run's shares — one `(host_dir,
@@ -728,6 +740,7 @@ pub fn krun_argv(
         network: cfg.network,
         scratch: params.scratch.map(str::to_owned),
         overlays: params.git_trust.map(trust_overlays).unwrap_or_default(),
+        verbose: params.verbose,
     };
     Ok(render(&spec))
 }
@@ -990,6 +1003,13 @@ fn render(spec: &Spec) -> Vec<String> {
         "--ram".to_owned(),
         spec.ram_mib.to_string(),
     ];
+    // 0b. the caller's verbosity request: mysbx forwards its own
+    // `--verbose` so the launcher logs its phase timings and setup
+    // detail. FIRST in the argv — a caller reading a dry run sees
+    // the mode switch before the size of the VM it configures.
+    if spec.verbose {
+        argv.push("--verbose".to_owned());
+    }
     // 1. the rootfs
     argv.push("--rootfs".to_owned());
     argv.push(spec.rootfs.clone());
