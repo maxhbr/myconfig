@@ -164,6 +164,12 @@ in
     }
     # MTP speculative decoding of the same two shards.
     #
+    # DISABLED: both `-MTP` entries fail to load on gfx1151 (llama-swap
+    # "upstream command exited prematurely" / health-check timeout on
+    # both Vulkan0 and ROCm0) — the standalone Q4_K_M draft head on top
+    # of the shards does not fit. The non-MTP entries above serve fine.
+    # Re-enable by uncommenting (and re-checking the head choice below).
+    #
     # Head choice per the README's "Which file" table: Q4_K_M is the
     # recommended small pairing. The self-contained head (2.60 GB) is
     # used for both quantisations — the `shared-` head cannot load
@@ -171,7 +177,7 @@ in
     # gfx1151 host has ample headroom for the extra ~0.8 GB.
     # No deliberate `ctxSize` / `cacheType` retuning: same GGUF defaults
     # as the non-MTP entries.
-    (mk_mtp_model "IQ4_XS" "mtp-Qwen3.8-Flash-Next-Q4_K_M.gguf")
-    (mk_mtp_model "Q4_K_XL" "mtp-Qwen3.8-Flash-Next-Q4_K_M.gguf")
+    # (mk_mtp_model "IQ4_XS" "mtp-Qwen3.8-Flash-Next-Q4_K_M.gguf")
+    # (mk_mtp_model "Q4_K_XL" "mtp-Qwen3.8-Flash-Next-Q4_K_M.gguf")
   ];
 }

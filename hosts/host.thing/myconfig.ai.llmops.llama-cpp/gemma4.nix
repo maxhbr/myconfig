@@ -1,6 +1,11 @@
 { modelsPullDir }:
-{
-  rtxModels = [
+let
+  # DISABLED on the rtx5090 backend (too large for the RTX 5090's
+  # 32 GB: "model failed to load" in the litellm smoke test). The same
+  # entries serve fine on gfx1151, so they are moved to amdModels —
+  # served on Vulkan0/ROCm0, not on the RTX backend. Re-enable on
+  # rtx5090 by moving them back into rtxModels.
+  disabled_gemma4_rtxModels = [
     {
       name = "gemma-4-31B-it-UD-Q5_K_XL";
       path = "/models/unsloth-gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q5_K_XL.gguf";
@@ -25,6 +30,34 @@
       ];
       ttl = 300;
     }
+    {
+      name = "gemma-4-26B-A4B-it-UD-Q8_K_XL";
+      path = "/models/unsloth-gemma-4-26B-A4B-it-GGUF/gemma-4-26B-A4B-it-UD-Q8_K_XL.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/gemma-4-26B-A4B-it-GGUF/gemma-4-26B-A4B-it-UD-Q8_K_XL.gguf" ];
+      };
+      params = [
+        "--batch-size"
+        "2048"
+        "--ubatch-size"
+        "512"
+        "--threads"
+        "1"
+        "--jinja"
+        "--temp"
+        "1.0"
+        "--top-p"
+        "0.95"
+        "--top-k"
+        "64"
+      ];
+      ttl = 300;
+    }
+  ];
+in
+{
+  rtxModels = [
     {
       name = "gemma-4-31B-it-UD-Q4_K_XL";
       path = "/models/unsloth-gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q4_K_XL.gguf";
@@ -167,31 +200,6 @@
       ctxSize = 262144;
       ttl = 300;
     }
-    {
-      name = "gemma-4-26B-A4B-it-UD-Q8_K_XL";
-      path = "/models/unsloth-gemma-4-26B-A4B-it-GGUF/gemma-4-26B-A4B-it-UD-Q8_K_XL.gguf";
-      pull-models = {
-        target_directory = modelsPullDir;
-        hf_spec = [ "unsloth/gemma-4-26B-A4B-it-GGUF/gemma-4-26B-A4B-it-UD-Q8_K_XL.gguf" ];
-      };
-      params = [
-        "--batch-size"
-        "2048"
-        "--ubatch-size"
-        "512"
-        "--threads"
-        "1"
-        "--jinja"
-        "--temp"
-        "1.0"
-        "--top-p"
-        "0.95"
-        "--top-k"
-        "64"
-      ];
-      ttl = 300;
-    }
-
   ];
 
   amdModels = [
@@ -205,5 +213,6 @@
       cacheType = "f16";
       ttl = 300;
     }
-  ];
+  ]
+  ++ disabled_gemma4_rtxModels;
 }
