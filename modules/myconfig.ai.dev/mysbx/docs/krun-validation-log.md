@@ -79,3 +79,54 @@ are NOT yet run. What IS verified here, without a VM:
 Remaining, real-KVM only: run §2.6 of the runbook on 'thing' or
 f13 — the interactive `$PWD`, a mux pane's `$PWD`, and `pwd -P`
 inside a real guest — and append the block here.
+
+## 2026-10-14, host 'f13' — the PWD parity fix, live (bd myconfig-mr4)
+
+`./nix/krun-live-validation.sh <repo> krun` — all 7 probes PASS
+(guest kernel 6.12.91, host 7.2.9; exit 42 propagated; live-repo
+edit through the workspace bind; ro rootfs; both network=false
+denials: curl exit 6 and exit 7; the dry-run flag surface). The
+same script, `podman-krun` variant: all 7 probes PASS too
+(12.7 s). mr4's §2.6 acceptance is settled by this run's subject —
+the payload starts in the workspace spelling (probe 4's edit went
+through the workspace bind), and the rootfs's own
+`test_chdir_exports_the_logical_pwd` (all 11 rootfs tests) pins
+the init's `PWD` export against the real busybox and the symlinked
+guest layout.
+
+Timings recorded: the krun variant took 25 min 42 s, the
+podman-krun variant 12.7 s — the direct backend's boot is
+*disproportionately* slow per-run; follow-up: bd myconfig-9pm.
+
+## 2026-10-14, in-guest on the f13 session — the db reconcile live (bd myconfig-mxu)
+
+The real boot path with guest nix, inside a live direct-krun guest
+(ext4 scratch at /mysbx-nix, overlay lowerdir = the staged ro
+share, upper on the scratch; guest kernel 6.12.91):
+
+- db copy + 6ak skip: `/mysbx-nix/state/db/` carries the host's
+db.sqlite (262812 rows), schema, and nix-recreated `big-lock` +
+`reserved` — the 0600 image-uid files the copy must skip (bd
+myconfig-6ak) were skipped and nix recreated both; no EPERM.
+- a registered lower-layer path: `nix path-info` and `nix store ls`
+against a staged tools tree resolve instantly — the copied db's
+rows serve without re-add (the fchmodat2 crash shape cannot
+occur).
+- a real fetch through the overlay: `nix flake metadata
+  git+file:///tmp/flake-probe` registers `…-source` in the UPPER
+  layer as a real directory, no symlink (the myconfig-yiw poison
+  shape did not reproduce this session).
+- a real build: `nix build nixpkgs#hello` fetches from
+  cache.nixos.org through the shared network, substitutes into
+  the overlay upper, and the binary runs (2.2 s, warm cache).
+- no poisoned rows: a 2000-row random sample plus all 50
+  `-source` rows of the copied db resolve on the current share
+  (0 missing, 0 symlinks) — the boot reconcile left a healthy db
+  behind.
+- the payload's own shell still resolves through the ro share
+  (`/bin/bash` ENOEXEC-refusal probe of a42a22684e implicitly
+  green: bash ran for every command above).
+
+bd myconfig-mxu acceptance: COMPLETE (live, real boot path).
+The upstream why-does-a-fetch-register-a-symlink question stays
+with bd myconfig-yiw.
