@@ -402,12 +402,17 @@ in
       ];
       parallel = 1;
       ttl = 900;
-      variants = {
-        full-ctx = {
-          ctxSize = 184320; # full context with quantized (q8_0) cache
-          tags = [ "long-context" ];
-        };
-      };
+      # DISABLED: the full-ctx variant (184320 ctx) fails to load on
+      # the rtx5090 backend (smoke test: "failed to load" — the q8_0 KV
+      # cache at full context does not fit next to the ~17 GB Q6_K
+      # weights). The base entry at 131072 ctx serves fine. Re-enable
+      # by uncommenting.
+      # variants = {
+      #   full-ctx = {
+      #     ctxSize = 184320; # full context with quantized (q8_0) cache
+      #     tags = [ "long-context" ];
+      #   };
+      # };
     }
     # NOTE: the Qwen3.6-27B-NVFP4 quantisation previously served here
     # (tngtech/Qwen3.6-27B-NVFP4-GGUF) has no Qwen3.8-27B successor as
