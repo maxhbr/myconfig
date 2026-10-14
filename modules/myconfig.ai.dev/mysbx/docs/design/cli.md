@@ -78,7 +78,13 @@ generated ssh keypair, generating it when enabled and missing), the
 global flag `--session <name>` ([workspace.md](./workspace.md) D1-D5 —
 the clone run mode), plus the global flags `--dry-run` (D9),
 `--verbose` (D10), `--result`/`--timeout` (D17), `--multiplexer`
-(D14) and `--backend` (D18).
+(D14) and `--backend` (D18). Both enum flags also accept a
+`--<value>` shorthand of every value they take (bd myconfig-6tt):
+`--tmux` == `--multiplexer tmux` … `--none` == `--multiplexer none`,
+and `--bubblewrap` == `--backend bubblewrap` … `--krun` == `--backend
+krun` — pure aliases of their long forms, not new decisions (the
+conflict rule: one invocation selects at most one value, whichever
+spelling names it, D5).
 
 ### D4: `--` separates sandbox args from the payload command
 
@@ -369,6 +375,15 @@ invocation only, per the precedence of D6 (flags > sidecar > user >
 defaults) — nothing is written, and the next `mysbx` runs whatever the
 configuration says again.
 
+Every value is also accepted as its own flag (bd myconfig-6tt):
+`--tmux`, `--workmux`, `--herdr`, `--aoe`, `--orca` and `--none` are
+PURE ALIASES of `--multiplexer <that value>` — parsed into the same
+field, accepted nowhere the long form is not, refused with the same
+usage errors. One invocation selects at most one value: two shorthands,
+or a shorthand and the long form, are a usage error naming both
+spellings (D5 — a repeated flag is a typo, not an intensifier), never
+a silently last-wins.
+
 **Why a flag at all.** The multiplexer of a host is a declarative
 default (the module option generates the user layer); the exception is
 an operator decision — "this one run wants herdr instead of the
@@ -570,6 +585,15 @@ It wins over the merged `backend` of both layers for THIS invocation
 only, per the precedence of D6 (flags > sidecar > user > defaults,
 with the CLI as the outermost layer of config.md D1) — nothing is
 written, and the next `mysbx` runs the configured backend again.
+
+Every value is also accepted as its own flag (bd myconfig-6tt):
+`--bubblewrap`, `--podman-gvisor`, `--nono`, `--podman-krun` and
+`--krun` are PURE ALIASES of `--backend <that value>` — the same
+positions, the same refusals, the same provenance tag in the D10
+report (`[--backend]`, whichever spelling selected it). One
+invocation selects at most one value across both spellings and both
+positions: a conflict is a usage error naming both spellings (D5),
+never a silently last-wins.
 
 **Why a flag at all.** The backend of a host is a declarative default
 (the generated user layer names it, config.md D7); testing a second

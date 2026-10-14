@@ -105,7 +105,7 @@ pub fn run(args: Vec<String>) -> i32 {
     // form; anything after `--` is payload and never parsed (cli.md D4,
     // D5, D10). `gui` takes no `--`: its whole argument tail is the
     // payload of the inner `mysbx` (D15) and passes through verbatim.
-    let (flags, rest) = match split_global_flags(&args) {
+    let (flags, selections, rest) = match split_global_flags_traced(&args) {
         Ok(x) => x,
         Err(code) => return code,
     };
@@ -175,7 +175,7 @@ pub fn run(args: Vec<String>) -> i32 {
             eprintln!("try `mysbx --help`");
             2
         }
-        Some("run") => run_command(flags, &rest[1..]),
+        Some("run") => run_command(flags, &selections, &rest[1..]),
         Some("gui") => {
             // cli.md D15: `mysbx gui ARG...` re-invokes `mysbx` — the SAME
             // executable, by absolute path, so a PATH lookup cannot find
@@ -403,6 +403,66 @@ impl Flags {
         self.dry_run || self.verbose || !self.ro.is_empty() || !self.rw.is_empty()
     }
 
+    /// Set the backend, checking the one-run rule first: a backend
+    /// was already selected — by the long form or by a shorthand —
+    /// is a usage error naming BOTH spellings (bd myconfig-6tt:
+    /// never silently last-wins, like every repeated flag, D5).
+    /// `previous` is the flag the earlier selection was typed with,
+    /// `usage` the line the refusal ends with (the bare form points
+    /// at `--help`, the `run` form at its usage line).
+    fn set_backend(
+        &mut self,
+        name: &str,
+        flag: &str,
+        previous: Option<&str>,
+        where_: &str,
+        usage: &str,
+    ) -> Result<(), i32> {
+        if let Some(previous_flag) = previous {
+            if previous_flag == flag {
+                eprintln!("mysbx: repeated flag: {flag}");
+            } else {
+                eprintln!(
+                    "{where_}: {flag} selects the backend `{name}`, but {previous_flag} already selected `{}`",
+                    self.backend.as_deref().unwrap_or("")
+                );
+                eprintln!("  one run starts exactly one backend — pick one");
+            }
+            eprintln!("{usage}");
+            return Err(2);
+        }
+        self.backend = Some(name.to_string());
+        Ok(())
+    }
+
+    /// Set the multiplexer, the same one-run rule as the backend
+    /// (bd myconfig-6tt).
+    fn set_multiplexer(
+        &mut self,
+        mux: config::Multiplexer,
+        flag: &str,
+        previous: Option<&str>,
+        where_: &str,
+        usage: &str,
+    ) -> Result<(), i32> {
+        if let Some(previous_flag) = previous {
+            if previous_flag == flag {
+                eprintln!("mysbx: repeated flag: {flag}");
+            } else {
+                eprintln!(
+                    "{where_}: {flag} selects the multiplexer `{}`, but {previous_flag} already selected `{}`",
+                    mux.name(),
+                    self.multiplexer.map(|m| m.name()).unwrap_or("")
+                );
+                eprintln!("  one run starts exactly one session — pick one");
+            }
+            eprintln!("{usage}");
+            return Err(2);
+        }
+        self.multiplexer = Some(mux);
+        Ok(())
+    }
+
     /// The flag named in the "not valid with `<verb>`" usage error —
     /// whichever was set, `--dry-run` first (it is the older, more
     /// dangerous-sounding promise), then `--verbose`, then the run-
@@ -459,8 +519,28 @@ impl Flags {
 /// as `--dry-run`/`--verbose` (D10), so one rule governs all three
 /// (D14). An unknown multiplexer spelling is a usage error (`2`, D8):
 /// the command line is wrong, not the world it names.
+#[cfg(test)]
 fn split_global_flags(args: &[String]) -> Result<(Flags, &[String]), i32> {
+    split_global_flags_traced(args).map(|(flags, _, rest)| (flags, rest))
+}
+
+/// The spelling that made the backend selection of
+/// [`split_global_flags_traced`] — long form or `--<value>` shorthand
+/// as typed (bd myconfig-6tt). The dispatcher threads it into
+/// `run_command` so the one-run conflict rule names BOTH flags
+/// exactly, even when they sit in different positions.
+#[derive(Debug, Clone, Default)]
+struct Selections {
+    backend: Option<String>,
+}
+
+fn split_global_flags_traced(args: &[String]) -> Result<(Flags, Selections, &[String]), i32> {
     let mut flags = Flags::default();
+    // The flag spellings that made the two selections — the conflict
+    // message of `set_backend`/`set_multiplexer` names the earlier
+    // one as typed, long form or shorthand (bd myconfig-6tt).
+    let mut backend_set_by: Option<String> = None;
+    let mut mux_set_by: Option<String> = None;
     let mut rest = args;
     while let Some((first, tail)) = rest.split_first() {
         match first.as_str() {
@@ -481,7 +561,7 @@ fn split_global_flags(args: &[String]) -> Result<(Flags, &[String]), i32> {
                 flags.verbose = true;
             }
             "--multiplexer" => {
-                if flags.multiplexer.is_some() {
+                if mux_set_by.as_deref() == Some("--multiplexer") {
                     eprintln!("mysbx: repeated flag: --multiplexer");
                     eprintln!("try `mysbx --help`");
                     return Err(2);
@@ -502,17 +582,52 @@ fn split_global_flags(args: &[String]) -> Result<(Flags, &[String]), i32> {
                         return Err(2);
                     }
                 };
-                flags.multiplexer = Some(match config::Multiplexer::parse_cli(value) {
+                let mux = match config::Multiplexer::parse_cli(value) {
                     Ok(m) => m,
                     Err(msg) => {
                         eprintln!("mysbx: {msg}");
                         eprintln!("try `mysbx --help`");
                         return Err(2);
                     }
-                });
+                };
+                // The one-run rule spans the long form and the
+                // `--<mux>` shorthands (bd myconfig-6tt): any two
+                // selections in one invocation are a usage error
+                // naming both, never a silently last-wins.
+                flags.set_multiplexer(
+                    mux,
+                    "--multiplexer",
+                    mux_set_by.as_deref(),
+                    "mysbx",
+                    "try `mysbx --help`",
+                )?;
+                mux_set_by = Some("--multiplexer".to_string());
                 // The value argument is consumed with the flag.
                 rest = tail.split_first().map(|(_, t)| t).unwrap_or(&[]);
                 continue;
+            }
+            first
+                if first.starts_with("--") && config::Multiplexer::NAMES.contains(&&first[2..]) =>
+            {
+                // bd myconfig-6tt: the `--<mux>` shorthands of the
+                // D14 flag — `--tmux`, `--workmux`, `--herdr`,
+                // `--aoe`, `--orca`, `--none` == `--multiplexer
+                // <mux>`. Pure aliases: they parse into the SAME
+                // `Flags::multiplexer` field with the same closed
+                // set (`config::Multiplexer::NAMES` — iterated, never
+                // re-listed), so every later rule — the bare-form
+                // position rule, the dispatcher's verb refusals, the
+                // pipeline's application — governs them unchanged.
+                let mux = config::Multiplexer::parse_cli(&first[2..])
+                    .expect("the arm matched a NAME, so parse_cli accepts it");
+                flags.set_multiplexer(
+                    mux,
+                    first,
+                    mux_set_by.as_deref(),
+                    "mysbx",
+                    "try `mysbx --help`",
+                )?;
+                mux_set_by = Some(first.to_string());
             }
             "--ro" | "--rw" => {
                 // cli.md D16: a value-taking, REPEATABLE run flag. The
@@ -564,7 +679,7 @@ fn split_global_flags(args: &[String]) -> Result<(Flags, &[String]), i32> {
                 // ones — the command line is fine, the backend it
                 // names does not exist. A missing value is still a
                 // usage error (`2`), like every value-taking flag.
-                if flags.backend.is_some() {
+                if flags.backend.is_some() && backend_set_by.as_deref() == Some("--backend") {
                     eprintln!("mysbx: repeated flag: --backend");
                     eprintln!("try `mysbx --help`");
                     return Err(2);
@@ -573,16 +688,47 @@ fn split_global_flags(args: &[String]) -> Result<(Flags, &[String]), i32> {
                     Some((v, _)) => v,
                     None => {
                         eprintln!(
-                            "mysbx: --backend requires a value — one of: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`, `krun`"
+                            "mysbx: --backend requires a value — one of: {}",
+                            doctor::BACKENDS
+                                .iter()
+                                .map(|n| format!("`{n}`"))
+                                .collect::<Vec<_>>()
+                                .join(", ")
                         );
                         eprintln!("try `mysbx --help`");
                         return Err(2);
                     }
                 };
-                flags.backend = Some(value.clone());
+                flags.set_backend(
+                    value,
+                    "--backend",
+                    backend_set_by.as_deref(),
+                    "mysbx",
+                    "try `mysbx --help`",
+                )?;
+                backend_set_by = Some("--backend".to_string());
                 // The value argument is consumed with the flag.
                 rest = tail.split_first().map(|(_, t)| t).unwrap_or(&[]);
                 continue;
+            }
+            first if first.starts_with("--") && doctor::BACKENDS.contains(&&first[2..]) => {
+                // bd myconfig-6tt: the `--<backend>` shorthands of the
+                // D18 flag — `--bubblewrap`, `--podman-gvisor`,
+                // `--nono`, `--podman-krun`, `--krun` == `--backend
+                // <name>`. Pure aliases into the SAME
+                // `Flags::backend` field; the accepted names iterate
+                // `doctor::BACKENDS` (the same set the pipeline
+                // enforces), so a value arriving by shorthand can
+                // never be an unknown one. The conflict rule spans
+                // both spellings (see `set_backend`).
+                flags.set_backend(
+                    &first[2..],
+                    first,
+                    backend_set_by.as_deref(),
+                    "mysbx",
+                    "try `mysbx --help`",
+                )?;
+                backend_set_by = Some(first.to_string());
             }
             "--session" => {
                 // workspace.md D1/D2: `--session NAME` selects clone
@@ -667,7 +813,13 @@ fn split_global_flags(args: &[String]) -> Result<(Flags, &[String]), i32> {
         }
         rest = tail;
     }
-    Ok((flags, rest))
+    Ok((
+        flags,
+        Selections {
+            backend: backend_set_by,
+        },
+        rest,
+    ))
 }
 
 /// The `--verbose` refusal of the handoff verbs (workspace.md D6):
@@ -695,7 +847,7 @@ fn reject_verbose(verb: &str) -> i32 {
 /// look like flags (cli.md D4). The global flags are accepted before `--`
 /// only; `run` without `--` or without a command is a usage error (`2`),
 /// not an empty sandbox.
-fn run_command(global: Flags, args: &[String]) -> i32 {
+fn run_command(global: Flags, selections: &Selections, args: &[String]) -> i32 {
     let mut flags = global;
     // The structured-result mode (bd myconfig-0ql, the D8/D17
     // extension): `--result` asks for a waited run that records its
@@ -707,6 +859,11 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
     // accept-and-ignore: an operator typing `mysbx --result` must
     // learn the flag does not do that for a shell).
     let mut idx = 0;
+    // The same spelling trackers as `split_global_flags` (bd
+    // myconfig-6tt): the after-verb spellings merge with the
+    // before-verb ones into the same conflict rule — one invocation,
+    // one selection, both spellings named.
+    let mut backend_set_by = selections.backend.clone();
     while let Some(arg) = args.get(idx) {
         match arg.as_str() {
             "--dry-run" => {
@@ -760,6 +917,17 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
                 eprintln!("usage: {RUN_USAGE}");
                 return 2;
             }
+            arg if arg.starts_with("--") && config::Multiplexer::NAMES.contains(&&arg[2..]) => {
+                // bd myconfig-6tt: the `--<mux>` shorthands get the
+                // SAME refusal as the long form (D11) — a one-shot
+                // starts no session, whichever spelling named one.
+                eprintln!("mysbx run: {arg} is not valid with `run`");
+                eprintln!("  it is the shorthand of `--multiplexer {}`, which selects the interactive payload only:",
+                    &arg[2..]);
+                eprintln!("  `mysbx {arg}` starts the session");
+                eprintln!("usage: {RUN_USAGE}");
+                return 2;
+            }
             "--backend" => {
                 // bd myconfig-veg: the same flag after the verb, the
                 // same one position rule as `--ro`/`--rw` (cli.md
@@ -767,7 +935,7 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
                 // spellings one run. Not repeatable: a repeated flag
                 // is a typo (D5), and one run starts exactly one
                 // backend.
-                if flags.backend.is_some() {
+                if flags.backend.is_some() && backend_set_by.as_deref() == Some("--backend") {
                     eprintln!("mysbx run: repeated flag: --backend");
                     eprintln!("usage: {RUN_USAGE}");
                     return 2;
@@ -776,14 +944,46 @@ fn run_command(global: Flags, args: &[String]) -> i32 {
                     Some(v) => v.clone(),
                     None => {
                         eprintln!(
-                            "mysbx run: --backend requires a value — one of: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`, `krun`"
+                            "mysbx run: --backend requires a value — one of: {}",
+                            doctor::BACKENDS
+                                .iter()
+                                .map(|n| format!("`{n}`"))
+                                .collect::<Vec<_>>()
+                                .join(", ")
                         );
                         eprintln!("usage: {RUN_USAGE}");
                         return 2;
                     }
                 };
-                flags.backend = Some(value);
+                if let Err(code) = flags.set_backend(
+                    &value,
+                    "--backend",
+                    backend_set_by.as_deref(),
+                    "mysbx run",
+                    &format!("usage: {RUN_USAGE}"),
+                ) {
+                    return code;
+                }
+                backend_set_by = Some("--backend".to_string());
                 idx += 2;
+            }
+            arg if arg.starts_with("--") && doctor::BACKENDS.contains(&&arg[2..]) => {
+                // bd myconfig-6tt: the `--<backend>` shorthands after
+                // the verb — the same position rule the long form
+                // follows (D18), the same conflict rule across both
+                // spellings and both positions (one run, one
+                // backend).
+                if let Err(code) = flags.set_backend(
+                    &arg[2..],
+                    arg,
+                    backend_set_by.as_deref(),
+                    "mysbx run",
+                    &format!("usage: {RUN_USAGE}"),
+                ) {
+                    return code;
+                }
+                backend_set_by = Some(arg.to_string());
+                idx += 1;
             }
             "--ro" => {
                 // cli.md D16: the additions are run flags, so `run`
@@ -5480,6 +5680,107 @@ mod tests {
             let args = vec!["--backend".into(), "bubblewrap".into(), verb.into()];
             assert_eq!(run(args), 2, "{verb}");
         }
+    }
+
+    // bd myconfig-6tt: the `--<mux>` and `--<backend>` shorthands —
+    // pure aliases into the SAME `Flags` fields, with a one-run
+    // conflict rule naming both spellings.
+    #[test]
+    fn mux_shorthands_parse_into_the_same_field() {
+        let s = |v: &[&str]| -> Vec<String> { v.iter().map(|x| (*x).to_string()).collect() };
+
+        // Every accepted shorthand parses, including `--none`, and
+        // equals its long form — the SAME `Flags::multiplexer`.
+        for (text, want) in [
+            ("--tmux", config::Multiplexer::Tmux),
+            ("--workmux", config::Multiplexer::Workmux),
+            ("--herdr", config::Multiplexer::Herdr),
+            ("--aoe", config::Multiplexer::Aoe),
+            ("--orca", config::Multiplexer::Orca),
+            ("--none", config::Multiplexer::None),
+        ] {
+            let args = s(&[text, "--dry-run"]);
+            let (flags, rest) = split_global_flags(&args).unwrap();
+            assert_eq!(flags.multiplexer, Some(want), "`{text}`");
+            assert!(flags.dry_run);
+            assert!(rest.is_empty(), "`{text}`");
+
+            // The shorthand and its long form produce the SAME
+            // flags — pure alias, nothing else changes.
+            let long = s(&["--multiplexer", &text[2..], "--dry-run"]);
+            let (long_flags, _) = split_global_flags(&long).unwrap();
+            assert_eq!(flags, long_flags, "`{text}`");
+        }
+
+        // The one-run rule: two shorthands, or a shorthand and its
+        // long form, are usage errors in either order.
+        assert_eq!(split_global_flags(&s(&["--tmux", "--none"])), Err(2));
+        assert_eq!(split_global_flags(&s(&["--none", "--tmux"])), Err(2));
+        assert_eq!(
+            split_global_flags(&s(&["--multiplexer", "tmux", "--none"])),
+            Err(2)
+        );
+        assert_eq!(
+            split_global_flags(&s(&["--none", "--multiplexer", "tmux"])),
+            Err(2)
+        );
+
+        // The shorthand does not make an unknown verb acceptable
+        // (D14: bare form and nothing else).
+        assert_eq!(run(vec!["--herdr".into(), "nope".into()]), 2);
+        assert_eq!(run(vec!["--herdr".into(), "init".into()]), 2);
+        // And `run` never starts a session (D11), so it rejects the
+        // shorthand like it rejects the long form.
+        assert_eq!(run(vec!["run".into(), "--herdr".into()]), 2);
+    }
+
+    // bd myconfig-6tt: the backend shorthands — the same alias and
+    // conflict rules against `Flags::backend`, iterating the same
+    // closed set the pipeline enforces.
+    #[test]
+    fn backend_shorthands_parse_into_the_same_field() {
+        let s = |v: &[&str]| -> Vec<String> { v.iter().map(|x| (*x).to_string()).collect() };
+
+        for text in doctor::BACKENDS {
+            let shorthand = format!("--{text}");
+            let args = s(&[&shorthand, "--dry-run"]);
+            let (flags, rest) = split_global_flags(&args).unwrap();
+            assert_eq!(flags.backend.as_deref(), Some(*text), "`{shorthand}`");
+            assert!(flags.dry_run);
+            assert!(rest.is_empty(), "`{shorthand}`");
+
+            // The shorthand and its long form produce the SAME
+            // flags — pure alias, nothing else changes.
+            let long = s(&["--backend", text, "--dry-run"]);
+            let (long_flags, _) = split_global_flags(&long).unwrap();
+            assert_eq!(flags, long_flags, "`{shorthand}`");
+        }
+
+        // The one-run rule across spellings, in either order.
+        assert_eq!(split_global_flags(&s(&["--bubblewrap", "--nono"])), Err(2));
+        assert_eq!(split_global_flags(&s(&["--nono", "--bubblewrap"])), Err(2));
+        assert_eq!(
+            split_global_flags(&s(&["--backend", "bubblewrap", "--nono"])),
+            Err(2)
+        );
+        assert_eq!(
+            split_global_flags(&s(&["--nono", "--backend", "bubblewrap"])),
+            Err(2)
+        );
+
+        // The same position rules as the long form (D18): refused
+        // with every verb except `run`, accepted after the verb.
+        for verb in ["init", "edit", "version", "help", "status"] {
+            let args = vec!["--nono".into(), verb.into()];
+            assert_eq!(run(args), 2, "{verb}");
+        }
+        // `run --nono -- CMD` is the same run as `run --backend nono`:
+        // it reaches the pipeline (which fails later in this
+        // synthetic environment, never at the parser).
+        let code = run(s(&["run", "--nono", "--", "true"]));
+        assert_ne!(code, 2, "the after-verb shorthand must reach the run");
+        // And the cross-position conflict is still one usage error.
+        assert_eq!(run(s(&["--nono", "run", "--backend", "bubblewrap"])), 2);
     }
 
     // The `--session` flag (workspace.md D1/D2): parsed in both
