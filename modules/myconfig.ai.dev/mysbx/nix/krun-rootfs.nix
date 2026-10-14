@@ -620,16 +620,17 @@ let
     # The loop rides a plain subshell fork of THIS init: it survives
     # the exec below, dies with the VM (PID 1 exit) and needs no
     # daemon, timer or extra store path. MYSBX_KRUN_INODE_WATCHDOG
-    # overrides the threshold (=0 disables) and MYSBX_KRUN_INODE_-
+    # overrides the threshold (default 20000 leaves headroom below
+    # the launcher's minimum 65536 fds; =0 disables) and MYSBX_KRUN_INODE_-
     # WATCHDOG_INTERVAL the check interval in seconds (default 60;
     # validation runs arm ~2 — a walk pins fds faster than the
     # interval, so the interval bounds the overshoot) — both ride
     # the manifest env route, no launcher change needed.
-    if [ "''${MYSBX_KRUN_INODE_WATCHDOG:-150000}" != "0" ]; then
+    if [ "''${MYSBX_KRUN_INODE_WATCHDOG:-20000}" != "0" ]; then
         (
-            _iw_limit="''${MYSBX_KRUN_INODE_WATCHDOG:-150000}"
+            _iw_limit="''${MYSBX_KRUN_INODE_WATCHDOG:-20000}"
             case "$_iw_limit" in
-                "" | *[!0-9]*) _iw_limit=150000 ;;
+                "" | *[!0-9]*) _iw_limit=20000 ;;
             esac
             _iw_interval="''${MYSBX_KRUN_INODE_WATCHDOG_INTERVAL:-60}"
             case "$_iw_interval" in

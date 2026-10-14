@@ -32,6 +32,7 @@ case "$backend" in
         ;;
 esac
 mysbx=${MYSBX:-mysbx}
+fd_stress=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/krun-fd-stress.py
 # The fail() hint names the variant's runbook section: D2 for the
 # podman-krun variant, D3 for the direct backend.
 fail_section=$([ "$backend" = krun ] && printf 'D3' || printf 'D2')
@@ -188,9 +189,10 @@ esac
 # and asserts BOTH halves — the guest reports the watchdog
 # reclaiming each round, and the launcher's host fd count stays
 # under the budget — measured from both ends of the vsock.
-if [ "$backend" = krun ] && [ -f "$repo/modules/myconfig.ai.dev/mysbx/nix/krun-fd-stress.py" ]; then
+if [ "$backend" = krun ]; then
+    [ -f "$fd_stress" ] || fail "8 inode watchdog" "the fd-stress harness is missing: $fd_stress"
     fd_stress_rc=0
-    python3 "$repo/modules/myconfig.ai.dev/mysbx/nix/krun-fd-stress.py" \
+    python3 "$fd_stress" \
         --store-scan --rounds 2 --watchdog-threshold 20000 \
         --fd-budget 40000 "$repo" || fd_stress_rc=$?
     case "$fd_stress_rc" in

@@ -208,9 +208,9 @@ class InitTests(unittest.TestCase):
         # pressure — the watchdog bounds it guest-side. This runs the
         # REAL block (sleep replaced by break, /proc redirected to a
         # fake tree) under the baked busybox: over the threshold it
-        # drops caches, 0/garbage/under-threshold never do, and a
+        # drops caches, 0/under-threshold never do, and a
         # custom threshold takes effect.
-        start = INIT.index('if [ "${MYSBX_KRUN_INODE_WATCHDOG:-150000}" != "0" ]; then')
+        start = INIT.index('if [ "${MYSBX_KRUN_INODE_WATCHDOG:-')
         end = INIT.index('step "exec-ing the payload: $1"', start)
         block = INIT[start:end]
         # The block forks and must be waited for; the payload is a
@@ -250,7 +250,10 @@ class InitTests(unittest.TestCase):
             (base / "sys/vm/drop_caches").write_text("0\n")
             script = (
                 'IW_PROC=%s\n' % shlex.quote(str(base / "sys"))
-                + 'MYSBX_KRUN_INODE_WATCHDOG=%s\n' % shlex.quote(env)
+                + (
+                    'unset MYSBX_KRUN_INODE_WATCHDOG\n' if env is None
+                    else 'MYSBX_KRUN_INODE_WATCHDOG=%s\n' % shlex.quote(env)
+                )
                 + 'MYSBX_KRUN_INODE_WATCHDOG_INTERVAL=%s\n' % shlex.quote(interval)
                 + payload
             )
@@ -262,23 +265,28 @@ class InitTests(unittest.TestCase):
                 env={"PATH": ""},
             )
 
-        # over the default threshold: one drop, and the fork is
-        # waited (the drops echo must see the write)
-        result = run("", 200000)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("mysbx-test: drops=2", result.stdout)
+        # Default and fallback reclaim well below the launcher's
+        # minimum supported host ceiling (65536 fds).
+        for env in (None, "", "banana"):
+            with self.subTest(env=env):
+                result = run(env, 30000)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("mysbx-test: drops=2", result.stdout)
+                result = run(env, 20000)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("mysbx-test: drops=0", result.stdout)
         # disabled: no drop even over the threshold
         result = run("0", 200000)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("mysbx-test: drops=0", result.stdout)
-        # garbage threshold: falls back to the default, still drops
-        result = run("banana", 200000)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("mysbx-test: drops=2", result.stdout)
         # under the threshold: no drop
-        result = run("150000", 4000)
+        result = run("20000", 4000)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("mysbx-test: drops=0", result.stdout)
+        # a custom low threshold takes effect
+        result = run("1000", 4000)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("mysbx-test: drops=2", result.stdout)
         # a custom high threshold takes effect
         result = run("500000", 200000)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -286,7 +294,7 @@ class InitTests(unittest.TestCase):
         # the interval knob parses and defaults on garbage the same
         # way (the sleep interval itself is not observable here — it
         # is replaced by break — but the garbage path must not error)
-        result = run("banana", 200000, interval="banana")
+        result = run("banana", 30000, interval="banana")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("mysbx-test: drops=2", result.stdout)
 

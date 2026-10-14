@@ -438,8 +438,9 @@ the `FORGET`s, and the host launcher's fds fall with them.
 Knobs through the normal `[env]` config route:
 
 - `MYSBX_KRUN_INODE_WATCHDOG` — the inode threshold; `0` disables;
-  default `150000` (a long session peaks well below the 524288
-  host ceiling plus its live working set).
+  default `20000`, leaving headroom below the launcher's minimum
+  supported host ceiling of `65536` fds for other descriptors and
+  growth between checks.
 - `MYSBX_KRUN_INODE_WATCHDOG_INTERVAL` — the check interval in
   seconds; default `60`. Shorter intervals bound the overshoot of
   fast walks; validation uses `2`.
