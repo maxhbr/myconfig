@@ -190,54 +190,85 @@ in
                 set -x
                 ${niri}/bin/niri msg output "$OUTPUT" scale "$target"
               '';
+              # The bulk of the niri config (binds, window rules, layout) lives
+              # in config.kdl and is passed to home-manager's
+              # `wayland.windowManager.niri` module via its `extraConfig`
+              # verbatim passthrough. It contains `@@niri-extra-binds@@`
+              # substitution markers and host-derived fragments (headless
+              # window rules, NixOS session variables) which the typed
+              # `settings` tree cannot express faithfully.
+              kdlSource = builtins.readFile ./config.kdl;
+              niriConfigKdl =
+                lib.throwIfNot (lib.hasInfix "@@niri-extra-binds@@" kdlSource)
+                  "@@niri-extra-binds@@ marker missing from config.kdl"
+                  (
+                    "environment {\n"
+                    + "    QT_QPA_PLATFORM \"wayland\"\n"
+                    + "    ELECTRON_OZONE_PLATFORM_HINT \"${nixosConfig.environment.sessionVariables.ELECTRON_OZONE_PLATFORM_HINT}\"\n"
+                    + "}\n\n"
+                    + (lib.replaceString "@@niri-extra-binds@@" config.myconfig.desktop.wayland.niri.extraBinds
+                      kdlSource
+                    )
+                    + "\n"
+                    + headlessWindowRules
+                    + "xwayland-satellite {\n"
+                    + "    path \"${pkgs.xwayland-satellite}/bin/xwayland-satellite\"\n"
+                    + "}\n\n"
+                    # `optional=true` so that home-manager's build-time
+                    # `niri validate` (checkConfig) tolerates the missing relative
+                    # include; at runtime the file exists next to config.kdl.
+                    + "include optional=true \"include.kdl\"\n\n"
+                    + "spawn-at-startup \"${niri-autostart}\""
+                  );
+              # The host-specific overrides (additionalConfigKdl) are pulled in
+              # via the `include optional=true \"include.kdl\"` node above.
+              # home-manager only validates config.kdl itself, so validate the
+              # merged config (config.kdl + include.kdl) here and link the
+              # result into place.
+              niri-config =
+                pkgs.runCommand "niri-config"
+                  {
+                    nativeBuildInputs = [ niri ];
+                  }
+                  ''
+                    mkdir $out
+                    printf '%s' ${lib.escapeShellArg niriConfigKdl} > $out/config.kdl
+                    printf '%s' ${
+                      lib.escapeShellArg (cfg.desktop.wayland.niri.additionalConfigKdl + "\n")
+                    } > $out/include.kdl
+                    niri validate --config $out/config.kdl
+                  '';
             in
             {
+              # Drive home-manager's niri module
+              # (modules/services/window-managers/niri.nix of the home
+              # input). The generated config is validated by the module's
+              # `checkConfig` (runs `niri validate` on the written file).
+              wayland.windowManager.niri = {
+                enable = true;
+                package = niri;
+                # xwayland-satellite is spawned by niri via the explicit
+                # `xwayland-satellite { path ... }` node in config.kdl, so it
+                # does not need to end up in PATH.
+                xwaylandSatellitePackage = null;
+                # Portals are configured at the NixOS level
+                # (modules/services.dbus.nix), not via home-manager.
+                portalPackage = null;
+                # The niri systemd units are defined manually below (they add
+                # a restart policy). Installing the upstream units as well
+                # would collide with the hand-written niri.service.
+                systemd.enable = false;
+                extraConfig = niriConfigKdl;
+              };
+              # host-specific overrides (`additionalConfigKdl`) are pulled in
+              # via `include optional=true "include.kdl"` in config.kdl
+              xdg.configFile."niri/include.kdl".source = "${niri-config}/include.kdl";
               # Let niri's integrated Xwayland-satellite manage DISPLAY.
               # A global DISPLAY also makes TTY launches select the nested backend.
               home.packages = [
-                niri
                 niri-xwayland-satellite
                 niri-toggle-dpi-scale
               ];
-              xdg.configFile =
-                let
-                  extraBinds = config.myconfig.desktop.wayland.niri.extraBinds;
-                  drv =
-                    pkgs.runCommand "niri-config"
-                      {
-                        nativeBuildInputs = [ niri ];
-                        src = ./config.kdl;
-                      }
-                      ''
-                        mkdir $out
-                        cat <<EOF >$out/config.kdl
-                        environment {
-                            QT_QPA_PLATFORM "wayland"
-                            ELECTRON_OZONE_PLATFORM_HINT "${nixosConfig.environment.sessionVariables.ELECTRON_OZONE_PLATFORM_HINT}"
-                        }
-
-                        $(cat $src)
-
-                        ${headlessWindowRules}xwayland-satellite {
-                            path "${pkgs.xwayland-satellite}/bin/xwayland-satellite"
-                        }
-
-                        include "include.kdl"
-
-                        spawn-at-startup "${niri-autostart}"
-                        EOF
-                        substituteInPlace $out/config.kdl \
-                          --replace-fail "@@niri-extra-binds@@" ${lib.escapeShellArg extraBinds}
-                        cat <<EOF >$out/include.kdl
-                        ${cfg.desktop.wayland.niri.additionalConfigKdl}
-                        EOF
-                        niri validate --config $out/config.kdl > $out/config.kdl.validate
-                      '';
-                in
-                {
-                  "niri/config.kdl".source = "${drv}/config.kdl";
-                  "niri/include.kdl".source = "${drv}/include.kdl";
-                };
               programs.waybar.settings.mainBar = {
                 "niri/workspaces" = {
                   "format" = "{index}";
