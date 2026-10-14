@@ -91,6 +91,10 @@ cursor {
     position x=1280 y=0
 }
 
+workspace "chat" {
+    open-on-output "eDP-1"
+}
+
 // Make the wallpaper stationary, rather than moving with workspaces.
 layer-rule {
     // This is for swaybg; change for other wallpaper tools.
@@ -221,6 +225,7 @@ layout {
 // Note that running niri as a session supports xdg-desktop-autostart,
 // which may be more convenient to use.
 spawn-at-startup "waybarOnce" "--auto-restart" "niri"
+spawn-at-startup "signal-desktop"
 
 // Uncomment this line to ask the clients to omit their client-side decorations if possible.
 // If the client will specifically ask for CSD, the request will be honored.
@@ -315,7 +320,21 @@ window-rule {
 }
 
 window-rule {
+    match app-id="^Signal$"
+
+    open-on-workspace "chat"
+}
+
+window-rule {
     match app-id="^zoom$"
+
+    default-column-width { }
+    open-floating true
+    default-floating-position x=32 y=32 relative-to="bottom-left"
+    block-out-from "screen-capture"
+}
+
+window-rule {
     match app-id="it.mijorus.smile"
 
     default-column-width { }

@@ -76,7 +76,6 @@
   "gfx1151:NVIDIA-Nemotron-3-Nano-Omni-Q8_0"
   "gfx1151:NVIDIA-Nemotron-3-Super-120B-A12B-Q5_K_M"
   "gfx1151:Nex-N2.5-mini-Q4_K_L"
-  "gfx1151:Nex-N2.5-mini-Q5_K_M"
   "gfx1151:Nex-N2.5-mini-Q6_K_L"
   "gfx1151:Nex-N2.5-mini-Q6_K_L-mmproj"
   "gfx1151:Ornith-1.0-35B-Q8_0"
@@ -317,11 +316,9 @@
     maxOutputTokens = 65536;
   }
   "gfx1151:Qwen3.8-Flash-Next-UD-IQ4_XS"
-  "gfx1151:Qwen3.8-Flash-Next-UD-IQ4_XS-MTP"
   "gfx1151:Qwen3.8-Flash-Next-UD-IQ4_XS-mmproj"
   "gfx1151:Qwen3.8-Flash-Next-UD-IQ4_XS-sequential"
   "gfx1151:Qwen3.8-Flash-Next-UD-Q4_K_XL"
-  "gfx1151:Qwen3.8-Flash-Next-UD-Q4_K_XL-MTP"
   "gfx1151:Qwen3.8-Flash-Next-UD-Q4_K_XL-mmproj"
   "gfx1151:Qwen3.8-Flash-Next-UD-Q4_K_XL-sequential"
   {
@@ -383,7 +380,6 @@
   "gfx1151:ROCm0:NVIDIA-Nemotron-3-Nano-Omni-Q8_0"
   "gfx1151:ROCm0:NVIDIA-Nemotron-3-Super-120B-A12B-Q5_K_M"
   "gfx1151:ROCm0:Nex-N2.5-mini-Q4_K_L"
-  "gfx1151:ROCm0:Nex-N2.5-mini-Q5_K_M"
   "gfx1151:ROCm0:Nex-N2.5-mini-Q6_K_L"
   "gfx1151:ROCm0:Nex-N2.5-mini-Q6_K_L-mmproj"
   "gfx1151:ROCm0:Ornith-1.0-35B-Q8_0"
@@ -619,11 +615,9 @@
     maxOutputTokens = 65536;
   }
   "gfx1151:ROCm0:Qwen3.8-Flash-Next-UD-IQ4_XS"
-  "gfx1151:ROCm0:Qwen3.8-Flash-Next-UD-IQ4_XS-MTP"
   "gfx1151:ROCm0:Qwen3.8-Flash-Next-UD-IQ4_XS-mmproj"
   "gfx1151:ROCm0:Qwen3.8-Flash-Next-UD-IQ4_XS-sequential"
   "gfx1151:ROCm0:Qwen3.8-Flash-Next-UD-Q4_K_XL"
-  "gfx1151:ROCm0:Qwen3.8-Flash-Next-UD-Q4_K_XL-MTP"
   "gfx1151:ROCm0:Qwen3.8-Flash-Next-UD-Q4_K_XL-mmproj"
   "gfx1151:ROCm0:Qwen3.8-Flash-Next-UD-Q4_K_XL-sequential"
   {
@@ -755,8 +749,6 @@
   }
   "rtx5090:Nex-N2.5-mini-Q4_K_L"
   "rtx5090:Nex-N2.5-mini-Q4_K_L-mmproj"
-  "rtx5090:Nex-N2.5-mini-Q5_K_M"
-  "rtx5090:Nex-N2.5-mini-Q5_K_M-mmproj"
   {
     name = "rtx5090:Qwen3.5-9B-Q5_K_M";
     contextWindow = 262144;
@@ -848,11 +840,6 @@
     maxOutputTokens = 32768;
   }
   {
-    name = "rtx5090:Qwen3.8-27B-Q6_K-MTP-full-ctx";
-    contextWindow = 184320;
-    maxOutputTokens = 46080;
-  }
-  {
     name = "rtx5090:Qwen3.8-27B-UD-Q4_K_XL";
     contextWindow = 262144;
     maxOutputTokens = 65536;
@@ -932,7 +919,6 @@
     contextWindow = 262144;
     maxOutputTokens = 65536;
   }
-  "rtx5090:gemma-4-26B-A4B-it-UD-Q8_K_XL"
   {
     name = "rtx5090:gemma-4-26B-A4B-it-qat-q4_0";
     contextWindow = 262144;
@@ -963,7 +949,6 @@
     contextWindow = 65536;
     maxOutputTokens = 16384;
   }
-  "rtx5090:gemma-4-31B-it-UD-Q5_K_XL"
   {
     name = "rtx5090:gemma-4-31B-it-qat-q4_0";
     contextWindow = 65536;
