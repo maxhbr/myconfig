@@ -17,7 +17,9 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 import unittest
+from unittest import mock
 
 NOFILE = 65536
 STORE_ROOTS = ("/nix/store", "/mysbx-krun-stage/ro/store")
@@ -236,17 +238,18 @@ def run_store_scan(args, repo):
     try:
         return _store_scan_once(args, repo, scratch)
     finally:
+        shutil.rmtree(scratch.with_name(scratch.name + ".mysbx"), ignore_errors=True)
         shutil.rmtree(scratch, ignore_errors=True)
 
 
 def _store_scan_once(args, repo, scratch):
-    scratch_config = scratch / ".mysbx"
+    scratch_config = scratch.with_name(scratch.name + ".mysbx")
     scratch_config.mkdir(exist_ok=True)
     (scratch_config / "config.toml").write_text(
         'backend = "krun"\n'
         "[env]\n"
-        f"{WATCHDOG_ENV} = {args.watchdog_threshold}\n"
-        f"{WATCHDOG_INTERVAL_ENV} = 2\n"
+        f'{WATCHDOG_ENV} = "{args.watchdog_threshold}"\n'
+        f'{WATCHDOG_INTERVAL_ENV} = "2"\n'
     )
     log_fd, log_name = tempfile.mkstemp(prefix="mysbx-krun-watchdog-", suffix=".log")
     print(
@@ -464,6 +467,51 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(
             WATCHDOG_INTERVAL_ENV, "MYSBX_KRUN_INODE_WATCHDOG_INTERVAL"
         )
+
+    def test_store_scan_config_and_failure_cleanup(self):
+        args = argparse.Namespace(
+            mysbx="mysbx", watchdog_threshold=20000, fd_budget=40000, rounds=2,
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            repo = Path(temporary) / "repo"
+            repo.mkdir()
+            log_fd, log_name = tempfile.mkstemp(dir=temporary)
+
+            def launch(argv, **kwargs):
+                scratch = kwargs["cwd"]
+                sidecar = scratch.with_name(scratch.name + ".mysbx")
+                self.assertEqual(sidecar.parent, repo)
+                self.assertFalse((scratch / ".mysbx").exists())
+                config = tomllib.loads((sidecar / "config.toml").read_text())
+                self.assertEqual(config, {
+                    "backend": "krun",
+                    "env": {WATCHDOG_ENV: "20000", WATCHDOG_INTERVAL_ENV: "2"},
+                })
+                raise OSError("launch failed")
+
+            with mock.patch("tempfile.mkstemp", return_value=(log_fd, log_name)), \
+                    mock.patch("subprocess.Popen", side_effect=launch) as popen:
+                with self.assertRaisesRegex(OSError, "launch failed"):
+                    run_store_scan(args, repo)
+                popen.assert_called_once()
+            self.assertEqual(list(repo.iterdir()), [])
+
+    def test_store_scan_success_cleanup(self):
+        args = argparse.Namespace(watchdog_threshold=20000, fd_budget=40000)
+        with tempfile.TemporaryDirectory() as temporary:
+            repo = Path(temporary)
+
+            def scan(args, repo, scratch):
+                sidecar = scratch.with_name(scratch.name + ".mysbx")
+                sidecar.mkdir()
+                (sidecar / "config.toml").write_text('backend = "krun"\n')
+                return 0
+
+            with mock.patch.dict(
+                globals(), _store_scan_once=mock.Mock(side_effect=scan),
+            ):
+                self.assertEqual(run_store_scan(args, repo), 0)
+            self.assertEqual(list(repo.iterdir()), [])
 
     def test_guest_walks_and_content_check(self):
         with tempfile.TemporaryDirectory() as temporary:
