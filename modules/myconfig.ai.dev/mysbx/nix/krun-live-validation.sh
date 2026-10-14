@@ -26,7 +26,10 @@ repo=${1:?usage: krun-live-validation.sh <repo> [podman-krun|krun]}
 backend=${2:-podman-krun}
 case "$backend" in
     podman-krun | krun) ;;
-    *) echo "usage: krun-live-validation.sh <repo> [podman-krun|krun]" >&2; exit 2 ;;
+    *)
+        echo "usage: krun-live-validation.sh <repo> [podman-krun|krun]" >&2
+        exit 2
+        ;;
 esac
 mysbx=${MYSBX:-mysbx}
 # The fail() hint names the variant's runbook section: D2 for the
