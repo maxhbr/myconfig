@@ -606,6 +606,53 @@ let
             || fail "the store share lost $probe — the baked symlink's target does not resolve; refresh the sandbox (the mxu degradation)"
     done
 
+    # The fd-pin watchdog (bd myconfig-dj4): every guest inode
+    # reached through a virtiofs share pins one host O_PATH fd in
+    # the launcher (the FUSE lookup ref), released only on the
+    # guest's FORGET — and this VM is never under memory pressure,
+    # so its inode cache grows monotonically until the HOST hits
+    # EMFILE (three live wedges at the raised 524288 ceiling). The
+    # eviction lever is here, guest-side: past a threshold, drop
+    # reclaimable dentries+inodes (drop_caches=2 keeps the page-
+    # cache); the kernel then sends the FORGETs and the host fds
+    # fall with them. Measured live: find /nix/store -maxdepth 2
+    # pins 269k inodes, one echo 2 reclaims them all.
+    # The loop rides a plain subshell fork of THIS init: it survives
+    # the exec below, dies with the VM (PID 1 exit) and needs no
+    # daemon, timer or extra store path. MYSBX_KRUN_INODE_WATCHDOG
+    # overrides the threshold (=0 disables) and MYSBX_KRUN_INODE_-
+    # WATCHDOG_INTERVAL the check interval in seconds (default 60;
+    # validation runs arm ~2 — a walk pins fds faster than the
+    # interval, so the interval bounds the overshoot) — both ride
+    # the manifest env route, no launcher change needed.
+    if [ "''${MYSBX_KRUN_INODE_WATCHDOG:-150000}" != "0" ]; then
+        (
+            _iw_limit="''${MYSBX_KRUN_INODE_WATCHDOG:-150000}"
+            case "$_iw_limit" in
+                "" | *[!0-9]*) _iw_limit=150000 ;;
+            esac
+            _iw_interval="''${MYSBX_KRUN_INODE_WATCHDOG_INTERVAL:-60}"
+            case "$_iw_interval" in
+                "" | *[!0-9]*) _iw_interval=60 ;;
+            esac
+            [ "$_iw_interval" -ge 1 ] 2>/dev/null || _iw_interval=60
+            while :; do
+                # inode-state is TAB-separated; read's default IFS
+                # splits on any whitespace, so the first field alone
+                # lands in _iw_inodes.
+                read _iw_inodes _ < /proc/sys/fs/inode-state 2>/dev/null || _iw_inodes=0
+                case "$_iw_inodes" in
+                    "" | *[!0-9]*) _iw_inodes=0 ;;
+                esac
+                if [ "$_iw_inodes" -gt "$_iw_limit" ]; then
+                    "$BB" sync
+                    echo 2 > /proc/sys/vm/drop_caches 2>/dev/null || :
+                fi
+                "$BB" sleep "$_iw_interval"
+            done
+        ) &
+    fi
+
     step "exec-ing the payload: $1"
     exec "$@"
   '';

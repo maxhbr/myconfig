@@ -202,6 +202,94 @@ class InitTests(unittest.TestCase):
         offsets = [INIT.index(phase) for phase in phases]
         self.assertEqual(offsets, sorted(offsets))
 
+    def test_inode_watchdog_block(self):
+        # bd myconfig-dj4: the guest inode cache pins host launcher fds
+        # via FUSE lookup refs, and nothing evicts it without memory
+        # pressure — the watchdog bounds it guest-side. This runs the
+        # REAL block (sleep replaced by break, /proc redirected to a
+        # fake tree) under the baked busybox: over the threshold it
+        # drops caches, 0/garbage/under-threshold never do, and a
+        # custom threshold takes effect.
+        start = INIT.index('if [ "${MYSBX_KRUN_INODE_WATCHDOG:-150000}" != "0" ]; then')
+        end = INIT.index('step "exec-ing the payload: $1"', start)
+        block = INIT[start:end]
+        # The block forks and must be waited for; the payload is a
+        # sentinel through the same "exec $@" shape the init uses.
+        payload = (
+            "set -eu\n"
+            'BB=%s\n'
+            'step() { :; }\n'
+            % (shlex.quote(str(ROOTFS / "bin/busybox")))
+            + block
+            + 'echo "mysbx-test: drops=$("$BB" cat /tmp/iw-drop)"\n'
+            'exit 0\n'
+        )
+        # Redirect the block's /proc paths into a fake tree the test
+        # controls, and make one iteration observable (no real sleep).
+        # wait: the block forks its loop into the background; the
+        # sentinel echo must observe the drop AFTER it happened.
+        payload = payload.replace('/proc/sys/fs/inode-state', '"$IW_PROC"/fs/inode-state')
+        payload = payload.replace('/proc/sys/vm/drop_caches', '"$IW_PROC"/vm/drop_caches')
+        payload = payload.replace('"$BB" sleep "$_iw_interval"', 'break')
+        payload = payload.replace(
+            'echo "mysbx-test: drops=$("$BB" cat /tmp/iw-drop)"',
+            'wait\necho "mysbx-test: drops=$("$BB" cat /tmp/iw-drop)"',
+        )
+        # the fake drop counter file, outside the block's replaced
+        # paths but pinned at a fixed spot both halves can reach
+        payload = payload.replace('/tmp/iw-drop', '"$IW_PROC"/vm/drop_caches')
+        # the block's own stdin is the init's; the fake tree must not
+        # shadow the harness's own busybox calls
+        self.assertIn('wait\n', payload)
+
+        def run(env, inodes, interval="60"):
+            base = self.base / "iw-proc"
+            (base / "sys/fs").mkdir(parents=True, exist_ok=True)
+            (base / "sys/vm").mkdir(parents=True, exist_ok=True)
+            (base / "sys/fs/inode-state").write_text(f"{inodes}\t0\t0\t0\t0\t0\t0\n")
+            (base / "sys/vm/drop_caches").write_text("0\n")
+            script = (
+                'IW_PROC=%s\n' % shlex.quote(str(base / "sys"))
+                + 'MYSBX_KRUN_INODE_WATCHDOG=%s\n' % shlex.quote(env)
+                + 'MYSBX_KRUN_INODE_WATCHDOG_INTERVAL=%s\n' % shlex.quote(interval)
+                + payload
+            )
+            return subprocess.run(
+                [str(ROOTFS / "bin/busybox"), "sh", "-c", script],
+                capture_output=True,
+                text=True,
+                timeout=20,
+                env={"PATH": ""},
+            )
+
+        # over the default threshold: one drop, and the fork is
+        # waited (the drops echo must see the write)
+        result = run("", 200000)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("mysbx-test: drops=2", result.stdout)
+        # disabled: no drop even over the threshold
+        result = run("0", 200000)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("mysbx-test: drops=0", result.stdout)
+        # garbage threshold: falls back to the default, still drops
+        result = run("banana", 200000)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("mysbx-test: drops=2", result.stdout)
+        # under the threshold: no drop
+        result = run("150000", 4000)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("mysbx-test: drops=0", result.stdout)
+        # a custom high threshold takes effect
+        result = run("500000", 200000)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("mysbx-test: drops=0", result.stdout)
+        # the interval knob parses and defaults on garbage the same
+        # way (the sleep interval itself is not observable here — it
+        # is replaced by break — but the garbage path must not error)
+        result = run("banana", 200000, interval="banana")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("mysbx-test: drops=2", result.stdout)
+
     def test_prunes_missing_and_both_symlinks_with_incoming_refs(self):
         (self.store / "directory").mkdir()
         (self.store / "file").write_text("valid store object")
