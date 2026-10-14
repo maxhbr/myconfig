@@ -1017,6 +1017,137 @@ fn the_backend_flag_is_rejected_by_every_verb() {
     assert!(stderr.contains("repeated flag"), "{stderr}");
 }
 
+// bd myconfig-6tt: the `--<backend>` and `--<mux>` shorthands —
+// end-to-end dry-run runs that must behave exactly like their long
+// forms (pure aliases), plus the one-run conflict rule.
+#[test]
+fn backend_shorthand_runs_like_the_long_form() {
+    // `--nono` before the verb, after it, and its long form: the same
+    // argv, the same `[--backend]` provenance tag in the report.
+    for (args, label) in [
+        (vec!["--nono", "--verbose", "--dry-run"], "bare shorthand"),
+        (
+            vec!["run", "--nono", "--verbose", "--dry-run", "--", "true"],
+            "run, after the verb",
+        ),
+        (
+            vec!["--backend", "nono", "--verbose", "--dry-run"],
+            "bare long form",
+        ),
+    ] {
+        let (inv, _, _) = fixture("backend-shorthand-forms", &[]);
+        let (code, stdout, stderr) = run_binary_with(&inv, &args);
+        assert_eq!(code, 0, "{label}: stderr: {stderr}");
+        let report = report_lines(&stdout).join("\n");
+        assert!(
+            report.contains("backend:        nono  [--backend]"),
+            "{label}: {report}"
+        );
+    }
+
+    // The one-run rule: two shorthands, or shorthand + long form, in
+    // either order — a usage error naming both spellings, never a
+    // silently last-wins.
+    for (args, first, second) in [
+        (
+            vec!["--bubblewrap", "--nono", "--dry-run"],
+            "--bubblewrap",
+            "--nono",
+        ),
+        (
+            vec!["--nono", "--bubblewrap", "--dry-run"],
+            "--nono",
+            "--bubblewrap",
+        ),
+        (
+            vec!["--backend", "bubblewrap", "--nono", "--dry-run"],
+            "--nono",
+            "--backend",
+        ),
+        (
+            vec!["--nono", "--backend", "bubblewrap", "--dry-run"],
+            "--backend",
+            "--nono",
+        ),
+    ] {
+        let (inv, _, _) = fixture("backend-shorthand-conflict", &[]);
+        let (code, stdout, stderr) = run_binary_with(&inv, &args);
+        assert_eq!(code, 2, "stderr: {stderr}");
+        assert!(stderr.contains(first), "{first}: {stderr}");
+        assert!(stderr.contains(second), "{second}: {stderr}");
+        assert!(!stdout.contains("--clearenv"), "no argv: {stdout}");
+    }
+}
+
+#[test]
+fn mux_shorthand_runs_like_the_long_form() {
+    // `--herdr` and its long form pick the same session payload —
+    // byte-identical dry-run argv when the entry is pinned.
+    let (inv, _, _) = fixture_mux("mux-shorthand-herdr", Multiplexer::Herdr, &[]);
+    let mut long = spawn_with_args(&inv, &["--multiplexer", "herdr", "--dry-run"]);
+    let (_, entry) = mux_pin(Multiplexer::Herdr);
+    long.env("MYSBX_MUX_ENTRY_HERDR", &entry);
+    let out = long.output().expect("failed to spawn the mysbx binary");
+    let with_long = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert_eq!(out.status.code(), Some(0), "{with_long}");
+
+    let (inv, _, _) = fixture_mux("mux-shorthand-herdr", Multiplexer::Herdr, &[]);
+    let mut short = spawn_with_args(&inv, &["--herdr", "--dry-run"]);
+    short.env("MYSBX_MUX_ENTRY_HERDR", &entry);
+    let out = short.output().expect("failed to spawn the mysbx binary");
+    let with_short = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert_eq!(out.status.code(), Some(0), "{with_short}");
+    assert_eq!(with_short, with_long, "pure alias: byte-identical argv");
+    assert!(with_short.contains(&entry), "{with_short}");
+
+    // `--none` forces the plain shell over a configured session —
+    // compared against its LONG form, not the pre-existing golden:
+    // the keypair state bind differs with the environment (uid-0
+    // ssh-keygen, bd myconfig-0x5), and the alias contract is the
+    // byte-identity of the two spellings.
+    let (inv, _, _) = fixture_mux("mux-shorthand-none", Multiplexer::Workmux, &[]);
+    let mut short = spawn_with_args(&inv, &["--none", "--dry-run"]);
+    all_mux_pins(&mut short);
+    let out = short.output().expect("failed to spawn the mysbx binary");
+    let with_short = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert_eq!(out.status.code(), Some(0), "{with_short}");
+    assert!(
+        with_short.contains("MYSBX_MULTIPLEXER\nnone\n"),
+        "{with_short}"
+    );
+
+    let (inv, _, _) = fixture_mux("mux-shorthand-none", Multiplexer::Workmux, &[]);
+    let mut long = spawn_with_args(&inv, &["--multiplexer", "none", "--dry-run"]);
+    all_mux_pins(&mut long);
+    let out = long.output().expect("failed to spawn the mysbx binary");
+    let with_long = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert_eq!(out.status.code(), Some(0), "{with_long}");
+    assert_eq!(with_short, with_long, "pure alias: byte-identical argv");
+
+    // The one-run rule, both spellings named.
+    for (args, first, second) in [
+        (vec!["--tmux", "--none", "--dry-run"], "--tmux", "--none"),
+        (vec!["--none", "--tmux", "--dry-run"], "--none", "--tmux"),
+        (
+            vec!["--multiplexer", "tmux", "--none", "--dry-run"],
+            "--none",
+            "--multiplexer",
+        ),
+        (
+            vec!["--none", "--multiplexer", "tmux", "--dry-run"],
+            "--multiplexer",
+            "--none",
+        ),
+    ] {
+        let (inv, _, _) = fixture("mux-shorthand-conflict", &[]);
+        let (code, stdout, stderr) = run_binary_with(&inv, &args);
+        assert_eq!(code, 2, "stderr: {stderr}");
+        assert!(stderr.contains(first), "{first}: {stderr}");
+        assert!(stderr.contains(second), "{second}: {stderr}");
+        assert!(!stdout.contains("--clearenv"), "no argv: {stdout}");
+    }
+}
+
 // ---- environment forwarding and payload handling ---------------------------
 
 #[test]

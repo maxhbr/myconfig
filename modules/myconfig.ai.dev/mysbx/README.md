@@ -344,7 +344,10 @@ For one invocation the choice can be overridden without touching any
 file: `mysbx --multiplexer <mux>` (bare form only) starts that value's
 payload for this run — including `none` for a bare shell on a host that
 configured a session — and the next run uses the configuration again
-(`docs/design/cli.md` D14).
+(`docs/design/cli.md` D14). Every value is also its own flag (bd
+myconfig-6tt): `mysbx --herdr` == `mysbx --multiplexer herdr`, and
+`mysbx --backend podman-gvisor` == `mysbx --podman-gvisor` — pure
+aliases, one value per invocation whichever spelling names it.
 
 The private socket directory is **not configurable**: it always lives at
 `/mysbx-home/.mysbx-tmux`, inside the sandbox home tmpfs, so no

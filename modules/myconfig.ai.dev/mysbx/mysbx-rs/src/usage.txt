@@ -239,6 +239,13 @@ Options:
                 the selection is refused there, never a broken
                 half-run.
                 layer selecting it
+                Shorthands (bd myconfig-6tt): every value is also its
+                own flag — `--tmux`, `--workmux`, `--herdr`, `--aoe`,
+                `--orca`, `--none` == `--multiplexer <mux>`. Pure
+                aliases with the same position rules and refusals;
+                a shorthand together with the long form (or another
+                shorthand) in one invocation is a usage error naming
+                both
   --backend <name>
                 the sandbox backend of THIS run, overriding the
                 `backend` of the config layers for one invocation —
@@ -257,6 +264,13 @@ Options:
                 access (a refused run without it). Valid before the
                 verb and after it for `run`; every other verb
                 rejects it
+                Shorthands (bd myconfig-6tt): every value is also its
+                own flag — `--bubblewrap`, `--podman-gvisor`,
+                `--nono`, `--podman-krun`, `--krun` == `--backend
+                <name>`. Pure aliases with the same position rules
+                and refusals; a shorthand together with the long
+                form (or another shorthand) in one invocation is a
+                usage error naming both
   --session <name>
                 run in the named session's clone (the clone mode of
                 docs/design/workspace.md): the session's standalone

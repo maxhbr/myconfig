@@ -351,7 +351,24 @@ complete -c mysbx -f -n '__mysbx_expects_worktree_verb' -a hunk -d 'The same ran
 complete -c mysbx -n '__mysbx_no_verb' -l dry-run -d 'Print the exact bwrap invocation and exit; creates nothing'
 complete -c mysbx -n '__mysbx_no_verb' -l verbose -d 'Print the run configuration before running'
 complete -c mysbx -n '__mysbx_no_verb' -l multiplexer -x -a 'tmux workmux herdr aoe orca none' -d 'The multiplexer of THIS interactive run (bare form only)'
-complete -c mysbx -n '__mysbx_no_verb' -l backend -x -a 'bubblewrap podman-gvisor nono podman-krun' -d 'The backend of THIS run (overrides the config layers for one run)'
+# The `--<mux>` shorthands (bd myconfig-6tt): pure aliases of
+# `--multiplexer <value>`, bare form only like the long form. Written
+# out one by one (no fish loop): the mysbx-completions check greps
+# this file for each literal `-l <name>` usage.txt documents.
+complete -c mysbx -n '__mysbx_no_verb' -l tmux -d 'Alias of --multiplexer tmux (bd myconfig-6tt)'
+complete -c mysbx -n '__mysbx_no_verb' -l workmux -d 'Alias of --multiplexer workmux (bd myconfig-6tt)'
+complete -c mysbx -n '__mysbx_no_verb' -l herdr -d 'Alias of --multiplexer herdr (bd myconfig-6tt)'
+complete -c mysbx -n '__mysbx_no_verb' -l aoe -d 'Alias of --multiplexer aoe (bd myconfig-6tt)'
+complete -c mysbx -n '__mysbx_no_verb' -l orca -d 'Alias of --multiplexer orca (bd myconfig-6tt)'
+complete -c mysbx -n '__mysbx_no_verb' -l none -d 'Alias of --multiplexer none: the plain shell (bd myconfig-6tt)'
+complete -c mysbx -n '__mysbx_no_verb' -l backend -x -a 'bubblewrap podman-gvisor nono podman-krun krun' -d 'The backend of THIS run (overrides the config layers for one run)'
+# The `--<backend>` shorthands (bd myconfig-6tt): pure aliases of
+# `--backend <value>`.
+complete -c mysbx -n '__mysbx_no_verb' -l bubblewrap -d 'Alias of --backend bubblewrap (bd myconfig-6tt)'
+complete -c mysbx -n '__mysbx_no_verb' -l podman-gvisor -d 'Alias of --backend podman-gvisor (bd myconfig-6tt)'
+complete -c mysbx -n '__mysbx_no_verb' -l nono -d 'Alias of --backend nono (bd myconfig-6tt)'
+complete -c mysbx -n '__mysbx_no_verb' -l podman-krun -d 'Alias of --backend podman-krun (bd myconfig-6tt)'
+complete -c mysbx -n '__mysbx_no_verb' -l krun -d 'Alias of --backend krun (bd myconfig-6tt)'
 complete -c mysbx -n '__mysbx_no_verb' -l session -x -a '(__mysbx_sessions)' -d 'Run in the named session clone; the FIRST run creates it'
 complete -c mysbx -n '__mysbx_no_verb' -l ro -r -d 'Bind one more host path read-only for THIS run; repeatable'
 complete -c mysbx -n '__mysbx_no_verb' -l rw -r -d 'The same, read-write; every --ro before every --rw'
@@ -365,7 +382,14 @@ complete -c mysbx -n '__mysbx_no_verb' -s V -l version -d 'Print the version'
 # cli.md D11).
 complete -c mysbx -n '__mysbx_in_run' -l dry-run -d 'Print the exact bwrap invocation and exit; creates nothing'
 complete -c mysbx -n '__mysbx_in_run' -l verbose -d 'Print the run configuration before running'
-complete -c mysbx -n '__mysbx_in_run' -l backend -x -a 'bubblewrap podman-gvisor nono podman-krun' -d 'The backend of THIS run (overrides the config layers for one run)'
+complete -c mysbx -n '__mysbx_in_run' -l backend -x -a 'bubblewrap podman-gvisor nono podman-krun krun' -d 'The backend of THIS run (overrides the config layers for one run)'
+# The `--<backend>` shorthands after `run` (bd myconfig-6tt): the
+# same position rule the long form follows (D18).
+complete -c mysbx -n '__mysbx_in_run' -l bubblewrap -d 'Alias of --backend bubblewrap (bd myconfig-6tt)'
+complete -c mysbx -n '__mysbx_in_run' -l podman-gvisor -d 'Alias of --backend podman-gvisor (bd myconfig-6tt)'
+complete -c mysbx -n '__mysbx_in_run' -l nono -d 'Alias of --backend nono (bd myconfig-6tt)'
+complete -c mysbx -n '__mysbx_in_run' -l podman-krun -d 'Alias of --backend podman-krun (bd myconfig-6tt)'
+complete -c mysbx -n '__mysbx_in_run' -l krun -d 'Alias of --backend krun (bd myconfig-6tt)'
 complete -c mysbx -n '__mysbx_in_run' -l session -x -a '(__mysbx_sessions)' -d 'Run in the named session clone; the FIRST run creates it'
 complete -c mysbx -n '__mysbx_in_run' -l ro -r -d 'Bind one more host path read-only for THIS run; repeatable'
 complete -c mysbx -n '__mysbx_in_run' -l rw -r -d 'The same, read-write; every --ro before every --rw'
