@@ -409,6 +409,11 @@ in
         };
       }
       {
+        # Ghostty quick terminal as the eDP-1 backdrop (see
+        # myconfig.desktop.wayland/home-manager.ghostty.nix).
+        programs.ghostty.enable = true;
+      }
+      {
         home.packages = with pkgs.helper; [
           (connectBtDevice {
             name = "WF-1000XM5";

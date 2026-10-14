@@ -422,6 +422,15 @@ layer-rule {
     block-out-from "screen-capture"
 }
 
+// Ghostty quick terminal used as the eDP-1 backdrop terminal (see
+// myconfig.desktop.wayland/home-manager.ghostty.nix). It sits in the
+// bottom layer already; this only excludes it from screen capture.
+layer-rule {
+    match namespace="^ghostty-quick-terminal$"
+
+    block-out-from "screen-capture"
+}
+
 hotkey-overlay {
     hide-not-bound
     skip-at-startup

@@ -207,6 +207,7 @@ in
         ./home-manager.swaync.nix
         ./home-manager.mako.nix
         ./home-manager.foot.nix
+        ./home-manager.ghostty.nix
         ./home-manager.wayvnc.nix
         ./home-manager.wprs.nix
         ./home-manager.wlogout.nix
