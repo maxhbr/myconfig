@@ -25,14 +25,35 @@ survives into a new session. The reconcile cannot help MID-session
 (the row bites until the session ends), and it does not answer WHY
 nix registers a symlink here at all.
 
+2026-10-14 live forensics (bd myconfig-yiw notes): the poison was
+captured mid-session once. The creator was the session's own
+`./get_input.sh nixpkgs` — `builtins.getFlake ("git+file://" +
+toString /home/mhuber/myconfig/myconfig)` against the SANDBOX-SYMLINK
+spelling, one minute after a commit, in the lock-file-update path.
+The fetcher hashed the nar THROUGH the symlink (the live tree, not
+the rev's export) and registered the source AS the symlink; the
+same eval then failed with the `is a symlink` error.
+
+2026-10-14 fresh-boot repro experiment (same bead notes): the
+verbatim shape (fresh VM, fresh commit, `./get_input.sh nixpkgs`
+within a minute) does NOT reproduce — healthy real-dir registration
+with the rev's true nar hash. Dirty/staged-tree variants and
+prefetch via the symlink spelling are healthy too. The poisoning
+call is pinned precisely from the session log: the silent
+`2>/dev/null` first run at 08:42:19, which created and tripped over
+the symlink in ~2 s. Creation is not deterministic from the
+observed inputs; the next step is a store-watcher wrapper
+(inotify on /nix/store, argv logging) shipped in the guest to
+catch the creation live.
+
 ## What remains (bd myconfig-yiw)
 
-1. Reproduce on a live krun guest with a controlled fetcher cache:
-   evaluate `git+file:///…` for the workspace share repeatedly,
-   watch when a `*-source` entry becomes a symlink instead of a real
-   copy, with nix's fetcher logging on. The missing ingredient is
-   suspected to be a mid-session COMMIT (the observed poisoning
-   registered ~4 minutes after one).
+1. Catch the creation live: ship a store-watcher wrapper around the
+guest's nix (inotify on `/nix/store` for new `*-source` entries +
+argv/stderr logging) in `nix/krun-guest-nix.nix`, then let agent
+sessions run as usual. The observed creation is not deterministic
+from (fresh VM, symlink URL spelling, fresh commit, dirty tree) —
+all of those reproduce HEALTHY.
 2. Identify the responsible nix code path (git fetcher fallback to
    path fetch for a dirty tree, symlink-preserving store
    registration) and file it upstream. Suspect ingredients: the
