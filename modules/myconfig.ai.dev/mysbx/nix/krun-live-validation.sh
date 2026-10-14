@@ -32,6 +32,7 @@ case "$backend" in
         ;;
 esac
 mysbx=${MYSBX:-mysbx}
+fd_stress=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/krun-fd-stress.py
 # The fail() hint names the variant's runbook section: D2 for the
 # podman-krun variant, D3 for the direct backend.
 fail_section=$([ "$backend" = krun ] && printf 'D3' || printf 'D2')
@@ -176,5 +177,30 @@ case "$backend" in
         pass "7 krun flags on the dry run: launcher argv surface (cpus/ram/rootfs/shares)"
         ;;
 esac
+
+# 8. the guest inode watchdog (bd myconfig-dj4, direct backend
+# only): a store-share walk pins one host launcher fd per visited
+# guest inode via the FUSE lookup ref, with nothing to evict them in
+# an unpressured VM — the live wedges. mysbx-init now bounds it
+# guest-side. The fd-stress harness's --store-scan mode is the
+# canonical probe: it arms the watchdog through a scratch repo's
+# [env] (the normal config route to the init's
+# MYSBX_KRUN_INODE_WATCHDOG), walks the shared store in the guest,
+# and asserts BOTH halves — the guest reports the watchdog
+# reclaiming each round, and the launcher's host fd count stays
+# under the budget — measured from both ends of the vsock.
+if [ "$backend" = krun ]; then
+    [ -f "$fd_stress" ] || fail "8 inode watchdog" "the fd-stress harness is missing: $fd_stress"
+    fd_stress_rc=0
+    python3 "$fd_stress" \
+        --store-scan --rounds 2 --watchdog-threshold 20000 \
+        --fd-budget 40000 "$repo" || fd_stress_rc=$?
+    case "$fd_stress_rc" in
+        0) pass "8 inode watchdog: store scan reclaimed guest-side, launcher fd peak bounded" ;;
+        1) fail "8 inode watchdog" "the fd-stress store scan failed (see its output above)" ;;
+        77) printf 'SKIP 8 inode watchdog: no /dev/kvm on this host (probe needs the real VM)\n' ;;
+        *) fail "8 inode watchdog" "the fd-stress store scan exited $fd_stress_rc" ;;
+    esac
+fi
 
 printf 'krun live validation (%s): all probes passed\n' "$backend"

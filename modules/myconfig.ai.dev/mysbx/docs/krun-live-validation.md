@@ -421,3 +421,46 @@ seconds until interrupted (Ctrl-C), then finishes the report — the
 "measure over time" step of bd myconfig-dj4: a monotonically rising
 count through idle periods is the no-eviction behaviour, a drop
 after guest `FORGET` pressure (or none at all) narrows the cause.
+
+### 6.2 The guest inode watchdog (bd myconfig-dj4)
+
+The 2026-10-14 wedge pinned the cause: the launcher ran the patched
+library (readdirplus accounting + zero entry timeout) and still hit
+524281 fds at the raised 524288 ceiling. Under the FUSE protocol the
+host may never drop an inode the guest still references — the guest
+kernel's own inode cache owns those references, and an unpressured
+microVM never evicts them. So the fix is guest-side: `mysbx-init`
+now starts a watchdog that, past a threshold of allocated guest
+inodes (`/proc/sys/fs/inode-state`), drops reclaimable dentries and
+inodes (`drop_caches = 2`, page cache kept). The kernel then sends
+the `FORGET`s, and the host launcher's fds fall with them.
+
+Knobs through the normal `[env]` config route:
+
+- `MYSBX_KRUN_INODE_WATCHDOG` — the inode threshold; `0` disables;
+  default `20000`, leaving headroom below the launcher's minimum
+  supported host ceiling of `65536` fds for other descriptors and
+  growth between checks.
+- `MYSBX_KRUN_INODE_WATCHDOG_INTERVAL` — the check interval in
+  seconds; default `60`. Shorter intervals bound the overshoot of
+  fast walks; validation uses `2`.
+
+Validate both ends on a host with writable `/dev/kvm`:
+
+```bash
+MYSBX=/path/to/rebuilt/mysbx python3 \
+  modules/myconfig.ai.dev/mysbx/nix/krun-fd-stress.py \
+  --store-scan /path/to/test/repo
+```
+
+The store-scan mode walks the SHARED store (the workload of every
+live wedge) through a scratch repo whose `[env]` arms the watchdog,
+in the sibling `<scratch>.mysbx/config.toml` (removed with the scratch
+directory afterward), while the host side samples the launcher's fd count.
+`PASS` requires both halves: the guest reports the watchdog
+reclaiming during or after each round, and the launcher's fd peak stays under
+the budget (`--fd-budget`, default `40000`, with
+`--watchdog-threshold`, default `20000` — kept below the budget,
+since the launcher pins roughly one fd per guest inode).
+The same probe runs as step 8 of `krun-live-validation.sh` for the
+direct backend, skipped with a message when `/dev/kvm` is missing.
