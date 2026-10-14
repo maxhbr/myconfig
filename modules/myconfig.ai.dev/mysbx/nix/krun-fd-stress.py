@@ -10,6 +10,7 @@ from pathlib import Path
 import resource
 import select
 import shlex
+import shutil
 import signal
 import stat
 import subprocess
@@ -20,6 +21,8 @@ import unittest
 
 NOFILE = 65536
 STORE_ROOTS = ("/nix/store", "/mysbx-krun-stage/ro/store")
+WATCHDOG_ENV = "MYSBX_KRUN_INODE_WATCHDOG"
+WATCHDOG_INTERVAL_ENV = "MYSBX_KRUN_INODE_WATCHDOG_INTERVAL"
 GUEST = r"""
 import os
 import sys
@@ -40,6 +43,58 @@ for round in range(rounds):
     if count != expected:
         raise RuntimeError(f"walk returned {count} files, expected {expected}")
     print(f"round {round + 1}: read {count} files", flush=True)
+"""
+
+# The watchdog-validation payload (bd myconfig-dj4): a store-share
+# walk pins one guest inode — and through the FUSE lookup ref, one
+# host launcher fd — per visited entry, with nothing to evict it in
+# an unpressured VM (the live wedge). The payload walks the SHARED
+# store like a real agent session (greps/evals over /nix/store),
+# samples the guest's allocated inodes each round, and waits for the
+# watchdog to reclaim them: every round must return near the round's
+# starting level, proving the guest-side drop (drop_caches=2) bounds
+# the accumulation instead of growing monotonically toward EMFILE.
+GUEST_WATCHDOG = r"""
+import os
+import sys
+import time
+
+root = sys.argv[1]
+rounds = int(sys.argv[2])
+threshold = int(sys.argv[3])
+interval = float(sys.argv[4])
+
+
+def inodes():
+    with open("/proc/sys/fs/inode-state") as source:
+        return int(source.read().split()[0])
+
+
+print(f"guest: kernel={os.uname().release}; store scan of {root}", flush=True)
+for round in range(rounds):
+    count = 0
+    for directory, _, files in os.walk(root, onerror=lambda error: None):
+        count += 1 + len(files)
+    peak = inodes()
+    print(f"round {round + 1}: scanned {count} entries, inodes={peak}", flush=True)
+    if peak <= threshold:
+        print(f"WARN: the walk never exceeded the watchdog threshold "
+              f"({peak} <= {threshold}); the eviction path is untested", flush=True)
+    # Wait for the watchdog to notice and drop: a few intervals, then
+    # the count must be back near the pre-walk level.
+    deadline = time.monotonic() + 4 * interval + 10
+    while time.monotonic() < deadline:
+        time.sleep(0.5)
+        after = inodes()
+        if after < peak * 0.9:
+            print(f"round {round + 1}: watchdog reclaimed "
+                  f"({peak} -> {after})", flush=True)
+            break
+    else:
+        raise RuntimeError(
+            f"the watchdog did not reclaim: inodes {peak} -> {inodes()} "
+            f"after {4 * interval + 10:.0f}s")
+print("guest: store scan complete", flush=True)
 """
 
 
@@ -153,6 +208,131 @@ def fd_snapshot(pid, data, proc_root=Path("/proc")):
     return "\n".join(lines)
 
 
+def guest_watchdog_argv(root, rounds, threshold, interval):
+    encoded = base64.b64encode(GUEST_WATCHDOG.encode("utf-8")).decode("ascii")
+    code = f"exec(__import__('base64').b64decode('{encoded}'))"
+    return ["python3", "-c", code, str(root), str(rounds), str(threshold), str(interval)]
+
+
+def run_store_scan(args, repo):
+    # The watchdog validation (bd myconfig-dj4): the guest walks the
+    # SHARED store — the workload of every live wedge, unlike the
+    # private fixture (whose inodes the guest evicts on its own) —
+    # while the host side samples the launcher's fd count. The
+    # watchdog is armed through a scratch repo's [env] (the normal
+    # config route: [env] merges into the payload env, the launcher
+    # carries it in the manifest, mysbx-init reads it), with a LOW
+    # threshold and a SHORT interval so the drops are observable
+    # inside the walk. PASS needs BOTH halves: the guest reports the
+    # watchdog reclaiming each round, AND the host launcher's fd
+    # peak stays under the budget (roughly one pinned fd per guest
+    # inode, so the threshold must sit below the fd budget).
+    if args.watchdog_threshold >= args.fd_budget:
+        raise RuntimeError(
+            f"--watchdog-threshold ({args.watchdog_threshold}) must stay "
+            f"below --fd-budget ({args.fd_budget})"
+        )
+    scratch = Path(tempfile.mkdtemp(prefix=".mysbx-watchdog-", dir=repo))
+    try:
+        return _store_scan_once(args, repo, scratch)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
+def _store_scan_once(args, repo, scratch):
+    scratch_config = scratch / ".mysbx"
+    scratch_config.mkdir(exist_ok=True)
+    (scratch_config / "config.toml").write_text(
+        'backend = "krun"\n'
+        "[env]\n"
+        f"{WATCHDOG_ENV} = {args.watchdog_threshold}\n"
+        f"{WATCHDOG_INTERVAL_ENV} = 2\n"
+    )
+    log_fd, log_name = tempfile.mkstemp(prefix="mysbx-krun-watchdog-", suffix=".log")
+    print(
+        f"Watchdog validation: store scan; threshold={args.watchdog_threshold}, "
+        f"launcher fd budget: {args.fd_budget}",
+        flush=True,
+    )
+    print(f"Log: {log_name}", flush=True)
+    with os.fdopen(log_fd, "w") as log:
+        proc = subprocess.Popen(
+            [
+                args.mysbx,
+                "run",
+                "--",
+                *guest_watchdog_argv(
+                    "/nix/store", args.rounds, args.watchdog_threshold, 2
+                ),
+            ],
+            cwd=scratch,
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            preexec_fn=child_limits,
+        )
+        peak, launcher, launcher_fd = 0, None, None
+        deadline = time.monotonic() + args.timeout
+        try:
+            while proc.poll() is None:
+                if time.monotonic() >= deadline:
+                    raise RuntimeError("the krun store scan timed out")
+                if launcher is None:
+                    found = find_launcher(proc.pid)
+                    if found is not None:
+                        try:
+                            candidate_fd = os.pidfd_open(found)
+                            try:
+                                if (
+                                    find_launcher(proc.pid) == found
+                                    and not select.select([candidate_fd], [], [], 0)[0]
+                                ):
+                                    launcher_fd, launcher = candidate_fd, found
+                            finally:
+                                if launcher_fd != candidate_fd:
+                                    os.close(candidate_fd)
+                        except ProcessLookupError:
+                            pass
+                if launcher is not None:
+                    try:
+                        peak = max(peak, len(os.listdir(f"/proc/{launcher}/fd")))
+                    except (FileNotFoundError, ProcessLookupError):
+                        pass
+                    if peak > args.fd_budget:
+                        snapshot = fd_snapshot(launcher, scratch)
+                        print(snapshot, file=sys.stderr, flush=True)
+                        print(snapshot, file=log, flush=True)
+                        raise RuntimeError(
+                            f"launcher fd count {peak} exceeded budget {args.fd_budget}"
+                        )
+                time.sleep(0.1)
+            if proc.returncode != 0:
+                raise RuntimeError(f"krun exited {proc.returncode}; read {log_name}")
+            log.flush()
+            with open(log_name) as check:
+                reclaimed = [line for line in check if "watchdog reclaimed" in line]
+            if not reclaimed:
+                raise RuntimeError(
+                    f"no watchdog reclaim is reported in {log_name}; "
+                    "the guest-side half of the fix did not trigger"
+                )
+            if launcher is None or peak == 0:
+                raise RuntimeError("no launcher fd sample was collected")
+        finally:
+            try:
+                stop(proc, launcher_fd)
+            finally:
+                if launcher_fd is not None:
+                    os.close(launcher_fd)
+        print(
+            f"PASS: watchdog store scan; launcher peak={peak}, "
+            f"limit={NOFILE}, budget={args.fd_budget}; "
+            f"guest reclaims: {len(reclaimed)}"
+        )
+    return 0
+
+
 def run(args):
     if not os.access("/dev/kvm", os.R_OK | os.W_OK):
         print(
@@ -166,6 +346,8 @@ def run(args):
     hard_limit = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
     if hard_limit != resource.RLIM_INFINITY and hard_limit < NOFILE:
         raise RuntimeError(f"the host hard fd limit must be at least {NOFILE}")
+    if args.store_scan:
+        return run_store_scan(args, repo)
     with tempfile.TemporaryDirectory(prefix=".mysbx-fd-stress-", dir=repo) as temporary:
         data = Path(temporary) / "data"
         data.mkdir()
@@ -262,6 +444,26 @@ class MonitorTests(unittest.TestCase):
         self.assertTrue(all(" " <= char <= "~" for char in serialized))
         self.assertNotIn('"', argv[2])
         self.assertEqual(shlex.split(serialized), argv)
+
+    def test_watchdog_guest_commandline(self):
+        argv = guest_watchdog_argv("/nix/store", 2, 20000, 2)
+        serialized = " ".join(f'"{arg}"' for arg in argv)
+        self.assertTrue(all(" " <= char <= "~" for char in serialized))
+        self.assertEqual(shlex.split(serialized), argv)
+        # the payload must read the guest's own inode state and wait
+        # out the watchdog, not just walk: decode the way the guest
+        # does and inspect the source
+        source = base64.b64decode(
+            argv[2].removeprefix("exec(__import__('base64').b64decode('").removesuffix("')")
+        )
+        self.assertIn(b"/proc/sys/fs/inode-state", source)
+        self.assertIn(b"watchdog reclaimed", source)
+
+    def test_watchdog_env_names(self):
+        self.assertEqual(WATCHDOG_ENV, "MYSBX_KRUN_INODE_WATCHDOG")
+        self.assertEqual(
+            WATCHDOG_INTERVAL_ENV, "MYSBX_KRUN_INODE_WATCHDOG_INTERVAL"
+        )
 
     def test_guest_walks_and_content_check(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -393,6 +595,20 @@ def main():
     parser.add_argument("--rounds", type=int, default=3)
     parser.add_argument("--fd-budget", type=int, default=8192)
     parser.add_argument("--timeout", type=float, default=600)
+    parser.add_argument(
+        "--store-scan",
+        action="store_true",
+        help="validate the guest inode watchdog (bd myconfig-dj4): walk the "
+        "SHARED store, armed through a scratch repo, and require both the "
+        "guest-side reclaim and a bounded host launcher fd count",
+    )
+    parser.add_argument(
+        "--watchdog-threshold",
+        type=int,
+        default=20000,
+        help="the MYSBX_KRUN_INODE_WATCHDOG value the scratch repo arms "
+        "(store-scan mode only)",
+    )
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
     if args.self_test:
