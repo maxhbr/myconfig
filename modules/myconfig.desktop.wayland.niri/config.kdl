@@ -225,7 +225,6 @@ layout {
 // Note that running niri as a session supports xdg-desktop-autostart,
 // which may be more convenient to use.
 spawn-at-startup "waybarOnce" "--auto-restart" "niri"
-spawn-at-startup "signal-desktop"
 
 // Uncomment this line to ask the clients to omit their client-side decorations if possible.
 // If the client will specifically ask for CSD, the request will be honored.
