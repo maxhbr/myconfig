@@ -76,10 +76,19 @@
 //
 // Usage (grouped interface — argv and env, no TOML):
 //
-//   mysbx-krun [--cpus N] [--ram MIB] --rootfs DIR [--init PATH]
+//   mysbx-krun [--cpus N] [--ram MIB] [--verbose] --rootfs DIR [--init PATH]
 //              [--ro-device TAG=DIR] [--rw-device TAG=DIR]
 //              [--ro-share TAG:SLOT@DEST] [--rw-share TAG:SLOT@DEST]
 //              [--env K=V]... [--chdir DIR] -- CMD [ARGS...]
+//
+// `--verbose` makes the launcher log its phase TIMINGS (kvm probe,
+// dlopen, vm setup, vm run — one stderr line each, with the
+// cumulative total) and its setup detail (the dlopen'd lib, the
+// payload, the manifest, the fd limits), and escalates libkrun's
+// own log to info; mysbx forwards its own `--verbose` here. The
+// guest init's step trace stays a separate switch
+// (MYSBX_KRUN_TRACE) — verbose is the launcher's verbosity, not the
+// guest console's.
 //
 // The rootfs is shared READ-ONLY (the root of a sandbox is never
 // writable from inside). The devices carry their own ro/rw flag —
@@ -471,6 +480,11 @@ struct Config {
     cpus: u8,
     ram_mib: u32,
     rootfs: PathBuf,
+    /// `--verbose`: the caller asks for chatty timing and setup
+    /// logs (mysbx passes its own `--verbose` through). Escalates
+    /// the same routes the trace flag does, minus the guest init's
+    /// own step tracing (that is what `MYSBX_KRUN_TRACE` is for).
+    verbose: bool,
     /// A guest entry script used as krun_set_exec's exec_path. It
     /// receives the payload as its argv ($1.. — the cmdline "--"
     /// vector with argv[0] replaced by this script) and the shares'
@@ -514,7 +528,7 @@ struct Config {
 
 fn usage() -> ! {
     eprintln!(
-        "usage: mysbx-krun [--cpus N] [--ram MIB] --rootfs DIR [--init PATH] \
+        "usage: mysbx-krun [--cpus N] [--ram MIB] [--verbose] --rootfs DIR [--init PATH] \
          [--ro-device TAG=DIR] [--rw-device TAG=DIR] \
          [--manifest FILE] [--network shared|none] \
          [--scratch FILE] [--env K=V]... \
@@ -537,6 +551,7 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
         cpus: 2,
         ram_mib: 2048,
         rootfs: PathBuf::new(),
+        verbose: false,
         init: None,
         devices: Vec::new(),
         shares: Vec::new(),
@@ -558,6 +573,7 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
                     .parse()
                     .map_err(|_| "invalid value for --cpus".to_owned())?
             }
+            "--verbose" => cfg.verbose = true,
             "--ram" => {
                 cfg.ram_mib = it
                     .next()
@@ -1019,10 +1035,26 @@ fn exec_spec(cfg: &Config) -> (String, Vec<String>, Vec<String>) {
 }
 
 fn main() {
+    let boot_started = std::time::Instant::now();
     let cfg = parse_args(std::env::args().skip(1));
 
     let (soft, hard) = raise_nofile();
     ensure_nofile(soft, hard);
+
+    // The phase timer (the timing story of the launcher): a small
+    // helper that logs the elapsed time since the last phase mark,
+    // unconditionally a compact one-line summary per phase, plus
+    // the cumulative time. Zero dependencies by design, so
+    // std::time::Instant is the clock.
+    let mut phase_started = boot_started;
+    let mut phase = |name: &str| {
+        let elapsed = phase_started.elapsed();
+        eprintln!(
+            "mysbx-krun: {name} took {elapsed:?} (total {:?})",
+            boot_started.elapsed()
+        );
+        phase_started = std::time::Instant::now();
+    };
 
     // The /dev/kvm pre-flight (the spike's finding 7): libkrun's
     // KvmContext::new() PANICS — abort, no return code to map —
@@ -1045,6 +1077,7 @@ fn main() {
         );
         std::process::exit(EXIT_SETUP);
     }
+    phase("kvm probe");
 
     // dlopen with RTLD_NOW|RTLD_GLOBAL: libkrun dlopen()s its own
     // libkrunfw (the guest-kernel blob) lazily, and the global
@@ -1058,6 +1091,14 @@ fn main() {
             }
         }
     };
+    phase("dlopen of libkrun");
+
+    if cfg.verbose {
+        eprintln!(
+            "mysbx-krun: libkrun at {}",
+            std::env::var("MYSBX_KRUN_LIB").unwrap_or_else(|_| "<default>".into())
+        );
+    }
 
     let check = |rc: c_int, what: &str| -> c_int {
         if rc < 0 {
@@ -1071,12 +1112,17 @@ fn main() {
     // environment, so the HOST's MYSBX_KRUN_TRACE never reaches
     // this process — only the config-side --env entry does (the
     // sixth live finding: the flag sat in config.toml, the launcher
-    // never saw it). Both routes checked.
+    // never saw it). Both routes checked. `--verbose` escalates the
+    // same launcher-side routes (the log level, the device and
+    // share list) but NOT the guest init's own step trace — that is
+    // the trace flag's job, and a verbose run must not spam the
+    // guest console.
     let trace = std::env::var("MYSBX_KRUN_TRACE").is_ok_and(|v| !v.is_empty())
         || cfg
             .env
             .iter()
             .any(|(k, v)| k == "MYSBX_KRUN_TRACE" && !v.is_empty());
+    let chatty = trace || cfg.verbose;
 
     // libkrun's own log, redirected to stderr BEFORE anything else:
     // every error! of the VMM (device attach failures, build_microvm
@@ -1086,8 +1132,17 @@ fn main() {
     if let Some(init_log) = api.krun_init_log {
         // Level: 1 = error, 4 = debug. Style 0 = auto, options 0 =
         // honor RUST_LOG when the host sets it (the trace's own
-        // escalation path).
-        let _ = unsafe { (init_log)(2, if trace { 4 } else { 1 }, 0, 0) };
+        // escalation path). Verbose escalates to info (3) — the
+        // boot's own milestones — while trace keeps debug (4), the
+        // full VMM story.
+        let level = if trace {
+            4
+        } else if cfg.verbose {
+            3
+        } else {
+            1
+        };
+        let _ = unsafe { (init_log)(2, level, 0, 0) };
     }
 
     // The banner (the sixth live finding: a hung run printed NOTHING,
@@ -1101,7 +1156,22 @@ fn main() {
         cfg.rootfs.display(),
         cfg.init.clone().unwrap_or_default(),
     );
-    if trace {
+    if cfg.verbose {
+        eprintln!("mysbx-krun: payload: {:?}", cfg.payload);
+        eprintln!("mysbx-krun: manifest: {:?}", cfg.manifest);
+        eprintln!(
+            "mysbx-krun: network: {}",
+            if cfg.network { "shared" } else { "none" }
+        );
+        eprintln!("mysbx-krun: scratch: {:?}", cfg.scratch);
+        eprintln!("mysbx-krun: fd limit: soft={soft} hard={hard}");
+        eprintln!(
+            "mysbx-krun: {} env entries, {} overlay files",
+            cfg.env.len(),
+            cfg.overlays.len()
+        );
+    }
+    if chatty {
         for d in &cfg.devices {
             eprintln!(
                 "mysbx-krun: device {} = {} ({})",
@@ -1334,10 +1404,19 @@ fn main() {
             ),
             "krun_set_exec",
         );
+        phase("vm setup");
         // krun_start_enter runs the VM and returns the payload's exit
         // code (via the init's KRUN_EXIT_CODE_IOCTL) — propagation is
-        // the whole exit-code story of the spike.
-        std::process::exit(check((api.krun_start_enter)(ctx), "krun_start_enter"));
+        // the whole exit-code story of the spike. This call spans the
+        // VM's whole lifetime, so its phase line lands only AFTER the
+        // guest exits — the vm-run duration is the payload's runtime.
+        let exit_code = check((api.krun_start_enter)(ctx), "krun_start_enter");
+        phase("vm run (boot + payload)");
+        eprintln!(
+            "mysbx-krun: payload exited with {exit_code} after {:?} total",
+            boot_started.elapsed()
+        );
+        std::process::exit(exit_code);
     }
 }
 
@@ -1397,6 +1476,7 @@ mod tests {
             cpus: 2,
             ram_mib: 2048,
             rootfs: PathBuf::new(),
+            verbose: false,
             init: None,
             devices: Vec::new(),
             shares: Vec::new(),
@@ -1479,6 +1559,23 @@ mod tests {
         assert!(parse(&["--"]).is_err());
         assert!(parse(&["--rootfs", "/root", "--"]).is_err());
         assert!(parse(&["--rootfs", "/root", "--", "/bin/true"]).is_ok());
+    }
+
+    #[test]
+    fn verbose_parses_and_defaults_off() {
+        // `--verbose`: the caller asks for the timing and setup logs.
+        // Off by default — the plain run keeps its one banner line.
+        assert!(
+            !parse(&["--rootfs", "/root", "--", "/bin/true"])
+                .unwrap()
+                .verbose
+        );
+        assert!(
+            parse(&["--rootfs", "/root", "--verbose", "--", "/bin/true"])
+                .unwrap()
+                .verbose
+        );
+        assert!(parse(&["--verbose", "--rootfs", "/root", "--", "/bin/true"]).is_ok());
     }
 
     #[test]

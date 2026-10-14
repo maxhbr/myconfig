@@ -2569,6 +2569,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                     cpus: None,
                     git_trust: None,
                     scratch: None,
+                    verbose: false,
                 };
                 let backing = match krun::backing_paths(&merged, &repo, &trust_params) {
                     Ok(map) => map,
@@ -2949,6 +2950,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                     cpus: None,
                     git_trust: None,
                     scratch: None,
+                    verbose: false,
                 };
                 let backing = match krun::backing_paths(&merged, &repo, &trust_params) {
                     Ok(map) => map,
@@ -3024,6 +3026,11 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 cpus: merged.cpus.clone().map(Cow::from),
                 git_trust: krun_git_trust.as_ref(),
                 scratch: krun_scratch_params_direct.as_deref(),
+                // The caller's `--verbose` rides through to the
+                // launcher: its `--verbose` flag makes the boot log
+                // its phase timings and setup detail (the dlopen'd
+                // lib, the manifest, the fd limits).
+                verbose: flags.verbose,
             };
             let krun_argv = match krun::krun_argv(&merged, &repo, &payload, &host_env, &krun_params)
             {

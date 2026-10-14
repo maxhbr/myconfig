@@ -8959,6 +8959,39 @@ fn the_direct_krun_backend_writes_no_sidecar_trust_files() {
 }
 
 #[test]
+fn verbose_reaches_the_krun_launcher_argv() {
+    // The pass-through of cli.md D10: a `--verbose` run forwards
+    // the flag to the mysbx-krun launcher (its phase timings and
+    // setup logs), a plain run does not. The dry-run argv audits
+    // exactly this — the `--verbose` line is there or it is not.
+    let (inv, _, sidecar) = fixture("krun-verbose-argv", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"krun\"\n").unwrap();
+    let rootfs = sidecar.join("rootfs-stub");
+    std::fs::create_dir_all(rootfs.join("bin")).unwrap();
+    std::fs::write(rootfs.join("bin/mysbx-init"), "#!/bin/sh\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["run", "--dry-run", "--", "/bin/true"]);
+    cmd.env("MYSBX_KRUN_LAUNCHER", "/does/not/matter/dry-run")
+        .env("MYSBX_KRUN_ROOTFS", rootfs.to_str().unwrap().to_string());
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(0));
+    let plain = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(
+        !plain.lines().any(|l| l == "--verbose"),
+        "a plain run does not pass --verbose: {plain}"
+    );
+    let mut cmd = spawn_with_args(&inv, &["--verbose", "run", "--dry-run", "--", "/bin/true"]);
+    cmd.env("MYSBX_KRUN_LAUNCHER", "/does/not/matter/dry-run")
+        .env("MYSBX_KRUN_ROOTFS", rootfs.to_str().unwrap().to_string());
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(0));
+    let verbose = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(
+        verbose.lines().any(|l| l == "--verbose"),
+        "a --verbose run forwards --verbose to the launcher: {verbose}"
+    );
+}
+
+#[test]
 fn the_hoisted_sweep_cleans_both_krun_backends_debris() {
     // bd myconfig-6xl: the per-run dir sweep is HOISTED above the arm
     // dispatch, so a podman-krun run reclaims gittrust/<pid>/ debris

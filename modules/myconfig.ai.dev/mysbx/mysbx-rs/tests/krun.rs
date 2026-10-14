@@ -78,6 +78,7 @@ fn params<'a>(
         cpus: None,
         git_trust: None,
         scratch: None,
+        verbose: false,
     }
 }
 
@@ -119,6 +120,24 @@ fn golden_minimal_config() {
         &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
     );
     assert_golden("minimal.txt", &argv);
+}
+
+#[test]
+fn golden_verbose_forwards_the_flag_to_the_launcher() {
+    // The verbose pass-through: mysbx `--verbose` renders the
+    // launcher's `--verbose` FIRST — the caller's mode switch, ahead
+    // of the VM size it configures. Everything else stays the argv
+    // of the plain run.
+    let argv = run(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &Params {
+            verbose: true,
+            ..params("/synth/rootfs", "/synth/shell", None, Workspace::Live)
+        },
+    );
+    assert_golden("verbose.txt", &argv);
 }
 
 #[test]
@@ -657,6 +676,7 @@ fn params_owned<'a>(
         cpus: None,
         git_trust: None,
         scratch: None,
+        verbose: false,
     }
 }
 
