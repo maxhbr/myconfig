@@ -43,7 +43,7 @@
     },
     "litellm-grafana-dashboard": {
         "cargoLock": null,
-        "date": "2026-10-05",
+        "date": "2026-10-12",
         "extract": null,
         "name": "litellm-grafana-dashboard",
         "passthru": null,
@@ -52,9 +52,9 @@
             "name": "litellm-grafana-dashboard.json",
             "sha256": "sha256-BepW78CWd6K27AL0nrIamyTESsVKsY/5/kO67QNU6vA=",
             "type": "url",
-            "url": "https://raw.githubusercontent.com/BerriAI/litellm/02f61c9c420b9aa9de10ff673098ad7132b78f5b/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json"
+            "url": "https://raw.githubusercontent.com/BerriAI/litellm/7efce7f8e05e58fb86e006a6427ab39b6db467fb/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json"
         },
-        "version": "02f61c9c420b9aa9de10ff673098ad7132b78f5b"
+        "version": "7efce7f8e05e58fb86e006a6427ab39b6db467fb"
     },
     "pi-token-speed": {
         "cargoLock": null,
@@ -79,7 +79,7 @@
     },
     "simple-english": {
         "cargoLock": null,
-        "date": "2026-09-30",
+        "date": "2026-10-05",
         "extract": null,
         "name": "simple-english",
         "passthru": null,
@@ -91,11 +91,11 @@
             "name": null,
             "owner": "AminBlg",
             "repo": "SimpleEnglish",
-            "rev": "32ea2d3f4404bfbff162c1861e5ae4f1bcc628b3",
-            "sha256": "sha256-mWs9n465FMiMcyxD9diTV6olXWuTy2wW+bZ475Vc3to=",
+            "rev": "a6fcb4fde098b33617cc1578d151ebf58774b883",
+            "sha256": "sha256-p1ffLp/3Yg1yBfCikBwua3ieVBCNyZfTZH6GBAxNREA=",
             "sparseCheckout": [],
             "type": "github"
         },
-        "version": "32ea2d3f4404bfbff162c1861e5ae4f1bcc628b3"
+        "version": "a6fcb4fde098b33617cc1578d151ebf58774b883"
     }
 }
