@@ -454,9 +454,10 @@ MYSBX=/path/to/rebuilt/mysbx python3 \
 
 The store-scan mode walks the SHARED store (the workload of every
 live wedge) through a scratch repo whose `[env]` arms the watchdog,
-while the host side samples the launcher's fd count.
+in the sibling `<scratch>.mysbx/config.toml` (removed with the scratch
+directory afterward), while the host side samples the launcher's fd count.
 `PASS` requires both halves: the guest reports the watchdog
-reclaiming after each round, and the launcher's fd peak stays under
+reclaiming during or after each round, and the launcher's fd peak stays under
 the budget (`--fd-budget`, default `40000`, with
 `--watchdog-threshold`, default `20000` — kept below the budget,
 since the launcher pins roughly one fd per guest inode).

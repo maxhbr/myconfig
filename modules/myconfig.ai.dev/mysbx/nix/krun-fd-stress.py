@@ -4,6 +4,7 @@
 import argparse
 import base64
 from collections import Counter
+import io
 import math
 import os
 from pathlib import Path
@@ -52,9 +53,9 @@ for round in range(rounds):
 # host launcher fd — per visited entry, with nothing to evict it in
 # an unpressured VM (the live wedge). The payload walks the SHARED
 # store like a real agent session (greps/evals over /nix/store),
-# samples the guest's allocated inodes each round, and waits for the
-# watchdog to reclaim them: every round must return near the round's
-# starting level, proving the guest-side drop (drop_caches=2) bounds
+# samples the guest's allocated inodes during each walk, and waits for
+# reclamation if none was observed: every round must show a drop,
+# proving the guest-side drop (drop_caches=2) bounds
 # the accumulation instead of growing monotonically toward EMFILE.
 GUEST_WATCHDOG = r"""
 import os
@@ -75,27 +76,33 @@ def inodes():
 print(f"guest: kernel={os.uname().release}; store scan of {root}", flush=True)
 for round in range(rounds):
     count = 0
+    peak = inodes()
+    reclaimed = None
     for directory, _, files in os.walk(root, onerror=lambda error: None):
         count += 1 + len(files)
-    peak = inodes()
-    print(f"round {round + 1}: scanned {count} entries, inodes={peak}", flush=True)
+        after = inodes()
+        peak = max(peak, after)
+        if peak > threshold and after < peak * 0.9:
+            reclaimed = (peak, after)
+    print(f"round {round + 1}: scanned {count} entries, peak inodes={peak}", flush=True)
     if peak <= threshold:
         print(f"WARN: the walk never exceeded the watchdog threshold "
               f"({peak} <= {threshold}); the eviction path is untested", flush=True)
-    # Wait for the watchdog to notice and drop: a few intervals, then
-    # the count must be back near the pre-walk level.
+    # Only wait if no drop was already observed during traversal.
     deadline = time.monotonic() + 4 * interval + 10
-    while time.monotonic() < deadline:
-        time.sleep(0.5)
+    while reclaimed is None:
         after = inodes()
-        if after < peak * 0.9:
-            print(f"round {round + 1}: watchdog reclaimed "
-                  f"({peak} -> {after})", flush=True)
-            break
-    else:
-        raise RuntimeError(
-            f"the watchdog did not reclaim: inodes {peak} -> {inodes()} "
-            f"after {4 * interval + 10:.0f}s")
+        peak = max(peak, after)
+        if peak > threshold and after < peak * 0.9:
+            reclaimed = (peak, after)
+        elif time.monotonic() >= deadline:
+            raise RuntimeError(
+                f"the watchdog did not reclaim: inodes {peak} -> {after} "
+                f"after {4 * interval + 10:.0f}s")
+        else:
+            time.sleep(0.5)
+    print(f"round {round + 1}: watchdog reclaimed "
+          f"({reclaimed[0]} -> {reclaimed[1]})", flush=True)
 print("guest: store scan complete", flush=True)
 """
 
@@ -468,6 +475,72 @@ class MonitorTests(unittest.TestCase):
             WATCHDOG_INTERVAL_ENV, "MYSBX_KRUN_INODE_WATCHDOG_INTERVAL"
         )
 
+    def test_watchdog_reclamation_timing(self):
+        for name, rounds, values, reclaims, succeeds in [
+            ("during walk", 1, [10000, 30000, 10000], 1, True),
+            ("after walk", 1, [10000, 25000, 30000, 30000, 10000], 1, True),
+            ("each round", 2, [10000, 30000, 10000, 10000, 31000, 10000], 2, True),
+            ("no drop", 1, [10000, 30000, 30000], 0, False),
+            ("small drop", 1, [10000, 30000, 28000], 0, False),
+            ("below threshold", 1, [10000, 15000, 10000], 0, False),
+            (
+                "second round fails", 2,
+                [10000, 30000, 10000, 10000, 30000, 30000], 1, False,
+            ),
+        ]:
+            with self.subTest(name=name):
+                samples = iter(values)
+                output = io.StringIO()
+
+                def inode_state(path):
+                    self.assertEqual(path, "/proc/sys/fs/inode-state")
+                    return io.StringIO(f"{next(samples, values[-1])} 0 0\n")
+
+                with (
+                    mock.patch.object(
+                        sys, "argv", ["guest", "/nix/store", str(rounds), "20000", "2"],
+                    ),
+                    mock.patch("os.walk", return_value=[
+                        ("/nix/store", [], ["a"]), ("/nix/store/a", [], ["b"]),
+                    ]),
+                    mock.patch("builtins.open", side_effect=inode_state),
+                    mock.patch("time.monotonic", side_effect=iter(range(100))),
+                    mock.patch("time.sleep") as sleep,
+                    mock.patch.object(sys, "stdout", output),
+                ):
+                    if succeeds:
+                        exec(GUEST_WATCHDOG, {})
+                    else:
+                        with self.assertRaisesRegex(
+                            RuntimeError, "watchdog did not reclaim",
+                        ):
+                            exec(GUEST_WATCHDOG, {})
+                    if name in ("during walk", "each round"):
+                        sleep.assert_not_called()
+                self.assertEqual(
+                    output.getvalue().count("watchdog reclaimed"), reclaims,
+                )
+
+    def test_fd_budget_defaults_and_overrides(self):
+        for flags, budget in [
+            ([], 8192),
+            (["--store-scan"], 40000),
+            (["--fd-budget", "12345"], 12345),
+            (["--store-scan", "--fd-budget", "8192"], 8192),
+            (["--fd-budget", "30000", "--store-scan"], 30000),
+        ]:
+            with self.subTest(flags=flags):
+                run_mock = mock.Mock(return_value=0)
+                with mock.patch.object(sys, "argv", ["probe", *flags]), \
+                        mock.patch.dict(globals(), run=run_mock):
+                    self.assertEqual(main(), 0)
+                self.assertEqual(run_mock.call_args.args[0].fd_budget, budget)
+
+    def test_store_scan_rejects_threshold_at_budget(self):
+        args = argparse.Namespace(watchdog_threshold=20000, fd_budget=20000)
+        with self.assertRaisesRegex(RuntimeError, "must stay below --fd-budget"):
+            run_store_scan(args, Path("/unused"))
+
     def test_store_scan_config_and_failure_cleanup(self):
         args = argparse.Namespace(
             mysbx="mysbx", watchdog_threshold=20000, fd_budget=40000, rounds=2,
@@ -641,7 +714,10 @@ def main():
     parser.add_argument("--mysbx", default=os.environ.get("MYSBX", "mysbx"))
     parser.add_argument("--files", type=int, default=100000)
     parser.add_argument("--rounds", type=int, default=3)
-    parser.add_argument("--fd-budget", type=int, default=8192)
+    parser.add_argument(
+        "--fd-budget", type=int,
+        help="launcher fd budget (default: 40000 for --store-scan, otherwise 8192)",
+    )
     parser.add_argument("--timeout", type=float, default=600)
     parser.add_argument(
         "--store-scan",
@@ -659,6 +735,8 @@ def main():
     )
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
+    if args.fd_budget is None:
+        args.fd_budget = 40000 if args.store_scan else 8192
     if args.self_test:
         tests = unittest.defaultTestLoader.loadTestsFromTestCase(MonitorTests)
         result = unittest.TextTestRunner().run(tests)
