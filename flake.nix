@@ -635,6 +635,12 @@
                   # category — a plain script executed by a human on a
                   # KVM host.
                   "modules/myconfig.ai.dev/mysbx/nix/krun-live-validation.sh"
+                  # The wedged-krun-sandbox triage collector (bd
+                  # myconfig-dj4 §6.1 of docs/krun-live-validation.md):
+                  # same category — a plain read-only /proc inspection
+                  # script executed by a human on the host of a wedged
+                  # guest.
+                  "modules/myconfig.ai.dev/mysbx/nix/krun-inspect-and-collect.sh"
                 ];
               in
               pkgs.stdenv.mkDerivation {

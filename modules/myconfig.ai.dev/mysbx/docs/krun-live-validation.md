@@ -379,3 +379,45 @@ Exit 77 means that the host lacks access to `/dev/kvm`, not that the probe passe
 A `PASS` result reports the largest fd sample for this workload.
 Record the result, host, kernel, and library version on `myconfig-dj4`.
 Repeat normal long-lived agent workloads before closing the issue.
+
+### 6.1 Triaging a wedged sandbox: `mysbx-krun-inspect-and-collect`
+
+When a long-lived session dies the EMFILE death (agent file open
+fails, `workmux` stops responding, new panes never come up), the
+guest is wedged but the host-side LAUNCHER is still alive — and it
+is the process that exhausted. Collect its evidence from the HOST
+before killing anything:
+
+```bash
+modules/myconfig.ai.dev/mysbx/nix/krun-inspect-and-collect.sh            # snapshot
+modules/myconfig.ai.dev/mysbx/nix/krun-inspect-and-collect.sh --watch 5  # + fd samples every 5s
+```
+
+The script is read-only (no signals, no fd contents) and writes
+`~/myconfig/myconfig/_mysbx-krun-inspect-and-collect.<timestamp>.log`
+with, per launcher (`mysbx-krun`/`.mysbx-krun-wrapped` with
+`--rootfs`, the identity rule of the fd probe):
+
+- `/proc/<pid>/limits` — the fd ceiling that stands (a low ceiling
+  means the `raise_nofile` of bd myconfig-mnr failed or was
+  constrained, launcher stderr would carry the WARNING; the raised
+  pair means genuine growth),
+- the fd count and its pressure against that ceiling,
+- the fd TARGET HISTOGRAM by parent directory and by top-level
+  scope — the accumulation signature is `O_PATH` fds into
+  `/nix/store` and `/mysbx-krun-stage/ro/store`, clustered in
+  nixpkgs source trees (the 2026-10-07 recurrence: ~524k fds,
+  ~70k of them under two `pkgs/development/python-modules`
+  directories alone),
+- the O_PATH/handle split by fd flags (the virtiofs passthrough
+  inode-table pins are O_PATH — a dominating count over the store
+  share with a raised ceiling is case (b) of bd myconfig-dj4, the
+  no-eviction accumulation),
+- memory (the inode table lives in the launcher's heap), threads,
+  state, cmdline, and any kernel-log lines naming fd exhaustion.
+
+`--watch N` additionally samples every launcher's fd count every N
+seconds until interrupted (Ctrl-C), then finishes the report — the
+"measure over time" step of bd myconfig-dj4: a monotonically rising
+count through idle periods is the no-eviction behaviour, a drop
+after guest `FORGET` pressure (or none at all) narrows the cause.
