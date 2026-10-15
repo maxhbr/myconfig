@@ -301,10 +301,10 @@ in
                 # Portals are configured at the NixOS level
                 # (modules/services.dbus.nix), not via home-manager.
                 portalPackage = null;
-                # The niri systemd units are defined manually below (they add
-                # a restart policy). Installing the upstream units as well
-                # would collide with the hand-written niri.service.
-                systemd.enable = false;
+                # Installs niri's upstream user units via
+                # `systemd.user.packages`; the restart policy is added on top
+                # through a drop-in override below.
+                systemd.enable = true;
                 extraConfig = niriConfigKdl;
               };
               # host-specific overrides (`additionalConfigKdl`) are pulled in
@@ -325,23 +325,20 @@ in
                 };
                 modules-left = [ "niri/workspaces" ];
               };
-              # A dedicated anchor for your compositor session
-              systemd.user.services.niri = {
-                Unit = {
-                  Description = "A scrollable-tiling Wayland compositor";
-                  BindsTo = "graphical-session.target";
-                  Before = "graphical-session.target xdg-desktop-autostart.target";
-                  Wants = "graphical-session-pre.target xdg-desktop-autostart.target";
-                  After = "graphical-session-pre.target";
-                  X-RestartIfChanged = false;
-                };
-                Service = {
-                  Slice = "session.slice";
-                  Type = "notify";
-                  ExecStart = "${niri}/bin/niri --session";
-                  Restart = "on-failure"; # optional, keeps it from exiting permanently on crashes
-                };
-              };
+              # The compositor anchor service comes from niri's upstream
+              # units (installed via the niri module's `systemd.enable`).
+              # This drop-in only adds a restart policy, so a crashed niri
+              # does not leave the session dead until manual restart, and
+              # keeps home-manager from restarting the unit on activation
+              # (`X-RestartIfChanged = false` — restarting the compositor
+              # from its own activation would kill the session it runs in).
+              xdg.configFile."systemd/user/niri.service.d/override.conf".text = ''
+                [Unit]
+                X-RestartIfChanged=false
+
+                [Service]
+                Restart=on-failure
+              '';
               systemd.user.services.niri-ws-names = lib.mkIf wsNamesCfg.enable {
                 Unit = {
                   Description = "Dynamic workspace naming for niri";
