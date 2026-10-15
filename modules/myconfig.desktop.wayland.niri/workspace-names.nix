@@ -114,12 +114,14 @@ let
               if [[ -n "$current" && "$managed" == 1 ]]; then
                 jq -cn --argjson id "$ws" \
                   '{Action:{UnsetWorkspaceName:{reference:{Id:$id}}}}' \
-                  | niri msg raw-request || true
+                  | niri msg raw-request \
+                  || echo "niri-ws-names: unsetting name of workspace $ws failed" >&2
               fi
             elif [[ "$desired" != "$current" ]]; then
               jq -cn --arg name "$desired" --argjson id "$ws" \
                   '{Action:{SetWorkspaceName:{name:$name,workspace:{Id:$id}}}}' \
-                | niri msg raw-request || true
+                | niri msg raw-request \
+                || echo "niri-ws-names: naming workspace $ws '$desired' failed (name taken?)" >&2
             fi
           done < "$tmpdir/plan.tsv"
         '';
@@ -131,7 +133,9 @@ let
       text = ''
         interval=${toString interval}
         while true; do
-          niri-ws-names-step || true
+          if ! niri-ws-names-step; then
+            echo "niri-ws-names: reconciliation step failed" >&2
+          fi
           sleep "$interval"
         done
       '';

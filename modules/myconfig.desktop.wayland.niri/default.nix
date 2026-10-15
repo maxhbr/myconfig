@@ -272,7 +272,7 @@ in
 
                         spawn-at-startup "${niri-autostart}"
                         ${lib.optionalString wsNamesCfg.enable ''
-                          spawn-at-startup "${wsNames}/bin/niri-ws-names"
+                          spawn-at-startup "systemctl --user start niri-ws-names.service"
                         ''}
                         EOF
                         substituteInPlace $out/config.kdl \
@@ -311,6 +311,33 @@ in
                   Type = "notify";
                   ExecStart = "${niri}/bin/niri --session";
                   Restart = "on-failure"; # optional, keeps it from exiting permanently on crashes
+                };
+              };
+              systemd.user.services.niri-ws-names = lib.mkIf wsNamesCfg.enable {
+                Unit = {
+                  Description = "Dynamic workspace naming for niri";
+                  # The daemon polls niri via $NIRI_SOCKET, whose path embeds
+                  # niri's PID: it is only valid for this session. Bind to the
+                  # niri service so the daemon dies with the compositor
+                  # instead of polling a stale socket forever.
+                  BindsTo = [
+                    "niri.service"
+                    "graphical-session.target"
+                  ];
+                  PartOf = [ "graphical-session.target" ];
+                  After = [
+                    "niri.service"
+                    "graphical-session.target"
+                  ];
+                  X-RestartIfChanged = false;
+                };
+                Service = {
+                  Slice = "session.slice";
+                  ExecStart = "${wsNames}/bin/niri-ws-names";
+                  Restart = "on-failure";
+                  # The step script is idempotent; a wedged call must not
+                  # wedge the whole daemon.
+                  TimeoutStopSec = 5;
                 };
               };
               systemd.user.targets.niri-shutdown = {

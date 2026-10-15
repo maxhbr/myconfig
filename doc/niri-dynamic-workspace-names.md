@@ -55,6 +55,12 @@ Semantics in `src/layout/mod.rs::set_workspace_name`:
   name** (`find_workspace_by_name`). A daemon must therefore check for
   name collisions itself (e.g. suffix `_2`, `_3` — the "client_1"-style
   numbering fits this).
+  - **Caveat**: rule names themselves must not end in `_[0-9]+` (e.g.
+    two distinct rules named `client_1` and `client_2`): the daemon derives
+    the rule name from a collision variant by stripping that suffix, so
+    generated variants (`client_1_2`) and rule names
+    (`client_1`, `client_2`) share one namespace and can block each
+    other's renames via the duplicate-name no-op.
 - Renaming the first/last workspace can trigger insertion of a new empty
   workspace (`empty-workspace-above-first` handling).
 - `unset_workspace_name` on an empty workspace makes it eligible for
