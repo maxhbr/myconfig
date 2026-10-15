@@ -298,9 +298,11 @@ in
                 # `xwayland-satellite { path ... }` node in config.kdl, so it
                 # does not need to end up in PATH.
                 xwaylandSatellitePackage = null;
-                # Portals are configured at the NixOS level
-                # (modules/services.dbus.nix), not via home-manager.
-                portalPackage = null;
+                # portals: niri ships `share/xdg-desktop-portal/
+                # niri-portals.conf` preferring the `gnome` and `gtk`
+                # backends; this module provides it. Portal resolution for
+                # `XDG_CURRENT_DESKTOP=niri` matches a native niri session.
+                portalPackage = pkgs.xdg-desktop-portal-gnome;
                 # Installs niri's upstream user units via
                 # `systemd.user.packages`; the restart policy is added on top
                 # through a drop-in override below.

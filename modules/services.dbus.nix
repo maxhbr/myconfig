@@ -84,6 +84,12 @@ in
       # portal implementation found in lexicographical order, use the following:
       #
       # xdg.portal.config.common.default = "*";
+      #
+      # `common.default = "wlr"` routes every portal interface of every
+      # session to xdg-desktop-portal-wlr. The niri session additionally
+      # ships niri's own `niri-portals.conf` (installed via the niri
+      # home-manager module's `portalPackage`), whose niri-specific backend
+      # preferences also apply for `XDG_CURRENT_DESKTOP=niri`.
       config = {
         common = {
           default = "wlr";
