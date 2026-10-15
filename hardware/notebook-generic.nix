@@ -32,6 +32,20 @@
 
     services.hardware.bolt.enable = true;
 
+    services.upower = {
+      enable = true;
+      usePercentageForPolicy = true;
+
+      percentageLow = 15;
+      percentageCritical = 10;
+      percentageAction = 5;
+
+      criticalPowerAction = "Hibernate";
+    };
+
+    # Überwachung ab Systemstart, unabhängig von der Desktop-Sitzung.
+    systemd.services.upower.wantedBy = [ "multi-user.target" ];
+
     # disable USB wakeup
     services.udev.extraRules = ''
       ACTION=="add", SUBSYSTEM=="usb", ATTR{power/wakeup}="disabled"
