@@ -257,9 +257,6 @@ in
                     )
                     + "\n"
                     + headlessWindowRules
-                    + "xwayland-satellite {\n"
-                    + "    path \"${pkgs.xwayland-satellite}/bin/xwayland-satellite\"\n"
-                    + "}\n\n"
                     # `optional=true` so that home-manager's build-time
                     # `niri validate` (checkConfig) tolerates the missing relative
                     # include; at runtime the file exists next to config.kdl.
@@ -294,10 +291,11 @@ in
               wayland.windowManager.niri = {
                 enable = true;
                 package = niri;
-                # xwayland-satellite is spawned by niri via the explicit
-                # `xwayland-satellite { path ... }` node in config.kdl, so it
-                # does not need to end up in PATH.
-                xwaylandSatellitePackage = null;
+                # Explicit `path` override dropped from config.kdl: with the
+                # default `xwaylandSatellitePackage`, the package is in the
+                # user's PATH, so niri's built-in default path dependency
+                # `xwayland-satellite { path "xwayland-satellite" }` resolves
+                # without any config.kdl node.
                 # portals: niri ships `share/xdg-desktop-portal/
                 # niri-portals.conf` preferring the `gnome` and `gtk`
                 # backends; this module provides it. Portal resolution for
