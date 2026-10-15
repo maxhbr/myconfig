@@ -78,6 +78,12 @@ let
   # A store path's name carries no quote, so no escaping of VALUES
   # is needed (only the LIKE pattern here is a literal).
   reconcileSelect = lib.strings.escapeShellArg "SELECT path FROM ValidPaths WHERE path LIKE '/nix/store/%'";
+  # The `#` of the step timer's `10#` base prefix: ash needs it
+  # to parse a leading-zero uptime fraction as decimal, but inside
+  # the indented init string a bare `#` would open a Nix comment
+  # and a bare `${` would interpolate — interpolating this plus the
+  # `''${` escape builds the shell bytes.
+  basePrefix = "#";
   # The guest entry script (bd myconfig-dak.5). It runs as the first
   # process of the payload (after /init.krun forked), as root, in the
   # VM: /init.krun replaces its own argv[0] with KRUN_INIT and
@@ -123,11 +129,34 @@ let
     # runs top to bottom, a call above the definition would try an
     # external `step` and die under set -eu before the first mount
     # (the fourth live finding). Cost when off: one [ -n ] test.
+    # The launcher's --verbose arms the trace too, so a verbose
+    # launch narrates the boot gap: the launcher's own phase lines
+    # stop at "vm setup" and resume only after guest exit — the
+    # steps between are exactly what the init spends the gap on.
+    # Each traced step carries the kernel uptime in [brackets] and
+    # its own duration since the previous step (the first one
+    # therefore measures from kernel boot — it lands late when the
+    # kernel spent long booting before the init started).
+    # busybox date has no %N (no sub-second clock), but
+    # /proc/uptime carries the fraction; the 10# prefixes keep a
+    # leading-zero fraction like ".08" from tripping ash's octal
+    # parsing. A read failure (no /proc yet) reports 0 — timing is
+    # best-effort, the step names are the point.
     trace="''${MYSBX_KRUN_TRACE:-}"
+    _now_ms() {
+        if read _up _ < /proc/uptime 2>/dev/null; then
+            _ms=$(( (10${basePrefix}''${_up%%.*} * 100 + 10${basePrefix}''${_up#*.}) * 10 ))
+        else
+            _ms=0
+        fi
+    }
     step() {
         [ -n "$trace" ] || return 0
-        "$BB" echo "mysbx-init: $*"
+        _now_ms
+        "$BB" echo "mysbx-init: [''${_ms}ms] $* (+$((_ms - _step_t0)) ms)"
+        _step_t0=$_ms
     }
+    _step_t0=0
 
     # The guest's writable scratch: the root is a READ-ONLY virtiofs
     # share, so nothing below / may change — /tmp is where every
@@ -449,14 +478,16 @@ let
         # (liveness semantics, plus its store-tree unlink is
         # exactly the lower-layer crash).
         if [ -f /mysbx-nix/state/db/db.sqlite ]; then
-            step "validating the copied nix db against the read-only store share"
             registered_file=/mysbx-nix/registered-paths.txt
             doomed_file=/mysbx-nix/doomed-paths.txt
+            step "enumerating the registered store paths from the copied nix db"
             /bin/sqlite3 /mysbx-nix/state/db/db.sqlite \
                 ${reconcileSelect} \
                 > "$registered_file" \
                 || fail "cannot enumerate registered store paths in the copied nix database"
+            n_registered=$("$BB" wc -l < "$registered_file")
             : > "$doomed_file"
+            step "checking $n_registered registered store path(s) against the read-only store share"
             while IFS= read -r p; do
                 case "$p" in /nix/store/*) ;; *) continue ;; esac
                 if [ ! -e "$p" ] || [ -L "$p" ]; then
@@ -466,7 +497,7 @@ let
             "$BB" rm -f "$registered_file"
             n_doomed=$("$BB" wc -l < "$doomed_file")
             if [ "$n_doomed" -gt 0 ]; then
-                step "reconciling the db: $n_doomed registered store path(s) missing or symlinked, dropping their rows"
+                step "reconciling the db: $n_doomed of $n_registered registered store path(s) missing or symlinked, dropping their rows"
                 {
                     printf 'PRAGMA foreign_keys=ON;\nBEGIN;\n'
                     while IFS= read -r p; do
@@ -627,6 +658,7 @@ let
     # interval, so the interval bounds the overshoot) — both ride
     # the manifest env route, no launcher change needed.
     if [ "''${MYSBX_KRUN_INODE_WATCHDOG:-20000}" != "0" ]; then
+        step "arming the inode watchdog (threshold ''${MYSBX_KRUN_INODE_WATCHDOG:-20000}, interval ''${MYSBX_KRUN_INODE_WATCHDOG_INTERVAL:-60}s)"
         (
             _iw_limit="''${MYSBX_KRUN_INODE_WATCHDOG:-20000}"
             case "$_iw_limit" in

@@ -360,7 +360,8 @@ Keep scratch and networking enabled for the normal startup test (`myconfig-8u0`)
 The launcher shares the host Nix database only when both are enabled.
 The shared database must contain `db.sqlite` to exercise reconciliation.
 With `MYSBX_KRUN_TRACE=1`, expect these init markers before the guest start marker:
-`validating the copied nix db against the read-only store share`,
+`enumerating the registered store paths from the copied nix db`,
+`checking N registered store path(s) against the read-only store share`,
 `copied nix db validation complete`, then
 `mounting the store overlay (fresh scratch upper)`.
 The init checks the copied database through the bare read-only share before mounting the overlay.

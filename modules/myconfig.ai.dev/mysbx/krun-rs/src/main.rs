@@ -84,11 +84,12 @@
 // `--verbose` makes the launcher log its phase TIMINGS (kvm probe,
 // dlopen, vm setup, vm run — one stderr line each, with the
 // cumulative total) and its setup detail (the dlopen'd lib, the
-// payload, the manifest, the fd limits), and escalates libkrun's
-// own log to info; mysbx forwards its own `--verbose` here. The
-// guest init's step trace stays a separate switch
-// (MYSBX_KRUN_TRACE) — verbose is the launcher's verbosity, not the
-// guest console's.
+// payload, the manifest, the fd limits), escalates libkrun's own
+// log to info, and arms the guest init's step trace
+// (MYSBX_KRUN_TRACE=1 rides the envp unless the config already
+// carries it — the init's timed steps narrate the boot gap the
+// launcher cannot see into); mysbx forwards its own `--verbose`
+// here.
 //
 // The rootfs is shared READ-ONLY (the root of a sandbox is never
 // writable from inside). The devices carry their own ro/rw flag —
@@ -482,8 +483,9 @@ struct Config {
     rootfs: PathBuf,
     /// `--verbose`: the caller asks for chatty timing and setup
     /// logs (mysbx passes its own `--verbose` through). Escalates
-    /// the same routes the trace flag does, minus the guest init's
-    /// own step tracing (that is what `MYSBX_KRUN_TRACE` is for).
+    /// the same routes the trace flag does, and ALSO arms the guest
+    /// init's own step trace (exec_spec pushes MYSBX_KRUN_TRACE=1)
+    /// so the boot gap is narrated guest-side.
     verbose: bool,
     /// A guest entry script used as krun_set_exec's exec_path. It
     /// receives the payload as its argv ($1.. — the cmdline "--"
@@ -991,6 +993,18 @@ fn exec_spec(cfg: &Config) -> (String, Vec<String>, Vec<String>) {
     let env: Vec<String> = match &cfg.manifest {
         Some(_) => {
             let mut env = vec![format!("MYSBX_KRUN_MANIFEST=stage-ro:{MANIFEST_SLOT}")];
+            // --verbose arms the guest init's step trace (the boot
+            // gap narration): the launcher's own phase lines stop at
+            // "vm setup" and resume only after guest exit, and the
+            // steps between — mounts, the scratch mkfs, the nix db
+            // copy and its per-path reconcile check — are exactly
+            // what the init spends the gap on. The trace flag, when
+            // set, keeps its own value.
+            if cfg.verbose {
+                if !cfg.env.iter().any(|(k, _)| k == "MYSBX_KRUN_TRACE") {
+                    env.push("MYSBX_KRUN_TRACE=1".to_owned());
+                }
+            }
             if let Some((_, v)) = cfg.env.iter().find(|(k, _)| k == "MYSBX_KRUN_TRACE") {
                 env.push(format!("MYSBX_KRUN_TRACE={v}"));
             }
@@ -998,6 +1012,9 @@ fn exec_spec(cfg: &Config) -> (String, Vec<String>, Vec<String>) {
         }
         None => {
             let mut env: Vec<String> = cfg.env.iter().map(|(k, v)| format!("{k}={v}")).collect();
+            if cfg.verbose && !cfg.env.iter().any(|(k, _)| k == "MYSBX_KRUN_TRACE") {
+                env.push("MYSBX_KRUN_TRACE=1".to_owned());
+            }
             if !cfg.shares.is_empty() {
                 // One "DEVICE SLOT DEST ro|rw" entry per share: the
                 // guest entry script mounts each DEVICE once (under
@@ -1114,9 +1131,10 @@ fn main() {
     // sixth live finding: the flag sat in config.toml, the launcher
     // never saw it). Both routes checked. `--verbose` escalates the
     // same launcher-side routes (the log level, the device and
-    // share list) but NOT the guest init's own step trace — that is
-    // the trace flag's job, and a verbose run must not spam the
-    // guest console.
+    // share list) AND arms the guest init's own step trace with
+    // timing (exec_spec pushes MYSBX_KRUN_TRACE=1 unless the env
+    // already carries it) — a verbose launch must narrate the boot
+    // gap, and the init's timed steps are the only voice it has.
     let trace = std::env::var("MYSBX_KRUN_TRACE").is_ok_and(|v| !v.is_empty())
         || cfg
             .env
@@ -1691,6 +1709,68 @@ mod tests {
         )));
         assert!(text.starts_with("env\t"));
         assert!(text.contains("chdir\t"));
+    }
+
+    #[test]
+    fn verbose_arms_the_guest_init_trace_in_both_env_routes() {
+        // The boot-gap narration: the launcher's own phase lines
+        // stop at "vm setup" and resume only after guest exit, so a
+        // verbose launch needs the init's timed step trace on the
+        // guest console. exec_spec arms it in BOTH routes (the
+        // manifest pointer envp and the legacy full envp), never
+        // overriding an explicit MYSBX_KRUN_TRACE, and staying off
+        // without --verbose.
+        let base = |verbose: bool| {
+            let mut cfg = test_cfg();
+            cfg.verbose = verbose;
+            cfg.payload = vec!["/bin/true".to_owned()];
+            cfg
+        };
+        // manifest route: the trace rides alongside the pointer
+        let mut cfg = base(true);
+        cfg.manifest = Some(PathBuf::from("/stage/ro/manifest"));
+        cfg.devices.push(Device {
+            tag: "stage-ro".to_owned(),
+            host_dir: PathBuf::from("/stage/ro"),
+            read_only: true,
+        });
+        let env = exec_spec(&cfg).2;
+        assert!(
+            env.contains(&"MYSBX_KRUN_TRACE=1".to_owned()),
+            "verbose + manifest must arm the init trace: {env:?}"
+        );
+        assert!(
+            env.contains(&"MYSBX_KRUN_MANIFEST=stage-ro:manifest".to_owned()),
+            "the manifest pointer must survive: {env:?}"
+        );
+        // ...but never overrides an explicit value
+        cfg.env
+            .push(("MYSBX_KRUN_TRACE".to_owned(), "1".to_owned()));
+        let env = exec_spec(&cfg).2;
+        assert_eq!(
+            env.iter()
+                .filter(|e| e.starts_with("MYSBX_KRUN_TRACE="))
+                .count(),
+            1,
+            "an explicit trace flag must not be duplicated: {env:?}"
+        );
+        // ...and stays off without --verbose
+        let mut cfg = base(false);
+        cfg.manifest = Some(PathBuf::from("/stage/ro/manifest"));
+        cfg.devices.push(Device {
+            tag: "stage-ro".to_owned(),
+            host_dir: PathBuf::from("/stage/ro"),
+            read_only: true,
+        });
+        let env = exec_spec(&cfg).2;
+        assert!(!env.iter().any(|e| e.starts_with("MYSBX_KRUN_TRACE=")));
+        // legacy route: the trace lands in the plain envp
+        let cfg = base(true);
+        let env = exec_spec(&cfg).2;
+        assert!(env.contains(&"MYSBX_KRUN_TRACE=1".to_owned()));
+        let cfg = base(false);
+        let env = exec_spec(&cfg).2;
+        assert!(!env.iter().any(|e| e.starts_with("MYSBX_KRUN_TRACE=")));
     }
 
     #[test]

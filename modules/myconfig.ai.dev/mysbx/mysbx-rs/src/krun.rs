@@ -218,9 +218,9 @@ pub struct Params<'a> {
     /// Whether the caller passed `--verbose` (cli.md D10): the argv
     /// forwards it to the launcher, which then logs its phase
     /// timings and setup detail (the dlopen'd lib, the manifest,
-    /// the fd limits) and escalates libkrun's log to info. The
-    /// guest init's own step trace stays gated on
-    /// `MYSBX_KRUN_TRACE` — verbose is the LAUNCHER's verbosity.
+    /// the fd limits), escalates libkrun's log to info, and arms
+    /// the guest init's timed step trace so the boot gap is
+    /// narrated guest-side.
     pub verbose: bool,
 }
 
@@ -462,7 +462,8 @@ struct Spec {
     /// sidecar file, no stage slot, no init placement.
     overlays: Vec<(String, u32, String)>,
     /// Whether the caller passed `--verbose`: forwarded to the
-    /// launcher for its phase timings and setup logs.
+    /// launcher for its phase timings, setup logs and the guest
+    /// init's step trace.
     verbose: bool,
 }
 

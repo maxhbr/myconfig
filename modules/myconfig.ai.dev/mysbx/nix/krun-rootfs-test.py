@@ -191,8 +191,12 @@ class InitTests(unittest.TestCase):
         )
 
     def test_trace_phases(self):
+        # The traced step names of the db reconcile: the split of the
+        # old single "validating" step into enumerate + check (each
+        # with its own timing) must keep the ORDER and the completion
+        # marker the live validation greps for.
         phases = [
-            'step "validating the copied nix db against the read-only store share"',
+            'step "enumerating the registered store paths from the copied nix db"',
             "SELECT path FROM ValidPaths WHERE path LIKE",
             'fail "foreign-key violations remain in the copied nix database"',
             'step "copied nix db validation complete"',
@@ -312,7 +316,9 @@ class InitTests(unittest.TestCase):
         before = self.rows(self.source_db)
         result = self.run_reconcile()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("3 registered store path(s) missing or symlinked", result.stdout)
+        self.assertIn(
+            "3 of 5 registered store path(s) missing or symlinked", result.stdout
+        )
         self.assertIn("copied nix db validation complete", result.stdout)
         self.assertIn("mysbx-test: overlay boundary reached", result.stdout)
         paths, refs = self.rows()
