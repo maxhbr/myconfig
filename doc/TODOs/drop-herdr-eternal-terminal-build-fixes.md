@@ -34,22 +34,14 @@ drv, the override is a no-op and can be deleted).
 
 ## eternal-terminal
 
-Override: `postPatch` bumping `set(CMAKE_CXX_STANDARD 17)` → `20` in
-`CMakeLists.txt`, plus `doCheck = false; enableParallelBuilding = false;`.
-
-At the locked rev the package fails to compile against the
-`abseil-cpp_20260817.0` + `protobuf 36.2` toolchain:
-
-```
-absl/types/compare.h:60:12: error: 'partial_ordering' has not been declared in 'std'
-absl/container/btree_map.h:432:15: error: 'contains' has not been declared ...
-```
-
-abseil LTS 202608 requires C++20, but EternalTerminal hard-codes
-`set(CMAKE_CXX_STANDARD 17)` (with `CMAKE_CXX_STANDARD_REQUIRED ON`, so
-`CXXFLAGS` cannot override it). The package expression is byte-identical on
-`master` / `nixos-unstable` / `nixos-unstable-small`, so no channel switch
-fixes this — only the patch does.
+Override (as of the nixpkgs bump that ships
+`pkgs/by-name/et/eternal-terminal/cmake-cxx-version.patch`): only
+`doCheck = false; enableParallelBuilding = false;` remain. The earlier
+`postPatch` bumping `set(CMAKE_CXX_STANDARD 17)` → `20` had to be dropped:
+upstream now patches exactly that line, so `substituteInPlace
+--replace-fail "set(CMAKE_CXX_STANDARD 17)" ...` found nothing to replace
+and aborted `patchPhase` with
+`pattern set\(CMAKE_CXX_STANDARD\ 17\) doesn't match anything`.
 
 `doCheck = false` and `enableParallelBuilding = false` are needed in the
 mysbx build sandbox (`/run/mysbx-nix/state/builds`):
@@ -60,13 +52,12 @@ mysbx build sandbox (`/run/mysbx-nix/state/builds`):
 - at `-j24` the C++20 PCH makes parallel `cc1plus` runs OOM the sandbox
   (`g++: fatal error: Killed signal terminated program cc1plus`).
 
-**What to do:** remove the override once upstream (EternalTerminal raising the
-C++ standard, or an abseil/protobuf pairing compatible with C++17) reaches a
-revision the `nixpkgs` input picks up; then also restore the check phase on a
-builder that supports the chown-based integration tests, i.e. drop
+**What to do:** remove the override once the build sandbox supports the
+chown-based integration tests and the C++20 PCH memory footprint, i.e. drop
 `doCheck = false`/`enableParallelBuilding = false` first and confirm
 `nix build .#nixosConfigurations.test-f13.pkgs.eternal-terminal` passes its
-tests there.
+tests there. If a future nixpkgs bump removes or renames the upstream patches
+again, the override may shrink to nothing.
 
 ## How to verify
 

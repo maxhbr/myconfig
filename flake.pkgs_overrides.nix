@@ -172,37 +172,22 @@
       herdr = self.master.herdr;
     })
 
-    # eternal-terminal: fails to compile at the pinned nixpkgs against the
-    # `abseil-cpp_20260817.0` + `protobuf 36.2` toolchain:
-    #   absl/types/compare.h:60:12: error: 'partial_ordering' has not been
-    #     declared in 'std'
-    #   absl/container/btree_map.h:432:15: error: 'contains' has not been
-    #     declared ...
-    # abseil's installed headers require C++20 (`std::partial_ordering`,
-    # `std::three_way_comparable`), but ET's `CMakeLists.txt` hard-codes
-    # `set(CMAKE_CXX_STANDARD 17)` (with `CMAKE_CXX_STANDARD_REQUIRED ON`),
-    # so a `CXXFLAGS`-based override is ignored. The expression is byte-
-    # identical on all newer channels, so bumping the input does not help;
-    # patch the standard to 20 instead. abseil LTS 202608 is built with and
-    # expects C++20, so this matches what protobuf already compiles with.
+    # eternal-terminal: the C++17→C++20 bump (needed against the
+    # `abseil-cpp_20260817.0` + `protobuf 36.2` toolchain) is now shipped
+    # upstream via the package's `cmake-cxx-version.patch` and
+    # `thread-pool-c++20-result-of.patch`, so no patching is needed here.
     #
-    # `doCheck = false` and `enableParallelBuilding = false` are needed for
-    # the sandbox the f13 build runs in (`/run/mysbx-nix/state/builds`):
+    # `doCheck = false` and `enableParallelBuilding = false` are still needed
+    # for the sandbox the f13 build runs in (`/run/mysbx-nix/state/builds`):
     # - the integration tests spawn an et daemon that `chown`s its socket
     #   path, which fails with `Error: (22): Invalid argument` there;
     # - at `-j24` the C++20 PCH makes parallel `cc1plus` processes OOM the
     #   build sandbox (`Killed signal terminated program cc1plus`).
     #
-    # TODO: remove once upstream (EternalTerminal or nixpkgs) raises the
-    # C++ standard to 20 (or an abseil/protobuf pairing compatible with
-    # C++17 is restored) in a revision the nixpkgs input picks up; then
-    # also restore the check phase on a builder that supports it.
+    # TODO: remove once the build sandbox supports the chown-based
+    # integration tests and the PCH memory footprint.
     (_self: prev: {
-      eternal-terminal = prev.eternal-terminal.overrideAttrs (old: {
-        postPatch = (old.postPatch or "") + ''
-          substituteInPlace CMakeLists.txt \
-            --replace-fail "set(CMAKE_CXX_STANDARD 17)" "set(CMAKE_CXX_STANDARD 20)"
-        '';
+      eternal-terminal = prev.eternal-terminal.overrideAttrs (_old: {
         doCheck = false;
         enableParallelBuilding = false;
       });
