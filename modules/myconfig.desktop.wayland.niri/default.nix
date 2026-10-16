@@ -11,12 +11,6 @@ let
   nixosConfig = config;
   cfg = config.myconfig;
   user = myconfig.user;
-  # Patch the upstream `niri-session` script which calls
-  #   systemctl --user import-environment
-  # without an explicit variable list. That bare form is deprecated by systemd
-  # and on newer systemd versions aborts the session.
-  # See https://github.com/niri-wm/niri/issues/254
-  # Build upstream niri against the host libc so it can load the system Mesa driver.
   niriPkgs = pkgs.extend inputs.niri.overlays.default;
   niri = niriPkgs.niri.overrideAttrs (old: {
     postInstall = (old.postInstall or "") + ''
@@ -28,13 +22,6 @@ let
       fi
     '';
   });
-  # On headless hosts (SSH + vnc/ast-vnc-style access, see
-  # modules/myconfig.headless.nix) there is no physical monitor to size
-  # windows against, so the initial foot terminal — the one autostarted as
-  # `foot-host-tmux-session`/`host-tmux-session` in
-  # myconfig.desktop.wayland.autostartCommands and hosting the main/host
-  # agent session — should just take over the whole output instead of
-  # tiling at some fraction of it.
   headless = cfg.headless.enable;
   headlessWindowRules = lib.optionalString headless ''
     // headless (myconfig.headless.enable): the initial foot terminal hosts
@@ -47,8 +34,6 @@ let
     }
   '';
   uwsmCfg = cfg.desktop.wayland.uwsm;
-  # Dynamic workspace naming: see ./workspace-names.nix and
-  # doc/niri-dynamic-workspace-names.md.
   wsNamesCfg = cfg.desktop.wayland.niri.workspaceNames;
   wsNames = (import ./workspace-names.nix { inherit lib pkgs; }).niri-ws-names {
     inherit (wsNamesCfg) rules interval;
@@ -109,10 +94,6 @@ in
       };
     };
   };
-  # Always expose the `extraBinds` home-manager option (even when niri is not
-  # the active session) so other home-manager modules — e.g. voxtype — can
-  # register niri keybinds. The value is substituted into the `binds { }`
-  # block of the generated config at the `@@niri-extra-binds@@` marker.
   imports = [
     {
       home-manager.sharedModules = [
@@ -140,10 +121,6 @@ in
         )
       )
       {
-        # keyd disabled by default — it interferes with touchpad
-        # "disable while typing". Re-enable on a per-host basis with
-        # `services.keyd.enable = true;` if you want the launcher tap
-        # and the F13 voxtype hotkey back.
         services.keyd = lib.mkIf config.services.keyd.enable {
           keyboards.default = {
             ids = [ "*" ];
@@ -165,11 +142,6 @@ in
             };
           };
         };
-        # nixpkgs.overlays = [
-        #   (_: _: {
-        #     niri = inputs.niri.packages.${pkgs.stdenv.hostPlatform.system}.niri;
-        #   })
-        # ];
         home-manager.sharedModules = [
           (
             { config, ... }:
@@ -236,13 +208,6 @@ in
                 set -x
                 ${niri}/bin/niri msg output "$OUTPUT" scale "$target"
               '';
-              # The bulk of the niri config (binds, window rules, layout) lives
-              # in config.kdl and is passed to home-manager's
-              # `wayland.windowManager.niri` module via its `extraConfig`
-              # verbatim passthrough. It contains `@@niri-extra-binds@@`
-              # substitution markers and host-derived fragments (headless
-              # window rules, NixOS session variables) which the typed
-              # `settings` tree cannot express faithfully.
               kdlSource = builtins.readFile ./config.kdl;
               niriConfigKdl =
                 lib.throwIfNot (lib.hasInfix "@@niri-extra-binds@@" kdlSource)
@@ -257,18 +222,10 @@ in
                     )
                     + "\n"
                     + headlessWindowRules
-                    # `optional=true` so that home-manager's build-time
-                    # `niri validate` (checkConfig) tolerates the missing relative
-                    # include; at runtime the file exists next to config.kdl.
                     + "include optional=true \"include.kdl\"\n\n"
                     + "spawn-at-startup \"${niri-autostart}\""
                     + lib.optionalString wsNamesCfg.enable "\nspawn-at-startup \"systemctl --user start niri-ws-names.service\""
                   );
-              # The host-specific overrides (additionalConfigKdl) are pulled in
-              # via the `include optional=true \"include.kdl\"` node above.
-              # home-manager only validates config.kdl itself, so validate the
-              # merged config (config.kdl + include.kdl) here and link the
-              # result into place.
               niri-config =
                 pkgs.runCommand "niri-config"
                   {
@@ -284,54 +241,25 @@ in
                   '';
             in
             {
-              # Drive home-manager's niri module
-              # (modules/services/window-managers/niri.nix of the home
-              # input). The generated config is validated by the module's
-              # `checkConfig` (runs `niri validate` on the written file).
               wayland.windowManager.niri = {
                 enable = true;
                 package = niri;
-                # Explicit `path` override dropped from config.kdl: with the
-                # default `xwaylandSatellitePackage`, the package is in the
-                # user's PATH, so niri's built-in default path dependency
-                # `xwayland-satellite { path "xwayland-satellite" }` resolves
-                # without any config.kdl node.
-                # portals: niri ships `share/xdg-desktop-portal/
-                # niri-portals.conf` preferring the `gnome` and `gtk`
-                # backends; this module provides it. Portal resolution for
-                # `XDG_CURRENT_DESKTOP=niri` matches a native niri session.
                 portalPackage = pkgs.xdg-desktop-portal-gnome;
-                # Installs niri's upstream user units via
-                # `systemd.user.packages`; the restart policy is added on top
-                # through a drop-in override below.
                 systemd.enable = true;
                 extraConfig = niriConfigKdl;
               };
-              # host-specific overrides (`additionalConfigKdl`) are pulled in
-              # via `include optional=true "include.kdl"` in config.kdl
               xdg.configFile."niri/include.kdl".source = "${niri-config}/include.kdl";
-              # Let niri's integrated Xwayland-satellite manage DISPLAY.
-              # A global DISPLAY also makes TTY launches select the nested backend.
               home.packages = [
                 niri-xwayland-satellite
                 niri-toggle-dpi-scale
               ];
               programs.waybar.settings.mainBar = {
                 "niri/workspaces" = {
-                  # {value} shows the workspace name if it has one, its
-                  # index otherwise (waybar niri-workspaces module).
                   "format" = if wsNamesCfg.enable then "{value}" else "{index}";
                   rotate = 90;
                 };
                 modules-left = [ "niri/workspaces" ];
               };
-              # The compositor anchor service comes from niri's upstream
-              # units (installed via the niri module's `systemd.enable`).
-              # This drop-in only adds a restart policy, so a crashed niri
-              # does not leave the session dead until manual restart, and
-              # keeps home-manager from restarting the unit on activation
-              # (`X-RestartIfChanged = false` — restarting the compositor
-              # from its own activation would kill the session it runs in).
               xdg.configFile."systemd/user/niri.service.d/override.conf".text = ''
                 [Unit]
                 X-RestartIfChanged=false
@@ -342,10 +270,6 @@ in
               systemd.user.services.niri-ws-names = lib.mkIf wsNamesCfg.enable {
                 Unit = {
                   Description = "Dynamic workspace naming for niri";
-                  # The daemon polls niri via $NIRI_SOCKET, whose path embeds
-                  # niri's PID: it is only valid for this session. Bind to the
-                  # niri service so the daemon dies with the compositor
-                  # instead of polling a stale socket forever.
                   BindsTo = [
                     "niri.service"
                     "graphical-session.target"
@@ -361,8 +285,6 @@ in
                   Slice = "session.slice";
                   ExecStart = "${wsNames}/bin/niri-ws-names";
                   Restart = "on-failure";
-                  # The step script is idempotent; a wedged call must not
-                  # wedge the whole daemon.
                   TimeoutStopSec = 5;
                 };
               };
@@ -395,9 +317,6 @@ in
           )
         ];
 
-        # Register niri as a uwsm-managed Wayland compositor. This produces the
-        # `niri-uwsm.desktop` wayland-session entry (via programs.uwsm) used by
-        # display managers, and is gated on uwsm being enabled.
         programs.uwsm.waylandCompositors = lib.mkIf uwsmCfg.enable {
           niri = {
             prettyName = "Niri";
@@ -407,9 +326,6 @@ in
         };
 
         myconfig.desktop.wayland.sessions = {
-          # When uwsm is enabled this routes the greetd session through
-          # `uwsm start -F -- niri --session`; otherwise it falls back to the
-          # plain `niri-session` helper.
           niri = {
             command =
               if uwsmCfg.enable then
