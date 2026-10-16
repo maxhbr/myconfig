@@ -8,7 +8,7 @@ let
     };
   };
 
-  config = hmLib.homeManagerConfiguration {
+  mkConfig = extra: hmLib.homeManagerConfiguration {
     inherit pkgs;
     modules = [
       agentSkillsModule
@@ -26,9 +26,22 @@ let
           targets.claude.enable = true;
         };
       }
+      extra
     ];
     extraSpecialArgs = { inputs = fixtureInputs; };
   };
+
+  config = mkConfig {
+    programs.agent-skills = {
+      sources.fixture.filter.maxDepth = 0;
+      skills.explicit = {
+        original = { from = "fixture"; path = "."; };
+        renamed = { from = "fixture"; path = "."; rename = "nested/output"; };
+      };
+    };
+  };
+  invalidConfig = extra: !(builtins.tryEval
+    (builtins.attrNames (mkConfig extra).config.programs.agent-skills.catalog)).success;
 
   bundle = config.config.programs.agent-skills.bundlePath;
   activation = config.config.home.activation.agent-skills.data;
@@ -43,13 +56,17 @@ let
     else throw "agent-skills input-source test failed: expected skill catalog entry from input source";
 
   _assertActivation =
-    if pkgs.lib.hasInfix "bundle=/nix/store/" activation then true
-    else throw "agent-skills input-source test failed: activation script did not capture the bundle path";
+    if pkgs.lib.hasInfix "/bin/skills-install" activation then true
+    else throw "agent-skills input-source test failed: activation script did not invoke the sync program";
 in
 assert _assertBundle;
 assert _assertCatalog;
 assert _assertActivation;
-pkgs.runCommand "agent-skills-home-manager-input-source-test" {} ''
+assert invalidConfig { programs.agent-skills.sources.fixture.idPrefix = "invalid/"; };
+pkgs.runCommand "agent-skills-home-manager-input-source-test" { } ''
+  test -f ${bundle}/original/SKILL.md
+  test -f ${bundle}/nested/output/SKILL.md
+  test ! -e ${bundle}/renamed
   mkdir -p "$out"
   touch "$out/ok"
 ''

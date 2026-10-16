@@ -10,7 +10,7 @@ in
 { config, pkgs, ... }@args:
 let
   cfg = config.programs.agent-skills;
-  agentLib = agentLibFor (args.inputs or {});
+  agentLib = agentLibFor (args.inputs or { });
 
   targetType = lib.types.submodule ({ config, name, ... }: {
     options = {
@@ -27,13 +27,14 @@ let
           then agentLib.defaultTargets.${name}.dest
           else throw "agent-skills: target '${name}' requires a 'dest' option";
         description = ''
-          Destination path for skills. Supports shell variable expansion at runtime.
+          Destination path for skills. Global targets support $HOME, ~, and
+          ''${VAR:-$HOME/...} fallback forms at runtime; local paths are literal.
           See README.md#default-target-paths for the full default path matrix.
           Examples:
             - "$HOME/.agents/skills" (global)
             - ".agents/skills" (project-local)
             - "''${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills" (env-expanded)
-          Note: 'link' structure type does not support shell variable expansion;
+          Note: 'link' structure type does not support runtime path expressions;
           use 'symlink-tree' or 'copy-tree' for dynamic paths.
         '';
       };
@@ -46,7 +47,7 @@ let
 
       systems = lib.mkOption {
         type = lib.types.listOf lib.types.str;
-        default = [];
+        default = [ ];
         description = "Limit to specific system identifiers; empty means all.";
       };
     };
@@ -63,7 +64,7 @@ let
       path = lib.mkOption {
         type = lib.types.nullOr lib.types.path;
         default = null;
-        description = "Local path fallback instead of `input`.";
+        description = "Source path; takes precedence over `input` when both are set.";
       };
 
       subdir = lib.mkOption {
@@ -80,9 +81,9 @@ let
 
       filter = {
         maxDepth = lib.mkOption {
-          type = lib.types.nullOr lib.types.ints.positive;
+          type = lib.types.nullOr lib.types.ints.unsigned;
           default = null;
-          description = "Recursion depth when discovering SKILL.md directories. 1 = immediate children only, 2 = one level of nesting, null = unlimited (capped at 100).";
+          description = "Recursion depth when discovering SKILL.md directories. 0 = source root only, 1 = immediate children, 2 = one level of nesting, null = unlimited (capped at 100).";
         };
 
         nameRegex = lib.mkOption {
@@ -121,13 +122,20 @@ let
 
       meta = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
-        default = {};
+        default = { };
         description = "Optional metadata override.";
+      };
+
+      agents = lib.mkOption {
+        type = lib.types.nullOr (lib.types.listOf lib.types.nonEmptyStr);
+        default = null;
+        description = "Target names that may receive this skill. Null installs to every enabled target; an empty list installs to none.";
+        example = [ "claude" "codex" ];
       };
 
       packages = lib.mkOption {
         type = lib.types.listOf lib.types.package;
-        default = [];
+        default = [ ];
         description = "Packages to symlink into the skill directory.";
       };
 
@@ -151,7 +159,7 @@ in
 
     sources = lib.mkOption {
       type = lib.types.attrsOf sourceType;
-      default = {};
+      default = { };
       description = "Named skill sources (flake input or path).";
     };
 
@@ -160,7 +168,7 @@ in
         options = {
           enable = lib.mkOption {
             type = lib.types.listOf lib.types.str;
-            default = [];
+            default = [ ];
             description = "Skill IDs to enable from discovered catalog.";
             example = [ "format-pr" "nix-review" ];
           };
@@ -173,22 +181,22 @@ in
 
           explicit = lib.mkOption {
             type = lib.types.attrsOf skillType;
-            default = {};
+            default = { };
             description = "Explicitly selected skills with optional rename.";
           };
         };
       });
       default = {
-        enable = [];
+        enable = [ ];
         enableAll = false;
-        explicit = {};
+        explicit = { };
       };
       description = "Skill selection (allowlist + explicit).";
     };
 
     targets = lib.mkOption {
       type = lib.types.attrsOf targetType;
-      default = {};
+      default = { };
       description = "Agent-specific sync destinations.";
     };
 
@@ -212,27 +220,41 @@ in
       type = lib.types.nullOr lib.types.path;
       description = "Store path for the built bundle.";
     };
+
+    targetBundlePaths = lib.mkOption {
+      type = lib.types.attrsOf lib.types.path;
+      readOnly = true;
+      description = "Store bundles filtered by skill agents allowlists, keyed by enabled target names for the current system.";
+    };
   };
 
-  config = lib.mkIf cfg.enable (let
-    catalog = agentLib.discoverCatalog cfg.sources;
-    allowlist = agentLib.allowlistFor {
-      inherit catalog;
-      sources = cfg.sources;
-      enableAll = cfg.skills.enableAll;
-      enable = cfg.skills.enable;
-    };
-    selection = agentLib.selectSkills {
-      inherit catalog allowlist;
-      skills = cfg.skills.explicit;
-      sources = cfg.sources;
-    };
-    bundle = agentLib.mkBundle { inherit pkgs selection; };
-  in {
-    programs.agent-skills.catalog = catalog;
-    programs.agent-skills.bundlePath = bundle;
-    # Set default targets individually with low priority
-    # This allows users to override individual target settings without losing others
-    programs.agent-skills.targets = lib.mapAttrs (_: v: lib.mkDefault v) agentLib.defaultTargets;
-  });
+  config = lib.mkIf cfg.enable (
+    let
+      catalog = agentLib.discoverCatalog cfg.sources;
+      allowlist = agentLib.allowlistFor {
+        inherit catalog;
+        sources = cfg.sources;
+        enableAll = cfg.skills.enableAll;
+        enable = cfg.skills.enable;
+      };
+      selection = agentLib.selectSkills {
+        inherit catalog allowlist;
+        skills = cfg.skills.explicit;
+        sources = cfg.sources;
+      };
+      bundle = agentLib.mkBundle { inherit pkgs selection; };
+    in
+    {
+      programs.agent-skills.catalog = catalog;
+      programs.agent-skills.bundlePath = bundle;
+      programs.agent-skills.targetBundlePaths = agentLib.bundlesForTargets {
+        bundle = cfg.bundlePath;
+        targets = cfg.targets;
+        system = pkgs.stdenv.hostPlatform.system;
+      };
+      # Set default targets individually with low priority
+      # This allows users to override individual target settings without losing others
+      programs.agent-skills.targets = lib.mapAttrs (_: v: lib.mkDefault v) agentLib.defaultTargets;
+    }
+  );
 }
