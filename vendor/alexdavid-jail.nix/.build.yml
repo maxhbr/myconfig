@@ -1,4 +1,4 @@
-image: nixos/25.05
+image: nixos/26.05
 environment:
   NIX_CONFIG: "experimental-features = nix-command flakes"
 secrets:

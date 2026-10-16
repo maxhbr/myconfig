@@ -2,12 +2,13 @@ module CombinatorsSpec (spec) where
 
 import Control.Concurrent (threadDelay)
 import Control.Monad
+import Data.ByteString qualified as BS
 import Data.List.Extra
 import Data.Maybe (fromJust)
 import Data.String.Interpolate.Util
 import GHC.IO.Exception (ExitCode (..))
 import System.Directory.Extra (createDirectoryIfMissing, doesFileExist, doesPathExist)
-import System.Posix (getProcessStatus, sigKILL, signalProcess)
+import System.Posix (createSymbolicLink, getProcessStatus, sigKILL, signalProcess)
 import System.Process qualified as Process
 import Test.Hspec
 import TestPrelude
@@ -58,6 +59,70 @@ spec = parallel $ inTestM $ do
         ])
       |]
         `shouldOutput` "bar\n"
+
+  describe "fido-token" $ do
+    let createFakeHidraw reportDescriptor devContents path = do
+          liftIO $ do
+            createDirectoryIfMissing True (path </> "device")
+            writeFile (path </> "dev") devContents
+            BS.writeFile (path </> "device/report_descriptor") reportDescriptor
+
+    let createFakeFidoHidraw :: String -> FilePath -> TestM ()
+        createFakeFidoHidraw =
+          createFakeHidraw $
+            BS.pack
+              ( [0x06, 0xd0, 0xf1] -- Usage Page (FIDO Alliance)         0
+                  <> [0x09, 0x01] --  Usage (U2F Authenticator Device)   3
+                  <> [0xa1, 0x01] --  Collection (Application)           5
+              )
+              <> "...remainder of HID data..."
+
+    let createFakeUnrelatedHidraw :: FilePath -> TestM ()
+        createFakeUnrelatedHidraw =
+          createFakeHidraw
+            ( BS.pack
+                [0x05, 0x01, 0x09, 0x02, 0xa1, 0x01, 0x09, 0x01]
+            )
+            "0:0"
+
+    let testFidoTokenCombinatorInFakeEnv :: String -> TestM String
+        testFidoTokenCombinatorInFakeEnv shell = do
+          tmpDir <- getTestDir
+          let hidrawPath = tmpDir </> "hidraw"
+          createFakeFidoHidraw "123:0" $ hidrawPath </> "hidraw8"
+          createFakeUnrelatedHidraw $ hidrawPath </> "hidraw9"
+          createFakeUnrelatedHidraw $ hidrawPath </> "hidraw10"
+          createFakeUnrelatedHidraw $ hidrawPath </> "hidraw11"
+          createFakeFidoHidraw "456:0" $ hidrawPath </> "hidraw12"
+          runNixDrv
+            [i|
+              let
+                withFakeFidoToken = program:
+                  jail program.name program (c: [
+                    (c.unsafe-add-raw-args "--dev-bind /dev/zero /dev/hidraw8")
+                    (c.unsafe-add-raw-args "--dev-bind /dev/zero /dev/hidraw9")
+                    (c.unsafe-add-raw-args "--dev-bind /dev/zero /dev/hidraw10")
+                    (c.unsafe-add-raw-args "--dev-bind /dev/zero /dev/hidraw11")
+                    (c.unsafe-add-raw-args "--dev-bind /dev/zero /dev/hidraw12")
+                    (c.ro-bind "#{hidrawPath}" "/sys/class/hidraw")
+                  ]);
+              in
+                withFakeFidoToken (
+                  jail "test" (sh "#{shell}") (c: [
+                    c.fido-token
+                  ])
+                )
+            |]
+
+    it "binds devices matching the FIDO alliance specification" $ do
+      testFidoTokenCombinatorInFakeEnv "cat /sys/class/hidraw/hidraw8/dev" `shouldReturnTestM` "123:0"
+      testFidoTokenCombinatorInFakeEnv "cat /sys/class/hidraw/hidraw12/dev" `shouldReturnTestM` "456:0"
+
+    it "dev-binds files in /dev/ matching the found devices" $ do
+      testFidoTokenCombinatorInFakeEnv "echo /dev/hidraw*" `shouldReturnTestM` "/dev/hidraw12 /dev/hidraw8\n"
+
+    it "only binds the matching hidraw in /sys/class/hidraw" $ do
+      testFidoTokenCombinatorInFakeEnv "echo /sys/class/hidraw/*" `shouldReturnTestM` "/sys/class/hidraw/hidraw12 /sys/class/hidraw/hidraw8\n"
 
   describe "fwd-env" $ do
     it "forwards the passed environment variable" $ do
@@ -168,6 +233,23 @@ spec = parallel $ inTestM $ do
               jail' "test" "unused" (c: [ c.network ])
           |]
       liftIO $ (read out :: Int) `shouldSatisfy` (< 100)
+
+    it "follows /etc/resolv.conf symlink chains (for WSL)" $ do
+      [i|
+        let
+          withFakeEtcResolvConf = program:
+            jail program.name program (c: [
+              (c.write-text "/mnt/wsl/resolv.conf" "expected resolv.conf contents")
+              (c.unsafe-add-raw-args "--symlink /mnt/wsl/resolv.conf /etc/resolv.conf")
+            ]);
+        in
+          withFakeEtcResolvConf (
+            jail "print-resolv-conf" (sh "cat /etc/resolv.conf") (c: [
+              c.network
+            ])
+          )
+      |]
+        `shouldOutput` "expected resolv.conf contents"
 
     it "works on systems using systemd-resolved" $ do
       out <-
@@ -447,6 +529,22 @@ spec = parallel $ inTestM $ do
           ])
       |]
         `shouldOutput` "/test-from-post-reset-jail-permissions\n"
+
+  describe "runtime-deep-ro-bind" $ do
+    it "follows multiple layers of symlinks that aren't in the nix store" $ do
+      tmpDir <- getTestDir
+      liftIO $ do
+        writeFile (tmpDir </> "actual") "this is the actual file"
+        createSymbolicLink (tmpDir </> "actual") (tmpDir </> "a")
+        createSymbolicLink (tmpDir </> "a") (tmpDir </> "b")
+        createSymbolicLink (tmpDir </> "b") (tmpDir </> "c")
+      let target = tmpDir </> "c"
+      [i|
+        jail "test" (sh "cat #{target}") (c: [
+          (c.runtime-deep-ro-bind "#{target}")
+        ])
+      |]
+        `shouldOutput` "this is the actual file"
 
   describe "set-argv" $ do
     it "overrides argv passed to the jailed program" $ do

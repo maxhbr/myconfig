@@ -31,11 +31,10 @@ in
     assert lib.isValidPosixName var;
     include-once "readonly-paths-from-var-${var}" (add-runtime ''
       IFS=${lib.escapeShellArg separator} read -ra DIRS <<< "''${${var}-}"
-      for DIR in "''${DIRS[@]}"; do
-        if [ -e "$DIR" ]; then
-          P="$(realpath "$DIR")"
+      if ((''${#DIRS[@]})); then
+        while IFS= read -r -d ''' P; do
           RUNTIME_ARGS+=(--ro-bind "$P" "$P")
-        fi
-      done
+        done < <(realpath -ezq -- "''${DIRS[@]}")
+      fi
     '');
 }

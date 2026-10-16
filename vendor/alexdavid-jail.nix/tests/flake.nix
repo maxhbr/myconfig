@@ -1,7 +1,7 @@
 {
   # This is a separate flake file from the one at the root because we don't
   # want to depend on nixpkgs
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
   outputs =
     { nixpkgs, ... }:
     let

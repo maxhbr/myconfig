@@ -25,7 +25,9 @@ in
           local NIX_STORE_PATH
           NIX_STORE_PATH="$1"
           while read -r P; do
-            RUNTIME_ARGS+=(--ro-bind "$P" "$P")
+            if [ "$P" != "" ]; then
+              RUNTIME_ARGS+=(--ro-bind "$P" "$P")
+            fi
           done <<< "$(${pkgs.nix}/bin/nix-store --query --requisites "$NIX_STORE_PATH")"
         }
 
@@ -56,6 +58,8 @@ in
               RUNTIME_ARGS+=(--symlink "$LINK_PATH" "$PATH_TO_BIND")
               if [[ "$LINK_PATH" == /nix/store/* ]]; then
                 bindNixStoreClosure "$LINK_PATH"
+              else
+                bindRuntime "$((MAX_DEPTH - 1))" "$LINK_PATH"
               fi
             ;;
           esac
