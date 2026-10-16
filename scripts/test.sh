@@ -9,7 +9,7 @@
 # toplevel derivation for the host. No result symlink is written.
 #
 # Usage:
-#   ./test.sh [<hostname>]
+#   just test [<hostname>]  (or: scripts/test.sh [<hostname>])
 #
 # Arguments:
 #   <hostname>  Short host name (without the `test-` prefix) to test against.
@@ -17,10 +17,10 @@
 #
 # Examples:
 #   # Test the configuration for the current host:
-#   ./test.sh
+#   just test
 #
 #   # Test the configuration for host f13:
-#   ./test.sh f13
+#   just test f13
 #
 # Notes:
 #   * Nothing on the running system is changed (no activation, no profile
@@ -33,7 +33,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+FLAKE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$FLAKE_DIR"
 
 log_step() {
     {
@@ -60,7 +61,7 @@ if ! nix eval --raw ".#nixosConfigurations.\"${host_name}\".config.system.name" 
     log_info "available test hosts:"
     nix eval --raw --expr '
       let
-        flake = builtins.getFlake ("git+file://" + toString '"${SCRIPT_DIR}"');
+        flake = builtins.getFlake ("git+file://" + toString '"${FLAKE_DIR}"');
       in
         builtins.concatStringsSep "\n"
           (builtins.filter (n: builtins.substring 0 5 n == "test-")

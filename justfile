@@ -5,6 +5,15 @@
 default:
     @just --list
 
+# Validate a `test-<hostname>` NixOS configuration of this flake without
+# modifying the system (runs `nix flake check` + a toplevel build).
+# Takes a short host name (without the `test-` prefix); defaults to the
+# current host. Nothing on the running system is changed.
+[linux]
+[macos]
+test host='':
+    ./scripts/test.sh {{host}}
+
 remote := 'gitolite'
 branch := 'main'
 

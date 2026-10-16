@@ -548,7 +548,7 @@
             hostName = "iso";
           } [ ];
 
-          # `nix fmt` / `./nixfmtall.sh` — nixfmt for Nix, rustfmt for the
+          # `nix fmt` — nixfmt for Nix, rustfmt for the
           # hand-written Rust crate in `modules/`
           # (`myconfig.ai.dev/mysbx/mysbx-rs`). `nixfmt-tree`
           # is a treefmt wrapper that ships the nixfmt entry; the override

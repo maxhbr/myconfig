@@ -43,7 +43,7 @@ done
 ```
 
 After refreshing, update the revision and SHA-256 columns above and run
-`./nixfmtall.sh` + `nix flake check`.
+`nix fmt` + `nix flake check`.
 
 ## Build-time transform (see `../host.unifi.nix`)
 

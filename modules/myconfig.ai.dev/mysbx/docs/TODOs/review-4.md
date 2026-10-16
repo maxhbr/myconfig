@@ -185,7 +185,7 @@ cargo test
 From the repository root:
 
 ```sh
-./nixfmtall.sh --check
+nix fmt -- --fail-on-change
 git diff --check
 ```
 

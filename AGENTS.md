@@ -41,10 +41,9 @@ Run the full `nix flake check` only when:
   Example: `./build-pkg-for-host.sh agent-bubblewrap-pi f13`
 
 ### Formatting & Linting
-- `./nixfmtall.sh` - Format the tree (runs `nix fmt`): nixfmt-rfc-style for
-  `*.nix`, rustfmt (`--edition 2021`) for the Rust crate under `modules/`
-  (`mysbx/mysbx-rs`)
-- `./nixfmtall.sh --check` - Check formatting without making changes
+- `nix fmt` - Format the tree: nixfmt-rfc-style for `*.nix`, rustfmt
+  (`--edition 2021`) for the Rust crate under `modules/` (`mysbx/mysbx-rs`)
+- `nix fmt -- --fail-on-change` - Check formatting without making changes
 - For shell scripts: `shfmt -d -s -i 4 -ci <file>` - Check shell script formatting (4 space indent)
 - `shellcheck -x <file>` - Lint shell scripts
 
@@ -61,7 +60,7 @@ Run manually: `nix run .#checks.x86_64-linux.pre-commit-check`
 ### CI Validation
 The CI workflow runs these checks:
 - `nix flake check`
-- `./nixfmtall.sh --check`
+- `nix fmt -- --fail-on-change`
 - Dry-run builds for hosts: f13, workstation, nas, vserver
 
 ### Finding Build Log Files
@@ -173,7 +172,7 @@ diverged when it does change — use the JSON snapshot to localise diffs.
 - This ensures all changes are tracked and visible via `git status`
 
 ### Before Committing
-- Run `./nixfmtall.sh` to format the tree (Nix + Rust)
+- Run `nix fmt` to format the tree (Nix + Rust)
 - Evaluate or build the hosts you touched, e.g.
   `nix eval --raw .#nixosConfigurations.<hostname>.config.system.build.toplevel.drvPath`
   or `nix build .#nixosConfigurations.<hostname>.config.system.build.toplevel`

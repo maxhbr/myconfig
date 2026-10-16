@@ -51,7 +51,7 @@ Use this when you want to apply a PR from the main nixpkgs repository to overrid
        { input = "{input}"; pkg = "{package}"; }
      ];
    ```
-4. Run `./nixfmtall.sh` to format all Nix files
+4. Run `nix fmt` to format all Nix files
 5. Run `nix flake check` to validate the configuration
 
 ## Notes

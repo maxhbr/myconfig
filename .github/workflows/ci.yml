@@ -36,7 +36,7 @@ jobs:
         github_access_token: ${{ secrets.GITHUB_TOKEN }}
         extra_nix_config: |
           experimental-features = nix-command flakes
-    - run: ./nixfmtall.sh --check
+    - run: nix fmt -- --fail-on-change
 
   stale-override-check:
     # Fail when a nixpkgs commit that makes a local override redundant

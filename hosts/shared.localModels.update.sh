@@ -265,9 +265,9 @@ for name in "${TARGETS[@]}"; do
     esac
 done
 
-if [[ -x ./nixfmtall.sh ]]; then
+if command -v nix >/dev/null 2>&1; then
     echo "Formatting..." >&2
-    ./nixfmtall.sh 2>/dev/null || true
+    nix fmt 2>/dev/null || true
 fi
 
 echo "Done." >&2

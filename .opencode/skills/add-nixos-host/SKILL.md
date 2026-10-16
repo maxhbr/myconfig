@@ -51,7 +51,7 @@ Use this when adding a new NixOS host to your configuration repository. I'll gui
    - Generator entry in `nixosConfigurationsGen`
    - Configuration entry in `nixosConfigurations`
 7. Update `hosts/metadata.json` with host metadata
-8. Run `./nixfmtall.sh` to format all changes
+8. Run `nix fmt` to format all changes
 9. Validate with `nix flake check`
 10. Add new files to git: `git add hosts/host.<hostname>/ flake.nix hosts/metadata.json`
 
