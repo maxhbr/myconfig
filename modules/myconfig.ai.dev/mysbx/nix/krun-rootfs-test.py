@@ -75,6 +75,7 @@ class InitTests(unittest.TestCase):
             shim.chmod(0o700)
             sqlite = shim
         block = block.replace("/bin/sqlite3", shlex.quote(str(sqlite)))
+        block = block.replace("/bin/store-scan", shlex.quote(str(ROOTFS / "bin/store-scan")))
         script = (
             "set -eu\n"
             f"BB={shlex.quote(str(ROOTFS / 'bin/busybox'))}\n"
@@ -327,7 +328,7 @@ class InitTests(unittest.TestCase):
         with sqlite3.connect(self.db) as db:
             self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
         self.assertEqual(self.rows(self.source_db), before, "the shared source DB must not change")
-        for name in ("registered-paths.txt", "doomed-paths.txt"):
+        for name in ("registered-paths.txt", "doomed-paths.txt", "store-scan.txt", "recheck-paths.txt"):
             self.assertFalse((self.scratch / name).exists())
         self.assertTrue((self.store / "live-link").is_symlink())
         self.assertTrue((self.store / "broken-link").is_symlink())

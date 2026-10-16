@@ -207,6 +207,7 @@ in
   mysbx-krun-guest-nix-test =
     let
       guestNix = pkgs.callPackage ../nix/krun-guest-nix.nix {
+        storeScan = pkgs.callPackage ../nix/krun-store-scan.nix { };
         nixConfig = "substituters = https://cache.example";
       };
       imageRootLike = pkgs.buildEnv {
@@ -304,12 +305,20 @@ in
         || fail "the reconcile must test for symlinked store paths, not only missing ones"
       grep -qF 'reconciling the db' "$setup" \
         || fail "the reconcile must announce how many rows it drops (refuse or announce)"
+      # The bulk scan + join of bd myconfig-kid: the per-path stat
+      # loop must be gone from the MAIN path (it survives only as
+      # the DT_UNKNOWN/deep-path fallback), and the scanner must
+      # be part of the setup's tools.
+      grep -qF 'store-scan /nix/store' "$setup" \
+        || fail "the reconcile must bulk-scan the share instead of stat-ing every registered path (bd myconfig-kid)"
+      grep -qF 'entry[$2] = $1' "$setup" \
+        || fail "the reconcile must join the registered paths against the store scan in bulk"
       # ...and in order: after copyState, before the overlay mount.
       copy_line=$(grep -n 'mysbx-krun-nix-copy-state /nix/var/nix' "$setup" | head -1 | cut -d: -f1)
-      doomed_line=$(grep -n 'doomed=\$' "$setup" | head -1 | cut -d: -f1)
+      scan_line=$(grep -n 'store-scan /nix/store' "$setup" | head -1 | cut -d: -f1)
       overlay_line=$(grep -n 'mount -t overlay' "$setup" | head -1 | cut -d: -f1)
-      [ -n "$copy_line" ] && [ -n "$doomed_line" ] && [ -n "$overlay_line" ] \
-        && [ "$copy_line" -lt "$doomed_line" ] && [ "$doomed_line" -lt "$overlay_line" ] \
+      [ -n "$copy_line" ] && [ -n "$scan_line" ] && [ -n "$overlay_line" ] \
+        && [ "$copy_line" -lt "$scan_line" ] && [ "$scan_line" -lt "$overlay_line" ] \
         || fail "the reconcile must run after copyState and before the overlay mount"
       grep -q 'exit 125' "$setup" || fail "a failed mount must be an error, never a fallback"
       [ "$(id -u)" -ne 0 ] || fail "the check expects a non-root build user"

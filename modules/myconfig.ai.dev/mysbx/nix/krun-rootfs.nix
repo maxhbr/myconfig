@@ -67,6 +67,12 @@
   # krun-guest-flake-source-symlink.md). A real copy, like busybox
   # and mkfs.ext4 — pkgsStatic so it works store-free.
   sqliteStatic,
+  # The STATIC bulk directory scanner of the same reconcile: one
+  # getdents pass classifies every share entry (the d_type arrives
+  # in the readdir stream), instead of one virtiofs FUSE round trip
+  # per registered path — ~175k paths made the boot minute-slow.
+  # Same real-copy contract as busybox (nix/krun-store-scan.nix).
+  storeScanStatic,
   python3,
   bash,
 }:
@@ -479,6 +485,8 @@ let
         # exactly the lower-layer crash).
         if [ -f /mysbx-nix/state/db/db.sqlite ]; then
             registered_file=/mysbx-nix/registered-paths.txt
+            scan_file=/mysbx-nix/store-scan.txt
+            recheck_file=/mysbx-nix/recheck-paths.txt
             doomed_file=/mysbx-nix/doomed-paths.txt
             step "enumerating the registered store paths from the copied nix db"
             /bin/sqlite3 /mysbx-nix/state/db/db.sqlite \
@@ -487,14 +495,52 @@ let
                 || fail "cannot enumerate registered store paths in the copied nix database"
             n_registered=$("$BB" wc -l < "$registered_file")
             : > "$doomed_file"
+            # One bulk getdents pass replaces the per-path stat: every
+            # [ -e ]/[ -L ] of the old loop was one virtiofs FUSE round
+            # trip, and ~175k registered paths made the reconcile the
+            # minute of the boot (bd myconfig-kid). The scan carries
+            # each entry's d_type straight from the readdir stream
+            # (libkrun passes the host's through), the awk join
+            # classifies all rows in bulk, and only the rows it
+            # cannot classify — DT_UNKNOWN (d_type 0), a non-directory
+            # share root entry, or a path deeper than the scanned root
+            # — fall back to the old per-path stat loop, exact
+            # semantics kept: [ -e ] false for missing AND dangling
+            # symlinks, [ -L ] true for every symlink (live-target
+            # poison included).
+            step "scanning the read-only store share (bulk getdents)"
+            /bin/store-scan /nix/store > "$scan_file" \
+                || fail "cannot scan the read-only store share"
             step "checking $n_registered registered store path(s) against the read-only store share"
-            while IFS= read -r p; do
-                case "$p" in /nix/store/*) ;; *) continue ;; esac
-                if [ ! -e "$p" ] || [ -L "$p" ]; then
-                    printf '%s\n' "$p" >> "$doomed_file"
-                fi
-            done < "$registered_file"
-            "$BB" rm -f "$registered_file"
+            "$BB" awk -v store_prefix="/nix/store/" -v doomed_file="$doomed_file" -v recheck_file="$recheck_file" '
+                NR == FNR { entry[$2] = $1; next }
+                {
+                    if (index($0, store_prefix) != 1) next
+                    p = substr($0, length(store_prefix) + 1)
+                    deep = index(p, "/")
+                    name = deep > 0 ? substr(p, 1, deep - 1) : p
+                    if (name == "") next
+                    t = entry[name]
+                    if (t == "" || t == 10)
+                        print $0 >> doomed_file
+                    else if (deep > 0 || t == 0 || t == 4)
+                        print $0 >> recheck_file
+                }
+            ' "$scan_file" "$registered_file" \
+                || fail "cannot join the registered paths against the store scan"
+            "$BB" rm -f "$scan_file" "$registered_file"
+            # The fallback stat loop: only the rows the scan could not
+            # classify (at most the DT_UNKNOWN and deep ones), the
+            # same [ -e ]/[ -L ] semantics the old full loop had.
+            if [ -s "$recheck_file" ]; then
+                while IFS= read -r p; do
+                    [ -n "$p" ] || continue
+                    if [ ! -e "$p" ] || [ -L "$p" ]; then
+                        printf '%s\n' "$p" >> "$doomed_file"
+                    fi
+                done < "$recheck_file"
+            fi
+            "$BB" rm -f "$recheck_file"
             n_doomed=$("$BB" wc -l < "$doomed_file")
             if [ "$n_doomed" -gt 0 ]; then
                 step "reconciling the db: $n_doomed of $n_registered registered store path(s) missing or symlinked, dropping their rows"
@@ -738,6 +784,10 @@ runCommand "mysbx-krun-rootfs"
     # real-copy contract — the init runs it before the store share
     # is mounted.
     cp ${sqliteStatic}/bin/sqlite3 $out/bin/sqlite3
+    # The db reconcile's static store scanner (bd myconfig-kid): same
+    # real-copy contract — the bulk getdents pass runs before the
+    # store share is overlaid.
+    cp ${storeScanStatic}/bin/store-scan $out/bin/store-scan
     # The payload's shells: store symlinks, valid once mysbx-init has
     # mounted the store share.
     ln -s ${bash}/bin/bash $out/bin/bash

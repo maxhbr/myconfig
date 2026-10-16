@@ -855,11 +855,15 @@ in
             # the init prunes copied-db rows the staged share cannot
             # keep, before any store path is visible.
             sqliteStatic = pkgs.pkgsStatic.sqlite.bin;
+            # The db reconcile's static bulk store scanner (bd
+            # myconfig-kid): the scan replaces the per-path stat loop
+            # of a host-sized db (~90s of boot on f13).
+            storeScanStatic = pkgs.callPackage ./nix/krun-store-scan.nix { };
             # The `env` of the /usr/bin/env shebangs (the podman
             # image's usrBinEnv twin).
             coreutils = pkgs.coreutils;
           };
-          defaultText = literalExpression "pkgs.callPackage ./nix/krun-rootfs.nix { busyboxStatic = pkgs.pkgsStatic.busybox; e2fsprogsStatic = pkgs.pkgsStatic.e2fsprogs; sqliteStatic = pkgs.pkgsStatic.sqlite.bin; coreutils = pkgs.coreutils; }";
+          defaultText = literalExpression "pkgs.callPackage ./nix/krun-rootfs.nix { busyboxStatic = pkgs.pkgsStatic.busybox; e2fsprogsStatic = pkgs.pkgsStatic.e2fsprogs; sqliteStatic = pkgs.pkgsStatic.sqlite.bin; storeScanStatic = pkgs.callPackage ./nix/krun-store-scan.nix { }; coreutils = pkgs.coreutils; }";
           description = ''
             The guest rootfs of the direct-libkrun backend —
             the Nix-built plain directory (./nix/krun-rootfs.nix)
@@ -985,10 +989,11 @@ in
             (pkgs.callPackage ./nix/krun-guest-nix.nix {
               nix = cfg.krun.nix.package;
               sqlite = pkgs.sqlite;
+              storeScan = pkgs.callPackage ./nix/krun-store-scan.nix { };
               nixConfig = cfg.krun.nix.settings;
             })
           ];
-          defaultText = literalExpression "[ (pkgs.callPackage ./nix/krun-guest-nix.nix { nix = cfg.krun.nix.package; sqlite = pkgs.sqlite; nixConfig = cfg.krun.nix.settings; }) ]";
+          defaultText = literalExpression "[ (pkgs.callPackage ./nix/krun-guest-nix.nix { nix = cfg.krun.nix.package; sqlite = pkgs.sqlite; storeScan = pkgs.callPackage ./nix/krun-store-scan.nix { }; nixConfig = cfg.krun.nix.settings; }) ]";
           description = ''
             The guest nix userspace baked into the agent image when
             `krun.nix.enable`, consumed through `podman.imagePackages`:

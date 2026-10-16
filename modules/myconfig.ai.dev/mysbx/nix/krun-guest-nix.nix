@@ -73,6 +73,13 @@
   # bd myconfig-mxu) — a direct db delete never touches the store
   # tree at all.
   sqlite,
+  # The db-reconcile step's bulk directory scanner: one getdents
+  # pass over /nix/store (d_type from the readdir stream) replaces
+  # the per-path stat loop — every [ -e ]/[ -L ] of the old loop was
+  # one virtiofs FUSE round trip and a host-sized db made the first
+  # nix call minute-slow (bd myconfig-kid). Static like the direct
+  # backend's baked copy (nix/krun-store-scan.nix).
+  storeScan,
   nix,
   scratch ? "/run/mysbx-nix",
   nixConfig ? "",
@@ -142,6 +149,7 @@ let
       gawk
       e2fsprogs
       sqlite
+      storeScan
     ];
     text = ''
       scratch=${lib.escapeShellArg scratch}
@@ -203,23 +211,55 @@ let
         # handle"), and nix's own re-add of the lower-layer entry
         # crashes (fchmodat2). Delete those rows BEFORE the overlay
         # is mounted and any payload nix runs; the guest nix then
-        # re-registers or re-fetches on demand. The path test lives
-        # in shell — sqlite cannot stat paths, and the test must
-        # catch a DANGLING poisoned symlink ([ -e ] is false for
-        # it) as well as a missing path. `nix store delete` cannot
-        # do this job: liveness semantics refuse rows held by live
-        # processes and its store-tree unlink is exactly the
-        # lower-layer crash.
+        # re-registers or re-fetches on demand. The path test is a
+        # BULK SCAN + JOIN, not a per-path stat (bd myconfig-kid):
+        # every [ -e ]/[ -L ] of the old loop was one virtiofs FUSE
+        # round trip and a host-sized db made the first nix call
+        # minute-slow — store-scan reads the share once via
+        # getdents (the d_type arrives in the readdir stream) and
+        # awk joins all rows in bulk. Only rows the scan cannot
+        # classify (DT_UNKNOWN, a non-directory root entry, a path
+        # deeper than the scanned root) fall back to the old
+        # per-path stat, whose exact semantics stay: [ -e ] is false
+        # for a DANGLING poisoned symlink as well as a missing
+        # path, [ -L ] true for every symlink. `nix store delete`
+        # cannot do this job: liveness semantics refuse rows held
+        # by live processes and its store-tree unlink is exactly
+        # the lower-layer crash.
         registered="$scratch/tmp/registered-paths.txt"
+        scan="$scratch/tmp/store-scan.txt"
+        recheck="$scratch/tmp/recheck-paths.txt"
         doomed="$scratch/tmp/doomed-paths.txt"
         sqlite3 "$scratch/state/db/db.sqlite" ${reconcileSelect} > "$registered" \
           || fail "cannot enumerate registered store paths in the copied nix database"
-        while IFS= read -r p; do
-          if [ ! -e "$p" ] || [ -L "$p" ]; then
-            printf '%s\n' "$p"
-          fi
-        done < "$registered" > "$doomed"
-        rm -f "$registered"
+        store-scan /nix/store > "$scan" \
+          || fail "cannot scan the image store share"
+        : > "$doomed"
+        awk -v store_prefix="/nix/store/" -v doomed_file="$doomed" -v recheck_file="$recheck" '
+          NR == FNR { entry[$2] = $1; next }
+          {
+              if (index($0, store_prefix) != 1) next
+              p = substr($0, length(store_prefix) + 1)
+              deep = index(p, "/")
+              name = deep > 0 ? substr(p, 1, deep - 1) : p
+              if (name == "") next
+              t = entry[name]
+              if (t == "" || t == 10)
+                  print $0 >> doomed_file
+              else if (deep > 0 || t == 0 || t == 4)
+                  print $0 >> recheck_file
+          }
+        ' "$scan" "$registered" \
+          || fail "cannot join the registered paths against the store scan"
+        rm -f "$scan" "$registered"
+        if [ -s "$recheck" ]; then
+          while IFS= read -r p; do
+            if [ ! -e "$p" ] || [ -L "$p" ]; then
+              printf '%s\n' "$p"
+            fi
+          done < "$recheck" >> "$doomed"
+        fi
+        rm -f "$recheck"
         if [ -s "$doomed" ]; then
           # Remove incoming Refs as well as each doomed ValidPaths row.
           # Foreign-key cascades remove outgoing Refs and
