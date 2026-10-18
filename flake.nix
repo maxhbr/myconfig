@@ -599,6 +599,9 @@
                 files = pkgs.lib.concatStringsSep " " [
                   "switch.sh"
                   "sync.sh"
+                  # Home-manager activation harness for the agent-skills
+                  # integration (takeover + sync against a throwaway HOME).
+                  "tests/agent-skills-activation.sh"
                   # The EXECUTED myconfig.ai.dev.microvm batch-job harnesses and the
                   # real-KVM validation suite. They are plain scripts (not
                   # writeShellApplication), so nothing else gates them.

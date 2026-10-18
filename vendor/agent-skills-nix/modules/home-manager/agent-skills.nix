@@ -67,22 +67,41 @@ in
       home.activation.agent-skills-takeover =
         lib.mkIf (syncTargets != { }) (lib.hm.dag.entryBetween [ "agent-skills" ] [ "linkGeneration" ]
         (''
+          # Succeeds when $1 is a Nix-store symlink, or a directory whose
+          # entire contents are (recursively) such symlinks — the shapes
+          # home.file and programs.<harness>.skills leave behind. Anything
+          # else (regular file, non-store symlink, empty dir) is not
+          # declaratively reproducible and aborts the claim.
+          __agent_skills_store_tree() {
+            local path="$1" entry target
+            if [ -L "$path" ]; then
+              target="$(readlink -f -- "$path" 2>/dev/null)" || return 1
+              case "$target" in
+                /nix/store/*) return 0 ;;
+                *) return 1 ;;
+              esac
+            fi
+            [ -d "$path" ] || return 1
+            shopt -s nullglob dotglob
+            local entries=("$path"/*)
+            [ "''${#entries[@]}" -gt 0 ] || return 1
+            for entry in "''${entries[@]}"; do
+              case "''${entry##*/}" in
+                .agent-skills-managed.json) continue ;;
+              esac
+              __agent_skills_store_tree "$entry" || return 1
+            done
+          }
+
           __agent_skills_takeover_one() {
-            local name="$1" dest="$2" entries entry target
+            local name="$1" dest="$2"
             [ -d "$dest" ] || return 0
             [ -f "$dest/.agent-skills-managed.json" ] && return 0
             shopt -s nullglob dotglob
-            entries=("$dest"/*)
-            [ "''${#entries[@]}" -eq 0 ] && return 0
-            for entry in "''${entries[@]}"; do
-              [ -L "$entry" ] || return 0
-              target="$(readlink -f -- "$entry" 2>/dev/null)" || return 0
-              case "$target" in
-                /nix/store/*) ;;
-                *) return 0 ;;
-              esac
-            done
-            printf 'agent-skills: pre-marking %s for takeover (all entries are store symlinks)\n' "$dest" >&2
+            local entries=("$dest"/*)
+            [ "''${#entries[@]}" -gt 0 ] || return 0
+            __agent_skills_store_tree "$dest" || return 0
+            printf 'agent-skills: pre-marking %s for takeover (tree of store symlinks)\n' "$dest" >&2
             printf '{"schemaVersion":1,"managedBy":"agent-skills-nix","mode":"global","bundle":"takeover","target":"%s","structure":"symlink-tree"}\n' "$name" \
               > "$dest/.agent-skills-managed.json"
           }
