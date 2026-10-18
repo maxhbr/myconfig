@@ -5,7 +5,12 @@
 # `agent-skills-nix` library (see `vendor/agent-skills-nix/`). When enabled,
 # skills are discovered from flake-pinned sources (mattpocock/skills by
 # default) and synced into the config directories of the agent harnesses that
-# are enabled on this host via home-manager.
+# are enabled on this host via home-manager. The locally-defined
+# ("handcrafted") skills registered by the individual skill modules are
+# routed through the same framework (as `handcrafted-<name>` sources plus
+# explicit skills), so every skills directory has exactly one owner — the
+# framework sync. Only when `myconfig.ai.dev.skills.enable` is false do the
+# handcrafted skills fall back to direct home-manager deployment.
 #
 # The upstream home-manager module exposes `programs.agent-skills.*`; this
 # wrapper provides a `myconfig.ai.dev.skills.*` surface with sensible defaults
@@ -37,6 +42,12 @@ let
   # `enable = false`. Using `mkOverride 900` keeps these below plain user
   # overrides (priority 100) but above the upstream `mkDefault` (1000), so a
   # host can still force a target on/off via `myconfig.ai.dev.skills.targets`.
+  #
+  # pi-coding-agent maps to the `agents` target (`~/.agents/skills`, the
+  # Agent Skills spec location pi discovers) instead of the `pi` target
+  # (`~/.pi/agent/skills`): every sandbox tier stages or binds exactly
+  # `~/.agents/skills`, and a second synced copy under `~/.pi/agent/skills`
+  # would make pi discover every skill twice.
   harnessTargetDefaults =
     let
       when = cond: name: lib.optionalAttrs cond { ${name}.enable = lib.mkOverride 900 true; };
@@ -51,7 +62,7 @@ let
       when (config.myconfig.ai.dev.claude-code.enable or false) "claude"
     )
     // lib.optionalAttrs (config.myconfig.ai.dev ? pi-coding-agent) (
-      when (config.myconfig.ai.dev.pi-coding-agent.enable or false) "pi"
+      when (config.myconfig.ai.dev.pi-coding-agent.enable or false) "agents"
     );
 
   # Whether each agent harness is enabled on this host. Used to gate the
@@ -71,6 +82,18 @@ let
   # agent harness — independently of the agent-skills sync framework, which
   # is opt-in via `myconfig.ai.dev.skills.enable`.
   handcrafted = config.myconfig.ai.dev.skills.handcrafted;
+  # The same registry reshaped for the agent-skills framework: one source
+  # per handcrafted skill (its directory is the source root), plus one
+  # explicit skill selecting that root, so the deployed skill keeps its name
+  # (`<name>`) in every target directory. The `handcrafted-` prefix namespaces
+  # these sources away from host-configured ones (`cfg.sources`).
+  handcraftedSources = lib.mapAttrs' (
+    name: dir: lib.nameValuePair "handcrafted-${name}" { path = dir; }
+  ) handcrafted;
+  handcraftedExplicit = lib.mapAttrs (name: _: {
+    from = "handcrafted-${name}";
+    path = ".";
+  }) handcrafted;
   # Registry of locally-defined pi prompt templates, populated by individual
   # skill modules when a workflow should also be reachable as a `/`-command
   # prompt template. Deployed to `~/.pi/agent/prompts/<name>.md` for every host
@@ -171,12 +194,14 @@ in
         Registry of locally-defined ("handcrafted") skills, keyed by skill
         name and valued by the source directory (a Nix path or a store-path
         string) that contains the skill's `SKILL.md`. Populated by the
-        individual skill modules (`commit.nix`, `playwright-cli.nix`,
-        `grafana-core.nix`); this module deploys every entry to each enabled
-        agent harness — opencode, claude-code and codex via their
+        individual skill modules (`commit.nix`, `grafana-core.nix`, …).
+        When `myconfig.ai.dev.skills.enable` is true, every entry is routed
+        through the agent-skills framework (source `handcrafted-<name>` plus
+        an explicit skill) and lands in each enabled harness's synced skills
+        directory. When the framework is disabled, the registry is deployed
+        directly instead: opencode, claude-code and codex via their
         `programs.<harness>.skills` option, and pi-coding-agent (which has no
-        such option) directly to the shared `~/.agents/skills/` discovery
-        directory.
+        such option) to the shared `~/.agents/skills/` discovery directory.
       '';
     };
 
@@ -214,29 +239,29 @@ in
 
   config = lib.mkMerge [
     {
-      # Apply every handcrafted skill to each enabled agent harness.
-      # opencode, claude-code and codex expose a `programs.<harness>.skills`
-      # attrset that home-manager turns into per-skill symlinks under their
-      # config directories. pi-coding-agent has no such option — it discovers
-      # skills purely from the filesystem — so skills are written directly to
-      # the shared `~/.agents/skills/` discovery directory (which pi reads and
-      # which the agent-skills sync framework does not manage by default, so
-      # this does not collide with the framework's `--delete` rsync on hosts
-      # that opt into it below). This block runs whenever a skill is enabled,
-      # independent of the sync framework (`myconfig.ai.dev.skills.enable`).
+      # Direct deployment of the handcrafted registry — ONLY when the
+      # agent-skills framework is disabled. With the framework enabled the
+      # same skills flow through it (block below), which must remain the sole
+      # writer of every synced skills directory: a second writer (these
+      # home-file symlinks) makes the framework's `rsync --delete` refuse the
+      # unmarked destination ("no .agent-skills-managed.json marker"). The
+      # pi prompt templates and sub-agent definitions are not skills and stay
+      # on home.file in both modes.
       home-manager.sharedModules = [
         {
-          programs.opencode.skills = lib.mkIf harnessEnabled.opencode handcrafted;
-          programs.claude-code.skills = lib.mkIf harnessEnabled.claude-code handcrafted;
-          programs.codex.skills = lib.mkIf harnessEnabled.codex handcrafted;
+          programs.opencode.skills = lib.mkIf (harnessEnabled.opencode && !cfg.enable) handcrafted;
+          programs.claude-code.skills = lib.mkIf (harnessEnabled.claude-code && !cfg.enable) handcrafted;
+          programs.codex.skills = lib.mkIf (harnessEnabled.codex && !cfg.enable) handcrafted;
           home.file = lib.mkIf harnessEnabled.pi (
-            (lib.mapAttrs' (
-              name: src:
-              lib.nameValuePair ".agents/skills/${name}" {
-                source = src;
-                recursive = true;
-              }
-            ) handcrafted)
+            (lib.optionalAttrs (!cfg.enable) (
+              lib.mapAttrs' (
+                name: src:
+                lib.nameValuePair ".agents/skills/${name}" {
+                  source = src;
+                  recursive = true;
+                }
+              ) handcrafted
+            ))
             // (lib.mapAttrs' (
               name: src: lib.nameValuePair ".pi/agent/prompts/${name}.md" { source = src; }
             ) handcraftedPrompts)
@@ -270,6 +295,7 @@ in
                   filter.nameRegex = lib.mkDefault "(engineering|productivity)/.*";
                 };
               }
+              handcraftedSources
               cfg.sources
             ];
 
@@ -277,7 +303,7 @@ in
               {
                 enableAll = lib.mkDefault [ "mattpocock" ];
                 enable = lib.mkDefault [ ];
-                explicit = lib.mkDefault { };
+                explicit = lib.mkDefault handcraftedExplicit;
               }
               cfg.skills
             ];
@@ -287,7 +313,16 @@ in
               cfg.targets
             ];
 
-            excludePatterns = lib.mkIf (cfg.excludePatterns != [ ]) cfg.excludePatterns;
+            # The claude-code home-manager module deploys its generated MCP
+            # plugin as `~/.claude/skills/claude-code-home-manager` via
+            # `home.file` — a second writer inside the synced `claude` target
+            # directory. Exclude it from the framework's `rsync --delete`
+            # (same pattern as the upstream `/.system` exclusion) so the two
+            # mechanisms coexist instead of deleting each other.
+            excludePatterns = lib.mkMerge [
+              [ "/claude-code-home-manager" ]
+              (lib.mkIf (cfg.excludePatterns != [ ]) cfg.excludePatterns)
+            ];
           };
         }
       ];

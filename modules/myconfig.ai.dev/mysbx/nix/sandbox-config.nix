@@ -53,6 +53,12 @@
   #               Targets are normalized by stripping this prefix, or
   #               the subtree match would silently miss everything
   #               deployed through `xdg.configFile`.
+  # `extraFiles` — extra entries to copy into the tree that are NOT in
+  #               `home.file` — attrset of `"<relative target>" =
+  #               <source path>` (e.g. framework-synced skills, which
+  #               home-manager activation writes via rsync, not
+  #               `home.file`). The source is dereferenced the same
+  #               way as `home.file` entries.
   #
   # Returns `{ tree, mounts }`:
   #   `tree`   — the dereferenced copy derivation;
@@ -64,6 +70,7 @@
       subtrees,
       name,
       homeDirectory ? null,
+      extraFiles ? { },
     }:
     let
       # Home-manager's own trick (modules/files.nix `sourceStorePath`): a
@@ -119,6 +126,19 @@
         lib.filterAttrs (target: _: inSubtree (normalize target)) homeFile
       );
 
+      # `extraFiles` are entries the host does NOT deploy through
+      # `home.file` (framework-synced skills: the agent-skills activation
+      # rsyncs them at switch time), shaped to match `home.file` entries so
+      # the copy pipeline below treats them identically.
+      extraEntries = lib.mapAttrs' (
+        target: source:
+        lib.nameValuePair (normalize target) {
+          inherit source;
+          target = normalize target;
+          enable = true;
+        }
+      ) (lib.filterAttrs (target: _: inSubtree (normalize target)) extraFiles);
+
       # Home-manager's own deployment skips `enable = false` entries
       # (modules/files.nix `enabledFiles`); the copies must match, or a
       # disabled entry would exist inside the sandbox but not in `~`.
@@ -127,7 +147,7 @@
       # puts parents (shorter paths) before their children, the same
       # invariant home-manager's own `files.nix` sorts by.
       sorted = lib.sortOn (e: builtins.stringLength e.target) (
-        lib.filter (e: e.enable) (lib.attrValues entries)
+        lib.filter (e: e.enable) (lib.attrValues (entries // extraEntries))
       );
       copyLine =
         e:

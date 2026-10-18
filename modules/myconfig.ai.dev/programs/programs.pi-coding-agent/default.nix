@@ -1480,10 +1480,14 @@ let
   # (../../mysbx/mysbx-rs/src/bwrap.rs) — payload-writable content must
   # never sit above a mount point.
 
-  # `~/.agents/skills/` only exists when a handcrafted skill is registered
-  # (../skills/default.nix deploys the registry there for pi, which has no
-  # `programs.pi.skills` option). Gate the mount on the same condition.
-  piHasHandcraftedSkills = (config.myconfig.ai.dev.skills.handcrafted or { }) != { };
+  # `~/.agents/skills/` carries the handcrafted skills (plus, when
+  # `myconfig.ai.dev.skills.enable` is on, the framework-synced selection)
+  # for pi, which discovers that directory per the Agent Skills spec. Gate
+  # the mount on the registry/framework being non-empty so a host with no
+  # skills does not bind a missing path.
+  piHasHandcraftedSkills =
+    (config.myconfig.ai.dev.skills.handcrafted or { }) != { }
+    || (config.myconfig.ai.dev.skills.enable or false);
 
   mysbxPiSubtrees = [
     # Generated + example extensions (myconfig-providers.ts,
@@ -1514,11 +1518,30 @@ let
   # mysbx module renders into `home.file` keyed by `.config/mysbx/…`, a
   # prefix no subtree below matches (Nix is lazy, so `mkIf`-gating the
   # only reference below suffices).
+  #
+  # Skills are the one exception to "home.file is the source of truth":
+  # when the agent-skills framework manages them, they are rsynced at
+  # ACTIVATION time, not linked from `home.file`. The framework exposes
+  # per-target bundles (`programs.agent-skills.targetBundlePaths`), so the
+  # exact tree the host syncs to `~/.agents/skills` (the `agents` target
+  # pi reads) is passed in via `extraFiles` — read from the user whose
+  # config layer mysbx generates, lazily, like `hmHomeFile` consumers.
+  mysbxPiSkillsBundle =
+    let
+      hmSkills = config.home-manager.users.mhuber.programs.agent-skills or null;
+    in
+    if hmSkills == null || !hmSkills.enable then
+      { }
+    else if !(hmSkills.targetBundlePaths ? agents) then
+      { }
+    else
+      { ".agents/skills" = hmSkills.targetBundlePaths.agents; };
   mysbxSandboxConfig = sandboxConfigLib.mkSandboxConfig {
     homeFile = config.home-manager.users.mhuber.home.file;
     homeDirectory = config.home-manager.users.mhuber.home.homeDirectory;
     subtrees = mysbxPiSubtrees;
     name = "pi-sandbox-config";
+    extraFiles = mysbxPiSkillsBundle;
   };
 
   mysbxPiMounts = mysbxSandboxConfig.mounts;
