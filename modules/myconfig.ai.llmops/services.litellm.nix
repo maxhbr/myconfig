@@ -116,7 +116,16 @@
         health_check_skip_disabled_background_models = true;
         health_check_concurrency = 4;
       };
-      settings.litellm_settings = lib.mkIf config.myconfig.observability.client.enable {
+      settings.litellm_settings = {
+        # Silently drop OpenAI-spec params the resolved provider does not
+        # support instead of failing with UnsupportedParamsError. Clients
+        # cannot know which params survive the proxy's per-provider
+        # mapping (e.g. pi sends `store: false` to every OpenAI-compatible
+        # endpoint; anthropic/… entries reject it), so the proxy is the
+        # right place to be lenient.
+        drop_params = true;
+      }
+      // lib.optionalAttrs config.myconfig.observability.client.enable {
         callbacks = [ "prometheus" ];
       };
       # `mkDefault` (priority 1000) so that a host can override this
