@@ -74,7 +74,8 @@ in
         };
         claude-code.enable = true;
         codex.enable = true;
-        skills.enable = true;
+        # TODO(bd myconfig-298): re-enable once the agent-skills takeover works on a live deploy
+        skills.enable = false;
         agent-of-empires.enable = true;
         mysbx = {
           enable = true;
