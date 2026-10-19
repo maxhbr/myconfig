@@ -305,6 +305,13 @@ prints `You need to install grc!` without it) and `eza`/`bat` (the
 `extraTools`, so they are on the sandbox `PATH` together with the config
 that calls them.
 
+The right prompt says where the session runs: when `MYSBX_BACKEND` is
+set (the identity variables of [`docs/design/config.md`](./docs/design/config.md)
+D14, the same ones the pi status extension reads), the rendered
+`config.fish` appends `mysbx: <backend> via <multiplexer>` to
+`fish_right_prompt` — appended, not substituted, so any-nix-shell's own
+segment survives. Outside a sandbox the block installs nothing.
+
 On a difftastic host the generated `[env]` additionally pins
 `GIT_EXTERNAL_DIFF` at a wrapper that renders the default unified diff:
 the mounted `~/.config/git` would otherwise send every `git diff`
@@ -553,6 +560,18 @@ unauthenticated and talks to the local LiteLLM / llama.cpp providers.
 Like pi, opencode keeps its sessions and its credentials in separate
 paths, so the session state can be persisted without the credentials
 following it.
+
+`hermes` ([`hermes-agent/mysbx.nix`](../hermes-agent/mysbx.nix)) is wired
+in the same way, with one deliberate difference: nothing of the host
+`~/.hermes` is mounted. hermes keeps `config.yaml`, `.env`, `auth.json`,
+`state.db` and `sessions/` in ONE root, so configuration cannot be
+separated from credentials there. Instead the `hermes` binary the sandbox
+gets is a launcher that seeds a credentials-free `config.yaml` (the LiteLLM
+route, placeholder key) into a fresh `$HERMES_HOME` and then execs the
+upstream CLI, and `.hermes` is a `state-dirs` entry — so sessions and
+memories persist per repository while no host credential enters the
+sandbox. On the podman backends the launcher is baked into the image and
+`CUSTOM_BASE_URL` points hermes at the forwarded LiteLLM endpoint.
 
 `hunk` ([`programs.hunk`](../../programs/programs.hunk/default.nix)) follows the same
 pattern for the *reviewing* side: on hosts with `myconfig.ai.hunk.enable`

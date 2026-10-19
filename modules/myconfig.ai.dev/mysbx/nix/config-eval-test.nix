@@ -487,6 +487,8 @@ let
       throw "mysbx generated-config test: the rendered shell config tree has no config.fish"
     else if !(lib.hasInfix "abbr --add -- g git" (builtins.readFile "${tree}/config.fish")) then
       throw "mysbx generated-config test: the rendered config.fish does not carry the user's abbreviation"
+    else if !(lib.hasInfix "MYSBX_BACKEND" (builtins.readFile "${tree}/config.fish")) then
+      throw "mysbx generated-config test: the rendered config.fish does not render the sandbox identity"
     else if
       lib.any (l: lib.hasInfix "hm-session-vars" l && lib.hasInfix "source" l) (
         lib.splitString "\n" (builtins.readFile "${tree}/config.fish")
@@ -548,7 +550,12 @@ pkgs.runCommand "mysbx-generated-config-test"
       krunNixGate
       shellGate
       shellRuntimeGate
+      shellConfigTree
       ;
+    nativeBuildInputs = with pkgs; [
+      fish
+      gnugrep
+    ];
   }
   ''
     fail() {
@@ -696,6 +703,56 @@ pkgs.runCommand "mysbx-generated-config-test"
 
     [ "$shellRuntimeGate" = ok ] \
       || { echo "mysbx generated-config test: shell runtime gate: $shellRuntimeGate" >&2; exit 1; }
+
+    # 8. the sandbox identity segment of the right prompt. Run fish for
+    #    real: the block is gated on a RUNTIME variable, so reading the
+    #    rendered file cannot prove that it appends to the host's own
+    #    right prompt instead of replacing it (any-nix-shell installs
+    #    one, and so does an autoloaded function file), nor that it stays
+    #    silent outside a sandbox.
+    prompt_home="$(mktemp -d)"
+    mkdir -p "$prompt_home/.config/fish/functions"
+    cp "$shellConfigTree/config.fish" "$prompt_home/.config/fish/config.fish"
+    # A prior right prompt, the way any-nix-shell installs one: the host's
+    # own segment must survive.
+    printf 'function fish_right_prompt\n    printf PRIOR\nend\n' \
+      > "$prompt_home/.config/fish/functions/fish_right_prompt.fish"
+
+    right_prompt() {
+      env -u MYSBX_BACKEND -u MYSBX_MULTIPLEXER -u MYSBX_HOST -u MYSBX_SESSION_NAME \
+        -u XDG_CONFIG_HOME HOME="$prompt_home" "$@" fish --private --interactive --command 'fish_right_prompt'
+    }
+    strip_sgr() {
+      sed -e 's/\x1b\[[0-9;]*m//g'
+    }
+
+    # 8a. inside a sandbox the backend and multiplexer are rendered, after
+    #     the host's own segment. The `none` multiplexer adds no `via`.
+    got="$(right_prompt MYSBX_BACKEND=bubblewrap MYSBX_MULTIPLEXER=herdr | strip_sgr)"
+    [ "$got" = "PRIOR mysbx: bubblewrap via herdr" ] \
+      || fail "the sandbox identity does not append to the right prompt (got '$got')" /dev/null
+    got="$(right_prompt MYSBX_BACKEND=bubblewrap MYSBX_MULTIPLEXER=none | strip_sgr)"
+    [ "$got" = "PRIOR mysbx: bubblewrap" ] \
+      || fail "multiplexer=none must not render a 'via' segment (got '$got')" /dev/null
+
+    # 8b. MYSBX_HOST and MYSBX_SESSION_NAME are picked up opportunistically
+    #     (a backend does not export them yet); a missing one is not an
+    #     error and does not leave a dangling separator.
+    got="$(right_prompt MYSBX_BACKEND=podman-krun MYSBX_MULTIPLEXER=workmux \
+      MYSBX_HOST=f13 MYSBX_SESSION_NAME=fix-bug | strip_sgr)"
+    [ "$got" = "PRIOR mysbx: podman-krun via workmux on f13 as fix-bug" ] \
+      || fail "the optional identity variables are not rendered (got '$got')" /dev/null
+
+    # 8c. outside a sandbox (`MYSBX_BACKEND` unset) the right prompt is
+    #     untouched — the rendered tree is also what a plain shell reads.
+    #     Same for an EMPTY value: the pi extension treats an empty
+    #     backend as "not a sandbox", and the two must agree.
+    got="$(right_prompt | strip_sgr)"
+    [ "$got" = "PRIOR" ] \
+      || fail "the identity must stay out of a non-sandbox shell (got '$got')" /dev/null
+    got="$(right_prompt MYSBX_BACKEND= | strip_sgr)"
+    [ "$got" = "PRIOR" ] \
+      || fail "an empty MYSBX_BACKEND must not render a segment (got '$got')" /dev/null
 
     mkdir "$out"
   ''

@@ -1450,6 +1450,20 @@ state stays on the writable tmpfs home. A host whose user does not run
 fish keeps the previous payload: `shell.path = null` pins nothing and
 the crate's `bash`/`/bin/sh` fallback applies.
 
+**The right prompt names the sandbox.** The rendered `config.fish` ends
+with a block that APPENDS a `mysbx: <backend> via <multiplexer>` segment
+to `fish_right_prompt` when the `MYSBX_*` identity variables of D14 are
+set — the same variables the pi status extension reads, so a fish
+session and a pi session inside the same sandbox agree. The segment is
+appended, never substituted: a right prompt from the configuration
+(any-nix-shell's `--info-right`, an autoloaded
+`functions/fish_right_prompt.fish`) is copied aside with `functions -c`
+and called first. The gate is the RUNTIME presence of `MYSBX_BACKEND`:
+the same tree is also what a plain shell reads outside a sandbox, where
+the block installs nothing. `MYSBX_MULTIPLEXER=none` adds no `via`,
+and `MYSBX_HOST` / `MYSBX_SESSION_NAME` are read opportunistically — a
+backend that starts exporting them needs no change here.
+
 Consequence, said out loud: the rendered `config.fish` is a
 *sandbox-relevant subset* of the host configuration. Anything the host's
 `config.fish` does through `hm-session-vars` (host `XDG_*`, credential
