@@ -13,8 +13,10 @@
 # `MYSBX_*` pin variables the Rust CLI reads (src/lib.rs `env_or` calls):
 #
 #   MYSBX_BWRAP       the bubblewrap backend binary (plan.md: "The base")
-#   MYSBX_SHELL       the payload shell — bash from *this wrapper's*
-#                     closure, never the host `$SHELL` (plan.md:
+#   MYSBX_SHELL       the interactive payload shell: the `shell` argument
+#                     when the caller pins one (the host's own shell, bd
+#                     myconfig-l44), else bash from *this wrapper's*
+#                     closure — never the host `$SHELL` (plan.md:
 #                     "Payload shell")
 #   MYSBX_BINSH       a shell for the sandbox's `/bin/sh` — bash's own
 #                     `bin/sh` from the same closure. tmux runs EVERY
@@ -165,6 +167,19 @@
   # falls back to the plain `alacritty` PATH lookup of the unwrapped
   # crate.
   alacritty ? null,
+  # The interactive payload shell of a `multiplexer = "none"` run (bd
+  # myconfig-l44): the host's own shell binary, so a sandbox session has
+  # the host's prompt, abbreviations and aliases instead of a bare bash
+  # that reads no configuration at all. `null` keeps this wrapper's
+  # `bash` (and the crate's `/bin/sh` PATH fallback for an unwrapped
+  # build) — the pre-l44 payload.
+  #
+  # The path must be a store path of the caller's closure: it is
+  # reachable inside the sandbox through the read-only `/nix/store` bind,
+  # and it is the SAME binary the host user logs into. Its configuration
+  # is mounted separately (../default.nix `shellConfigMounts`), rendered
+  # sandbox-safe by ./shell-config.nix.
+  shell ? null,
   # the dev-tool closure baked into the sandbox PATH (see the comment at
   # `toolsEnv` below for why these entries and no others)
   coreutils,
@@ -740,7 +755,7 @@ symlinkJoin {
   postBuild = ''
     wrapProgram "$out/bin/mysbx" \
       --set MYSBX_BWRAP '${bubblewrap}/bin/bwrap' \
-      --set MYSBX_SHELL '${bash}/bin/bash' \
+      --set MYSBX_SHELL '${if shell != null then shell else "${bash}/bin/bash"}' \
       --set MYSBX_BINSH '${bash}/bin/sh' \
       --set MYSBX_TOOLS_PATH '${toolsEnv}/bin' \
       --set MYSBX_NIX_CONF '${sandboxNixConf}' \

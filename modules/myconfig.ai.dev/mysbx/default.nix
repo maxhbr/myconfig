@@ -52,7 +52,6 @@ let
   #   - `.config/git`     ← ../../../shell.git (unconditional `programs.git`)
   #   - `.config/ripgrep` ← ../../../shell.programs.ripgrep.nix
   #   - `.config/bat`     ← ../../../shell.programs.bat.nix
-  #   - `.config/fish`    ← ../../../programs.fish (only when fish is on)
   # Same list as the `configDirs` default of ../fns/bubblewrap-app.nix.
   # Each entry also carries a `dest` under the sandbox home (review-2
   # item 6). Without one, the mount lands at its host path
@@ -76,14 +75,12 @@ let
         dest = homeDest p;
         mode = "ro";
       })
-      (
-        [
-          "~/.config/git"
-          "~/.config/ripgrep"
-          "~/.config/bat"
-        ]
-        ++ lib.optional config.programs.fish.enable "~/.config/fish"
-      );
+      [
+        "~/.config/git"
+        "~/.config/ripgrep"
+        "~/.config/bat"
+      ]
+    ++ shellConfigMounts;
 
   # `home-manager.users.mhuber` is only referenced under `mkIf cfg.enable`
   # below (Nix is lazy), and mysbx's own config block already writes
@@ -99,6 +96,12 @@ let
   # missing file (a hard `rg` failure). No myconfig host rewrites it;
   # revisit if one ever does.
   hmRipgrep = config.home-manager.users.mhuber.programs.ripgrep;
+
+  # The home-manager user whose shell/config is rendered into the
+  # sandbox (bd myconfig-l44); `myconfig.user` is the only home-manager
+  # user this repo configures.
+  hmUser = config.home-manager.users."${myconfig.user}";
+  hmFish = hmUser.programs.fish;
 
   # The shared host-side LiteLLM forwarder (../myconfig.ai.dev.litellm-forwarder.nix):
   # the endpoint a podman-gvisor container reaches the host proxy at.
@@ -119,6 +122,50 @@ let
       "external"
       "both"
     ];
+
+  # The interactive payload shell (bd myconfig-l44) and its
+  # SANDBOX-SAFE configuration: the host's shell binary with a rendered
+  # `~/.config/fish` tree (./nix/shell-config.nix) mounted FILE BY FILE
+  # below the sandbox home.
+  #
+  # Why not the host's `~/.config/fish` as one read-only directory
+  # mount (what `baselineMounts` did before): three separate defects.
+  #
+  #   1. The mounted `config.fish` sources the host's
+  #      `hm-session-vars.fish`, which carries HOST XDG paths and model
+  #      credentials — a directory mount hands both to the payload, the
+  #      opposite of what `--clearenv` is for. It also `source`s
+  #      absolute host-home function files that resolve nowhere inside
+  #      the sandbox.
+  #   2. fish must WRITE `fish_variables` in `$__fish_config_dir`
+  #      (universal variables, key bindings). A read-only directory
+  #      mount makes every start print "Unable to create temporary
+  #      file …/fish_variables: Read-only file system".
+  #   3. A directory mount would hide any file a layer mounts below it,
+  #      and the sandbox home is a tmpfs whose `.config` must stay
+  #      writable for the tools' own state.
+  #
+  # So the tree is rendered from the user's OWN home-manager `home.file`
+  # entries (`mkShellConfig`), dereferenced into real files, and the
+  # three paths are mounted INDIVIDUALLY: the configuration is
+  # read-only, while fish's state lives on the writable tmpfs home.
+  shellConfig =
+    if cfg.shell.path != null && hmFish.enable then
+      (import ./nix/shell-config.nix { inherit (pkgs) lib runCommand; }) {
+        homeFile = hmUser.home.file;
+        homeDirectory = hmUser.home.homeDirectory;
+        fish = hmFish;
+      }
+    else
+      null;
+
+  shellConfigMounts = lib.optionals (shellConfig != null) (
+    map (sub: {
+      path = "${shellConfig.tree}/${sub}";
+      dest = "/mysbx-home/.config/fish/${sub}";
+      mode = "ro";
+    }) shellConfig.subtrees
+  );
 
   # The wrapper the baseline `[env]` below pins: renders the DEFAULT
   # unified diff (git's own machinery minus `diff.external`), self-
@@ -200,13 +247,24 @@ let
   # plain shell. `tmux` always is; the others are gated on their
   # package option, which the host (or the tier module next door,
   # ../myconfig.ai.workmux/mysbx.nix) sets.
+
+  # The shell the multiplexer panes get (`pinShell` of
+  # ./nix/mux-entry-lib.nix): the same payload shell as a plain
+  # `multiplexer = "none"` session, so a pane does not silently fall back
+  # to bash on a fish host (bd myconfig-l44).
+  payloadShell = cfg.shell.path;
+
   muxEntries = {
-    tmux = pkgs.callPackage ./nix/tmux-entry.nix { tmux = cfg.tmux.package; };
+    tmux = pkgs.callPackage ./nix/tmux-entry.nix {
+      tmux = cfg.tmux.package;
+      inherit payloadShell;
+    };
     workmux =
       if cfg.workmux.package != null then
         pkgs.callPackage ./nix/workmux-entry.nix {
           workmux = cfg.workmux.package;
           tmux = cfg.tmux.package;
+          inherit payloadShell;
         }
       else
         null;
@@ -215,6 +273,7 @@ let
         pkgs.callPackage ./nix/herdr-entry.nix {
           herdr = cfg.herdr.package;
           tmux = cfg.tmux.package;
+          inherit payloadShell;
         }
       else
         null;
@@ -223,6 +282,7 @@ let
         pkgs.callPackage ./nix/aoe-entry.nix {
           aoe = cfg.aoe.package;
           tmux = cfg.tmux.package;
+          inherit payloadShell;
         }
       else
         null;
@@ -235,6 +295,7 @@ let
         pkgs.callPackage ./nix/orca-entry.nix {
           inherit (pkgs) appimage-run xvfb;
           orca = cfg.orca.package;
+          inherit payloadShell;
         }
       else
         null;
@@ -366,6 +427,7 @@ in
         inherit (cfg) extraTools;
         inherit muxEntries;
         alacritty = cfg.terminal.package;
+        shell = cfg.shell.path;
         podmanImage = cfg.podman.image;
         podmanShell = cfg.podman.shell;
         podmanPastaSpec = cfg.podman.pastaSpec;
@@ -386,7 +448,7 @@ in
         nono = cfg.nono.package;
         ssh-keygen = pkgs.openssh;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; podmanImage = cfg.podman.image; podmanShell = cfg.podman.shell; podmanPastaSpec = cfg.podman.pastaSpec; podmanEnv = cfg.podman.env; krunRuntime = cfg.krun.runtime; krunScratchSize = if cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null; krunLauncher = cfg.krun.direct.launcher; krunRootfs = cfg.krun.direct.rootfs; waypipe = cfg.display.package; podmanWaypipe = cfg.podman.waypipe; podmanMuxEntries = cfg.podman.muxEntries; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; shell = cfg.shell.path; podmanImage = cfg.podman.image; podmanShell = cfg.podman.shell; podmanPastaSpec = cfg.podman.pastaSpec; podmanEnv = cfg.podman.env; krunRuntime = cfg.krun.runtime; krunScratchSize = if cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null; krunLauncher = cfg.krun.direct.launcher; krunRootfs = cfg.krun.direct.rootfs; waypipe = cfg.display.package; podmanWaypipe = cfg.podman.waypipe; podmanMuxEntries = cfg.podman.muxEntries; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -603,17 +665,64 @@ in
       };
     };
 
+    # The interactive payload shell of the sandbox (bd myconfig-l44):
+    # the same shell the user logs into on the host, instead of the bare
+    # `bash` of mysbx's own closure — which reads NO configuration at all
+    # (there is no host `/etc/bashrc` and no `~/.bashrc` in the tmpfs
+    # home), so a sandbox session lost every host alias, abbreviation and
+    # function.
+    shell = {
+      # `null` keeps the crate default: `bashInteractive` from mysbx's
+      # own closure (`MYSBX_SHELL` in ./nix/mysbx.nix), the payload every
+      # host had before.
+      path = mkOption {
+        type = types.nullOr types.str;
+        default =
+          let
+            hm = config.home-manager.users."${myconfig.user}";
+            fish = hm.programs.fish;
+          in
+          if config.programs.fish.enable && fish.enable then "${fish.package}/bin/fish" else null;
+        defaultText = literalExpression ''
+          the fish binary path of the home-manager user's
+          `programs.fish.package` when fish is the user's shell
+          (`programs.fish.enable` and the home-manager user's
+          `programs.fish.enable`), else null'';
+        description = ''
+          The shell the INTERACTIVE payload of an `multiplexer = "none"`
+          sandbox execs, pinned into the wrapper as `MYSBX_SHELL`.
+
+          The default is the fish binary of the home-manager user's
+          `programs.fish.package` when fish is that user's shell — the
+          same shell a host login lands in, so a sandbox session has the
+          host's prompt, abbreviations and aliases. Its configuration is
+          rendered SANDBOX-SAFE by ./nix/shell-config.nix (the host's
+          generated `config.fish` is never mounted wholesale: it sources
+          `hm-session-vars.fish`, which carries host XDG paths and model
+          credentials, and absolute host-home function files).
+
+          A path from the wrapper's own closure, like every other pin:
+          the unmodified binary is reachable inside the sandbox through
+          the read-only `/nix/store` bind.
+
+          `null` keeps the crate default (`bash` from the same closure,
+          with no configuration; also the fallback on a host whose user
+          does not run fish).
+        '';
+      };
+    };
+
     podman = {
       # The interactive payload shell of the podman-gvisor backend (bd
       # myconfig-cew): the same shell the user logs into on the host,
       # baked into the image by `podman.extraImagePackages` (which
       # carries the fish world of the home-manager user whenever
       # `programs.fish.enable`, ./podman.nix). The image contains the
-      # binary at its store path, and the read-only `~/.config/fish`
-      # mount (`baselineMounts`) carries
-      # the configuration, aliases and plugins — the image is
-      # provisioned so the mounted symlinks resolve (every path the
-      # rendered config names is in the image closure).
+      # binary at its store path, and the read-only
+      # `~/.config/fish` paths of `shellConfigMounts` (config.md D25)
+      # carry the configuration, aliases and plugins — the image is
+      # provisioned so the store paths the rendered config names
+      # resolve (every one of them is in the image closure).
       #
       # `null` keeps the crate default: the image's own `Cmd`
       # (`/bin/bash`), i.e. the pre-cew behaviour of a bare bash.
@@ -638,7 +747,7 @@ in
           The default is the fish binary of the home-manager user's
           `programs.fish.package` — `podman.image` bakes exactly
           that package, so the store path resolves inside the
-          container and the mounted `~/.config/fish` gives it the
+          container and the mounted `~/.config/fish` paths give it the
           same aliases and configuration as on the host.
 
           `null` keeps the image's own `Cmd` (`/bin/bash`).

@@ -19,6 +19,11 @@
   writeShellApplication,
   coreutils,
   bashInteractive,
+  # The interactive payload shell of the sandbox (../default.nix
+  # `shell.path`, bd myconfig-l44): the HOST's shell, so a pane
+  # lands in the same shell as the host and the payload. `null`
+  # keeps this entry's own bash.
+  payloadShell ? null,
   tmux,
 }:
 let
@@ -34,7 +39,7 @@ writeShellApplication {
   text = ''
     ${muxLib.requireSocketDir "mysbx-tmux-entry"}
     ${muxLib.sessionName "mysbx"}
-    ${muxLib.pinShell (lib.getExe bashInteractive)}
+    ${muxLib.pinShell (if payloadShell != null then payloadShell else lib.getExe bashInteractive)}
 
     socket="$socket_dir/socket"
 

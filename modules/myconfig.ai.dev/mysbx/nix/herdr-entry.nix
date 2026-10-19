@@ -65,6 +65,11 @@
   writeShellApplication,
   coreutils,
   bashInteractive,
+  # The interactive payload shell of the sandbox (../default.nix
+  # `shell.path`, bd myconfig-l44): the HOST's shell, so a pane
+  # lands in the same shell as the host and the payload. `null`
+  # keeps this entry's own bash.
+  payloadShell ? null,
   tmux,
   # `jq` reads the workspace ids out of the socket API's JSON answers
   # when the startup workspace is relocated below.
@@ -103,7 +108,7 @@ writeShellApplication {
   ];
   text = ''
     ${muxLib.requireSocketDir "mysbx-herdr-entry"}
-    ${muxLib.pinShell (lib.getExe bashInteractive)}
+    ${muxLib.pinShell (if payloadShell != null then payloadShell else lib.getExe bashInteractive)}
 
     # Fresh on every start, in the tmpfs HOME: a stale session config
     # is impossible, and nothing of the host's ~/.config/herdr is read.

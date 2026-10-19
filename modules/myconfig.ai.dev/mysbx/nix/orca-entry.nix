@@ -78,6 +78,11 @@
   writeShellApplication,
   coreutils,
   bashInteractive,
+  # The interactive payload shell of the sandbox (../default.nix
+  # `shell.path`, bd myconfig-l44): the HOST's shell, so a pane
+  # lands in the same shell as the host and the payload. `null`
+  # keeps this entry's own bash.
+  payloadShell ? null,
   # `appimage-run` extracts the AppImage's squashfs payload (no FUSE
   # device, no /dev/fuse needed inside the sandbox) and provides the
   # FHS runtime the AppImage expects — the same launch path the
@@ -106,7 +111,7 @@ writeShellApplication {
   ];
   text = ''
     ${muxLib.requireSocketDir "mysbx-orca-entry"}
-    ${muxLib.pinShell (lib.getExe bashInteractive)}
+    ${muxLib.pinShell (if payloadShell != null then payloadShell else lib.getExe bashInteractive)}
 
     # Software rendering, like the host-side `orca-serve` unit of
     # ../../services.orca.nix: a sandbox has no GPU guarantees, and

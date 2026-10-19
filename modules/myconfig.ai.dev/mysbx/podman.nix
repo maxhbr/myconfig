@@ -35,10 +35,11 @@ let
   );
 
   # The fish runtime the host's rendered fish configuration assumes (bd
-  # myconfig-cew), for the read-only `~/.config/fish` mount of
-  # `baselineMounts`: fish, the tools its config names by store path
-  # (the eza/bat aliases, the `any-nix-shell` hook, grc) and the plugin
-  # `src` trees the generated conf.d files load from.
+  # myconfig-cew), for the read-only `~/.config/fish` paths of
+  # `shellConfigMounts` (config.md D25): fish, the tools its config
+  # names by store path (the eza/bat aliases, the `any-nix-shell` hook,
+  # grc) and the plugin `src` trees the rendered conf.d files load
+  # from.
   fishConveniencePackages =
     let
       hm = config.home-manager.users."${myconfig.user}";

@@ -108,7 +108,9 @@ libkrun runtime) **runs** additionally read its OWN flag pins:
   fish hosts to the fish binary as it exists inside the image (bd
   myconfig-cew: the image is provisioned with the host user's fish
   world, so an interactive session lands in the same shell, aliases
-  and configuration, via the ro `~/.config/fish` mount); the tool
+  and configuration, via the rendered, individually mounted
+  `~/.config/fish` paths of `nix/shell-config.nix` — config.md D25);
+  the tool
   `PATH` stays the image's own — `buildEnv` links every baked
   package's `bin` into the image `/bin`, which the OCI `PATH` already
   covers.

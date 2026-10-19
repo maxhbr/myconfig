@@ -136,6 +136,38 @@ let
     };
   };
 
+  # The interactive payload shell (bd myconfig-l44, config.md D25) — a
+  # `let` binding, not a `scenarios` member, because these are attribute
+  # sets and derivations the scenarios themselves cannot reference.
+  fishShell = evaluated [
+    {
+      programs.fish.enable = true;
+      home-manager.users.mhuber.programs.fish = {
+        enable = true;
+        shellAbbrs.g = "git";
+        shellAliases.ll = "eza -l";
+      };
+    }
+  ];
+  # The rendered shell configuration tree, mounted path by path.
+  shellMounts = fishShell.myconfig.ai.dev.mysbx.config.mounts;
+  shellConfig =
+    (import ./shell-config.nix {
+      inherit lib;
+      runCommand = pkgs.runCommand;
+    })
+      {
+        homeFile = fishShell.home-manager.users.mhuber.home.file;
+        homeDirectory = "/home/mhuber";
+        fish = fishShell.home-manager.users.mhuber.programs.fish;
+      };
+  shellConfigTree = shellConfig.tree;
+  # Without a pinned shell (`shell.path = null`) the baseline must not
+  # mount anything below `.config/fish` — the pre-l44 layout.
+  noShellMounts = map (m: m.dest or m.path) (
+    (evaluated [ { myconfig.ai.dev.mysbx.shell.path = null; } ]).myconfig.ai.dev.mysbx.config.mounts
+  );
+
   scenarios = {
     # Ripgrep active: the file Home Manager writes exists, so both the
     # read-only mount and the variable pointing at its in-sandbox copy
@@ -418,6 +450,47 @@ let
       throw "mysbx generated-config test: krun.nix.settings does not mirror the host substituters"
     else
       "ok";
+  # The interactive payload shell (bd myconfig-l44, config.md D25):
+  # asserted at check-build time because the values are packages and
+  # attribute sets, not TOML bytes. Three properties:
+  #   * the host shell is pinned when fish is the user's shell;
+  #   * the configuration is mounted as `config.fish`, `conf.d` and
+  #     `functions` — and NEVER the `~/.config/fish` directory itself
+  #     (config.md D25: a read-only directory mount breaks fish's
+  #     `fish_variables` write and would carry `hm-session-vars`);
+  #   * the rendered tree exists and carries the user's abbreviation.
+  shellGate =
+    let
+      dests = map (m: m.dest or m.path) shellMounts;
+      wanted = [
+        "/mysbx-home/.config/fish/config.fish"
+        "/mysbx-home/.config/fish/conf.d"
+        "/mysbx-home/.config/fish/functions"
+      ];
+      missing = builtins.filter (d: !(builtins.elem d dests)) wanted;
+      directoryMount = builtins.filter (m: (m.dest or m.path) == "/mysbx-home/.config/fish") shellMounts;
+      off = noShellMounts;
+      tree = shellConfigTree;
+    in
+    if missing != [ ] then
+      throw "mysbx generated-config test: the rendered shell config is not mounted path by path (missing: ${builtins.concatStringsSep ", " missing})"
+    else if directoryMount != [ ] then
+      throw "mysbx generated-config test: `~/.config/fish` is mounted as a directory again — fish cannot write fish_variables there and hm-session-vars leaks"
+    else if builtins.any (d: lib.hasPrefix "/mysbx-home/.config/fish" d) off then
+      throw "mysbx generated-config test: a null shell.path still mounted a fish config"
+    else if !(builtins.pathExists "${tree}/config.fish") then
+      throw "mysbx generated-config test: the rendered shell config tree has no config.fish"
+    else if !(lib.hasInfix "abbr --add -- g git" (builtins.readFile "${tree}/config.fish")) then
+      throw "mysbx generated-config test: the rendered config.fish does not carry the user's abbreviation"
+    else if
+      lib.any (l: lib.hasInfix "hm-session-vars" l && lib.hasInfix "source" l) (
+        lib.splitString "\n" (builtins.readFile "${tree}/config.fish")
+      )
+    then
+      throw "mysbx generated-config test: the rendered config.fish still sources hm-session-vars"
+    else
+      "ok";
+
 in
 pkgs.runCommand "mysbx-generated-config-test"
   {
@@ -450,6 +523,7 @@ pkgs.runCommand "mysbx-generated-config-test"
       krunPinGate
       krunNestedPodmanGate
       krunNixGate
+      shellGate
       ;
   }
   ''
@@ -592,6 +666,9 @@ pkgs.runCommand "mysbx-generated-config-test"
 
     [ "$assertionGate" = ok ] \
       || { echo "mysbx generated-config test: assertion gate: $assertionGate" >&2; exit 1; }
+
+    [ "$shellGate" = ok ] \
+      || { echo "mysbx generated-config test: shell gate: $shellGate" >&2; exit 1; }
 
     mkdir "$out"
   ''

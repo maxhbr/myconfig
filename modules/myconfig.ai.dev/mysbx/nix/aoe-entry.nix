@@ -21,6 +21,11 @@
   writeShellApplication,
   coreutils,
   bashInteractive,
+  # The interactive payload shell of the sandbox (../default.nix
+  # `shell.path`, bd myconfig-l44): the HOST's shell, so a pane
+  # lands in the same shell as the host and the payload. `null`
+  # keeps this entry's own bash.
+  payloadShell ? null,
   tmux,
   # The agent-of-empires package that runs inside the sandbox
   # (`myconfig.ai.dev.mysbx.aoe.package`, normally
@@ -40,7 +45,7 @@ writeShellApplication {
   ];
   text = ''
     ${muxLib.requireSocketDir "mysbx-aoe-entry"}
-    ${muxLib.pinShell (lib.getExe bashInteractive)}
+    ${muxLib.pinShell (if payloadShell != null then payloadShell else lib.getExe bashInteractive)}
 
     # mysbx `--chdir`s into the repo root, so `aoe` manages the
     # repository it was started for without being told which one.

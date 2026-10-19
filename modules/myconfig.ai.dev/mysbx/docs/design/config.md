@@ -1405,3 +1405,55 @@ Key grammar: a name must be a usable nix.conf directive name — empty,
 (a value smuggling a second directive or a comment would corrupt the
 generated file). Values are taken verbatim: a value is one setting's
 value, not a file format.
+
+### D25: the interactive payload is the HOST's shell, with a rendered sandbox config
+
+The plain interactive payload (`multiplexer = "none"`, the default) is
+the shell the user logs into on the host — `users.users.<user>.shell`
+(`fish` on myconfig hosts), not a bare `bash` from mysbx's own closure.
+A sandbox session is where an operator spends a whole working day, and a
+shell without the host's prompt, abbreviations, aliases and functions is
+a different tool, not a confined one.
+
+The binary is a store path the wrapper pins (`MYSBX_SHELL`,
+`nix/mysbx.nix` `shell` argument): identical to the host's, reachable
+inside the sandbox through the read-only `/nix/store` bind, and it is
+the same binary the multiplexer entries pin as their pane shell
+(`mux-entry-lib.nix` `pinShell`), so a pane and a bare session agree.
+
+**The configuration is rendered, not mounted.** The host's
+`~/.config/fish` cannot be handed over as a directory mount, for three
+separate reasons:
+
+1. its `config.fish` sources `hm-session-vars.fish`, which carries HOST
+   XDG paths and model credentials — mounting it defeats the
+   `--clearenv` policy the rest of the base follows;
+2. it `source`s absolute HOST-home function files that resolve nowhere
+   below `/mysbx-home`;
+3. a read-only directory mount is unusable for fish, which writes
+   `fish_variables` in `$__fish_config_dir` (universal variables, key
+   bindings) and prints `Unable to create temporary file …/fish_variables:
+   Read-only file system` on every start.
+
+So the module renders ONE store tree (`nix/shell-config.nix`) of
+dereferenced real-file copies from the user's own home-manager
+`home.file` entries, and mounts its three paths INDIVIDUALLY:
+
+| mount dest | content |
+| --- | --- |
+| `/mysbx-home/.config/fish/config.fish` | abbreviations, aliases, interactive/login init of the user's fish — no session-vars source |
+| `/mysbx-home/.config/fish/conf.d` | the plugin/hydro startup files the host's fish loads |
+| `/mysbx-home/.config/fish/functions` | the user's own fish functions |
+
+The mounts are `ro`; `.config/fish` itself is NOT mounted, so fish's own
+state stays on the writable tmpfs home. A host whose user does not run
+fish keeps the previous payload: `shell.path = null` pins nothing and
+the crate's `bash`/`/bin/sh` fallback applies.
+
+Consequence, said out loud: the rendered `config.fish` is a
+*sandbox-relevant subset* of the host configuration. Anything the host's
+`config.fish` does through `hm-session-vars` (host `XDG_*`, credential
+exports, `PATH` prefixes) is deliberately absent — inside the sandbox
+those variables name paths that do not exist there, and the credentials
+must not enter (D6's `[env]`/`forward-env` is the sanctioned way to
+carry a variable in).
