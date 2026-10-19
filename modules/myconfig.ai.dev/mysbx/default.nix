@@ -151,13 +151,25 @@ let
   # read-only, while fish's state lives on the writable tmpfs home.
   shellConfig =
     if cfg.shell.path != null && hmFish.enable then
-      (import ./nix/shell-config.nix { inherit (pkgs) lib runCommand; }) {
-        homeFile = hmUser.home.file;
-        homeDirectory = hmUser.home.homeDirectory;
-        fish = hmFish;
-      }
+      (import ./nix/shell-config.nix {
+        inherit (pkgs) lib pkgs runCommand;
+      })
+        {
+          homeFile = hmUser.home.file;
+          homeDirectory = hmUser.home.homeDirectory;
+          fish = hmFish;
+        }
     else
       null;
+
+  # The store paths the rendered fish configuration NAMES at startup
+  # (`nix/shell-config.nix` `runtimePackages`): fish itself (hydro
+  # re-execs it on every prompt tick), the plugin probes (`grc`) and the
+  # tools its aliases call (`eza`, `bat`). Without them on the sandbox
+  # `PATH` the rendered config is half-broken: `You need to install
+  # grc!` on every prompt, and `ls`/`ll`/`cat` naming an eza/bat that is
+  # not there. They come OUT of the rendering so the two cannot drift.
+  shellRuntimeTools = if shellConfig != null then shellConfig.runtimePackages else [ ];
 
   shellConfigMounts = lib.optionals (shellConfig != null) (
     map (sub: {
@@ -1698,11 +1710,17 @@ in
     # `extraTools`. See `selectedMuxTools` for why only the selected
     # one is added.
     #
+    # `shellRuntimeTools` is the same kind of obligation for the PAYLOAD
+    # shell (`shellRuntimeTools` above): the rendered fish configuration
+    # names fish, grc, eza and bat by bare name, so a sandbox that mounts
+    # the config but not the binaries prints `You need to install grc!`
+    # on every prompt.
+    #
     # Shared sandbox tooling (../../sandboxes/myconfig.ai.sandboxTools.nix),
     # phase 2d: mysbx honours the cross-tier hook like the other
     # tiers. The hook's packages land on the sandbox PATH here, via
     # the same `extraTools` the agent modules append to — one `listOf`
-    # definition, so all three simply concatenate in `toolsEnv`.
+    # definition, so all of them simply concatenate in `toolsEnv`.
     #
     # The phase-2d decision: `extraTools` STAYS as the mysbx-specific
     # extension ON TOP of this hook (for the selected multiplexer's
@@ -1711,6 +1729,7 @@ in
     # once.
     myconfig.ai.dev.mysbx.extraTools =
       selectedMuxTools
+      ++ shellRuntimeTools
       ++ config.myconfig.ai.dev.sandboxTools.extraPackages
       ++ lib.optional cfg.browser.enable browserPackage
       # The waypipe binary of the display channel (D18): the argv

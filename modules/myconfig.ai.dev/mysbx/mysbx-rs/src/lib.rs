@@ -1125,6 +1125,13 @@ enum RunMode {
 /// what tells the operator the run ended by itself and the window may be
 /// closed (no message at all means the window's shell is still in it).
 ///
+/// That wrapping shell is `MYSBX_GUI_SHELL` (a POSIX `sh` from the
+/// wrapper's own closure), NOT `MYSBX_SHELL`: the latter is the sandbox
+/// PAYLOAD shell, which is the host's own shell — fish on myconfig
+/// hosts. A fish cannot run the POSIX script below at all (`status=$?`
+/// is a syntax error there), so reusing the payload pin for it breaks
+/// `gui` on exactly the hosts whose payload the pin exists for.
+///
 /// The `gui` form waits for neither the sandbox nor the terminal: it
 /// forks ([`gui_detached`]) and the parent returns as soon as the
 /// window was started — detached like `mysbx gui & disown`. Only a
@@ -1167,11 +1174,13 @@ fn gui(flags: Flags, args: &[String]) -> i32 {
         }
     };
     // The shell that runs the inner mysbx AND prints its closing
-    // message: the wrapper's `MYSBX_SHELL` pin (the bash of the mysbx
-    // closure), so the window's top-level command does not depend on
-    // the host `$SHELL`; the `sh` fallback is the PATH lookup the
-    // unwrapped crate makes everywhere.
-    let shell = env_or("MYSBX_SHELL", "sh");
+    // message: the wrapper's `MYSBX_GUI_SHELL` pin (a POSIX `sh` of the
+    // mysbx closure), so the window's top-level command does not depend
+    // on the host `$SHELL`; the `sh` fallback is the PATH lookup the
+    // unwrapped crate makes everywhere. Deliberately NOT `MYSBX_SHELL`:
+    // that pin names the payload shell (fish on myconfig hosts) and the
+    // script below is POSIX.
+    let shell = env_or("MYSBX_GUI_SHELL", "sh");
     let mut cmd = std::process::Command::new(&terminal);
     cmd.arg("--working-directory")
         .arg(&cwd)
@@ -1198,6 +1207,9 @@ fn gui(flags: Flags, args: &[String]) -> i32 {
 /// verbatim (`"$0" "$@"` — the shell's `$0` is the inner executable, so
 /// a tail entry needs no quoting of its own) and then prints the
 /// closing message naming the exit status (cli.md D15).
+///
+/// `shell` is [`gui`]'s `MYSBX_GUI_SHELL` pin — a POSIX shell, never
+/// the `MYSBX_SHELL` payload pin: see [`GUI_FINAL_MESSAGE_SCRIPT`].
 ///
 /// The message is what makes a held window readable as FINISHED: the
 /// sandbox's own payload is gone by then, and without a last line an
@@ -1228,6 +1240,13 @@ fn gui_final_message_argv(shell: &str, self_exe: &str, args: &[String]) -> Vec<S
 /// wrapping script or a test asserts. The two branches say what an
 /// operator needs to know before closing the window: whether the run
 /// succeeded, and which status a failed one ended with.
+///
+/// POSIX on purpose, and the reason it gets its own shell pin: the
+/// script runs in `MYSBX_GUI_SHELL`, which the Nix wrapper points at a
+/// `sh` of the mysbx closure. Running it under `MYSBX_SHELL` would make
+/// the message a casualty of the payload shell — with fish, `gui` failed
+/// outright on `status=$?` before the window even started, i.e. on every
+/// host whose payload is fish.
 const GUI_FINAL_MESSAGE_SCRIPT: &str = concat!(
     "\"$0\" \"$@\"\n",
     "status=$?\n",
@@ -6467,15 +6486,15 @@ mod final_message_tests {
     #[test]
     fn the_gui_command_wraps_mysbx_in_a_shell_that_prints_the_closing_message() {
         // cli.md D15: the terminal's command is `SHELL -c SCRIPT MYSBX
-        // ARG...` — the shell is the wrapper's `MYSBX_SHELL` pin, `$0` of
-        // the script is the inner mysbx (absolute, current_exe), and the
-        // tail is passed verbatim behind it.
+        // ARG...` — the shell is the wrapper's `MYSBX_GUI_SHELL` pin, `$0`
+        // of the script is the inner mysbx (absolute, current_exe), and
+        // the tail is passed verbatim behind it.
         let argv = gui_final_message_argv(
-            "/synth/bin/bash",
+            "/synth/bin/sh",
             "/synth/store/mysbx/bin/mysbx",
             &["--multiplexer".to_owned(), "herdr".to_owned()],
         );
-        assert_eq!(argv[0], "/synth/bin/bash");
+        assert_eq!(argv[0], "/synth/bin/sh");
         assert_eq!(argv[1], "-c");
         assert_eq!(argv[2], GUI_FINAL_MESSAGE_SCRIPT);
         assert_eq!(argv[3], "/synth/store/mysbx/bin/mysbx");
@@ -6496,5 +6515,15 @@ mod final_message_tests {
         assert!(GUI_FINAL_MESSAGE_SCRIPT.contains("finished with status %s"));
         assert!(GUI_FINAL_MESSAGE_SCRIPT.contains("exit \"$status\""));
         assert!(GUI_FINAL_MESSAGE_SCRIPT.contains("can be closed"));
+    }
+
+    #[test]
+    fn the_closing_message_script_is_posix_not_fish() {
+        // The script runs in the `MYSBX_GUI_SHELL` pin, a POSIX `sh`.
+        // `status=$?` is exactly what fish rejects (`Unsupported use of
+        // '='`), so a payload shell must never be substituted here — the
+        // assertion guards the two pins against being merged again.
+        assert!(GUI_FINAL_MESSAGE_SCRIPT.contains("status=$?"));
+        assert!(!GUI_FINAL_MESSAGE_SCRIPT.contains("set status"));
     }
 }

@@ -195,7 +195,10 @@ variables, the effective `MYSBX_BWRAP` / `MYSBX_SHELL` / `MYSBX_TOOLS_PATH` /
 `MYSBX_CA_BUNDLE` (the pinned CA bundle the TLS env variables point
 at, or `(none)`) values after
 their fallbacks, the payload, and whether the run will exec or stop at
-the argv. The effective display channel (config.md D18) is shown too:
+the argv. (`MYSBX_GUI_SHELL`, the POSIX shell of `gui`'s
+closing-message wrapper, is not part of a RUN — it belongs to D15 and
+is not reported here.) The effective display channel (config.md D18) is
+shown too:
 `off`, or `waypipe` with the host-side socket path, the guest display
 name and the guest binary — or the refusal note when nothing is pinned.
 
@@ -434,8 +437,14 @@ with `N`. Without that line a held window is silent after the sandbox is
 gone, and an operator cannot tell a completed run from a hung one; a
 window that shows no such line still has a live process in it. The exit
 status handed to the terminal stays the run's — the message is
-additive. The shell is the wrapper's `MYSBX_SHELL` pin (bash from the
-mysbx closure), an `sh` PATH lookup only for the unwrapped crate.
+additive. The shell is the wrapper's `MYSBX_GUI_SHELL` pin (the `sh` of
+the mysbx closure), an `sh` PATH lookup only for the unwrapped crate.
+It is deliberately a SEPARATE pin from `MYSBX_SHELL`: that one names the
+sandbox PAYLOAD shell, which on myconfig hosts is fish, and fish cannot
+run the POSIX script at all (`status=$?` is a syntax error there).
+Sharing the pin made `mysbx gui …` fail before the window even opened —
+with `fish: Unsupported use of '='` — on exactly the hosts the payload
+pin exists for.
 
 **`gui` is not a run.** Nothing of the sandbox pipeline happens in the
 outer invocation: no repo resolution, no sidecar guard, no merge, no

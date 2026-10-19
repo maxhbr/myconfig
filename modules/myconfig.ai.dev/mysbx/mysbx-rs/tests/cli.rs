@@ -59,6 +59,10 @@ fn spawn_with_args<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> C
         .env("XDG_CONFIG_HOME", &inv.xdg)
         .env("MYSBX_SHELL", "/synth/bin/bash")
         .env("MYSBX_TOOLS_PATH", "/synth/bin")
+        // The `gui` closing-message shell is a SEPARATE pin (a POSIX
+        // `sh`, never the payload shell): unpinned here, so the tests
+        // get the crate's `sh` fallback unless they pin it themselves.
+        .env_remove("MYSBX_GUI_SHELL")
         .env_remove("MYSBX_BWRAP")
         // The gvisor pins are wrapper-provided, never inherited from the
         // test runner's own (possibly wrapped) environment — a wrapped
@@ -4354,9 +4358,13 @@ fn gui_passes_the_tail_verbatim_to_a_mysbx_in_the_cwd() {
     let mut cmd = spawn(&inv);
     cmd.env("MYSBX_TERMINAL", &stub)
         // The shell of the window's command is the wrapper's
-        // `MYSBX_SHELL` pin; the test pins a REAL `sh` so the argv
+        // `MYSBX_GUI_SHELL` pin; the test pins a REAL `sh` so the argv
         // shape is the wrapper's, not this build environment's.
-        .env("MYSBX_SHELL", "/bin/sh")
+        .env("MYSBX_GUI_SHELL", "/bin/sh")
+        // A payload shell that is NOT a POSIX shell, the way myconfig
+        // hosts pin fish there: `gui` must not read this variable at
+        // all (a fish cannot run the closing-message script).
+        .env("MYSBX_SHELL", "/synth/bin/fish")
         .env("MYSBX_GUI_STUB_OUT", &out);
     let status = cmd.status().expect("failed to spawn the mysbx binary");
     assert_eq!(status.code(), Some(0));
@@ -4525,6 +4533,45 @@ fn gui_names_the_terminal_it_cannot_start() {
     assert!(
         stderr.contains("/nonexistent/terminal"),
         "the error names the terminal: {stderr}"
+    );
+}
+
+#[test]
+fn gui_ignores_a_non_posix_payload_shell() {
+    // The live regression: `MYSBX_SHELL` is the PAYLOAD shell, and on
+    // myconfig hosts that is fish. The closing-message script is POSIX
+    // (`status=$?`), so reusing the payload pin for the window's shell
+    // made `mysbx gui …` die with fish's `Unsupported use of '='`
+    // before the terminal even started. `gui` must therefore read its
+    // OWN pin (`MYSBX_GUI_SHELL`) and never the payload one.
+    let base = tmpdir("gui-posix-shell");
+    let (repo, _) = make_repo(&base, "repo");
+    let (stub, out) = terminal_stub(&base);
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg")).unwrap();
+    let inv = Invocation {
+        args: vec!["gui"],
+        cwd: repo,
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let mut cmd = spawn(&inv);
+    cmd.env("MYSBX_TERMINAL", &stub)
+        .env("MYSBX_GUI_STUB_OUT", &out)
+        // A payload shell that would fail the script on its second line…
+        .env("MYSBX_SHELL", "/synth/bin/fish")
+        // …and the pin `gui` actually uses.
+        .env("MYSBX_GUI_SHELL", "/bin/sh");
+    let status = cmd.status().expect("failed to spawn the mysbx binary");
+    assert_eq!(status.code(), Some(0));
+    let recorded = wait_for_file(&out);
+    assert!(
+        recorded.contains("--command\n/bin/sh\n-c\n"),
+        "the window's shell is the POSIX pin, not the payload shell: {recorded}"
+    );
+    assert!(
+        !recorded.contains("/synth/bin/fish"),
+        "the payload shell must never reach the terminal's command: {recorded}"
     );
 }
 

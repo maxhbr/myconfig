@@ -34,10 +34,24 @@
 # INDIVIDUALLY below the sandbox home, so fish's own state stays on the
 # writable tmpfs home while the configuration is read-only.
 #
-# Returns `{ tree, subtrees }` like `./sandbox-config.nix`'s
-# `mkSandboxConfig`, and for the same reason: a plain function file, no
-# NixOS option machinery.
-{ lib, runCommand }:
+# Returns `{ tree, subtrees, runtimePackages }` like
+# `./sandbox-config.nix`'s `mkSandboxConfig`, and for the same reason: a
+# plain function file, no NixOS option machinery.
+#
+# `runtimePackages` is the other half of the rendering: the tree carries
+# the CONFIGURATION, and a fish reading it still needs the binaries that
+# configuration names. Mounting a config without them is what made a
+# sandbox session print "You need to install grc!" and lose its `eza`
+# aliases — a rendered tree is only as useful as the `PATH` it is read
+# under.
+#
+# `pkgs` is threaded in for those store paths (the caller's nixpkgs, the
+# same revision the host's fish runs against); nothing else here needs it.
+{
+  lib,
+  pkgs,
+  runCommand,
+}:
 {
   # The home-manager `home.file` attrset of the user whose shell is
   # rendered — the single source of truth: a config change on the host
@@ -193,7 +207,25 @@ let
     "conf.d"
     "functions"
   ];
+
+  # The store paths the rendered tree resolves at startup (see the
+  # `pkgs` argument): the fish of the rendered configuration, the plugin
+  # binaries its `conf.d` files probe for, and the tools its aliases
+  # call. `fishBinary` is the exact package the host user runs, so the
+  # re-exec in hydro's prompt hook finds the same shell.
+  runtimePackages = [
+    fish.package
+    pkgs.grc
+    pkgs.eza
+    pkgs.bat
+  ]
+  # `any-nix-shell` is named by an ABSOLUTE store path in the rendered
+  # `interactiveShellInit` (the host's config interpolates the
+  # package), so it resolves through the `/nix/store` bind without
+  # being on the PATH. Listed anyway when the host configured it: it
+  # is part of what the rendered config executes.
+  ++ lib.optionals (fish.interactiveShellInit != "") [ pkgs.any-nix-shell ];
 in
 {
-  inherit tree subtrees;
+  inherit tree subtrees runtimePackages;
 }

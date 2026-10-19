@@ -1457,3 +1457,21 @@ exports, `PATH` prefixes) is deliberately absent — inside the sandbox
 those variables name paths that do not exist there, and the credentials
 must not enter (D6's `[env]`/`forward-env` is the sanctioned way to
 carry a variable in).
+
+**The rendered config needs its binaries on the sandbox `PATH`.**
+A configuration is only as useful as the programs it names, and the
+rendered one names several by bare name:
+
+| named by | program | what breaks without it |
+| --- | --- | --- |
+| hydro's prompt hook | `fish` | the per-tick `fish --private --command …` re-exec fails on every prompt |
+| the `grc` plugin's `conf.d` | `grc` | `You need to install grc!` printed on every shell start |
+| the rendered aliases | `eza`, `bat` | `ls`/`ll`/`cat` name a binary that is not there |
+
+`nix/shell-config.nix` therefore returns `runtimePackages` next to the
+tree, and the module folds them into `extraTools` (i.e. the dev-tool
+closure of `toolsEnv`, which IS the sandbox `PATH`). They come out of
+the rendering rather than being a hand-kept list, so a change to what
+the config names changes the closure with it. Rendering the config
+without them was a live regression: the sandbox had the exact right
+fish configuration and none of the tools it calls.

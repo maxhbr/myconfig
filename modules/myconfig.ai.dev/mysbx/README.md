@@ -141,7 +141,10 @@ prints `mysbx: finished successfully — this window can be closed` (or
 a window WITHOUT that line still has a live process in it. The command
 returns as soon as the window opens — detached like `mysbx gui & disown`
 — so the shell prompt comes back immediately and the window survives the
-terminal it was typed in.
+terminal it was typed in. The closing-message wrapper runs under
+`MYSBX_GUI_SHELL` (a POSIX `sh` of the mysbx closure), a pin separate
+from `MYSBX_SHELL` — the latter is the sandbox payload shell, which is
+fish on myconfig hosts and cannot run that POSIX script.
 
 `mysbx --ro <path>` / `mysbx --rw <path>` (repeatable, and the same
 after `run`) grants one host path to the run it is typed in — read-only
@@ -293,6 +296,14 @@ that must travel) and the absolute host-home function sources. `.config/fish`
 itself is not mounted, so fish's own state (`fish_variables`) lands on the
 writable tmpfs home instead of a read-only mount. A host whose user does
 not run fish keeps the previous bare-bash payload.
+
+The rendered configuration names programs by bare name — `fish` itself
+(hydro re-execs it on every prompt tick), `grc` (the plugin's `conf.d`
+prints `You need to install grc!` without it) and `eza`/`bat` (the
+`ls`/`ll`/`cat` aliases). `nix/shell-config.nix` returns those as
+`runtimePackages` beside the tree and the module folds them into
+`extraTools`, so they are on the sandbox `PATH` together with the config
+that calls them.
 
 On a difftastic host the generated `[env]` additionally pins
 `GIT_EXTERNAL_DIFF` at a wrapper that renders the default unified diff:

@@ -153,7 +153,7 @@ let
   shellMounts = fishShell.myconfig.ai.dev.mysbx.config.mounts;
   shellConfig =
     (import ./shell-config.nix {
-      inherit lib;
+      inherit lib pkgs;
       runCommand = pkgs.runCommand;
     })
       {
@@ -162,6 +162,11 @@ let
         fish = fishShell.home-manager.users.mhuber.programs.fish;
       };
   shellConfigTree = shellConfig.tree;
+  # The binaries the rendered tree names: they must reach the sandbox
+  # `PATH` through `extraTools`, or the rendered config is unreadable in
+  # the way that matters (a `grc`-less prompt, `eza`-less `ls`).
+  shellRuntimeTools = shellConfig.runtimePackages;
+  shellExtraToolNames = map (p: p.pname or p.name) ((fishShell.myconfig.ai.dev.mysbx.extraTools));
   # Without a pinned shell (`shell.path = null`) the baseline must not
   # mount anything below `.config/fish` — the pre-l44 layout.
   noShellMounts = map (m: m.dest or m.path) (
@@ -491,6 +496,24 @@ let
     else
       "ok";
 
+  # The rendered fish configuration is only usable with the binaries it
+  # names on the sandbox PATH: `fish` (hydro re-execs it on every prompt
+  # tick), `grc` (the plugin prints "You need to install grc!" without
+  # it), and `eza`/`bat` (the `ls`/`ll`/`cat` aliases call them by bare
+  # name). Rendering the config without them was the live regression:
+  # a sandbox session with the right config and none of the tools.
+  shellRuntimeGate =
+    let
+      required = map (p: p.pname or p.name) shellRuntimeTools;
+      missing = builtins.filter (n: !(builtins.elem n shellExtraToolNames)) required;
+    in
+    if shellRuntimeTools == [ ] then
+      throw "mysbx generated-config test: the rendered shell config named no runtime packages"
+    else if missing != [ ] then
+      throw "mysbx generated-config test: the rendered shell config's binaries are not on the sandbox PATH (missing from extraTools: ${builtins.concatStringsSep ", " missing})"
+    else
+      "ok";
+
 in
 pkgs.runCommand "mysbx-generated-config-test"
   {
@@ -524,6 +547,7 @@ pkgs.runCommand "mysbx-generated-config-test"
       krunNestedPodmanGate
       krunNixGate
       shellGate
+      shellRuntimeGate
       ;
   }
   ''
@@ -669,6 +693,9 @@ pkgs.runCommand "mysbx-generated-config-test"
 
     [ "$shellGate" = ok ] \
       || { echo "mysbx generated-config test: shell gate: $shellGate" >&2; exit 1; }
+
+    [ "$shellRuntimeGate" = ok ] \
+      || { echo "mysbx generated-config test: shell runtime gate: $shellRuntimeGate" >&2; exit 1; }
 
     mkdir "$out"
   ''

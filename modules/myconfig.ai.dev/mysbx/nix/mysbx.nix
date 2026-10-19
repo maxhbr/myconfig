@@ -18,6 +18,11 @@
 #                     myconfig-l44), else bash from *this wrapper's*
 #                     closure — never the host `$SHELL` (plan.md:
 #                     "Payload shell")
+#   MYSBX_GUI_SHELL   a POSIX shell for the `gui` closing-message
+#                     wrapper (src/lib.rs GUI_FINAL_MESSAGE_SCRIPT).
+#                     Deliberately NOT MYSBX_SHELL: a payload shell may
+#                     be fish, which cannot run that script at all
+#                     (`status=$?`)
 #   MYSBX_BINSH       a shell for the sandbox's `/bin/sh` — bash's own
 #                     `bin/sh` from the same closure. tmux runs EVERY
 #                     `run-shell`/`if-shell`/`#()` job through
@@ -756,6 +761,7 @@ symlinkJoin {
     wrapProgram "$out/bin/mysbx" \
       --set MYSBX_BWRAP '${bubblewrap}/bin/bwrap' \
       --set MYSBX_SHELL '${if shell != null then shell else "${bash}/bin/bash"}' \
+      --set MYSBX_GUI_SHELL '${bash}/bin/sh' \
       --set MYSBX_BINSH '${bash}/bin/sh' \
       --set MYSBX_TOOLS_PATH '${toolsEnv}/bin' \
       --set MYSBX_NIX_CONF '${sandboxNixConf}' \
