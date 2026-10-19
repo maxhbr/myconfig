@@ -598,8 +598,10 @@
                 pkgs = inputs.nixpkgs.legacyPackages."${system}";
                 files = pkgs.lib.concatStringsSep " " [
                   "switch.sh"
-                  # Home-manager activation harness for the agent-skills
-                  # integration (takeover + sync against a throwaway HOME).
+                  # Home-manager activation harness (runs a host's real
+                  # activation against a throwaway HOME) plus the
+                  # agent-skills integration check driven by it.
+                  "tests/test_home-manager_activation.sh"
                   "tests/agent-skills-activation.sh"
                   # The EXECUTED myconfig.ai.dev.microvm batch-job harnesses and the
                   # real-KVM validation suite. They are plain scripts (not
