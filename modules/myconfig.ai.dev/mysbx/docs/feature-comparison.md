@@ -186,9 +186,11 @@ inside the sandbox.
 | `mysbx/podman-krun` | refused: AF_UNIX does not cross virtio-fs (bd myconfig-ef6) | `lib.rs` step 4d |
 
 `mysbx gui [ARG…]` opens a host alacritty window that runs the inner
-`mysbx` (`cli.md` D15). `browser.enable` defaults to off in
-`mysbx/default.nix`. `myconfig.ai.dev/default.nix` sets it to `true`, so
-it is on on every `myconfig.ai.dev` host. The browser (`--no-sandbox`
+`mysbx` (`cli.md` D15) and, once that run is over, prints a closing
+`mysbx: finished successfully` / `finished with status N` line before
+the held window is left to the operator. `browser.enable` defaults to off
+in `mysbx/default.nix`. `myconfig.ai.dev/default.nix` sets it to `true`,
+so it is on on every `myconfig.ai.dev` host. The browser (`--no-sandbox`
 wrapper, `nix/browser.nix`) goes on the bwrap/nono `PATH` through
 `extraTools`. It is not in the podman image.
 

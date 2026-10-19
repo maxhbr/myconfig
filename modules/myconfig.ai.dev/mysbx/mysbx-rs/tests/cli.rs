@@ -4353,6 +4353,10 @@ fn gui_passes_the_tail_verbatim_to_a_mysbx_in_the_cwd() {
     };
     let mut cmd = spawn(&inv);
     cmd.env("MYSBX_TERMINAL", &stub)
+        // The shell of the window's command is the wrapper's
+        // `MYSBX_SHELL` pin; the test pins a REAL `sh` so the argv
+        // shape is the wrapper's, not this build environment's.
+        .env("MYSBX_SHELL", "/bin/sh")
         .env("MYSBX_GUI_STUB_OUT", &out);
     let status = cmd.status().expect("failed to spawn the mysbx binary");
     assert_eq!(status.code(), Some(0));
@@ -4372,6 +4376,34 @@ fn gui_passes_the_tail_verbatim_to_a_mysbx_in_the_cwd() {
         "the argv pins --hold: {recorded}"
     );
     assert_eq!(lines.next(), Some("--command"));
+    // The command is the closing-message wrapper: `SH -c SCRIPT MYSBX
+    // ARG...` (D15) — the shell that prints the last line once the
+    // inner mysbx is gone.
+    assert_eq!(
+        lines.next(),
+        Some("/bin/sh"),
+        "the command starts with the payload shell: {recorded}"
+    );
+    assert_eq!(lines.next(), Some("-c"));
+    // The stub prints one argv entry per line, so the SCRIPT arrives as
+    // its eight lines: run the inner mysbx, capture the status, print
+    // the closing message (success or the failing status), re-exit the
+    // status.
+    let script: Vec<&str> = (0..8).map(|_| lines.next().unwrap()).collect();
+    assert_eq!(
+        script,
+        [
+            "\"$0\" \"$@\"",
+            "status=$?",
+            "if [ \"$status\" -eq 0 ]; then",
+            "printf '\\nmysbx: finished successfully — this window can be closed\\n'",
+            "else",
+            "printf '\\nmysbx: finished with status %s — this window can be closed\\n' \"$status\"",
+            "fi",
+            "exit \"$status\"",
+        ],
+        "{recorded}"
+    );
     let inner = lines.next().unwrap();
     // The inner mysbx is THIS mysbx: the wrapped binary the test drives,
     // not a PATH lookup — `current_exe` of the spawned process.

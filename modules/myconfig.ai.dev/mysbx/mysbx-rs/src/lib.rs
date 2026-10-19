@@ -1119,6 +1119,11 @@ enum RunMode {
 /// another program's command line rather than re-exec'ing itself.
 /// `--hold` keeps the window open after the inner mysbx exits, so the
 /// log it printed stays readable instead of vanishing with the window.
+/// The window does not go silent either: the inner invocation is wrapped
+/// in a shell ([`gui_final_message_argv`]) that prints a last line naming
+/// the exit status once the sandbox is gone — with `--hold` that line is
+/// what tells the operator the run ended by itself and the window may be
+/// closed (no message at all means the window's shell is still in it).
 ///
 /// The `gui` form waits for neither the sandbox nor the terminal: it
 /// forks ([`gui_detached`]) and the parent returns as soon as the
@@ -1161,18 +1166,23 @@ fn gui(flags: Flags, args: &[String]) -> i32 {
             return EXIT_INFRASTRUCTURE;
         }
     };
+    // The shell that runs the inner mysbx AND prints its closing
+    // message: the wrapper's `MYSBX_SHELL` pin (the bash of the mysbx
+    // closure), so the window's top-level command does not depend on
+    // the host `$SHELL`; the `sh` fallback is the PATH lookup the
+    // unwrapped crate makes everywhere.
+    let shell = env_or("MYSBX_SHELL", "sh");
     let mut cmd = std::process::Command::new(&terminal);
     cmd.arg("--working-directory")
         .arg(&cwd)
         // `--hold` keeps the window open after the inner mysbx exits,
         // so the sandbox's own output (an interactive run's final
-        // lines, a refused backend's error) stays readable instead of
-        // vanishing with the window. Alacritty's own option, like the
-        // two around it.
+        // lines, a refused backend's error, the closing message below)
+        // stays readable instead of vanishing with the window.
+        // Alacritty's own option, like the two around it.
         .arg("--hold")
         .arg("--command")
-        .arg(&self_exe)
-        .args(args)
+        .args(gui_final_message_argv(&shell, &self_exe, args))
         // Detached from THIS terminal: the window opens on the desktop,
         // not as a child of the shell the command was typed in. The
         // inner mysbx is alacritty's child, and inherits its env — which
@@ -1182,6 +1192,52 @@ fn gui(flags: Flags, args: &[String]) -> i32 {
         .stderr(std::process::Stdio::null());
     gui_detached(cmd, &terminal)
 }
+
+/// The command the terminal runs: `SHELL -c SCRIPT MYSBX ARG...`. The
+/// POSIX script executes the inner mysbx with the argument tail passed
+/// verbatim (`"$0" "$@"` — the shell's `$0` is the inner executable, so
+/// a tail entry needs no quoting of its own) and then prints the
+/// closing message naming the exit status (cli.md D15).
+///
+/// The message is what makes a held window readable as FINISHED: the
+/// sandbox's own payload is gone by then, and without a last line an
+/// operator looks at a silent window and cannot tell a completed run
+/// from a hung one. A window with no such line still has a live
+/// process in it.
+///
+/// The inner invocation is not nested deeper than before — it is the
+/// same `mysbx ARG...` the terminal ran directly, now the child of one
+/// `sh` — so a multiplexer payload (`mysbx gui --multiplexer herdr`)
+/// gets the same terminal and the same environment, and exits the same
+/// way. The script exits with the inner status, so the terminal's exit
+/// code stays the run's.
+fn gui_final_message_argv(shell: &str, self_exe: &str, args: &[String]) -> Vec<String> {
+    let mut argv = vec![
+        shell.to_owned(),
+        "-c".to_owned(),
+        GUI_FINAL_MESSAGE_SCRIPT.to_owned(),
+        self_exe.to_owned(),
+    ];
+    argv.extend(args.iter().cloned());
+    argv
+}
+
+/// The body of [`gui_final_message_argv`]'s script. `$?` is the
+/// payload's own code (or `128 + signal`), and `exit "$status"` keeps
+/// it — the message is additive, never a replacement for the code a
+/// wrapping script or a test asserts. The two branches say what an
+/// operator needs to know before closing the window: whether the run
+/// succeeded, and which status a failed one ended with.
+const GUI_FINAL_MESSAGE_SCRIPT: &str = concat!(
+    "\"$0\" \"$@\"\n",
+    "status=$?\n",
+    "if [ \"$status\" -eq 0 ]; then\n",
+    "printf '\\nmysbx: finished successfully — this window can be closed\\n'\n",
+    "else\n",
+    "printf '\\nmysbx: finished with status %s — this window can be closed\\n' \"$status\"\n",
+    "fi\n",
+    "exit \"$status\""
+);
 
 /// The one-byte verdicts [`gui_detached_child`] sends its parent through
 /// the report pipe: the terminal was started, or a failure whose message
@@ -6401,5 +6457,44 @@ mod tests {
         let _ = child.kill();
         let _ = child.wait();
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod final_message_tests {
+    use super::*;
+
+    #[test]
+    fn the_gui_command_wraps_mysbx_in_a_shell_that_prints_the_closing_message() {
+        // cli.md D15: the terminal's command is `SHELL -c SCRIPT MYSBX
+        // ARG...` — the shell is the wrapper's `MYSBX_SHELL` pin, `$0` of
+        // the script is the inner mysbx (absolute, current_exe), and the
+        // tail is passed verbatim behind it.
+        let argv = gui_final_message_argv(
+            "/synth/bin/bash",
+            "/synth/store/mysbx/bin/mysbx",
+            &["--multiplexer".to_owned(), "herdr".to_owned()],
+        );
+        assert_eq!(argv[0], "/synth/bin/bash");
+        assert_eq!(argv[1], "-c");
+        assert_eq!(argv[2], GUI_FINAL_MESSAGE_SCRIPT);
+        assert_eq!(argv[3], "/synth/store/mysbx/bin/mysbx");
+        assert_eq!(argv[4], "--multiplexer");
+        assert_eq!(argv[5], "herdr");
+        assert_eq!(argv.len(), 6);
+    }
+
+    #[test]
+    fn the_closing_message_names_the_exit_status_and_keeps_it() {
+        // The script is the whole contract of the closing message: a
+        // successful run says so, a failed one names its status, and the
+        // inner status is re-exited either way — the terminal's code
+        // stays the run's.
+        assert!(GUI_FINAL_MESSAGE_SCRIPT.contains("\"$0\" \"$@\""));
+        assert!(GUI_FINAL_MESSAGE_SCRIPT.contains("status=$?"));
+        assert!(GUI_FINAL_MESSAGE_SCRIPT.contains("finished successfully"));
+        assert!(GUI_FINAL_MESSAGE_SCRIPT.contains("finished with status %s"));
+        assert!(GUI_FINAL_MESSAGE_SCRIPT.contains("exit \"$status\""));
+        assert!(GUI_FINAL_MESSAGE_SCRIPT.contains("can be closed"));
     }
 }

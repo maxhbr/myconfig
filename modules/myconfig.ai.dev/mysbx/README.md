@@ -135,10 +135,13 @@ herdr session in a window, `mysbx gui run -- ls` a one-shot. Everything
 after the verb is passed to that inner invocation verbatim
 ([`docs/design/cli.md`](./docs/design/cli.md) D15) — the inner run
 reports its own errors in the window, so `gui` itself needs no
-initialized repo and starts no sandbox. The command returns as soon as
-the window opens — detached like `mysbx gui & disown` — so the shell
-prompt comes back immediately and the window survives the terminal it
-was typed in.
+initialized repo and starts no sandbox. When the run is over the window
+prints `mysbx: finished successfully — this window can be closed` (or
+`finished with status N` for a failed run) and stays open (`--hold`), so
+a window WITHOUT that line still has a live process in it. The command
+returns as soon as the window opens — detached like `mysbx gui & disown`
+— so the shell prompt comes back immediately and the window survives the
+terminal it was typed in.
 
 `mysbx --ro <path>` / `mysbx --rw <path>` (repeatable, and the same
 after `run`) grants one host path to the run it is typed in — read-only

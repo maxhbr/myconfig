@@ -419,10 +419,23 @@ D5/D8), and the error names the accepted set.
 Nix wrapper as `MYSBX_TERMINAL` from `myconfig.ai.mysbx.terminal.package`)
 with `--working-directory` on the current directory, `--hold` (so the
 window stays open after the inner mysbx exits and its log remains
-readable) and `--command` on
+readable) and `--command` on a shell that runs
 this same `mysbx` — by absolute path, `current_exe`, never a PATH lookup —
 with the whole argument tail passed through verbatim. `mysbx gui ARG1
-ARG2` therefore becomes `mysbx ARG1 ARG2` in the window.
+ARG2` therefore becomes `mysbx ARG1 ARG2` in the window, followed by one
+last line.
+
+**A finished run says so.** The window's command is
+`$MYSBX_SHELL -c SCRIPT MYSBX ARG...`, and `SCRIPT` runs the inner mysbx,
+captures its status, prints either
+`mysbx: finished successfully — this window can be closed` or
+`mysbx: finished with status N — this window can be closed`, and exits
+with `N`. Without that line a held window is silent after the sandbox is
+gone, and an operator cannot tell a completed run from a hung one; a
+window that shows no such line still has a live process in it. The exit
+status handed to the terminal stays the run's — the message is
+additive. The shell is the wrapper's `MYSBX_SHELL` pin (bash from the
+mysbx closure), an `sh` PATH lookup only for the unwrapped crate.
 
 **`gui` is not a run.** Nothing of the sandbox pipeline happens in the
 outer invocation: no repo resolution, no sidecar guard, no merge, no
