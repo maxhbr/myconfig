@@ -598,7 +598,6 @@
                 pkgs = inputs.nixpkgs.legacyPackages."${system}";
                 files = pkgs.lib.concatStringsSep " " [
                   "switch.sh"
-                  "sync.sh"
                   # Home-manager activation harness for the agent-skills
                   # integration (takeover + sync against a throwaway HOME).
                   "tests/agent-skills-activation.sh"
