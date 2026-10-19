@@ -17,11 +17,16 @@
 #                         NixOS declarative container.
 #   microvm.nix          — hermes service in a microvm.nix MicroVM (real VM,
 #                         separate kernel), managed as a host systemd service.
+#   mysbx.nix            — the `mysbx` sandbox tier: the hermes CLI on the
+#                         sandbox PATH (and in the agent image), a launcher
+#                         that seeds a credentials-free config into the tmpfs
+#                         home, and `.hermes` as a `state-dirs` entry.
 { ... }:
 {
   imports = [
     ./service.nix
     ./nixos-container.nix
     ./microvm.nix
+    ./mysbx.nix
   ];
 }

@@ -32,6 +32,15 @@
 #                 and every subcommand and option of usage.txt is
 #                 completed.
 #
+#   mysbx-hermes-test
+#                 the hermes tier (../../hermes-agent/mysbx.nix) on the
+#                 reference host that enables both halves (`test-p14`):
+#                 the launcher on the sandbox PATH AND in the podman image,
+#                 `.hermes` as a `state-dirs` entry, `CUSTOM_BASE_URL` for
+#                 the container backends, and the seeder's behaviour — a
+#                 fresh home gets the LiteLLM route, an existing config is
+#                 never rewritten.
+#
 #   mysbx-herdr-entry-test
 #                 static-contract check of the herdr entry script
 #                 (./herdr-entry.nix): it must configure herdr's
@@ -705,6 +714,111 @@ in
         if [ -n "$(find "$sandboxTree" -type l -print -quit)" ]; then
           find "$sandboxTree" -type l >&2
           fail "the pi-sandbox-config tree contains symlinks"
+        fi
+
+        mkdir "$out"
+      '';
+
+  # The hermes tier (../../hermes-agent/mysbx.nix), evaluated against the
+  # REAL reference host that enables both halves (`test-p14`: `hermes.enable`
+  # in hosts/host.p14/hermes-agent.nix, `mysbx.enable` in
+  # hosts/host.p14/ai.p14.nix). Two properties are asserted:
+  #
+  #   * the launcher is on the sandbox PATH AND baked into the podman image
+  #     (the container backends run the image's own `/bin`, so a PATH-only
+  #     entry would be invisible there), `.hermes` is a `state-dirs` entry, and
+  #     the podman backends carry `CUSTOM_BASE_URL` — a container's loopback is
+  #     its own, so the seeded host URL is wrong there;
+  #   * the seed itself: a FRESH home gets a config naming the LiteLLM route
+  #     and the placeholder key (so no first-run wizard appears), and an
+  #     EXISTING config is left byte-identical (the payload's own `hermes
+  #     model` must survive across runs through the `state-dirs` store).
+  mysbx-hermes-test =
+    let
+      lib = inputs.nixpkgs.lib;
+      cfg = self.nixosConfigurations.test-p14.config;
+      mysbxCfg = cfg.myconfig.ai.dev.mysbx;
+      named = prefix: ps: builtins.filter (p: lib.hasPrefix prefix (p.name or "")) ps;
+      launchers = named "hermes-agent-mysbx-" mysbxCfg.extraTools;
+      imageLaunchers = named "hermes-agent-mysbx-" mysbxCfg.podman.imagePackages;
+      expectedBaseUrl = cfg.myconfig.ai.dev.hermes.model.baseUrl;
+      evalAssertions = [
+        {
+          assertion = builtins.length launchers == 1;
+          message = "mysbx-hermes-test: expected exactly one hermes launcher on the sandbox PATH, got: ${
+            lib.concatStringsSep ", " (map (p: p.name) mysbxCfg.extraTools)
+          }";
+        }
+        {
+          assertion = builtins.length imageLaunchers == 1;
+          message = "mysbx-hermes-test: the launcher is not baked into the podman image — a container session would not find `hermes`";
+        }
+        {
+          assertion = builtins.elem ".hermes" mysbxCfg.config.stateDirs;
+          message = "mysbx-hermes-test: `.hermes` is not a state-dirs entry — sessions would die with the tmpfs home";
+        }
+        {
+          assertion =
+            (mysbxCfg.podman.env.CUSTOM_BASE_URL or null) == cfg.myconfig.ai.dev.litellm-forwarder.endpoint;
+          message = "mysbx-hermes-test: the podman backends do not point hermes at the forwarded endpoint (got ${
+            toString (mysbxCfg.podman.env.CUSTOM_BASE_URL or null)
+          })";
+        }
+      ];
+      failures = builtins.filter (a: !a.assertion) evalAssertions;
+      evalGate =
+        if failures != [ ] then
+          throw "mysbx-hermes-test: ${lib.concatMapStringsSep "\n  - " (f: f.message) failures}"
+        else
+          "ok";
+      launcher = builtins.head launchers;
+    in
+    pkgs.runCommand "mysbx-hermes-test"
+      {
+        inherit evalGate launcher;
+        seed = launcher.seed;
+        baseUrl = expectedBaseUrl;
+        nativeBuildInputs = with pkgs; [
+          gnugrep
+          coreutils
+        ];
+      }
+      ''
+        fail() {
+          echo "mysbx-hermes-test: $*" >&2
+          exit 1
+        }
+
+        [ "$evalGate" = ok ] || { echo "mysbx-hermes-test: eval gate: $evalGate" >&2; exit 1; }
+
+        # The launcher runs the seeder BEFORE the upstream binary: a static
+        # contract, the same shape the claude-code launcher check uses.
+        grep -q "$seed" "$launcher/bin/hermes" \
+          || fail "bin/hermes does not run the config seeder"
+        grep -q 'hermes-upstream' "$launcher/bin/hermes" \
+          || fail "bin/hermes does not exec the upstream binary"
+
+        # A fresh home is seeded with the LiteLLM route and the placeholder
+        # key (the value `_has_any_provider_configured` needs so no
+        # first-run wizard appears).
+        fresh="$(mktemp -d)"
+        HERMES_HOME="$fresh/.hermes" "$seed/bin/hermes-mysbx-seed-config"
+        test -f "$fresh/.hermes/config.yaml" || fail "the seeder wrote no config.yaml"
+        grep -q "base_url: $baseUrl" "$fresh/.hermes/config.yaml" \
+          || fail "the seeded config does not name the LiteLLM route"
+        grep -q 'api_key: local-key' "$fresh/.hermes/config.yaml" \
+          || fail "the seeded config does not carry the placeholder key"
+        grep -q 'default: hermes' "$fresh/.hermes/config.yaml" \
+          || fail "the seeded config does not name the default model"
+
+        # An existing config (the payload's own, persisted in the sidecar
+        # store) is never rewritten.
+        printf 'model:\n  default: mine\n' > "$fresh/.hermes/config.yaml"
+        HERMES_HOME="$fresh/.hermes" "$seed/bin/hermes-mysbx-seed-config"
+        grep -q 'default: mine' "$fresh/.hermes/config.yaml" \
+          || fail "the seeder overwrote an existing config.yaml"
+        if grep -q 'local-key' "$fresh/.hermes/config.yaml"; then
+          fail "the seeder appended to an existing config.yaml"
         fi
 
         mkdir "$out"
