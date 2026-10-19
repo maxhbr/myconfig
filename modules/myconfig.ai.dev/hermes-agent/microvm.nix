@@ -3,11 +3,12 @@
 #
 # myconfig.ai.dev.hermes — microvm.nix backend.
 #
-# When `myconfig.ai.dev.hermes.enable` and `myconfig.ai.dev.hermes.microvm.enable`
-# are both true, runs the hermes-agent gateway inside a microvm.nix
-# MicroVM (a real VM with its own kernel, managed as a systemd service on
-# the host). This gives stronger isolation than the NixOS-container backend
-# (nixos-container.nix) at the cost of a per-VM kernel.
+# When `myconfig.ai.dev.hermes.service.enable` and
+# `myconfig.ai.dev.hermes.service.microvm.enable` are both true, runs the
+# hermes-agent gateway inside a microvm.nix MicroVM (a real VM with its own
+# kernel, managed as a systemd service on the host). This gives stronger
+# isolation than the NixOS-container backend (nixos-container.nix) at the
+# cost of a per-VM kernel.
 #
 # The VM runs hermes in *native* mode (the VM itself is the isolation
 # boundary, so no nested container is needed). It reuses `hermesServiceCfg`
@@ -20,7 +21,7 @@
 # `microvm.host.enable = lib.mkDefault false` so that merely importing this
 # module does *not* load tap/vhost_net modules, enable KSM or create the
 # `microvm` user on hosts that don't use the backend. Hosts that opt in set
-# `myconfig.ai.dev.hermes.microvm.enable = true`, which flips
+# `myconfig.ai.dev.hermes.service.microvm.enable = true`, which flips
 # `microvm.host.enable` to `true`.  (Upstream microvm.nix defaults
 # `microvm.host.enable = true` — see nixos-modules/host/options.nix — so this
 # neutralization is load-bearing, not a no-op.)
@@ -60,6 +61,7 @@ let
     hostConfig
     ;
   cfg = config.myconfig.ai.dev.hermes;
+  serviceCfg = cfg.service;
 
   # The hermes CLI binary (same package the native backend installs).
   hermesPkg = inputs.hermes-agent.packages.${pkgs.stdenv.hostPlatform.system}.default;
@@ -79,13 +81,13 @@ let
       if ! /run/current-system/sw/bin/systemctl is-active --quiet microvm@hermes.service; then
         echo "The hermes microvm is not running." >&2
         echo "Start it with:  sudo systemctl start microvm@hermes" >&2
-        echo "(autostart is controlled by myconfig.ai.dev.hermes.microvm.autostart)" >&2
+        echo "(autostart is controlled by myconfig.ai.dev.hermes.service.microvm.autostart)" >&2
         exit 1
       fi
 
       # Point the hermes CLI at the gateway inside the VM. The gateway
       # advertises model "hermes-agent" (see its /v1/models endpoint).
-      export OPENROUTER_BASE_URL="http://127.0.0.1:${toString cfg.apiServerPort}/v1"
+      export OPENROUTER_BASE_URL="http://127.0.0.1:${toString serviceCfg.apiServerPort}/v1"
       export OPENAI_API_KEY="local-key"
       exec hermes --model hermes-agent "$@"
     '';
@@ -102,18 +104,18 @@ in
     # no effect (no kernel modules, no KSM, no `microvm` user).
     { microvm.host.enable = lib.mkDefault false; }
 
-    (lib.mkIf (cfg.enable && cfg.microvm.enable) {
+    (lib.mkIf (serviceCfg.enable && serviceCfg.microvm.enable) {
       microvm.host.enable = true;
 
       # Host-side `hermes-microvm` CLI wrapper (see `let` block above).
-      home-manager.users."${cfg.user}" =
+      home-manager.users."${serviceCfg.user}" =
         { pkgs, ... }:
         {
           home.packages = [ hermes-microvm ];
         };
 
       microvm.vms.hermes = {
-        autostart = cfg.microvm.autostart;
+        autostart = serviceCfg.microvm.autostart;
         # The guest is a full NixOS system evaluated from this repo. Its
         # `config` is a NixOS module; microvm.nix auto-imports the guest
         # `microvm` module and evaluates it with the host's nixpkgs.
@@ -131,12 +133,12 @@ in
             # forwarding, which targets the guest's 10.0.2.15 address).
             hermesMicrovmEnv = pkgs.writeText "hermes-microvm-api-env" ''
               OPENAI_API_KEY=local-key
-              ${lib.optionalString (cfg.apiServerPort != null) ''
+              ${lib.optionalString (serviceCfg.apiServerPort != null) ''
                 API_SERVER_ENABLED=true
-                API_SERVER_PORT=${toString cfg.apiServerPort}
+                API_SERVER_PORT=${toString serviceCfg.apiServerPort}
                 API_SERVER_HOST=0.0.0.0
               ''}
-              ${lib.optionalString (cfg.hassUrl != null) "HASS_URL=${cfg.hassUrl}"}
+              ${lib.optionalString (serviceCfg.hassUrl != null) "HASS_URL=${serviceCfg.hassUrl}"}
             '';
           in
           {
@@ -147,15 +149,15 @@ in
             networking.hostName = "hermes";
             # Open the guest firewall for the API port so forwarded traffic
             # from the host reaches the hermes API server.
-            networking.firewall.allowedTCPPorts = [ cfg.apiServerPort ];
+            networking.firewall.allowedTCPPorts = [ serviceCfg.apiServerPort ];
 
             # ── microvm guest configuration ─────────────────────────────
             microvm = {
               # qemu with KVM acceleration on x86_64 Linux (f13 is a
               # Framework AMD laptop). cloud-hypervisor is an alternative.
               hypervisor = "qemu";
-              vcpu = cfg.microvm.vcpu;
-              mem = cfg.microvm.mem;
+              vcpu = serviceCfg.microvm.vcpu;
+              mem = serviceCfg.microvm.mem;
 
               # Share the host's /nix/store read-only so the VM needs no
               # store disk image and boots fast. storeOnDisk auto-disables
@@ -205,8 +207,8 @@ in
                 {
                   from = "host";
                   host.address = "127.0.0.1";
-                  host.port = cfg.apiServerPort;
-                  guest.port = cfg.apiServerPort;
+                  host.port = serviceCfg.apiServerPort;
+                  guest.port = serviceCfg.apiServerPort;
                 }
               ];
             };

@@ -17,10 +17,13 @@
     myconfig.ai.dev.hermes = {
       enable = true;
       model.default = "hermes";
-      hassUrl = "http://hass.nuc.wg0.maxhbr.local";
-      telegram = {
+      service = {
         enable = true;
-        requireMention = true;
+        hassUrl = "http://hass.nuc.wg0.maxhbr.local";
+        telegram = {
+          enable = true;
+          requireMention = true;
+        };
       };
     };
   };

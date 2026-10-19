@@ -15,7 +15,10 @@
 # All host-specific values (user, group, model, baseUrl, port, HASS URL,
 # extraPackages, stateDir, secretsDir, toolsets, telegram) are read from
 # `config.myconfig.ai.dev.hermes.*` options declared in service.nix. Override
-# them per-host; the defaults live in the option declarations.
+# them per-host; the defaults live in the option declarations. The model
+# route (`model.*`) sits at the top level of the tree because the sandbox
+# tiers use it without running a service; everything else is under
+# `service.*`.
 #
 # NOTE: `hermesServiceCfg.settings` declares `compression` twice (once with
 # `summary_provider`/`summary_model`, once with `enabled`/`threshold`).
@@ -34,20 +37,21 @@
 let
   hostConfig = config;
   cfg = config.myconfig.ai.dev.hermes;
+  serviceCfg = cfg.service;
 
-  stateDir = cfg.stateDir;
-  secretsDir = cfg.secretsDir;
+  stateDir = serviceCfg.stateDir;
+  secretsDir = serviceCfg.secretsDir;
   litellmBaseUrl = cfg.model.baseUrl;
 
   # When the container backend is enabled, advertise the container's own
   # address to hermes; otherwise bind to localhost. `containers.hermes` is
   # defined by nixos-container.nix — this cross-module reference is safe
   # because NixOS option evaluation is lazy.
-  apiServerHost = cfg.apiServerHost;
+  apiServerHost = serviceCfg.apiServerHost;
   hermesServiceCfg = {
     enable = true;
-    user = cfg.user;
-    group = cfg.group;
+    user = serviceCfg.user;
+    group = serviceCfg.group;
     createUser = false;
     stateDir = stateDir;
     settings = {
@@ -95,25 +99,25 @@ let
         enabled = true;
         threshold = 0.85;
       };
-      toolsets = cfg.toolsets;
+      toolsets = serviceCfg.toolsets;
     }
-    // (lib.optionalAttrs cfg.telegram.enable {
+    // (lib.optionalAttrs serviceCfg.telegram.enable {
       telegram = {
-        require_mention = cfg.telegram.requireMention;
+        require_mention = serviceCfg.telegram.requireMention;
       };
     });
-    extraPackages = cfg.extraPackages;
+    extraPackages = serviceCfg.extraPackages;
     environmentFiles =
       let
         hermes-api-env = (
           pkgs.writeText "hermes-api-env" ''
             OPENAI_API_KEY=local-key
-            ${lib.optionalString (cfg.apiServerPort != null && cfg.apiServerHost != null) ''
+            ${lib.optionalString (serviceCfg.apiServerPort != null && serviceCfg.apiServerHost != null) ''
               API_SERVER_ENABLED=true
-              API_SERVER_PORT=${toString cfg.apiServerPort}
+              API_SERVER_PORT=${toString serviceCfg.apiServerPort}
               API_SERVER_HOST=${apiServerHost}
             ''}
-            ${lib.optionalString (cfg.hassUrl != null) "HASS_URL=${cfg.hassUrl}"}
+            ${lib.optionalString (serviceCfg.hassUrl != null) "HASS_URL=${serviceCfg.hassUrl}"}
           ''
         );
       in
@@ -130,6 +134,7 @@ in
     stateDir
     secretsDir
     cfg
+    serviceCfg
     litellmBaseUrl
     apiServerHost
     hermesServiceCfg

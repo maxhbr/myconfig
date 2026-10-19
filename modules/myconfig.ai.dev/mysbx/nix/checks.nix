@@ -720,8 +720,8 @@ in
       '';
 
   # The hermes tier (../../hermes-agent/mysbx.nix), evaluated against the
-  # REAL reference host that enables both halves (`test-p14`: `hermes.enable`
-  # in hosts/host.p14/hermes-agent.nix, `mysbx.enable` in
+  # REAL reference host that enables both halves (`test-p14`:
+  # `hermes.enable` in hosts/host.p14/hermes-agent.nix, `mysbx.enable` in
   # hosts/host.p14/ai.p14.nix). Two properties are asserted:
   #
   #   * the launcher is on the sandbox PATH AND baked into the podman image

@@ -3,10 +3,11 @@
 #
 # myconfig.ai.dev.hermes — NixOS declarative container backend.
 #
-# When `myconfig.ai.dev.hermes.enable` and `myconfig.ai.dev.hermes.container.enable`
-# are both true, runs the hermes-agent gateway inside an isolated NixOS
-# declarative container (`containers.hermes`) instead of as a host-level
-# systemd service (see service.nix). The container reuses the same
+# When `myconfig.ai.dev.hermes.service.enable` and
+# `myconfig.ai.dev.hermes.service.container.enable` are both true, runs the
+# hermes-agent gateway inside an isolated NixOS declarative container
+# (`containers.hermes`) instead of as a host-level systemd service (see
+# service.nix). The container reuses the same
 # `hermesServiceCfg` as the native backend (from shared.nix) so the two
 # modes stay in sync.
 #
@@ -38,16 +39,17 @@ let
     hostConfig
     ;
   cfg = config.myconfig.ai.dev.hermes;
+  serviceCfg = cfg.service;
 in
 {
-  config = lib.mkIf (cfg.enable && cfg.container.enable) {
+  config = lib.mkIf (serviceCfg.enable && serviceCfg.container.enable) {
     containers.hermes = {
-      autoStart = cfg.container.autostart;
+      autoStart = serviceCfg.container.autostart;
       privateNetwork = true;
-      hostAddress = cfg.container.hostAddress;
-      localAddress = cfg.container.localAddress;
-      hostAddress6 = cfg.container.hostAddress6;
-      localAddress6 = cfg.container.localAddress6;
+      hostAddress = serviceCfg.container.hostAddress;
+      localAddress = serviceCfg.container.localAddress;
+      hostAddress6 = serviceCfg.container.hostAddress6;
+      localAddress6 = serviceCfg.container.localAddress6;
       bindMounts = {
         "${stateDir}" = {
           hostPath = stateDir;

@@ -5,7 +5,7 @@
 #
 # The `enable = true` flag is set in the external priv flake (priv/), along
 # with the secrets (env file). This file holds only the non-secret
-# host-specific config: the microvm backend.
+# host-specific config: the microvm backend and the gateway it runs.
 {
   config,
   lib,
@@ -14,9 +14,12 @@
 {
   config = {
     myconfig.ai.dev.hermes = {
-      microvm = {
+      service = {
         enable = true;
-        autostart = true;
+        microvm = {
+          enable = true;
+          autostart = true;
+        };
       };
     };
   };
