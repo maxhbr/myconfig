@@ -43,10 +43,75 @@ in
       ];
 
       home.activation.agent-skills =
-        lib.mkIf (syncTargets != { }) (lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        lib.mkIf (syncTargets != { }) (lib.hm.dag.entryAfter [
+        "writeBoundary"
+        # After linkGeneration so Home Manager removes old-generation
+        # home.file links before this sync claims (and rsync --delete's) a
+        # destination directory that a previous generation populated.
+        "linkGeneration"
+      ] ''
           ${syncProgram bundle}/bin/skills-install
         '');
 
+      # One-time takeover for a destination populated by an older
+      # generation of this or another symlink-based deployment.
+      # `linkGeneration` has already removed old-generation home.file
+      # links, but entries linked by the CURRENT generation (e.g. a
+      # home-manager plugin living in the same skills directory) remain —
+      # and those are symlinks into the Nix store, so the directory is
+      # declaratively reproducible and safe to claim. Pre-mark it so the
+      # sync accepts it without AGENT_SKILLS_FORCE. A destination holding
+      # anything else (regular files, foreign symlinks) is left untouched:
+      # the sync then fails loudly with the AGENT_SKILLS_FORCE hint rather
+      # than risking user data.
+      home.activation.agent-skills-takeover =
+        lib.mkIf (syncTargets != { }) (lib.hm.dag.entryBetween [ "agent-skills" ] [ "linkGeneration" ]
+        (''
+          # Succeeds when $1 is a Nix-store symlink, or a directory whose
+          # entire contents are (recursively) such symlinks — the shapes
+          # home.file and programs.<harness>.skills leave behind. Anything
+          # else (regular file, non-store symlink, empty dir) is not
+          # declaratively reproducible and aborts the claim.
+          __agent_skills_store_tree() {
+            local path="$1" entry target
+            if [ -L "$path" ]; then
+              target="$(readlink -f -- "$path" 2>/dev/null)" || return 1
+              case "$target" in
+                /nix/store/*) return 0 ;;
+                *) return 1 ;;
+              esac
+            fi
+            [ -d "$path" ] || return 1
+            shopt -s nullglob dotglob
+            local entries=("$path"/*)
+            [ "''${#entries[@]}" -gt 0 ] || return 1
+            for entry in "''${entries[@]}"; do
+              case "''${entry##*/}" in
+                .agent-skills-managed.json) continue ;;
+              esac
+              __agent_skills_store_tree "$entry" || return 1
+            done
+          }
+
+          __agent_skills_takeover_one() {
+            local name="$1" dest="$2"
+            [ -d "$dest" ] || return 0
+            [ -f "$dest/.agent-skills-managed.json" ] && return 0
+            shopt -s nullglob dotglob
+            local entries=("$dest"/*)
+            [ "''${#entries[@]}" -gt 0 ] || return 0
+            __agent_skills_store_tree "$dest" || return 0
+            printf 'agent-skills: pre-marking %s for takeover (tree of store symlinks)\n' "$dest" >&2
+            printf '{"schemaVersion":1,"managedBy":"agent-skills-nix","mode":"global","bundle":"takeover","target":"%s","structure":"symlink-tree"}\n' "$name" \
+              > "$dest/.agent-skills-managed.json"
+          }
+        '' + lib.concatStringsSep "\n" (
+          lib.mapAttrsToList
+            (name: t: ''
+              __agent_skills_takeover_one "${name}" "${lib.strings.escape [ "\"" "\\" ] t.dest}"
+            '')
+            syncTargets
+        )));
       # Note: 'link' structure type uses home.file which requires a static path relative to $HOME.
       # Shell variable expansion in dest is not supported for 'link' type.
       # Use 'symlink-tree' or 'copy-tree' structure for dynamic paths with environment variables.

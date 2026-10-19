@@ -150,6 +150,23 @@ let
   hmHomeFile = config.home-manager.users.mhuber.home.file;
   hmHomeDirectory = config.home-manager.users.mhuber.home.homeDirectory;
 
+  # Skills are the one exception to "home.file is the source of truth"
+  # (see ../programs.pi-coding-agent): when the agent-skills framework
+  # manages them, `~/.config/opencode/skills` is rsynced at ACTIVATION
+  # time, not linked from `home.file`. Pass the framework's per-target
+  # bundle for the `opencode` target through `extraFiles` so the sandbox
+  # tree matches what the host deploys. Lazily read, like `hmHomeFile`.
+  mysbxOpencodeSkillsBundle =
+    let
+      hmSkills = config.home-manager.users.mhuber.programs.agent-skills or null;
+    in
+    if hmSkills == null || !hmSkills.enable then
+      { }
+    else if !(hmSkills.targetBundlePaths ? opencode) then
+      { }
+    else
+      { ".config/opencode/skills" = hmSkills.targetBundlePaths.opencode; };
+
   mysbxOpencodeMounts =
     (sandboxConfigLib.mkSandboxConfig {
       homeFile = hmHomeFile;
@@ -167,6 +184,7 @@ let
       ++ lib.optional (hmMcpServers != { }) ".config/mcp";
       name = "opencode-sandbox-config";
       homeDirectory = hmHomeDirectory;
+      extraFiles = mysbxOpencodeSkillsBundle;
     }).mounts;
 
   # Build a lookup: model name (raw or provider-prefixed) -> contextWindow.
