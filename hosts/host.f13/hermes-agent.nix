@@ -3,35 +3,22 @@
 #
 # Hermes agent configuration for f13.
 #
-# The `enable = true` flag is set in the external priv flake (priv/), along
-# with the secrets (env file). This file holds only the non-secret
-# host-specific config: the microvm backend and the gateway it runs.
+# Only the CLI tier: hermes is on this host as a sandboxed payload (the
+# `mysbx` tier of modules/myconfig.ai.dev/hermes-agent/mysbx.nix, pointed at
+# the local LiteLLM forwarder), not as a gateway. The secrets for anything
+# service-shaped live in the external priv flake (priv/) and are unused while
+# `myconfig.ai.dev.hermes.service.enable` stays false.
+#
+# Enabling `service.microvm.enable` (or `service.container.enable`) here flips
+# `microvm.host.enable` inside that module. Do NOT add a separate
+# hosts/host.f13/agent-sandbox.nix that also imports
+# `inputs.microvm.nixosModules.host` and blanket-enables
+# `microvm.host.enable`/`updates-flake`: that bypasses the gating and loads
+# tap/vhost_net + creates the `microvm` user unconditionally.
 {
   config,
-  lib,
   ...
 }:
 {
-  config = {
-    myconfig.ai.dev.hermes = {
-      service = {
-        enable = true;
-        microvm = {
-          enable = true;
-          autostart = true;
-        };
-      };
-    };
-  };
-
-  # NOTE (microvm host wiring): the microvm.nix *host* module is imported and
-  # gated inside modules/myconfig.ai.dev/hermes-agent/microvm.nix
-  # (`microvm.host.enable`: mkDefault false, flipped true here). Do NOT add a
-  # separate hosts/host.f13/agent-sandbox.nix that also imports
-  # `inputs.microvm.nixosModules.host` and blanket-enables
-  # `microvm.host.enable`/`updates-flake` — that would bypass the gating and
-  # load tap/vhost_net + create the `microvm` user unconditionally. If a
-  # reusable agent-sandbox host module is ever introduced, it must gate the
-  # host module behind its own option with `lib.mkDefault false`, the same
-  # pattern, not re-enable it globally.
+  config.myconfig.ai.dev.hermes.enable = true;
 }
