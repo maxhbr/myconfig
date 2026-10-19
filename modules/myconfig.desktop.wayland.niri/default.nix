@@ -34,11 +34,6 @@ let
     }
   '';
   uwsmCfg = cfg.desktop.wayland.uwsm;
-  wsNamesCfg = cfg.desktop.wayland.niri.workspaceNames;
-  wsNames = (import ./workspace-names.nix { inherit lib pkgs; }).niri-ws-names {
-    inherit (wsNamesCfg) rules interval;
-    inherit niri;
-  };
   # Compositor entrypoint used when running niri under uwsm. uwsm itself sets
   # up the graphical-session systemd targets, so we launch `niri --session`
   # directly instead of the `niri-session` helper script.
@@ -53,45 +48,6 @@ in
       type = types.str;
       default = "";
       description = "Additional config added to config.kdl";
-    };
-    desktop.wayland.niri.workspaceNames = {
-      enable = mkEnableOption "dynamic workspace naming for niri";
-      rules = mkOption {
-        # The daemon passes rules as a TSV file, so fields must not
-        # contain tabs or newlines.
-        type = types.listOf (
-          types.submodule {
-            options = {
-              app-id = mkOption {
-                type = types.strMatching "[^\t\n\r]*";
-                description = "POSIX ERE matched against the window app-id";
-                default = ".*";
-              };
-              title = mkOption {
-                type = types.strMatching "[^\t\n\r]*";
-                description = "POSIX ERE matched against the window title";
-                default = ".*";
-              };
-              name = mkOption {
-                type = types.strMatching "[^\t\n\r]*";
-                description = "Workspace name to apply when the rule matches";
-              };
-            };
-          }
-        );
-        default = [ ];
-        description = ''
-          Rules naming workspaces by their windows, evaluated in order
-          (first match wins): a workspace holding any window that matches
-          app-id and title is named `name`. A second workspace wanting the
-          same name gets `name_2`, and so on.
-        '';
-      };
-      interval = mkOption {
-        type = types.ints.positive;
-        default = 5;
-        description = "Poll interval (seconds) of the renaming daemon";
-      };
     };
   };
   imports = [
@@ -224,7 +180,6 @@ in
                     + headlessWindowRules
                     + "include optional=true \"include.kdl\"\n\n"
                     + "spawn-at-startup \"${niri-autostart}\""
-                    + lib.optionalString wsNamesCfg.enable "\nspawn-at-startup \"systemctl --user start niri-ws-names.service\""
                   );
               niri-config =
                 pkgs.runCommand "niri-config"
@@ -255,7 +210,7 @@ in
               ];
               programs.waybar.settings.mainBar = {
                 "niri/workspaces" = {
-                  "format" = if wsNamesCfg.enable then "{value}" else "{index}";
+                  "format" = "{index}";
                   rotate = 90;
                 };
                 modules-left = [ "niri/workspaces" ];
@@ -267,27 +222,6 @@ in
                 [Service]
                 Restart=on-failure
               '';
-              systemd.user.services.niri-ws-names = lib.mkIf wsNamesCfg.enable {
-                Unit = {
-                  Description = "Dynamic workspace naming for niri";
-                  BindsTo = [
-                    "niri.service"
-                    "graphical-session.target"
-                  ];
-                  PartOf = [ "graphical-session.target" ];
-                  After = [
-                    "niri.service"
-                    "graphical-session.target"
-                  ];
-                  X-RestartIfChanged = false;
-                };
-                Service = {
-                  Slice = "session.slice";
-                  ExecStart = "${wsNames}/bin/niri-ws-names";
-                  Restart = "on-failure";
-                  TimeoutStopSec = 5;
-                };
-              };
               systemd.user.targets.niri-shutdown = {
                 Unit = {
                   Description = "Shutdown running niri session";
