@@ -124,6 +124,16 @@
         # endpoint; anthropic/… entries reject it), so the proxy is the
         # right place to be lenient.
         drop_params = true;
+        # Serve /v1/messages for the `openai/*` deployments below through
+        # chat/completions rather than litellm's Responses-API bridge.
+        # The bridge sends Anthropic history upstream as Responses `input`
+        # items: assistant turns become bare `{role, content}` items with no
+        # `type`, and reasoning items carry no `content` array. llama.cpp's
+        # Responses implementation requires both, so it answers 400
+        # "Cannot determine type of 'item'" / "item['content'] is not an
+        # array" on any request that replays an assistant turn. These
+        # backends implement chat/completions completely.
+        use_chat_completions_url_for_anthropic_messages = true;
       }
       // lib.optionalAttrs config.myconfig.observability.client.enable {
         callbacks = [ "prometheus" ];
