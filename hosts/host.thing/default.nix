@@ -26,6 +26,7 @@
     (myconfig.metadatalib.setupAsBuildMachine [
       myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub"
     ])
+    (myconfig.metadatalib.substituterHostFor "f13")
     { environment.systemPackages = with pkgs; [ linuxPackages.usbip ]; }
     {
       # programs.mosh.enable = lib.mkDefault true;
