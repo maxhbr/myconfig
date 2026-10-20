@@ -80,8 +80,11 @@ the clone run mode), the global flags `--dry-run` (D9),
 `--verbose` (D10), `--result`/`--timeout` (D17), `--multiplexer`
 (D14), `--backend` (D18) and `--detach` (D21, the decisions live in
 [detach.md](./detach.md) B1-B10 — the bare form started under a
-host-side `dtach` master; `--detachable` and `attach` follow with
-bd myconfig-7ioq.5). Both enum flags also accept a
+host-side `dtach` master; the same decision's `--detachable` — the
+"start working now, detach later" composition that attaches the
+current terminal right after the launch — and `mysbx attach
+[--session NAME]`, the host-side verb that reconnects a terminal to
+that run). Both enum flags also accept a
 `--<value>` shorthand of every value they take (bd myconfig-6tt):
 `--tmux` == `--multiplexer tmux` … `--none` == `--multiplexer none`,
 and `--bubblewrap` == `--backend bubblewrap` … `--krun` == `--backend
@@ -776,12 +779,15 @@ computes for a run.
 `mysbx --detach`, `mysbx --detachable` and `mysbx attach` run the bare
 form in the background under a host-side `dtach` and reattach to it.
 The decisions live in [detach.md](./detach.md) (B1–B10). They are
-accepted; the changes to D3, D19, D20 and the non-goals below land
-with the implementation beads (detach.md B9).
+accepted and implemented (the `status detached:` section, the
+`session destroy` guard and the `doctor` checks of B9 follow with the
+remaining implementation beads); the changes to D19, D20 and the
+non-goals below land with them (detach.md B9).
 
 ## Non-goals
 
-- No daemon, no background state beyond the sidecar directory
-  (proposed change: detach.md B9).
+- No mysbx daemon — the dtach master is per run and ends with it —
+  and no background state beyond the sidecar and the runtime root
+  (detach.md B9).
 - No interactive prompts; `mysbx` must be usable from scripts and from
   agents.

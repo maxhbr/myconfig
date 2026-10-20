@@ -160,6 +160,18 @@ specific subdirectory instead). Nothing persists — the next `mysbx`
 starts from the configuration alone — and the `--verbose` report
 attributes the grant to the `[command line]`, never to a file.
 
+`mysbx --detach` starts the bare form's sandbox under a host-side
+`dtach` master and returns once the run is up: the terminal can close,
+the sandbox keeps running, and `mysbx attach` (or `mysbx attach
+--session NAME` for a session run) reconnects another terminal to it —
+pressing `^\` inside an attached terminal detaches again, the run
+keeps going
+([`docs/design/detach.md`](./docs/design/detach.md)). `mysbx
+--detachable` is the "start working now, detach later" form: the
+same run started and the current terminal attached to it immediately.
+One detached run per repo (or session) — a second start is refused
+and names `mysbx attach`.
+
 `mysbx edit` opens the repo's sidecar `config.toml` in `$EDITOR` (or
 `$VISUAL`), creating the commented template first when it is missing
 (the second, equally explicit way to initialize a repo) —

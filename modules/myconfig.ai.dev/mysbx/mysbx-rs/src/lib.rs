@@ -120,25 +120,26 @@ pub fn run(args: Vec<String>) -> i32 {
             eprintln!("try `mysbx --help`");
             2
         }
-        // The composition form is bd myconfig-7ioq.5 (with `attach`):
-        // refused here, naming the bead, never accepted-and-ignored —
-        // the operator asked for a behaviour this build does not have.
-        None if flags.detachable => {
-            eprintln!("mysbx: --detachable is not implemented yet (bd myconfig-7ioq.5)");
-            eprintln!("  start a run detached with --detach instead");
-            eprintln!("try `mysbx --help`");
-            2
-        }
+        // The composition form (B2) and the plain detach form are
+        // dispatched below, after the shared refusal arms.
+        //
         // B4 step 3: the dtach child is the INNER mysbx of one
-        // detached run — a nested `--detach` would start a second
-        // one for the same workspace, which B3 refuses anyway. The
-        // marker names the socket the state file is keyed by;
-        // refusing here keeps the marker unforgeable as a
+        // detached run — a nested `--detach` or `--detachable` would
+        // start a second one for the same workspace, which B3 refuses
+        // anyway. The marker names the socket the state file is keyed
+        // by; refusing here keeps the marker unforgeable as a
         // redirection.
-        None if flags.detach
+        None if (flags.detach || flags.detachable)
             && std::env::var_os("MYSBX_DETACHED").is_some_and(|v| !v.is_empty()) =>
         {
-            eprintln!("mysbx: --detach is not valid inside a detached run (MYSBX_DETACHED is set)");
+            eprintln!(
+                "mysbx: {} is not valid inside a detached run (MYSBX_DETACHED is set)",
+                if flags.detachable {
+                    "--detachable"
+                } else {
+                    "--detach"
+                }
+            );
             eprintln!("try `mysbx --help`");
             2
         }
@@ -149,15 +150,16 @@ pub fn run(args: Vec<String>) -> i32 {
         None if std::env::var_os("MYSBX_DETACHED").is_some_and(|v| !v.is_empty()) => {
             detach::drive_inner(flags)
         }
-        // The outer mysbx of `--detach` (B4 steps 1-2): the full run
-        // pipeline as a pre-flight — every refusal in the foreground,
-        // no side effects — then the registry, the lock and the
-        // dtach launch (B2/B3/B6). The one-shot outcome flags are
-        // refused FIRST, with the bare form's own message: `--result`
-        // and `--timeout` name the outcome of a payload run, and a
-        // detached run's outcome is the registry record, not a
-        // result.json — never accepted-and-ignored.
-        None if flags.detach && (flags.result || flags.timeout.is_some()) => {
+        // The outer mysbx of `--detach`/`--detachable` (B4 steps
+        // 1-2): the full run pipeline as a pre-flight — every
+        // refusal in the foreground, no side effects — then the
+        // registry, the lock and the dtach launch (B2/B3/B6). The
+        // one-shot outcome flags are refused FIRST, with the bare
+        // form's own message: `--result` and `--timeout` name the
+        // outcome of a payload run, and a detached run's outcome is
+        // the registry record, not a result.json — never
+        // accepted-and-ignored.
+        None if (flags.detach || flags.detachable) && (flags.result || flags.timeout.is_some()) => {
             eprintln!(
                 "mysbx: {} names the outcome of a payload run — a detached run's outcome is its registry record; use it with `run -- CMD`",
                 flags.first_run_scoped_name()
@@ -166,6 +168,25 @@ pub fn run(args: Vec<String>) -> i32 {
             2
         }
         None if flags.detach => sandbox(flags, bwrap::Payload::Shell, RunMode::Detached),
+        // `--detachable` (detach.md B2): the composition form —
+        // `--detach` then `attach` in one invocation. The tty is a
+        // pre-flight requirement HERE (the attach half relays this
+        // terminal into the run, so an invocation without one could
+        // never talk to the run it starts): refused with `70`, the
+        // environment refusal attach's own no-tty case gives too.
+        // `--dry-run` is exempt — it prints exactly what
+        // `--detach --dry-run` prints and touches nothing (B9), so
+        // it needs no terminal either.
+        None if flags.detachable && !flags.dry_run && !stdin_is_tty() => {
+            eprintln!(
+                "mysbx: --detachable needs a terminal on stdin — it attaches the current terminal to the run it starts"
+            );
+            eprintln!(
+                "  start a run without one with --detach instead, and reattach later with `mysbx attach`"
+            );
+            EXIT_INFRASTRUCTURE
+        }
+        None if flags.detachable => sandbox(flags, bwrap::Payload::Shell, RunMode::Detachable),
         // Bare `mysbx` is the primary action (docs/design/cli.md D2): enter
         // the sandbox for the current repository. The one-shot flags
         // of the D8/D17 extension are refused here too (bd
@@ -191,8 +212,10 @@ pub fn run(args: Vec<String>) -> i32 {
         // workspace.md D6 — a handoff names its session positionally,
         // and is not a run; detach.md B2 for `--detach`/
         // `--detachable` — a detached run is the bare form's
-        // interactive payload, and no other verb starts one): they
-        // name the mounts, the payload or the
+        // interactive payload, and no other verb starts one; `attach`
+        // takes `--session` (B2: it selects which workspace's run to
+        // attach to) but no other run-scoped flag): they name the
+        // mounts, the payload or the
         // outcome of a run, and no OTHER verb has one to choose or
         // add. `--multiplexer` is refused for `run` too (D11: a
         // one-shot never starts a session), while `--ro`/`--rw` and
@@ -207,7 +230,7 @@ pub fn run(args: Vec<String>) -> i32 {
         Some(other)
             if (flags.multiplexer.is_some()
                 || (flags.backend.is_some() && other != "run")
-                || (flags.session.is_some() && other != "run")
+                || (flags.session.is_some() && other != "run" && other != "attach")
                 || ((flags.result || flags.timeout.is_some()) && other != "run")
                 || ((!flags.ro.is_empty() || !flags.rw.is_empty()) && other != "run")
                 || flags.detach
@@ -229,6 +252,7 @@ pub fn run(args: Vec<String>) -> i32 {
                         | "status"
                         | "doctor"
                         | "ssh-pubkey"
+                        | "attach"
                         | "podman-load-image"
                         | "gvisor-load-image"
                 ) =>
@@ -302,6 +326,21 @@ pub fn run(args: Vec<String>) -> i32 {
         // untouched, generating nothing.
         Some("ssh-pubkey") if flags.verbose => reject_verbose("ssh-pubkey"),
         Some("ssh-pubkey") => ssh_pubkey(&rest[1..], flags.dry_run),
+        // `mysbx attach` (detach.md B2, B5, B6) — host-side like
+        // `status`: no sandbox is started, the repo is the one the
+        // cwd resolves to (D1). It connects this terminal to the
+        // detached run of the live repo or of `--session NAME`, and
+        // ends in an exec of dtach so the terminal and the exit code
+        // are the run's. `--verbose` is refused like on the other
+        // host-side verbs (no run to report on); the run-scoped
+        // flags are refused by the arm above (`--session` exempt —
+        // it selects the workspace); the tail is `detach::attach`'s
+        // own — it parses the after-verb `--session NAME` and
+        // `--dry-run` (B2's `mysbx attach --session NAME` spelling,
+        // the `run_command` merge precedent, D10) and refuses
+        // everything else.
+        Some("attach") if flags.verbose => reject_verbose("attach"),
+        Some("attach") => detach::attach(&rest[1..], flags.session.as_deref(), flags.dry_run),
         Some("worktree") => {
             match rest.get(1).map(String::as_str) {
                 Some("list") => worktreeverbs::list(&rest[2..], flags.dry_run),
@@ -1211,6 +1250,12 @@ enum RunMode {
     /// workspace lock and the `dtach` launch, handed to
     /// `detach::launch_outer`.
     Detached,
+    /// `--detachable`, the outer of the composition form (detach.md
+    /// B2/B4): the same pre-flight, launch and handshake as
+    /// [`RunMode::Detached`], except the Running handshake execs
+    /// `dtach -a` — the "start working now, detach later" form, the
+    /// exact composition `--detach && attach` under one lock (B6).
+    Detachable,
     /// The INNER mysbx of a detached run (detach.md B4): the dtach
     /// child under `MYSBX_DETACHED`. The pipeline runs for real —
     /// clone creation, waypipe client, git trust, staging — and the
@@ -1565,9 +1610,10 @@ unsafe fn libc_geteuid() -> u32 {
 }
 
 /// Whether stdin is a terminal (libc `isatty`) — decides the podman
-/// backend's `--tty` (bd myconfig-jho). The same zero-dependency raw
-/// extern idiom as `libc_geteuid`.
-fn stdin_is_tty() -> bool {
+/// backend's `--tty` (bd myconfig-jho) and the attach exec's terminal
+/// requirement (detach.md B2). The same zero-dependency raw extern
+/// idiom as `libc_geteuid`.
+pub(crate) fn stdin_is_tty() -> bool {
     extern "C" {
         fn isatty(fd: i32) -> i32;
     }
@@ -1861,13 +1907,14 @@ fn sweep_krun_run_dirs(dir: &std::path::Path) -> Result<(), String> {
 /// sidecar config fails with the `mysbx init` hint.
 fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     let dry_run = flags.dry_run;
-    // The outer mysbx of `--detach` (docs/design/detach.md B4) runs
-    // the same pipeline a dry run runs — every refusal, no side
-    // effect: the INNER run under dtach creates the session clone,
-    // the state dirs and the staging trees, never the outer. Prints
-    // that are a dry run's whole job (the clone commands, the argv)
-    // stay gated on `dry_run` alone, so a real outer stays quiet.
-    let preflight_only = dry_run || matches!(mode, RunMode::Detached);
+    // The outer mysbx of `--detach`/`--detachable` (docs/design/
+    // detach.md B4) runs the same pipeline a dry run runs — every
+    // refusal, no side effect: the INNER run under dtach creates
+    // the session clone, the state dirs and the staging trees,
+    // never the outer. Prints that are a dry run's whole job (the
+    // clone commands, the argv) stay gated on `dry_run` alone, so
+    // a real outer stays quiet.
+    let preflight_only = dry_run || matches!(mode, RunMode::Detached | RunMode::Detachable);
     // workspace.md D4: `--rw` in a clone run is a REFUSED run (exit
     // `70`, cli.md D8) naming the flag and the mode — never a silent
     // downgrade: an operator who believes a directory is writable
@@ -2159,12 +2206,19 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // of a detached run as well (a config changed between the outer
     // pre-flight and the inner run must not spawn what the outer
     // refused).
-    if matches!(mode, RunMode::Detached | RunMode::DetachedInner)
-        && matches!(backend, "podman-gvisor" | "podman-krun")
+    if matches!(
+        mode,
+        RunMode::Detached | RunMode::Detachable | RunMode::DetachedInner
+    ) && matches!(backend, "podman-gvisor" | "podman-krun")
     {
         eprintln!(
-            "mysbx: --detach is not supported on the `{backend}` backend \
-             (bd myconfig-cad, docs/design/detach.md B9)"
+            "mysbx: {} is not supported on the `{backend}` backend \
+             (bd myconfig-cad, docs/design/detach.md B9)",
+            if mode == RunMode::Detachable {
+                "--detachable"
+            } else {
+                "--detach"
+            }
         );
         eprintln!(
             "  the container name is per repo root and the argv carries --replace, so any \
@@ -2566,7 +2620,10 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // detached run only — a foreground run's argv stays
     // byte-identical, and no configuration layer can set or unset it
     // (it is emitted after `[env]` in every backend).
-    let detachable = matches!(mode, RunMode::Detached | RunMode::DetachedInner);
+    let detachable = matches!(
+        mode,
+        RunMode::Detached | RunMode::Detachable | RunMode::DetachedInner
+    );
     let waypipe_socket_dir = repo.sidecar.join("waypipe").join(pid.to_string());
     let waypipe_socket_dir_str = waypipe_socket_dir.to_string_lossy().into_owned();
     // The guest-root git trust of the krun variant (bd myconfig-zj2):
@@ -3537,7 +3594,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         // state file — the audit contract of cli.md D9 applied to
         // the launch, so the refusal is checked too (a missing
         // dtach pin, an unusable runtime root).
-        if matches!(mode, RunMode::Detached) {
+        if matches!(mode, RunMode::Detached | RunMode::Detachable) {
             let dtach = match detach::resolve_dtach_or_refuse() {
                 Ok(p) => p,
                 Err(code) => return code,
@@ -3607,7 +3664,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // The outer of a detached run spawns NOTHING itself (B4): no
     // `## exec` block for it — the inner under dtach reports its own
     // argv when it runs verbose.
-    if flags.verbose && !matches!(mode, RunMode::Detached) {
+    if flags.verbose && !matches!(mode, RunMode::Detached | RunMode::Detachable) {
         println!("## exec: {backend_bin}");
         for arg in &argv {
             println!("## arg:  {arg}");
@@ -3625,7 +3682,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         detach::tee_restore();
     }
     let mut waypipe_child: Option<std::process::Child> = None;
-    if merged.display.is_waypipe() && !matches!(mode, RunMode::Detached) {
+    if merged.display.is_waypipe() && !matches!(mode, RunMode::Detached | RunMode::Detachable) {
         match waypipe_params.as_ref() {
             // The client runs on the HOST — connecting the token-dir
             // socket to the host compositor — and the socket file
@@ -3673,13 +3730,16 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         // client and no backend were spawned (the gating above), and
         // nothing this run created needs cleanup: the pre-flight
         // creates nothing.
-        RunMode::Detached => detach::launch_outer(&detach::Launch {
-            repo_root: &repo.root,
-            sidecar: &repo.sidecar,
-            session: flags.session.as_deref(),
-            backend,
-            multiplexer: merged.multiplexer.name(),
-        }),
+        RunMode::Detached | RunMode::Detachable => detach::launch_outer(
+            &detach::Launch {
+                repo_root: &repo.root,
+                sidecar: &repo.sidecar,
+                session: flags.session.as_deref(),
+                backend,
+                multiplexer: merged.multiplexer.name(),
+            },
+            matches!(mode, RunMode::Detachable),
+        ),
         // The inner's wait mode (detach.md B4): spawn the backend,
         // record the outcome in the registry state file (B5), and
         // clean up the per-run host state after it — which an exec

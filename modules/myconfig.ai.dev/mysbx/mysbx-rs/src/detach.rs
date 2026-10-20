@@ -198,8 +198,16 @@ pub enum Error {
     /// resolved — the 40-bit `fnv1a10` collided (detach.md B3). The
     /// entry is refused, never attached to.
     RepoMismatch { recorded: String, resolved: String },
-    /// The filesystem could not be read or written.
-    Io { path: PathBuf, why: String },
+    /// The filesystem could not be read or written. `kind` is the
+    /// `std::io::ErrorKind` of the underlying error, kept so a
+    /// caller can tell a missing file from any other failure
+    /// without string-matching the message (the same idiom the
+    /// probe at the socket uses).
+    Io {
+        path: PathBuf,
+        kind: std::io::ErrorKind,
+        why: String,
+    },
     /// The state file could not be parsed: not the format [`render`]
     /// writes.
     Unparsable { why: String },
@@ -271,7 +279,7 @@ impl fmt::Display for Error {
                  {recorded}, not the resolved repo {resolved} — the \
                  fnv1a10 registry name collided (detach.md B3)"
             ),
-            Error::Io { path, why } => {
+            Error::Io { path, why, .. } => {
                 write!(f, "cannot use {}: {why}", path.display())
             }
             Error::Unparsable { why } => {
@@ -311,6 +319,21 @@ impl fmt::Display for Error {
 }
 
 impl std::error::Error for Error {}
+
+impl Error {
+    /// Whether the error is a state file that is simply GONE — the
+    /// re-read under the attach lock races the next `--detach`, for
+    /// which a missing record is an outcome, not a failure.
+    fn is_not_found(&self) -> bool {
+        matches!(
+            self,
+            Error::Io {
+                kind: std::io::ErrorKind::NotFound,
+                ..
+            }
+        )
+    }
+}
 
 /// Read `$XDG_RUNTIME_DIR` (detach.md B3): unset or relative is
 /// refused, `/tmp` is never used as a fallback. Reads the
@@ -494,6 +517,7 @@ pub fn ensure(paths: &Paths) -> Result<(), Error> {
         .parent()
         .ok_or_else(|| Error::Io {
             path: paths.dir.clone(),
+            kind: std::io::ErrorKind::NotFound,
             why: "the registry directory has no parent".to_owned(),
         })?
         .to_owned();
@@ -503,6 +527,7 @@ pub fn ensure(paths: &Paths) -> Result<(), Error> {
     builder.recursive(true).mode(0o700);
     builder.create(&mysbx_dir).map_err(|e| Error::Io {
         path: mysbx_dir.clone(),
+        kind: e.kind(),
         why: e.to_string(),
     })?;
     // `mysbx/` is verified before anything is created inside it: a
@@ -510,6 +535,7 @@ pub fn ensure(paths: &Paths) -> Result<(), Error> {
     verify_dir(&mysbx_dir)?;
     builder.create(&paths.dir).map_err(|e| Error::Io {
         path: paths.dir.clone(),
+        kind: e.kind(),
         why: e.to_string(),
     })?;
     verify_dir(&paths.dir)
@@ -521,6 +547,7 @@ fn verify_dir(dir: &Path) -> Result<(), Error> {
     use std::os::unix::fs::MetadataExt;
     let md = std::fs::symlink_metadata(dir).map_err(|e| Error::Io {
         path: dir.to_owned(),
+        kind: e.kind(),
         why: e.to_string(),
     })?;
     // The raw st_mode, not Permissions: the decision is about the
@@ -710,6 +737,7 @@ fn string_at(text: &str, key: &str, start: usize) -> Result<String, Error> {
 pub fn read(paths: &Paths) -> Result<Record, Error> {
     let text = std::fs::read_to_string(&paths.json).map_err(|e| Error::Io {
         path: paths.json.clone(),
+        kind: e.kind(),
         why: e.to_string(),
     })?;
     parse(&text)
@@ -836,6 +864,7 @@ fn parse_iso8601(text: &str) -> Result<u64, Error> {
 pub fn write(paths: &Paths, r: &Record) -> Result<(), Error> {
     crate::write_atomically(&paths.json, &render(r)).map_err(|why| Error::Io {
         path: paths.json.clone(),
+        kind: std::io::ErrorKind::Other,
         why,
     })
 }
@@ -939,6 +968,7 @@ pub fn lock(paths: &Paths) -> Result<WorkspaceLock, Error> {
     let fd = open_lock_file(paths)?;
     flock_file(&fd, LOCK_EX).map_err(|e| Error::Io {
         path: paths.lock.clone(),
+        kind: e.kind(),
         why: e.to_string(),
     })?;
     Ok(WorkspaceLock { _fd: fd })
@@ -957,6 +987,7 @@ pub fn try_lock(paths: &Paths) -> Result<WorkspaceLock, Error> {
         }),
         Err(e) => Err(Error::Io {
             path: paths.lock.clone(),
+            kind: e.kind(),
             why: e.to_string(),
         }),
     }
@@ -967,6 +998,7 @@ pub fn try_lock(paths: &Paths) -> Result<WorkspaceLock, Error> {
 fn open_lock_file(paths: &Paths) -> Result<std::fs::File, Error> {
     std::fs::File::create(&paths.lock).map_err(|e| Error::Io {
         path: paths.lock.clone(),
+        kind: e.kind(),
         why: e.to_string(),
     })
 }
@@ -1011,6 +1043,7 @@ pub fn remove_stale(paths: &Paths) -> Result<bool, Error> {
             Err(e) => {
                 return Err(Error::Io {
                     path: paths.sock.clone(),
+                    kind: e.kind(),
                     why: e.to_string(),
                 })
             }
@@ -1102,22 +1135,329 @@ pub(crate) fn resolve_dtach() -> Option<PathBuf> {
 
 /// [`resolve_dtach`] with the operator-facing refusal (detach.md
 /// B10) attached: a `None` resolution prints the two-line refusal —
-/// a missing or non-executable dtach disables `--detach` alone —
-/// and yields the `70` the callers return; the text lives here once
-/// for the launch and the dry run alike.
+/// a missing or non-executable dtach disables `--detach`,
+/// `--detachable` and `attach` alone — and yields the `70` the
+/// callers return; the text lives here once for every user.
 pub(crate) fn resolve_dtach_or_refuse() -> Result<PathBuf, i32> {
     match resolve_dtach() {
         Some(p) => Ok(p),
         None => {
             eprintln!(
-                "mysbx: --detach requires a usable dtach (MYSBX_DTACH) — none was found on PATH"
+                "mysbx: --detach, --detachable and attach require a usable dtach (MYSBX_DTACH) — none was found on PATH"
             );
             eprintln!(
-                "  a missing or non-executable dtach disables --detach only, other runs are unaffected (docs/design/detach.md B10)"
+                "  a missing or non-executable dtach disables all three --detach, --detachable and attach — other runs are unaffected (docs/design/detach.md B10)"
             );
             Err(crate::EXIT_INFRASTRUCTURE)
         }
     }
+}
+
+/// The verb's own usage line, printed by its usage errors (the same
+/// pairing rule usage.txt follows, cli.md D5).
+pub const USAGE_ATTACH: &str = "usage: mysbx attach [--session <name>]";
+
+/// The `dtach` attach argv (detach.md B2):
+/// `dtach -a <socket> -r winch -z` — `-a` attaches a client, `-r
+/// winch` redraws this terminal on attach, `-z` sends `^Z` into the
+/// run instead of suspending the client. The detach key is dtach's
+/// default `^\`. Pure, so the tests assert the exact shape.
+pub fn attach_argv(dtach: &str, sock: &Path) -> Vec<String> {
+    vec![
+        dtach.to_owned(),
+        "-a".to_owned(),
+        sock.to_string_lossy().into_owned(),
+        "-r".to_owned(),
+        "winch".to_owned(),
+        "-z".to_owned(),
+    ]
+}
+
+/// `mysbx attach [--session NAME]` (detach.md B2, B5, B6): connect
+/// the current terminal to the detached run of the live repo (or of
+/// `--session NAME`) — a host-side verb like `status`, no sandbox is
+/// started. `rest_tail` is what follows the verb; `session` and
+/// `dry_run` are the BEFORE-verb global flags. The after-verb
+/// spellings `--session NAME` and `--dry-run` parse HERE, the same
+/// one-position-rule merge `run_command` gives `run` (D10: both
+/// spellings are the same attach, and a `--session` given in both
+/// positions is the repeated-flag refusal `run` gives too) — the
+/// hinted command of the one-per-workspace refusals (B2's
+/// `mysbx attach --session NAME`) must copy-and-paste. Everything
+/// else in the tail is a usage error naming the bare shape (B2).
+///
+/// No lock is taken for the probe or the exec — attaching reads the
+/// registry and connects to the socket, it replaces nothing (B6).
+/// The lock is taken ONLY to remove a finished or lost record, and
+/// under it the record is re-read and the socket re-probed: a
+/// concurrent `--detach` may have replaced it while this waited.
+///
+/// Liveness is the socket, never the state field (B5): a live
+/// socket is attachable whatever the record says — the probe is
+/// the first classification, so a `starting` record whose master
+/// is up attaches too (the master owns the terminal; the inner may
+/// still be finishing its startup, attaching just relays).
+///
+/// The tty check is LAST, only on the Live path: a finished or lost
+/// record is printed and removed without a terminal, and `--dry-run`
+/// never needs one. A missing tty refuses with `70` and leaves the
+/// record untouched.
+pub fn attach(rest_tail: &[String], session: Option<&str>, dry_run: bool) -> i32 {
+    // A closed surface like the handoff verbs (B2): only `--session`
+    // and `--dry-run` parse after the verb — the same merge
+    // `run_command` gives `run` (a `--session` in both positions is
+    // the repeated-flag refusal, `--dry-run` is idempotent) — any
+    // other tail argument is a usage error naming the bare shape.
+    let mut session = session.map(str::to_owned);
+    let mut dry_run = dry_run;
+    let mut idx = 0;
+    while let Some(arg) = rest_tail.get(idx) {
+        match arg.as_str() {
+            "--dry-run" => {
+                dry_run = true;
+                idx += 1;
+            }
+            "--session" => {
+                if session.is_some() {
+                    eprintln!("mysbx attach: repeated flag: --session");
+                    eprintln!("{USAGE_ATTACH}");
+                    return 2;
+                }
+                let value = match rest_tail.get(idx + 1) {
+                    Some(v) => v.clone(),
+                    None => {
+                        eprintln!("mysbx attach: --session requires a name");
+                        eprintln!("  the grammar is [A-Za-z0-9][A-Za-z0-9._-]{{0,63}} — no slashes, no leading dot");
+                        eprintln!("{USAGE_ATTACH}");
+                        return 2;
+                    }
+                };
+                if !crate::session::valid_name(&value) {
+                    eprintln!("mysbx attach: --session: invalid session name `{value}`");
+                    eprintln!("  the grammar is [A-Za-z0-9][A-Za-z0-9._-]{{0,63}} — no slashes, no leading dot");
+                    eprintln!("{USAGE_ATTACH}");
+                    return 2;
+                }
+                session = Some(value);
+                idx += 2;
+            }
+            other => {
+                eprintln!("mysbx attach: unexpected argument: {other}");
+                eprintln!("{USAGE_ATTACH}");
+                return 2;
+            }
+        }
+    }
+    // The repo comes from the cwd, never a flag (cli.md D1).
+    let repo = match crate::repo::resolve_cwd() {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("mysbx: {e}");
+            return crate::EXIT_INFRASTRUCTURE;
+        }
+    };
+    let root = match runtime_root_from_env() {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("mysbx: {e}");
+            return crate::EXIT_INFRASTRUCTURE;
+        }
+    };
+    let paths = match paths(&root, &repo.root, &workspace_of(session.as_deref())) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("mysbx: {e}");
+            return crate::EXIT_INFRASTRUCTURE;
+        }
+    };
+    // `attach --dry-run` (B9): the dtach attach argv, one argument
+    // per line — audited like every dry run, so it refuses an
+    // unresolvable repo, an unusable runtime root and an unusable
+    // dtach (all `70`, D8), but touches the registry NOT AT ALL: no
+    // read, no removal, and no tty needed. An invalid session NAME
+    // is refused by the parser with `2` before this runs, so it is
+    // not an audit case here.
+    if dry_run {
+        let dtach = match resolve_dtach_or_refuse() {
+            Ok(p) => p,
+            Err(code) => return code,
+        };
+        for arg in attach_argv(&dtach.to_string_lossy(), &paths.sock) {
+            println!("{arg}");
+        }
+        return 0;
+    }
+    // Nothing registered (B3: the directory IS the registry, a file
+    // exists ⇒ a run exists): no record, no run — the refusal names
+    // the command that starts one.
+    if !paths.json.exists() {
+        eprintln!("mysbx: nothing to attach — no detached run of this workspace is registered");
+        eprintln!("  start one with: {}", start_hint(session.as_deref()));
+        return crate::EXIT_INFRASTRUCTURE;
+    }
+    let record = match read(&paths) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("mysbx: {e}");
+            return crate::EXIT_INFRASTRUCTURE;
+        }
+    };
+    // B3: a hash collision must never let one repo attach to
+    // another's run — the recorded root must be the resolved one.
+    if let Err(e) = ensure_same_repo(&record, &repo.root) {
+        eprintln!("mysbx: {e}");
+        return crate::EXIT_INFRASTRUCTURE;
+    }
+    attach_classified(&paths, &record, probe(&paths.sock), &repo.root)
+}
+
+/// Act on one classification of the record: the Live path execs
+/// dtach (no lock — attaching replaces nothing), the Finished and
+/// Lost paths print the outcome, remove the record under the lock
+/// (re-reading and re-probing under it, B6) and exit `70` (B5).
+/// `repo_root` is the resolved repo every record — the first read
+/// AND the under-lock re-read — is refused against unless it names
+/// the same root (B3: a hash collision must never let one repo
+/// attach to another's run, not even a record that replaced the
+/// original one while this waited for the lock).
+fn attach_classified(paths: &Paths, record: &Record, p: Probe, repo_root: &Path) -> i32 {
+    match classify(record, p) {
+        Status::Live => {
+            // The tty check is last (B2): the attach exec relays this
+            // terminal into the run, so without one there is nothing
+            // to attach — an environment refusal, `70`, and the
+            // record is NOT removed (the run is still live).
+            if !crate::stdin_is_tty() {
+                eprintln!(
+                    "mysbx: attach needs a terminal on stdin — connect one and run: {}",
+                    attach_hint(record.session.as_deref())
+                );
+                return crate::EXIT_INFRASTRUCTURE;
+            }
+            let dtach = match resolve_dtach_or_refuse() {
+                Ok(p) => p,
+                Err(code) => return code,
+            };
+            attach_exec(&dtach, &paths.sock)
+        }
+        Status::Finished | Status::Lost => {
+            // The removal runs under the workspace lock (B6), and
+            // under it the record is RE-READ and the socket
+            // RE-PROBED: a concurrent `--detach` may have replaced
+            // the finished record with a fresh starting one while
+            // this waited for the lock — a live re-classification
+            // takes the Live path instead, a gone record is the
+            // nothing path, and only a still-finished record is
+            // removed.
+            let guard = match lock(paths) {
+                Ok(g) => g,
+                Err(e) => {
+                    eprintln!("mysbx: {e}");
+                    return crate::EXIT_INFRASTRUCTURE;
+                }
+            };
+            match read(paths) {
+                Ok(r) => {
+                    // B3: the re-read record is refused against the
+                    // resolved repo like the first one — a concurrent
+                    // `--detach` of a colliding repo must not turn
+                    // this into an attach to (or a removal of)
+                    // another repo's record.
+                    if let Err(e) = ensure_same_repo(&r, repo_root) {
+                        eprintln!("mysbx: {e}");
+                        return crate::EXIT_INFRASTRUCTURE;
+                    }
+                    match classify(&r, probe(&paths.sock)) {
+                        Status::Live => {
+                            drop(guard);
+                            attach_classified(paths, &r, probe(&paths.sock), repo_root)
+                        }
+                        Status::Finished => {
+                            print_finished(&r);
+                            remove_record(paths);
+                            crate::EXIT_INFRASTRUCTURE
+                        }
+                        Status::Lost => {
+                            eprintln!(
+                                "mysbx: the detached run of this workspace is lost — its dtach master is gone"
+                            );
+                            remove_record(paths);
+                            crate::EXIT_INFRASTRUCTURE
+                        }
+                    }
+                }
+                // The record vanished while this waited for the lock:
+                // the nothing path.
+                Err(e) if e.is_not_found() => {
+                    eprintln!(
+                        "mysbx: nothing to attach — no detached run of this workspace is registered"
+                    );
+                    eprintln!(
+                        "  start one with: {}",
+                        start_hint(record.session.as_deref())
+                    );
+                    crate::EXIT_INFRASTRUCTURE
+                }
+                Err(e) => {
+                    eprintln!("mysbx: {e}");
+                    crate::EXIT_INFRASTRUCTURE
+                }
+            }
+        }
+    }
+}
+
+/// The one-line outcome of a finished record (detach.md B5's
+/// lifecycle: `attach` prints it once and removes the record).
+fn print_finished(r: &Record) {
+    match r.state {
+        State::Exited => eprintln!(
+            "mysbx: the detached run exited with {} at {}",
+            r.exit_code.unwrap_or(0),
+            crate::result::iso8601(r.finished_at.unwrap_or(r.started_at))
+        ),
+        State::Failed => match r.error.as_deref() {
+            Some(error) if !error.is_empty() => {
+                eprintln!("mysbx: the detached run failed during startup: {error}")
+            }
+            _ => eprintln!("mysbx: the detached run failed during startup"),
+        },
+        State::Cancelled => eprintln!("mysbx: the detached run was cancelled"),
+        // The caller classified the record first; a non-terminal
+        // state without a live socket is `lost`, never finished.
+        State::Starting | State::Running => unreachable!("classify puts the probe first"),
+    }
+}
+
+/// Remove the finished record, tolerating a removal raced by the
+/// next `--detach` (B6: it replaces the file under the same lock,
+/// but a record gone between the re-read and the unlink is the
+/// nothing path's outcome, not an error).
+fn remove_record(paths: &Paths) {
+    if let Err(e) = std::fs::remove_file(&paths.json) {
+        if e.kind() != std::io::ErrorKind::NotFound {
+            eprintln!("mysbx: {e}");
+        }
+    }
+}
+
+/// `exec dtach -a <sock> -r winch -z` (detach.md B2): the tool
+/// replaces this process, so it owns the terminal and its exit code
+/// propagates unchanged (cli.md D8, the `hunk` precedent of
+/// worktree.md W4). The argv is [`attach_argv`] — one source of
+/// truth for the dry-run audit and the exec. A dtach that cannot be
+/// exec'd is the plain runtime failure of the exec.
+fn attach_exec(dtach: &Path, sock: &Path) -> i32 {
+    use std::os::unix::process::CommandExt;
+    let dtach = dtach.to_string_lossy().into_owned();
+    let mut cmd = std::process::Command::new(&dtach);
+    // The executable is argv[0] of [`attach_argv`], everything after
+    // it is the argument tail.
+    let e = cmd
+        .args(attach_argv(&dtach, sock).into_iter().skip(1))
+        .exec();
+    eprintln!("mysbx: cannot exec {}: {e}", dtach);
+    crate::EXIT_INFRASTRUCTURE
 }
 
 /// The attach hint of the one-per-workspace refusals and the success
@@ -1130,6 +1470,16 @@ fn attach_hint(session: Option<&str>) -> String {
     }
 }
 
+/// The `--detach` spelling of the nothing-registered hint (B2): the
+/// flag that starts a detached run, with the `--session` name when a
+/// workspace was asked for.
+fn start_hint(session: Option<&str>) -> String {
+    match session {
+        Some(name) => format!("mysbx --detach --session {name}"),
+        None => "mysbx --detach".to_owned(),
+    }
+}
+
 /// The outer mysbx's half of `--detach` (detach.md B4): take the
 /// workspace lock, remove a stale socket under it, write the
 /// `starting` record, spawn `dtach -n <sock> -r winch <self> <args>`
@@ -1139,7 +1489,15 @@ fn attach_hint(session: Option<&str>) -> String {
 /// (B4). The lock guard stays alive until this function returns, so
 /// the registry is serialized from the liveness probe until the
 /// handshake ends (B6).
-pub fn launch_outer(l: &Launch) -> i32 {
+///
+/// `attach_after` is the `--detachable` composition (B2): the Running
+/// handshake execs `dtach -a` instead of printing the attach hint,
+/// so the whole `--detach && attach` runs under ONE lock (B6) — a
+/// concurrent `--detach` cannot take the workspace in between. The
+/// exec releases the guard's flock atomically (Rust `File`s are
+/// `O_CLOEXEC`). Every non-Running outcome is identical to
+/// `--detach`, exit codes included.
+pub fn launch_outer(l: &Launch, attach_after: bool) -> i32 {
     let workspace = workspace_of(l.session);
     // The registry location itself is a refusal, not a fallback
     // question (B3: no `/tmp`).
@@ -1265,7 +1623,9 @@ pub fn launch_outer(l: &Launch) -> i32 {
     loop {
         std::thread::sleep(std::time::Duration::from_millis(50));
         match read(&paths) {
-            Ok(r) if r.state != State::Starting => break report_handshake(&r, l.session),
+            Ok(r) if r.state != State::Starting => {
+                break report_handshake(&r, l.session, attach_after, &paths, &dtach);
+            }
             _ => {}
         }
         let probe_now = probe(&paths.sock);
@@ -1281,7 +1641,9 @@ pub fn launch_outer(l: &Launch) -> i32 {
         // child's exit.
         if (socket_seen || child_gone) && probe_now != Probe::Live {
             match read(&paths) {
-                Ok(r) if r.state != State::Starting => break report_handshake(&r, l.session),
+                Ok(r) if r.state != State::Starting => {
+                    break report_handshake(&r, l.session, attach_after, &paths, &dtach);
+                }
                 _ => {
                     eprintln!("mysbx: the detached run died during startup");
                     return crate::EXIT_INFRASTRUCTURE;
@@ -1292,16 +1654,36 @@ pub fn launch_outer(l: &Launch) -> i32 {
 }
 
 /// Report the handshake outcome (detach.md B4 step 4) from the
-/// terminal-state record the inner wrote.
-fn report_handshake(r: &Record, session: Option<&str>) -> i32 {
+/// terminal-state record the inner wrote. In the `--detachable`
+/// composition (B2) the Running case execs `dtach -a` instead of
+/// printing the attach hint — the lock guard `launch_outer` still
+/// holds stays alive through the exec (Rust `File`s are
+/// `O_CLOEXEC`, the exec closes it), so the whole `--detach &&
+/// attach` ran under ONE lock (B6) and no concurrent `--detach`
+/// could take the workspace in between.
+fn report_handshake(
+    r: &Record,
+    session: Option<&str>,
+    attach_after: bool,
+    paths: &Paths,
+    dtach: &Path,
+) -> i32 {
     match r.state {
         State::Running => {
+            if attach_after {
+                return attach_exec(dtach, &paths.sock);
+            }
             eprintln!("mysbx: detached; attach with: {}", attach_hint(session));
             0
         }
         State::Exited => {
+            // The record is left in place (B5's lifecycle: a finished
+            // record stays until `attach` removes it), so the message
+            // names where the outcome is read again — a silent `0`
+            // would leave the operator without a follow-up.
             eprintln!(
-                "mysbx: the detached run already exited (exit code {})",
+                "mysbx: the detached run already exited (exit code {}) — \
+                 its outcome is in the registry record, `mysbx attach` prints it",
                 r.exit_code.unwrap_or(0)
             );
             0
@@ -2454,6 +2836,25 @@ mod tests {
                 "/nix/store/bbbb-mysbx/bin/mysbx".to_owned(),
                 "--session".to_owned(),
                 "fix-1".to_owned(),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_attach_argv_is_dtach_a_sock_winch_z() {
+        let argv = attach_argv(
+            "/nix/store/aaaa-dtach/bin/dtach",
+            Path::new("/run/user/1000/mysbx/abc/live.sock"),
+        );
+        assert_eq!(
+            argv,
+            vec![
+                "/nix/store/aaaa-dtach/bin/dtach".to_owned(),
+                "-a".to_owned(),
+                "/run/user/1000/mysbx/abc/live.sock".to_owned(),
+                "-r".to_owned(),
+                "winch".to_owned(),
+                "-z".to_owned(),
             ]
         );
     }
