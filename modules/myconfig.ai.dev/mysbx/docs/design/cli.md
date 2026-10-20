@@ -768,8 +768,17 @@ against stubbed `bwrap`/`podman` binaries. The podman runtime
 settings (`podman_runtime`) mirror the ones `sandbox` in `lib.rs`
 computes for a run.
 
+### D21: Detached runs (proposed)
+
+`mysbx --detach`, `mysbx --detachable` and `mysbx attach` run the bare
+form in the background under a host-side `dtach` and reattach to it.
+The decisions live in [detach.md](./detach.md) (B1–B10). Until they are
+accepted and implemented, D3, D19, D20 and the non-goals below are
+unchanged; detach.md B9 lists what each of them gains.
+
 ## Non-goals
 
-- No daemon, no background state beyond the sidecar directory.
+- No daemon, no background state beyond the sidecar directory
+  (proposed change: detach.md B9).
 - No interactive prompts; `mysbx` must be usable from scripts and from
   agents.

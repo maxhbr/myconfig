@@ -58,6 +58,13 @@ path or at an explicit destination. The repo mount is implicit, not a mount
 entry.
 _Avoid_: bind, share, volume
 
+**Detached run**:
+An interactive run whose terminal is held by a host-side `dtach` master
+instead of the terminal that started it, reached again with
+`mysbx attach` (proposed, `docs/design/detach.md`). One per workspace
+(the live repo or a session).
+_Avoid_: background job, daemon, server
+
 **State dir**:
 A sandbox-home-relative path declared in `state-dirs` (config.md D15):
 mysbx backs it with `<sidecar>/state/<entry>` and binds it rw at
