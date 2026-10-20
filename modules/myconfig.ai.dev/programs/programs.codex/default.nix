@@ -28,7 +28,9 @@ let
   #      keyed on this module's `enable`).
   #   2. codex's *configuration* visible inside the sandbox -> read-only
   #      mounts from the shared `mkSandboxConfig` helper
-  #      (../../mysbx/nix/sandbox-config.nix). `~/.codex` (Home Manager's
+  #      (../../mysbx/nix/sandbox-config.nix), one per deployed child of
+  #      `~/.codex` (`childSubtrees`), so the tmpfs `.codex` stays writable
+  #      and the state-dirs below it are not covered. `~/.codex` (Home Manager's
   #      `configDir` default: `home.preferXdgDirectories` is off, so it is
   #      NOT `~/.config/codex`) holds everything `programs.codex` renders —
   #      config.toml, hooks.json, AGENTS.md, skills, rules, profiles.
@@ -92,24 +94,30 @@ let
   mysbxCodexMounts =
     (sandboxConfigLib.mkSandboxConfig {
       homeFile = hmHomeFile;
-      subtrees = [
-        ".codex"
-      ]
-      # The shared handcrafted-skills tree, discovered by codex (and pi)
-      # from `~/.agents/skills/`. Mounted only when populated (same
-      # `piHasHandcraftedSkills` gate as
-      # ../../programs/programs.pi-coding-agent) AND only when the pi
-      # module has not already mounted the very same tree: pi's mysbx
-      # integration binds `~/.agents/skills` too, and while the CLI
-      # treats equal mount dests as a harmless shadowing re-bind, a
-      # single writer keeps the generated layer (and its checks) clean.
-      ++ lib.optional (
-        !(osconfig.myconfig.ai.dev.pi-coding-agent.enable or false)
-        && (
-          (config.myconfig.ai.dev.skills.handcrafted or { }) != { }
-          || (config.myconfig.ai.dev.skills.enable or false)
-        )
-      ) ".agents/skills";
+      # The deployed children of `.codex`, not `.codex` itself: a
+      # read-only mount of the whole dir would cover the state-dirs below.
+      subtrees =
+        sandboxConfigLib.childSubtrees {
+          homeFile = hmHomeFile;
+          homeDirectory = hmHomeDirectory;
+          extraFiles = mysbxCodexSkillsBundle;
+          dir = ".codex";
+        }
+        # The shared handcrafted-skills tree, discovered by codex (and pi)
+        # from `~/.agents/skills/`. Mounted only when populated (same
+        # `piHasHandcraftedSkills` gate as
+        # ../../programs/programs.pi-coding-agent) AND only when the pi
+        # module has not already mounted the very same tree: pi's mysbx
+        # integration binds `~/.agents/skills` too, and while the CLI
+        # treats equal mount dests as a harmless shadowing re-bind, a
+        # single writer keeps the generated layer (and its checks) clean.
+        ++ lib.optional (
+          !(osconfig.myconfig.ai.dev.pi-coding-agent.enable or false)
+          && (
+            (config.myconfig.ai.dev.skills.handcrafted or { }) != { }
+            || (config.myconfig.ai.dev.skills.enable or false)
+          )
+        ) ".agents/skills";
       name = "codex-sandbox-config";
       homeDirectory = hmHomeDirectory;
       extraFiles = mysbxCodexSkillsBundle;

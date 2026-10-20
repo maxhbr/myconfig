@@ -794,8 +794,11 @@ What the guest may read is decided entirely by the SPEC's shares:
 
 The KrunSpec builder (dak.3) turns the merged config into exactly
 this: cpus, ram, the rootfs pin, one ro store share, one rw
-workspace share per the merged mounts' live/clone layout, the
-state-dirs shares, env, and the payload argv. The scratch disk
+workspace share per the merged mounts' live/clone layout, the rw
+`<repo>__worktrees` sibling share (live run, sibling exists), the
+state-dirs shares, the configured mounts (implicit shares first; a
+mount covering one is refused like bwrap's `HiddenMount`), env, and
+the payload argv. The scratch disk
 (dak.7), passt (dak.6), overlay files (dak.8) and waypipe/vsock
 (dak.9) extend the spec; none of them re-open the store question.
 

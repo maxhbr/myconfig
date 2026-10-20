@@ -64,7 +64,9 @@ let
   #      `enable`).
   #   2. the *configuration* visible inside the sandbox -> read-only mounts
   #      from the shared `mkSandboxConfig` helper
-  #      (../../mysbx/nix/sandbox-config.nix): `.claude` holds everything
+  #      (../../mysbx/nix/sandbox-config.nix), one per deployed child of
+  #      `.claude` (`childSubtrees`), so the tmpfs `.claude` stays writable
+  #      and the state-dirs below it are not covered. `.claude` holds everything
   #      `programs.claude-code` renders (settings.json, hooks/, agents/,
   #      commands/, skills/) because `configDir` keeps its upstream default
   #      `~/.claude`. Skills flow through `home.file` in the
@@ -129,7 +131,14 @@ let
   mysbxClaudeMounts =
     (sandboxConfigLib.mkSandboxConfig {
       homeFile = hmHomeFile;
-      subtrees = [ ".claude" ];
+      # The deployed children of `.claude`, not `.claude` itself: a
+      # read-only mount of the whole dir would cover the state-dirs below.
+      subtrees = sandboxConfigLib.childSubtrees {
+        homeFile = hmHomeFile;
+        homeDirectory = hmHomeDirectory;
+        extraFiles = mysbxClaudeSkillsBundle;
+        dir = ".claude";
+      };
       name = "claude-code-sandbox-config";
       homeDirectory = hmHomeDirectory;
       extraFiles = mysbxClaudeSkillsBundle;

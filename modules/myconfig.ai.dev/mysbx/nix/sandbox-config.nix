@@ -199,4 +199,37 @@
     {
       inherit tree mounts;
     };
+
+  # `childSubtrees` — the direct children of `dir` (a relative path
+  # under `$HOME`, e.g. `.claude`) that `homeFile` or `extraFiles`
+  # deploy, as `dir/<child>` subtrees for `mkSandboxConfig`. A tool
+  # whose config dir also holds its `state-dirs` (`.claude/projects`)
+  # mounts these children instead of the whole dir: a read-only mount
+  # of the dir itself would cover the state binds, which every backend
+  # refuses (a mount may not hide an implicit bind).
+  childSubtrees =
+    {
+      homeFile,
+      dir,
+      homeDirectory ? null,
+      extraFiles ? { },
+    }:
+    let
+      normalize =
+        t:
+        if homeDirectory != null && lib.hasPrefix "${homeDirectory}/" t then
+          lib.removePrefix "${homeDirectory}/" t
+        else
+          t;
+      # Filter on the (normalized) name BEFORE forcing `enable`: only
+      # entries below `dir` are ever evaluated, the same laziness
+      # argument as `mkSandboxConfig`'s subtree filter.
+      inDir = t: lib.hasPrefix "${dir}/" (normalize t);
+      deployed = lib.filterAttrs (t: v: inDir t && (v.enable or true)) homeFile;
+      below = map normalize (
+        builtins.attrNames deployed ++ builtins.filter inDir (builtins.attrNames extraFiles)
+      );
+      child = t: builtins.head (lib.splitString "/" (lib.removePrefix "${dir}/" t));
+    in
+    map (c: "${dir}/${c}") (lib.unique (lib.sort (a: b: a < b) (map child below)));
 }

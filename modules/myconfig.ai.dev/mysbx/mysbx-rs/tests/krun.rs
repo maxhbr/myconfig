@@ -182,6 +182,117 @@ fn golden_state_dirs() {
 }
 
 #[test]
+fn the_worktrees_sibling_is_an_implicit_rw_share_of_a_live_run() {
+    // The workmux `<repo>__worktrees` sibling: shared rw at its real
+    // host path when it exists, right after the workspace and before
+    // the state dirs — the same implicit bind bwrap/podman add.
+    let mut repo = synth_repo();
+    repo.worktrees = Some(PathBuf::from("/home/synth/repo__worktrees"));
+    let mut cfg = base(true);
+    cfg.state_dirs.push(".cache".into());
+    let p = params("/synth/rootfs", "/synth/shell", None, Workspace::Live);
+    let argv = run(&cfg, &repo, &Payload::Shell, &p);
+    let pos = |needle: &str| {
+        argv.iter()
+            .position(|a| a == needle)
+            .unwrap_or_else(|| panic!("{needle} missing"))
+    };
+    let wt = pos("stage-rw:worktrees@/home/synth/repo__worktrees rw");
+    assert_eq!(argv[wt - 1], "--rw-share");
+    assert!(pos("stage-rw:workspace@/home/synth/repo rw") < wt);
+    assert!(wt < pos("stage-rw:state--cache@/mysbx-home/.cache rw"));
+    let binds = mysbx::krun::stage_binds(&cfg, &repo, &p);
+    assert!(binds.contains(&(
+        "/home/synth/repo__worktrees".to_owned(),
+        false,
+        "worktrees".to_owned()
+    )));
+
+    // a mount covering the sibling is refused like on bwrap
+    cfg.mounts.push(make_mount(
+        "/synth/data",
+        Some("/home/synth/repo__worktrees"),
+        Mode::Ro,
+    ));
+    let err = krun_argv(&cfg, &repo, &Payload::Shell, &BTreeMap::new(), &p).unwrap_err();
+    assert!(
+        matches!(&err, mysbx::krun::Error::HiddenMount { hidden, .. }
+            if hidden == "/home/synth/repo__worktrees"),
+        "{err}"
+    );
+
+    // no sibling in a clone run (workspace.md D4), and none without one
+    let clone = params(
+        "/synth/rootfs",
+        "/synth/shell",
+        None,
+        Workspace::Clone {
+            clone: Path::new("/synth/repo.mysbx/clones/s1"),
+        },
+    );
+    for (repo, p) in [(&repo, &clone), (&synth_repo(), &p)] {
+        let cfg = base(true);
+        assert!(!run(&cfg, repo, &Payload::Shell, p)
+            .iter()
+            .any(|a| a.contains("worktrees")));
+        assert!(!mysbx::krun::stage_binds(&cfg, repo, p)
+            .iter()
+            .any(|(_, _, slot)| slot == "worktrees"));
+    }
+}
+
+#[test]
+fn a_mount_covering_a_state_dir_is_refused() {
+    // The bwrap/podman `HiddenMount` refusal: a ro config mount of
+    // `.claude` would cover the `.claude/projects` state share.
+    let mut cfg = base(true);
+    cfg.state_dirs.push(".claude/projects".into());
+    cfg.mounts.push(make_mount(
+        "/synth/claude",
+        Some("/mysbx-home/.claude"),
+        Mode::Ro,
+    ));
+    let err = krun_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &BTreeMap::new(),
+        &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
+    )
+    .unwrap_err();
+    assert!(
+        matches!(&err, mysbx::krun::Error::HiddenMount { dest, hidden }
+            if dest == "/mysbx-home/.claude" && hidden == "/mysbx-home/.claude/projects"),
+        "{err}"
+    );
+}
+
+#[test]
+fn a_mount_below_a_state_dir_is_placed_after_it() {
+    // Implicit shares come first, so the init's bind of the mount
+    // lands on top of the state share, not under it.
+    let mut cfg = base(true);
+    cfg.state_dirs.push(".claude".into());
+    cfg.mounts.push(make_mount(
+        "/synth/settings.json",
+        Some("/mysbx-home/.claude/settings.json"),
+        Mode::Ro,
+    ));
+    let argv = run(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
+    );
+    let pos = |needle: &str| {
+        argv.iter()
+            .position(|a| a.ends_with(needle))
+            .unwrap_or_else(|| panic!("{needle} missing"))
+    };
+    assert!(pos("@/mysbx-home/.claude rw") < pos("@/mysbx-home/.claude/settings.json ro"));
+}
+
+#[test]
 fn golden_command_payload() {
     let argv = run(
         &base(true),

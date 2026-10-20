@@ -17,9 +17,9 @@ stage-ro:store@/nix/store ro
 --rw-share
 stage-rw:workspace@/home/synth/repo rw
 --rw-share
-stage-rw:m-3d446ac1e1@/srv/data rw
---rw-share
 stage-rw:state--ssh@/mysbx-home/.ssh rw
+--rw-share
+stage-rw:m-3d446ac1e1@/srv/data rw
 --env
 HOME=/mysbx-home
 --env

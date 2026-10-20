@@ -40,8 +40,9 @@
 //! 3. `--ro-share`/`--rw-share TAG@DEST=DIR` — one per virtiofs
 //!    share. The ro store share (D3's default: the whole host
 //!    /nix/store, the same visibility the bwrap tier grants) comes
-//!    first, then the workspace, then every configured mount and
-//!    state-dir backing store. The virtiofs SERVER enforces the ro
+//!    first, then the workspace, the worktrees sibling (live runs,
+//!    when it exists), every state-dir backing store, then every
+//!    configured mount. The virtiofs SERVER enforces the ro
 //!    flag; the guest kernel cannot remount it (spike probe 2).
 //!    DEST is the GUEST path of the share mount — under
 //!    `/tmp/mysbx-shares/` on the guest tmpfs, never below another
@@ -133,6 +134,9 @@ pub const STAGE_RW_TAG: &str = "stage-rw";
 /// sidecar (`<sidecar>/krun-stage/<pid>/…`), the same per-run
 /// lifecycle as the git trust files.
 pub const STAGE_ROOT: &str = "/mysbx-krun-stage";
+
+/// The staging slot of the workmux `<repo>__worktrees` sibling.
+const WORKTREES_SLOT: &str = "worktrees";
 
 /// The manifest's slot inside the ro stage tree (krun-rootfs.nix's
 /// guest init reads it at GUEST_STAGE_RO/manifest; the launcher
@@ -287,6 +291,11 @@ pub enum Error {
     /// store share IS the /nix surface (dak.7's scratch store will
     /// need a deliberate placement of its own, not this hole).
     NixShareRoot { dest: String },
+    /// A configured mount's dest is at or above an implicit share
+    /// (the workspace or a `state-dirs` entry): the same refusal as
+    /// bwrap/podman (`HiddenMount`) — implicit shares are placed
+    /// first, so the mount would cover them.
+    HiddenMount { dest: String, hidden: String },
 }
 
 impl std::fmt::Display for Error {
@@ -314,6 +323,10 @@ impl std::fmt::Display for Error {
             Error::NixShareRoot { dest } => write!(
                 f,
                 "the mount dest `{dest}` sits below /nix, whose only surface is the store share — placing anything else there would mount a tmpfs over /nix and hide the baked /nix/store link, breaking every store-backed payload"
+            ),
+            Error::HiddenMount { dest, hidden } => write!(
+                f,
+                "mount {dest} would hide {hidden} — implicit binds are not configuration and always come first, so a dest may not cover them"
             ),
             Error::UnknownShareRoot { dest, root } => write!(
                 f,
@@ -490,6 +503,13 @@ pub fn stage_binds(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Vec<(Strin
         false,
         "workspace".to_owned(),
     ));
+    if let (Workspace::Live, Some(worktrees)) = (&params.workspace, &repo.worktrees) {
+        binds.push((
+            worktrees.to_string_lossy().into_owned(),
+            false,
+            WORKTREES_SLOT.to_owned(),
+        ));
+    }
     for mount in &cfg.mounts {
         let sandbox_path = mount.dest.clone().unwrap_or_else(|| mount.path.clone());
         // The forced-ro downgrade of a clone run (workspace.md D4):
@@ -534,7 +554,8 @@ pub fn stage_binds(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Vec<(Strin
 }
 
 /// The run's shares — the exact list [`krun_argv`] renders (store,
-/// workspace, mounts, state dirs, the two trust files). Extracted so
+/// workspace, worktrees sibling, state dirs, mounts, the two trust
+/// files). Extracted so
 /// the trust computation can map a SANDBOX path to its BACKING path
 /// without re-deriving the layout (bd myconfig-n4b).
 fn krun_shares(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Result<Vec<Share>, Error> {
@@ -555,9 +576,23 @@ fn krun_shares(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Result<Vec<Sha
         sandbox_path: repo.root.to_string_lossy().into_owned(),
         read_only: false,
     });
-    for mount in &cfg.mounts {
-        shares.push(share_of_mount(mount, &params.workspace)?);
+    // The workmux `<repo>__worktrees` sibling, rw at its real host
+    // path — implicit like the workspace and bound only in a live run
+    // and only when it exists ([`Repo::worktrees`]), the same rule as
+    // the bwrap/podman binds.
+    if let (Workspace::Live, Some(worktrees)) = (&params.workspace, &repo.worktrees) {
+        let sandbox_path = worktrees.to_string_lossy().into_owned();
+        check_share_root(&sandbox_path)?;
+        shares.push(Share {
+            slot: WORKTREES_SLOT.to_owned(),
+            sandbox_path,
+            read_only: false,
+        });
     }
+    // The implicit shares (workspace and worktrees above, state dirs here) come
+    // before every configured mount, like bwrap's bind order: the init
+    // places the shares in this order, so a mount below a state dir
+    // lands on top of it, and a mount at or above one is refused.
     if matches!(params.workspace, Workspace::Live) {
         for entry in cfg.effective_state_dirs() {
             shares.push(Share {
@@ -567,6 +602,26 @@ fn krun_shares(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Result<Vec<Sha
             });
         }
     }
+    // Each mount's own placement checks first (root-level, protected,
+    // unbaked roots), then the cover check against the implicit shares.
+    let mount_shares = cfg
+        .mounts
+        .iter()
+        .map(|m| share_of_mount(m, &params.workspace))
+        .collect::<Result<Vec<_>, _>>()?;
+    for mount in &cfg.mounts {
+        let dest = crate::bwrap::normalize(mount.dest.as_deref().unwrap_or(&mount.path));
+        if let Some(hidden) = shares[1..]
+            .iter()
+            .find(|s| crate::bwrap::normalize(&s.sandbox_path).starts_with(&dest))
+        {
+            return Err(Error::HiddenMount {
+                dest: dest.to_string_lossy().into_owned(),
+                hidden: hidden.sandbox_path.clone(),
+            });
+        }
+    }
+    shares.extend(mount_shares);
     // The host nix db ride-along (bd myconfig-j23) — the argv twin
     // of the stage_binds entry, same gate, LINKLESS (NOLINK_DEST).
     if cfg.network && params.scratch.is_some() {
