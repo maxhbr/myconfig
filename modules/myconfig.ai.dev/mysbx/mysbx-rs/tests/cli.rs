@@ -86,6 +86,11 @@ fn spawn_with_args<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> C
         .env_remove("MYSBX_WAYPIPE")
         .env_remove("MYSBX_PODMAN_WAYPIPE")
         .env_remove("MYSBX_WAYPIPE_SECCTX")
+        // The detached-run registry root is not a fixture input: a
+        // host-set value would make runs of this very sandbox depend
+        // on the machine's runtime dir. Tests that exercise the
+        // runtime-root refusal set it themselves.
+        .env_remove("XDG_RUNTIME_DIR")
         // Keep the host's TERM & co. out of the result: the forwarded set
         // must come only from variables the test actually sets. The list
         // is the same constant the pipeline reads — not a hand copy that
@@ -3818,6 +3823,231 @@ fn a_writable_mount_of_the_home_with_the_sidecar_is_refused_end_to_end() {
     assert!(
         stderr.contains("mysbx: ") && stderr.contains("policy file"),
         "unexpected stderr: {stderr}"
+    );
+}
+
+// ---- the runtime-root exposure refusal (detach.md B8) --------------
+
+/// The runtime-root fixture: a standard bubblewrap-user-backend
+/// fixture plus the `base/runtime` directory, so a test can set
+/// `XDG_RUNTIME_DIR` to it. The user config carries
+/// `extra_config` after the backend line; an empty `extra_config`
+/// leaves the fixture's own `backend` line in place.
+fn fixture_runtime_root(name: &str, extra_config: &str) -> (Invocation, PathBuf, PathBuf, PathBuf) {
+    let (inv, repo, sidecar) = fixture_user_backend(name, &["--dry-run"]);
+    let base = inv.cwd.parent().unwrap().to_path_buf();
+    let runtime = base.join("runtime");
+    std::fs::create_dir_all(&runtime).unwrap();
+    if !extra_config.is_empty() {
+        std::fs::write(
+            inv.xdg.join("mysbx").join("config.toml"),
+            format!("backend = \"bubblewrap\"\n{extra_config}"),
+        )
+        .unwrap();
+    }
+    (inv, repo, sidecar, runtime)
+}
+
+#[test]
+fn a_mount_exposing_the_runtime_root_is_refused_end_to_end() {
+    // detach.md B8: a sandbox that could reach the runtime root could
+    // connect to a dtach socket and type into every detached run of
+    // the user. A `[[mounts]]` source at the root, below it and above
+    // it is refused end to end — 70 and the runtime-root message —
+    // before the backend is executed: the first two iterations pin
+    // MYSBX_BWRAP to a missing binary and never reach it, the third
+    // runs as a plain dry run.
+    for (label, relative, bwrap) in [
+        ("at the root", "mysbx", true),
+        ("below the root", "mysbx/repo", true),
+        ("above the root ($XDG_RUNTIME_DIR itself)", "", false),
+    ] {
+        let (inv, _, _, runtime) = fixture_runtime_root(
+            &format!("expose-{}", label.replace([' ', '$', '(', ')'], "")),
+            "",
+        );
+        let source = if relative.is_empty() {
+            runtime.clone()
+        } else {
+            runtime.join(relative)
+        };
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::write(
+            inv.xdg.join("mysbx").join("config.toml"),
+            format!(
+                "backend = \"bubblewrap\"\n\n[[mounts]]\npath = {:?}\nmode = \"ro\"\n",
+                source.canonicalize().unwrap()
+            ),
+        )
+        .unwrap();
+        let mut cmd = spawn_with_args(&inv, &[] as &[&str]);
+        cmd.env("XDG_RUNTIME_DIR", &runtime);
+        if bwrap {
+            cmd.env("MYSBX_BWRAP", "/nonexistent-bwrap");
+        }
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert_eq!(
+            out.status.code(),
+            Some(mysbx::EXIT_INFRASTRUCTURE),
+            "{label}: stdout: {stdout}\nstderr: {stderr}"
+        );
+        assert!(
+            stderr.contains("runtime root") && stderr.contains("detach.md B8"),
+            "{label}: unexpected stderr: {stderr}"
+        );
+    }
+}
+
+#[test]
+fn a_flag_path_exposing_the_runtime_root_is_refused() {
+    // detach.md B8 for the flags: `--ro` and `--rw` may not expose
+    // the runtime root any more than a layer entry may — and the
+    // refusal precedes the `--dry-run` early return, so the audit
+    // refuses too.
+    for (flag, relative) in [("--ro", "mysbx"), ("--rw", "")] {
+        let (inv, _, _, runtime) = fixture_runtime_root(&format!("expose-flag-{flag}"), "");
+        let source = if relative.is_empty() {
+            runtime.clone()
+        } else {
+            runtime.join(relative)
+        };
+        std::fs::create_dir_all(&source).unwrap();
+        let mut cmd = spawn_with_args(&inv, &["--dry-run", flag]);
+        cmd.arg(&source);
+        cmd.env("XDG_RUNTIME_DIR", &runtime);
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert_eq!(
+            out.status.code(),
+            Some(mysbx::EXIT_INFRASTRUCTURE),
+            "{flag}: stdout: {stdout}\nstderr: {stderr}"
+        );
+        assert!(
+            stderr.contains("runtime root") && stderr.contains("detach.md B8"),
+            "{flag}: unexpected stderr: {stderr}"
+        );
+    }
+}
+
+#[test]
+fn a_mount_exposing_the_runtime_root_is_refused_on_every_backend() {
+    // detach.md B8 names every backend: the refusal sits in the
+    // pipeline before the backend check, so all five refuse. The
+    // krun family's dry runs need no pins beyond what the fixtures
+    // carry: the runtime-root refusal fires before the backend's
+    // own validation, so the guest-root path issues of this host
+    // never mask the runtime-root message.
+    for backend in ["bubblewrap", "nono", "podman-gvisor", "podman-krun", "krun"] {
+        let (inv, _, sidecar) = fixture(&format!("expose-{backend}"), &["--dry-run"]);
+        let base = inv.cwd.parent().unwrap().to_path_buf();
+        let runtime = base.join("runtime");
+        std::fs::create_dir_all(runtime.join("mysbx")).unwrap();
+        std::fs::write(
+            sidecar.join("config.toml"),
+            format!(
+                "backend = \"{backend}\"\n\n[[mounts]]\npath = {:?}\nmode = \"ro\"\n",
+                runtime.join("mysbx").canonicalize().unwrap()
+            ),
+        )
+        .unwrap();
+        let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+        cmd.env("XDG_RUNTIME_DIR", &runtime);
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert_eq!(
+            out.status.code(),
+            Some(mysbx::EXIT_INFRASTRUCTURE),
+            "{backend}: stdout: {stdout}\nstderr: {stderr}"
+        );
+        assert!(
+            stderr.contains("runtime root") && stderr.contains("detach.md B8"),
+            "{backend}: unexpected stderr: {stderr}"
+        );
+    }
+}
+
+#[test]
+fn a_waypipe_run_with_a_runtime_dir_still_starts() {
+    // detach.md B8: the waypipe socket bind
+    // (`$XDG_RUNTIME_DIR/<display>`) is a sibling of the runtime
+    // root, never a `Mount` — a waypipe run with the runtime dir
+    // set stays a valid dry run.
+    let (inv, repo, _) = fixture_display("expose-waypipe", &["--dry-run"]);
+    let waypipe = repo.join("fake-waypipe");
+    let runtime = inv.cwd.parent().unwrap().join("runtime");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_WAYPIPE", &waypipe);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.lines().any(|l| l == "server"),
+        "the guest waypipe server is still the payload prefix: {stdout}"
+    );
+}
+
+#[test]
+fn a_mount_of_a_sibling_of_the_runtime_root_is_allowed() {
+    // detach.md B8: the anchor is the `mysbx` child, not the runtime
+    // dir itself — a sibling like the waypipe socket path
+    // (`$XDG_RUNTIME_DIR/<display>`) is a legitimate mount.
+    let runtime = tmpdir("expose-sibling-cli");
+    let socket = runtime.join("wayland-0");
+    std::fs::write(&socket, "").unwrap();
+    let (inv, _, _, _) = fixture_runtime_root(
+        "expose-sibling",
+        &format!(
+            "\n[[mounts]]\npath = {:?}\nmode = \"ro\"\n",
+            socket.canonicalize().unwrap()
+        ),
+    );
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+#[test]
+fn a_mount_without_a_runtime_dir_is_allowed() {
+    // Without `$XDG_RUNTIME_DIR` there is no runtime root to expose:
+    // the check passes, and a foreground run in an environment
+    // without the variable does not break (the no-fallback rule of
+    // B3 governs detached runs, not this refusal).
+    let (inv, _, _, _) = fixture_runtime_root("expose-no-runtime-dir", "");
+    let granted = inv.cwd.parent().unwrap().join("granted");
+    std::fs::create_dir_all(&granted).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        format!(
+            "backend = \"bubblewrap\"\n\n[[mounts]]\npath = {:?}\nmode = \"ro\"\n",
+            granted.canonicalize().unwrap()
+        ),
+    )
+    .unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env_remove("XDG_RUNTIME_DIR");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
     );
 }
 

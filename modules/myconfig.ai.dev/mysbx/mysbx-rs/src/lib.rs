@@ -1939,6 +1939,26 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // report's provenance cut, one past the last configured entry.
     let cli_mount_count = flags.ro.len() + flags.rw.len();
 
+    // 3ab. the runtime-root exposure refusal (detach.md B8): a
+    // process that can connect to a dtach socket can type into
+    // that terminal, so a mount whose source is
+    // `$XDG_RUNTIME_DIR/mysbx` — or below or above it — would let
+    // the sandbox reach the registry of detached runs, including
+    // runs of other repos with other grants. Every run is refused,
+    // detached or not (a foreground run could reach detached ones
+    // just the same), before the backend check and before the
+    // `--dry-run` early return, so a dry run audits the refusal
+    // too. The waypipe socket bind is a sibling
+    // (`$XDG_RUNTIME_DIR/<display>`), never a `Mount`, and stays
+    // allowed. An unset or relative `$XDG_RUNTIME_DIR` passes:
+    // there is no runtime root to expose.
+    if let Err(e) =
+        detach::check_mount_exposure(detach::runtime_dir_from_env().as_deref(), &merged.mounts)
+    {
+        eprintln!("mysbx: {e}");
+        return EXIT_INFRASTRUCTURE;
+    }
+
     // 3b. the state-dir backing stores (docs/design/config.md D15):
     // one directory per merged `state-dirs` entry under
     // `<sidecar>/state/`, so the rw binds of the argv have an existing

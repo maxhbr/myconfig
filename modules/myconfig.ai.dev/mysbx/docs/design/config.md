@@ -250,7 +250,9 @@ no mount `dest` may overwrite a protected sandbox path (`/`,
 resolve through writable content, and the repo root itself may not be
 `$HOME`, a directory CONTAINING `$HOME` (review-4 item 2 — the repo is
 bound `rw`, so a marker above the home would expose the whole home) or
-`/` (`repo.rs`).
+`/` (`repo.rs`), and no mount source may be — or lie below or above —
+the runtime root `$XDG_RUNTIME_DIR/mysbx`, the registry of detached
+runs (detach.md B8).
 
 ### D8: Paths are resolved eagerly, to absolute paths
 

@@ -1,7 +1,7 @@
 // Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 // SPDX-License-Identifier: MIT
 //! The runtime-root registry of detached runs (docs/design/detach.md
-//! B3, B5, B6).
+//! B3, B5, B6, B8).
 //!
 //! A detached run is registered in the runtime root, not in the
 //! sidecar: `$XDG_RUNTIME_DIR/mysbx/<fnv1a10(repo root)>/`, holding
@@ -30,7 +30,8 @@
 //!
 //! This module is pure data and filesystem plumbing: no CLI, no
 //! process spawning. Every function takes the runtime root as a
-//! parameter; only [`runtime_root_from_env`] reads the environment,
+//! parameter; only [`runtime_root_from_env`] and
+//! [`runtime_dir_from_env`] read the environment,
 //! so the tests never mutate it. Zero dependencies, like the rest of
 //! the crate.
 
@@ -195,6 +196,18 @@ pub enum Error {
     /// contention, reported separately from an unusable registry so
     /// the caller can tell the two apart.
     LockContended { path: PathBuf },
+    /// A mount source is — or lies below or above — the runtime root
+    /// (detach.md B8): a sandbox that could reach the registry could
+    /// connect to a dtach socket and type into every detached run
+    /// of the user.
+    RuntimeRootExposed {
+        /// The mount source, canonicalized.
+        source: PathBuf,
+        /// The runtime root it exposes.
+        runtime_root: PathBuf,
+        /// How the source relates to the runtime root.
+        relation: RuntimeRootRelation,
+    },
 }
 
 impl fmt::Display for Error {
@@ -261,6 +274,24 @@ impl fmt::Display for Error {
                  held by another detached run (detach.md B6)",
                 path.display()
             ),
+            Error::RuntimeRootExposed {
+                source,
+                runtime_root,
+                relation,
+            } => write!(
+                f,
+                "the mount source {} {} the runtime root {} \
+                 ($XDG_RUNTIME_DIR/mysbx, the registry of detached runs) — \
+                 a sandbox that could reach it could type into every \
+                 detached run of the user (detach.md B8)",
+                source.display(),
+                match relation {
+                    RuntimeRootRelation::Equal => "is",
+                    RuntimeRootRelation::Below => "is below",
+                    RuntimeRootRelation::Above => "is above",
+                },
+                runtime_root.display()
+            ),
         }
     }
 }
@@ -268,12 +299,98 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {}
 
 /// Read `$XDG_RUNTIME_DIR` (detach.md B3): unset or relative is
-/// refused, `/tmp` is never used as a fallback. The only function in
-/// this module that touches the environment — everything else takes
-/// the root as a parameter, so the tests never mutate it.
+/// refused, `/tmp` is never used as a fallback. Reads the
+/// environment, like [`runtime_dir_from_env`]; everything else
+/// takes the root as a parameter, so the tests never mutate it.
 pub fn runtime_root_from_env() -> Result<PathBuf, Error> {
     let raw = std::env::var("XDG_RUNTIME_DIR").ok();
     runtime_root_from(raw.as_deref())
+}
+
+/// Read `$XDG_RUNTIME_DIR` for the B8 mount refusal: unset or
+/// relative passes there, unlike [`runtime_root_from_env`], which
+/// refuses both — the seam the pipeline reads instead of the
+/// variable itself.
+pub fn runtime_dir_from_env() -> Option<std::ffi::OsString> {
+    std::env::var_os("XDG_RUNTIME_DIR")
+}
+
+/// How a mount source relates to the runtime root
+/// `$XDG_RUNTIME_DIR/mysbx` (detach.md B8): a source that IS it,
+/// lies below it or contains it exposes the registry of detached
+/// runs to the sandbox.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeRootRelation {
+    /// The source IS the runtime root.
+    Equal,
+    /// The source lies below the runtime root
+    /// (`$XDG_RUNTIME_DIR/mysbx/<repo>`).
+    Below,
+    /// The source contains the runtime root (`$XDG_RUNTIME_DIR`,
+    /// `/run/user`, `/run`, `/`).
+    Above,
+}
+
+/// The registry root a raw `$XDG_RUNTIME_DIR` value names:
+/// `<runtime_dir>/mysbx`, with a raw-value fallback on either
+/// canonicalization — the `home_canon` precedent in `merge.rs`'s
+/// `merge` and `resolve_cli_path` — so a symlinked runtime dir and
+/// a pre-existing `mysbx` symlink anchor the refusal at the real
+/// registry location, and the not-yet-existing `mysbx/` child
+/// needs no filesystem probe.
+fn registry_root_from(runtime_dir: &Path) -> PathBuf {
+    let dir = std::fs::canonicalize(runtime_dir).unwrap_or_else(|_| runtime_dir.to_path_buf());
+    let root = dir.join("mysbx");
+    std::fs::canonicalize(&root).unwrap_or(root)
+}
+
+/// Refuse a mount whose source is the runtime root, below it or
+/// above it (detach.md B8): a process that can connect to a dtach
+/// socket can type into that terminal, so a sandbox that could reach
+/// `$XDG_RUNTIME_DIR/mysbx/` could type into every detached run of
+/// the user — including runs of other repos with other grants. This
+/// is a refusal of every run, detached or not: a foreground run
+/// could reach detached ones just the same.
+///
+/// An unset or relative `$XDG_RUNTIME_DIR` passes: without a
+/// runtime root there is nothing at, below or above to refuse —
+/// detached runs refuse the variable themselves (B3, no fallback),
+/// but a foreground run must not break over an environment without
+/// it. Pure, so the tests never mutate the environment; the mount
+/// sources are the merge's canonicalized values (config.md D8),
+/// compared as stored.
+pub fn check_mount_exposure(
+    runtime_dir: Option<&std::ffi::OsStr>,
+    mounts: &[crate::config::Mount],
+) -> Result<(), Error> {
+    let Some(raw) = runtime_dir else {
+        return Ok(());
+    };
+    let dir = Path::new(raw);
+    if !dir.is_absolute() {
+        return Ok(());
+    }
+    let root = registry_root_from(dir);
+    for m in mounts {
+        let source = Path::new(&m.path);
+        let relation = if source == root {
+            Some(RuntimeRootRelation::Equal)
+        } else if source.starts_with(&root) {
+            Some(RuntimeRootRelation::Below)
+        } else if root.starts_with(source) {
+            Some(RuntimeRootRelation::Above)
+        } else {
+            None
+        };
+        if let Some(relation) = relation {
+            return Err(Error::RuntimeRootExposed {
+                source: source.to_path_buf(),
+                runtime_root: root,
+                relation,
+            });
+        }
+    }
+    Ok(())
 }
 
 /// Interpret the raw `$XDG_RUNTIME_DIR` value (detach.md B3): unset
@@ -1070,6 +1187,137 @@ mod tests {
         let p = paths(root, Path::new("/src/repo"), &Workspace::Live).unwrap();
         ensure(&p).unwrap();
         p
+    }
+
+    fn mount_at(path: &str) -> crate::config::Mount {
+        crate::config::Mount {
+            path: path.to_owned(),
+            dest: None,
+            mode: crate::config::Mode::Ro,
+            file: false,
+        }
+    }
+
+    // ---- the mount refusal (detach.md B8) ---------------------------
+
+    #[test]
+    fn a_mount_at_the_runtime_root_is_refused() {
+        let root = tmpdir("expose-equal");
+        let source = root.join("mysbx");
+        std::fs::create_dir_all(&source).unwrap();
+        match check_mount_exposure(
+            Some(root.as_os_str()),
+            &[mount_at(source.to_str().unwrap())],
+        ) {
+            Err(Error::RuntimeRootExposed {
+                source,
+                runtime_root,
+                relation: RuntimeRootRelation::Equal,
+            }) => {
+                assert_eq!(source, root.join("mysbx"));
+                assert_eq!(runtime_root, root.join("mysbx"));
+            }
+            other => panic!("expected RuntimeRootExposed, got {other:?}"),
+        }
+        // The message names the runtime root and the decision.
+        let msg = Error::RuntimeRootExposed {
+            source: root.join("mysbx"),
+            runtime_root: root.join("mysbx"),
+            relation: RuntimeRootRelation::Equal,
+        }
+        .to_string();
+        assert!(msg.contains("runtime root"), "{msg}");
+        assert!(msg.contains("detach.md B8"), "{msg}");
+    }
+
+    #[test]
+    fn a_mount_below_the_runtime_root_is_refused() {
+        let root = tmpdir("expose-below");
+        let source = root.join("mysbx").join("repo");
+        match check_mount_exposure(
+            Some(root.as_os_str()),
+            &[mount_at(source.to_str().unwrap())],
+        ) {
+            Err(Error::RuntimeRootExposed { relation, .. }) => {
+                assert_eq!(relation, RuntimeRootRelation::Below);
+            }
+            other => panic!("expected RuntimeRootExposed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_mount_above_the_runtime_root_is_refused() {
+        for above in ["/run/user/1000", "/run/user", "/run", "/"] {
+            match check_mount_exposure(
+                Some(std::ffi::OsStr::new("/run/user/1000")),
+                &[mount_at(above)],
+            ) {
+                Err(Error::RuntimeRootExposed { relation, .. }) => {
+                    assert_eq!(relation, RuntimeRootRelation::Above, "{above}");
+                }
+                other => panic!("{above}: expected RuntimeRootExposed, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn a_mount_of_a_sibling_of_the_runtime_root_is_allowed() {
+        let root = tmpdir("expose-sibling");
+        let sibling = root.join("wayland-0");
+        std::fs::write(&sibling, "").unwrap();
+        check_mount_exposure(
+            Some(root.as_os_str()),
+            &[mount_at(sibling.to_str().unwrap())],
+        )
+        .expect("a sibling of the runtime root is not the runtime root");
+    }
+
+    #[test]
+    fn a_mount_without_a_runtime_dir_is_allowed() {
+        check_mount_exposure(None, &[mount_at("/run")])
+            .expect("no runtime root, nothing to refuse");
+    }
+
+    #[test]
+    fn a_mount_with_a_relative_runtime_dir_is_allowed() {
+        check_mount_exposure(
+            Some(std::ffi::OsStr::new("relative/run")),
+            &[mount_at("/run")],
+        )
+        .expect("a relative runtime dir names no runtime root");
+    }
+
+    #[test]
+    fn a_symlinked_runtime_dir_refuses_the_real_target() {
+        let real = tmpdir("expose-symlink-real");
+        let link = tmpdir("expose-symlink-link");
+        let _ = std::fs::remove_dir_all(&link);
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        let source = real.join("mysbx").join("repo");
+        match check_mount_exposure(
+            Some(link.as_os_str()),
+            &[mount_at(source.to_str().unwrap())],
+        ) {
+            Err(Error::RuntimeRootExposed { relation, .. }) => {
+                assert_eq!(relation, RuntimeRootRelation::Below);
+            }
+            other => panic!("expected RuntimeRootExposed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_symlinked_mysbx_child_refuses_the_real_target() {
+        let real = tmpdir("expose-symlink-mysbx-real");
+        let runtime = tmpdir("expose-symlink-mysbx-runtime");
+        std::fs::create_dir_all(real.join("repo")).unwrap();
+        std::os::unix::fs::symlink(&real, runtime.join("mysbx")).unwrap();
+        let source = real.to_str().unwrap();
+        match check_mount_exposure(Some(runtime.as_os_str()), &[mount_at(source)]) {
+            Err(Error::RuntimeRootExposed { relation, .. }) => {
+                assert_eq!(relation, RuntimeRootRelation::Equal);
+            }
+            other => panic!("expected RuntimeRootExposed, got {other:?}"),
+        }
     }
 
     // ---- state round-trip (detach.md B5) -----------------------------
