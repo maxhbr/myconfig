@@ -86,6 +86,14 @@ fn spawn_with_args<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> C
         .env_remove("MYSBX_WAYPIPE")
         .env_remove("MYSBX_PODMAN_WAYPIPE")
         .env_remove("MYSBX_WAYPIPE_SECCTX")
+        // The detached-run pins and markers (docs/design/detach.md
+        // B4/B10) are wrapper- or dtach-provided: a wrapped mysbx on
+        // PATH, or a test runner under a `mysbx --detach` itself,
+        // would otherwise leak the dtach pin or the inner marker into
+        // tests that must exercise the refusal paths and the plain
+        // foreground runs.
+        .env_remove("MYSBX_DTACH")
+        .env_remove("MYSBX_DETACHED")
         // The detached-run registry root is not a fixture input: a
         // host-set value would make runs of this very sandbox depend
         // on the machine's runtime dir. Tests that exercise the
@@ -10331,5 +10339,880 @@ fn podman_gvisor_carries_no_trust_file() {
     assert!(
         !sidecar.join("gittrust").exists(),
         "the gvisor run must not create the trust file"
+    );
+}
+
+// ---- `mysbx --detach` (docs/design/detach.md B1-B10) -----------------------
+
+/// A stub `dtach` for the launch tests: it records its own argv (one
+/// argument per line, the `dtach` executable first) into a fixed
+/// record file — baked into the script text like `bwrap_stub` does,
+/// because the child's environment is not the test's to reach — and
+/// — variant 1 — drops the four fixed dtach arguments (`-n <sock>`
+/// and `-r winch`) and `exec`s what remains (the inner mysbx and
+/// its arguments), so the handshake completes through a real
+/// mysbx; variant 2 records and exits 1 (a dtach that dies during
+/// startup). Written with the mode bits of a script because the
+/// outer spawns it directly.
+fn dtach_stub(base: &Path, exec_inner: bool) -> (PathBuf, PathBuf) {
+    let record = base.join("dtach-record.txt");
+    let stub = base.join("dtach-stub");
+    let tail = if exec_inner {
+        format!(
+            "shift 4\nprintf '%s\\n' \"$@\" > {}\nexec \"$@\"\n",
+            record.display()
+        )
+    } else {
+        format!("printf '%s\\n' \"$@\" > {}\nexit 1\n", record.display())
+    };
+    std::fs::write(&stub, format!("#!/bin/sh\n{tail}")).unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+    (stub, record)
+}
+
+/// A stub `bwrap`: records its own argv, sleeps until `$BWRAP_LIVE`
+/// appears (the test controls how long the "backend" runs), then
+/// exits with `$BWRAP_EXIT` (default 0).
+fn bwrap_stub(base: &Path) -> (PathBuf, PathBuf) {
+    let record = base.join("bwrap-record.txt");
+    let stub = base.join("bwrap-stub");
+    std::fs::write(
+        &stub,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\n\
+             while [ ! -e \"$BWRAP_LIVE\" ]; do sleep 0.05; done\nexit \"${{BWRAP_EXIT:-0}}\"\n",
+            record.display()
+        ),
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+    (stub, record)
+}
+
+/// A SHORT runtime root for a detached-run test: the socket paths a
+/// run computes are capped by the kernel's sun_path, and the sandbox
+/// a `nix build` runs in has a deep $TMPDIR — the fixture's tmpdir
+/// tree is too long there, so the registry root gets its own short
+/// directory right under $TMPDIR.
+fn short_runtime_root(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("mysbx-drt-{name}"));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+/// The registry paths of a live-workspace detached run for `repo`
+/// under `runtime` — the layout of detach.md B3/B5, computed the same
+/// way the binary computes them, so a test reads the record without
+/// re-deriving the hash by hand.
+fn detach_paths_live(runtime: &Path, repo: &Path) -> mysbx::detach::Paths {
+    mysbx::detach::paths(runtime, repo, &mysbx::detach::Workspace::Live)
+        .expect("the registry paths build")
+}
+
+/// Read a detached run's registry record (B5), polling until the
+/// state file names a state other than `starting` — the outer's
+/// handshake waits the same way, and a test that reads `starting`
+/// would race the inner's writes. The reader is the crate's own
+/// [`mysbx::detach::read`], so the test parses exactly what a later
+/// `attach` (bd myconfig-7ioq.5) will parse.
+fn wait_for_record(paths: &mysbx::detach::Paths) -> mysbx::detach::Record {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        if let Ok(rec) = mysbx::detach::read(paths) {
+            if rec.state != mysbx::detach::State::Starting {
+                return rec;
+            }
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the detached run never left `starting`: {}",
+            std::fs::read_to_string(&paths.json).unwrap_or_default()
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+}
+
+#[test]
+fn detach_is_refused_on_every_verb() {
+    // B2: `--detach` selects the bare form's start mode; every verb
+    // rejects it with the shared usage error (exit 2), naming the
+    // flag — the same arm that rejects `--dry-run` and friends.
+    let (inv, _, _) = fixture("detach-on-verb", &["--detach", "status"]);
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 2, "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stderr.contains("mysbx: --detach is not valid with `status`"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn detachable_is_refused_with_the_bead_named() {
+    // B2's composition half: `--detachable` is bd myconfig-7ioq.5's
+    // flag — parsed, refused with `2`, the bead named, never
+    // accepted-and-ignored.
+    let (inv, _, _) = fixture("detachable-refused", &[]);
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--detachable"]);
+    assert_eq!(code, 2, "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stderr.contains("--detachable is not implemented yet (bd myconfig-7ioq.5)"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn detach_and_detachable_are_refused_together() {
+    // B2: the two start modes of one detached run, never both in one
+    // invocation — the one-run rule every selection flag follows.
+    let (inv, _, _) = fixture("detach-detachable-both", &[]);
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--detach", "--detachable"]);
+    assert_eq!(code, 2, "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stderr.contains("--detach and --detachable are two ways to start one detached run"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn detach_is_refused_inside_a_detached_run() {
+    // B4 step 3: a nested `--detach` would start a second run for a
+    // workspace that has one — refused before anything runs, the
+    // marker named as the reason.
+    let (inv, _, _) = fixture("detach-nested", &[]);
+    let mut cmd = spawn_with_args(&inv, &["--detach"]);
+    cmd.env("MYSBX_DETACHED", "/synth/sock");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("--detach is not valid inside a detached run"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn detach_requires_a_usable_dtach() {
+    // B10: without a pin and without `dtach` on PATH the outer refuses
+    // with 70, naming MYSBX_DTACH — the same refusal a nix-less host
+    // gives. The state file of the aborted launch is REMOVED: nothing
+    // is registered when no child exists.
+    let (inv, repo, _) = fixture_with_backend("detach-no-dtach", &["--detach"]);
+    let runtime = short_runtime_root("no-dtach");
+    std::fs::create_dir_all(&runtime).unwrap();
+    std::fs::create_dir_all(inv.home.join("empty-path")).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--detach"]);
+    cmd.env_remove("MYSBX_DTACH")
+        .env("PATH", inv.home.join("empty-path"))
+        .env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(mysbx::EXIT_INFRASTRUCTURE));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("--detach requires a usable dtach (MYSBX_DTACH)"),
+        "{stderr}"
+    );
+    // No state file survives the refusal (B4: the pre-spawn failures
+    // remove the record, so nothing is registered without a child).
+    let paths = mysbx::detach::paths(
+        &runtime,
+        &repo.canonicalize().unwrap(),
+        &mysbx::detach::Workspace::Live,
+    )
+    .unwrap();
+    assert!(!paths.json.exists(), "the state file was removed");
+}
+
+#[test]
+fn detach_dry_run_prints_the_dtach_launcher_and_the_backend_argv() {
+    // B9: `--detach --dry-run` audits the launch — the dtach argv, a
+    // blank line, then the backend argv the inner run would spawn —
+    // and creates nothing: no registry directory, no state file.
+    let (inv, repo, _) = fixture_with_backend("detach-dry-run", &["--detach", "--dry-run"]);
+    let (dtach, _) = dtach_stub(&inv.home, true);
+    let runtime = short_runtime_root("dry");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--detach", "--dry-run"]);
+    cmd.env("MYSBX_DTACH", &dtach)
+        .env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    let lines: Vec<&str> = stdout.lines().collect();
+    // The launcher half: the pinned dtach first (B10: the audit
+    // names the resolved binary, never a bare PATH lookup).
+    assert_eq!(
+        lines[0],
+        dtach.to_string_lossy(),
+        "argv[0] is the pinned dtach: {stdout}"
+    );
+    assert_eq!(lines[1], "-n");
+    let sock = &lines[2];
+    let canonical = repo.canonicalize().unwrap();
+    let expected_paths =
+        mysbx::detach::paths(&runtime, &canonical, &mysbx::detach::Workspace::Live).unwrap();
+    assert_eq!(
+        Path::new(sock),
+        expected_paths.sock,
+        "the socket path is the registry's: {stdout}"
+    );
+    assert_eq!(lines[3], "-r");
+    assert_eq!(lines[4], "winch");
+    let self_exe = Path::new(lines[5]);
+    assert!(
+        self_exe.is_absolute(),
+        "the inner mysbx is spawned by absolute path: {stdout}"
+    );
+    // One blank line, then the backend argv — with the detachable
+    // mark the inner run's argv carries (B7).
+    let blank = lines.iter().position(|l| l.is_empty()).expect("blank line");
+    assert_eq!(&lines[blank + 1], &"bwrap", "the backend argv follows");
+    assert!(
+        stdout.contains("MYSBX_DETACHABLE"),
+        "the inner backend argv carries the mark: {stdout}"
+    );
+    // Nothing was created: no registry directory, no state file.
+    assert!(
+        !expected_paths.dir.exists(),
+        "the dry run created the registry dir"
+    );
+    assert!(
+        !expected_paths.json.exists(),
+        "the dry run created the state file"
+    );
+    assert!(
+        !expected_paths.sock.exists(),
+        "the dry run created the socket"
+    );
+}
+
+#[test]
+fn detach_dry_run_refuses_the_podman_backends() {
+    // B9 + bd myconfig-cad: the podman backends refuse `--detach`
+    // even under `--dry-run` — the audit must see the refusal, not
+    // the launch of an unsafe one.
+    let (inv, _, sidecar) = fixture("detach-podman-refusal", &["--detach", "--dry-run"]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"podman-gvisor\"\n").unwrap();
+    let runtime = short_runtime_root("podman");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--detach", "--dry-run"]);
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest")
+        .env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(mysbx::EXIT_INFRASTRUCTURE));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("--detach is not supported on the `podman-gvisor` backend")
+            && stderr.contains("bd myconfig-cad"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn a_detach_of_a_real_run_detaches_and_hands_the_attach_hint() {
+    if !is_ssh_keygen_available() {
+        return; // no usable ssh-keygen (the baseline env's uid-0 quirk)
+    }
+    // B4 step 4: the outer returns 0 once the inner spawned the
+    // backend — the state file says `running` — and its stderr names
+    // `mysbx attach` (the composition command of bd myconfig-7ioq.5).
+    // The stub dtach execs the inner mysbx for real; the stub bwrap
+    // runs until the test drops the live marker.
+    let (inv, repo, sidecar) = fixture_with_backend("detach-happy", &["--detach"]);
+    let _ = &sidecar;
+    let (dtach, dtach_record) = dtach_stub(&inv.home, true);
+    let (bwrap, bwrap_record) = bwrap_stub(&inv.home);
+    let runtime = short_runtime_root("happy");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let paths = detach_paths_live(&runtime, &repo.canonicalize().unwrap());
+    let mut cmd = spawn_with_args(&inv, &["--detach"]);
+    cmd.env("MYSBX_DTACH", &dtach)
+        .env("MYSBX_BWRAP", &bwrap)
+        .env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .env("XDG_RUNTIME_DIR", &runtime)
+        .env("BWRAP_LIVE", inv.home.join("bwrap-live"));
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        stderr.contains("mysbx: detached; attach with: mysbx attach"),
+        "{stderr}"
+    );
+    // The launch argv reached dtach: the inner mysbx it execs, by
+    // absolute path — the same executable as the outer (B4 step 2).
+    // The bare form passes no inner arguments, so the record is the
+    // executable alone.
+    let recorded = std::fs::read_to_string(&dtach_record).unwrap();
+    let rl: Vec<&str> = recorded.lines().collect();
+    assert_eq!(
+        rl,
+        vec![rl.first().copied().unwrap_or("")],
+        "the bare form's inner argv is the mysbx executable alone: {recorded}"
+    );
+    assert!(
+        Path::new(rl[0]).is_absolute(),
+        "the inner mysbx: {recorded}"
+    );
+    let self_exe = std::fs::canonicalize(env!("CARGO_BIN_EXE_mysbx")).unwrap();
+    assert_eq!(
+        std::fs::canonicalize(rl[0]).unwrap(),
+        self_exe,
+        "the inner is the SAME executable as the outer (B4): {recorded}"
+    );
+    // The backend the inner spawned runs detached: the stub's argv
+    // record arrives — polled, because the outer returns on the
+    // `running` state file, which the inner writes right after the
+    // spawn, before the stub's shell has written anything.
+    let rec = wait_for_record(&paths);
+    assert_eq!(rec.state, mysbx::detach::State::Running);
+    assert_eq!(rec.backend, "bubblewrap");
+    let _recorded_bwrap = wait_for_file(&bwrap_record);
+    // Let the backend exit 0 and read the terminal record.
+    std::fs::write(inv.home.join("bwrap-live"), "").unwrap();
+    let rec = wait_for_finished_record(&paths);
+    assert_eq!(rec.state, mysbx::detach::State::Exited);
+    assert_eq!(rec.exit_code, Some(0));
+}
+
+/// Poll until the registry record reaches a terminal state — the
+/// counterpart of [`wait_for_record`] for the end of a run.
+fn wait_for_finished_record(paths: &mysbx::detach::Paths) -> mysbx::detach::Record {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        if let Ok(rec) = mysbx::detach::read(paths) {
+            if rec.state.is_finished() {
+                return rec;
+            }
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the detached run never finished: {}",
+            std::fs::read_to_string(&paths.json).unwrap_or_default()
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+}
+
+#[test]
+fn a_detached_run_that_fails_the_startup_records_the_error_and_the_outer_reports_70() {
+    if !is_ssh_keygen_available() {
+        return; // no usable ssh-keygen (the baseline env's uid-0 quirk)
+    }
+    // B4/B5: a startup that fails only in the inner (here: the
+    // backend binary named by the pin does not exist — the outer's
+    // pre-flight does not spawn anything, so nothing refuses in the
+    // foreground) ends `failed` with the spawn's own diagnosis in
+    // `error`, and the OUTER reports it with 70 — the same diagnosis
+    // an interactive run would print, through the handshake.
+    let (inv, repo, _) = fixture_with_backend("detach-startup-fail", &["--detach"]);
+    let (dtach, _) = dtach_stub(&inv.home, true);
+    let runtime = short_runtime_root("startup-fail");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let paths = detach_paths_live(&runtime, &repo.canonicalize().unwrap());
+    let mut cmd = spawn_with_args(&inv, &["--detach"]);
+    cmd.env("MYSBX_DTACH", &dtach)
+        .env("MYSBX_BWRAP", inv.home.join("no-such-bwrap"))
+        .env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(mysbx::EXIT_INFRASTRUCTURE));
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        stderr.contains("mysbx: the detached run failed during startup:"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("cannot exec the backend"),
+        "the spawn's diagnosis is the reported error: {stderr}"
+    );
+    let rec = wait_for_finished_record(&paths);
+    assert_eq!(rec.state, mysbx::detach::State::Failed);
+    assert!(
+        rec.error
+            .unwrap_or_default()
+            .contains("cannot exec the backend"),
+        "the refusal is the recorded diagnosis"
+    );
+}
+
+#[test]
+fn a_detached_run_whose_backend_exits_nonzero_records_the_exit_code() {
+    if !is_ssh_keygen_available() {
+        return; // no usable ssh-keygen (the baseline env's uid-0 quirk)
+    }
+    // B5: the terminal record of a failed payload run carries the
+    // backend's own exit code. The backend is held alive until the
+    // outer has RETURNED (the live marker is created only after the
+    // outer's exit): the outer reports the handshake of a `running`
+    // run and exits 0 — a detached run that STARTED succeeded, its
+    // payload's fate is the record's to tell — and only then does the
+    // test let the backend exit 42, so the finished record cannot
+    // race the outer's handshake poll.
+    let (inv, repo, _) = fixture_with_backend("detach-exit-code", &["--detach"]);
+    let (dtach, _) = dtach_stub(&inv.home, true);
+    let (bwrap, _) = bwrap_stub(&inv.home);
+    let runtime = short_runtime_root("exit-code");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let paths = detach_paths_live(&runtime, &repo.canonicalize().unwrap());
+    let mut cmd = spawn_with_args(&inv, &["--detach"]);
+    cmd.env("MYSBX_DTACH", &dtach)
+        .env("MYSBX_BWRAP", &bwrap)
+        .env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .env("XDG_RUNTIME_DIR", &runtime)
+        .env("BWRAP_LIVE", inv.home.join("bwrap-live"))
+        .env("BWRAP_EXIT", "42");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    // Only now may the backend fail: the outer is gone, its handshake
+    // cannot race the terminal record.
+    std::fs::write(inv.home.join("bwrap-live"), "").unwrap();
+    let rec = wait_for_finished_record(&paths);
+    assert_eq!(rec.state, mysbx::detach::State::Failed);
+    assert_eq!(rec.exit_code, Some(42));
+    assert!(rec.finished_at.is_some());
+}
+
+#[test]
+fn a_second_detach_for_the_same_workspace_is_refused_with_the_attach_hint() {
+    // B3: one detached run per workspace — the live socket of the
+    // first run refuses the second launch with 70 and names
+    // `mysbx attach`, the command that reconnects. The socket is the
+    // probe's object, so the test binds a listening one at the
+    // registry's path directly — the same object a real dtach master
+    // holds — and the second launch needs no first child at all.
+    let (inv, repo, _) = fixture_with_backend("detach-second", &["--detach"]);
+    let (dtach, _) = dtach_stub(&inv.home, true);
+    let runtime = short_runtime_root("second");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let paths = mysbx::detach::paths(
+        &runtime,
+        &repo.canonicalize().unwrap(),
+        &mysbx::detach::Workspace::Live,
+    )
+    .unwrap();
+    mysbx::detach::ensure(&paths).unwrap();
+    let _listener = std::os::unix::net::UnixListener::bind(&paths.sock)
+        .expect("the test holds the socket of the first run");
+    let mut second = spawn_with_args(&inv, &["--detach"]);
+    second
+        .env("MYSBX_DTACH", &dtach)
+        .env("XDG_RUNTIME_DIR", &runtime);
+    let second = second.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(second.status.code(), Some(mysbx::EXIT_INFRASTRUCTURE));
+    let stderr = String::from_utf8_lossy(&second.stderr).into_owned();
+    assert!(
+        stderr.contains("mysbx attach"),
+        "the refusal names the command that reconnects: {stderr}"
+    );
+}
+
+#[test]
+fn a_detached_session_run_uses_the_session_registry_entry() {
+    if !is_ssh_keygen_available() {
+        return; // no usable ssh-keygen (the baseline env's uid-0 quirk)
+    }
+    // B3: the registry entry is per workspace — the live repo and a
+    // session clone have separate sockets and state files, so a
+    // detached session run and a detached live run do not collide.
+    // The session workspace needs a real git repo for the clone.
+    let Some((inv, repo, _sidecar)) =
+        git_session_fixture("detach-session", &["--session", "fix-1", "--detach"])
+    else {
+        return; // no git on PATH: skip, like the session tests
+    };
+    let (dtach, _) = dtach_stub(&inv.home, true);
+    let (bwrap, _) = bwrap_stub(&inv.home);
+    let runtime = short_runtime_root("session");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let paths = mysbx::detach::paths(
+        &runtime,
+        &repo.canonicalize().unwrap(),
+        &mysbx::detach::Workspace::Session("fix-1".to_owned()),
+    )
+    .unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--session", "fix-1", "--detach"]);
+    cmd.env("MYSBX_DTACH", &dtach)
+        .env("MYSBX_BWRAP", &bwrap)
+        .env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .env("XDG_RUNTIME_DIR", &runtime)
+        .env("BWRAP_LIVE", inv.home.join("bwrap-live"));
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let rec = wait_for_record(&paths);
+    assert_eq!(rec.state, mysbx::detach::State::Running);
+    assert_eq!(rec.session.as_deref(), Some("fix-1"));
+    // The live workspace has no record: one entry per workspace.
+    let live_paths = detach_paths_live(&runtime, &repo.canonicalize().unwrap());
+    assert!(!live_paths.json.exists(), "the live entry was not written");
+    // Finish the run.
+    std::fs::write(inv.home.join("bwrap-live"), "").unwrap();
+    wait_for_finished_record(&paths);
+}
+
+#[test]
+fn a_detached_run_creates_a_private_registry_directory() {
+    if !is_ssh_keygen_available() {
+        return; // no usable ssh-keygen (the baseline env's uid-0 quirk)
+    }
+    // B3: the registry directory the outer creates is owned by the
+    // current user and private (0700) — the socket grants the
+    // sandbox, the directory that holds it must not be readable by
+    // anybody else.
+    let (inv, repo, _) = fixture_with_backend("detach-registry-mode", &["--detach"]);
+    let (dtach, _) = dtach_stub(&inv.home, true);
+    let (bwrap, _) = bwrap_stub(&inv.home);
+    let runtime = short_runtime_root("registry-mode");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--detach"]);
+    cmd.env("MYSBX_DTACH", &dtach)
+        .env("MYSBX_BWRAP", &bwrap)
+        .env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .env("XDG_RUNTIME_DIR", &runtime)
+        .env("BWRAP_LIVE", inv.home.join("bwrap-live"));
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(0));
+    use std::os::unix::fs::PermissionsExt;
+    let paths = mysbx::detach::paths(
+        &runtime,
+        &repo.canonicalize().unwrap(),
+        &mysbx::detach::Workspace::Live,
+    )
+    .unwrap();
+    let mode = std::fs::metadata(&paths.dir)
+        .expect("the registry dir exists")
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o777, 0o700, "private by mode");
+    {
+        use std::os::unix::fs::MetadataExt;
+        assert_eq!(
+            std::fs::metadata(&paths.dir).unwrap().uid(),
+            nix_uid_of_current_user(),
+            "owned by the current user"
+        );
+    }
+    std::fs::write(inv.home.join("bwrap-live"), "").unwrap();
+    wait_for_finished_record(&paths);
+}
+
+/// The uid of the test runner — `std::os::unix::fs::MetadataExt`'s
+/// `uid()` needs the uid, and the crate is dependency-free, so this
+/// reads it through the metadata of a file the test itself owns.
+fn nix_uid_of_current_user() -> u32 {
+    use std::os::unix::fs::MetadataExt;
+    let probe = std::env::temp_dir().join(format!("mysbx-uid-probe-{}", std::process::id()));
+    std::fs::write(&probe, "").unwrap();
+    let uid = std::fs::metadata(&probe).unwrap().uid();
+    let _ = std::fs::remove_file(&probe);
+    uid
+}
+
+#[test]
+fn the_inner_detached_run_spawns_the_backend_with_the_detachable_mark() {
+    if !is_ssh_keygen_available() {
+        return; // no usable ssh-keygen (the baseline env's uid-0 quirk)
+    }
+    // B7 end to end: the argv the inner's backend receives carries
+    // `MYSBX_DETACHABLE=1` (the mark the future multiplexer checks)
+    // — asserted through the stub bwrap's recorded argv.
+    let (inv, _, _) = fixture_with_backend("detach-detachable-mark", &["--detach"]);
+    let (dtach, _) = dtach_stub(&inv.home, true);
+    let (bwrap, bwrap_record) = bwrap_stub(&inv.home);
+    let runtime = short_runtime_root("mark");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--detach"]);
+    cmd.env("MYSBX_DTACH", &dtach)
+        .env("MYSBX_BWRAP", &bwrap)
+        .env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .env("XDG_RUNTIME_DIR", &runtime)
+        .env("BWRAP_LIVE", inv.home.join("bwrap-live"));
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(0));
+    let recorded = wait_for_file(&bwrap_record);
+    // The pure-bwrap shape: `--setenv MYSBX_DETACHABLE 1`, one argv
+    // element per line (the nono layered shape would spell it
+    // `MYSBX_DETACHABLE=1` in its payload env segment).
+    let lines: Vec<&str> = recorded.lines().collect();
+    let mark = lines
+        .windows(3)
+        .any(|w| w == ["--setenv", "MYSBX_DETACHABLE", "1"]);
+    assert!(
+        mark,
+        "the mark reached the backend's environment: {recorded}"
+    );
+    std::fs::write(inv.home.join("bwrap-live"), "").unwrap();
+}
+
+#[test]
+fn a_marker_that_does_not_name_this_workspace_is_refused_by_the_inner() {
+    // B4 step 3: `MYSBX_DETACHED` must name THIS workspace's socket —
+    // a marker that points elsewhere (here: a second workspace's
+    // socket path) is a refused inner run, recorded `failed` with the
+    // B4 message, never a state file written into the other entry.
+    let (inv, repo, _) = fixture_with_backend("detach-forged-marker", &[]);
+    // A SHORT runtime root: the socket path is capped by the kernel's
+    // sun_path, and the fixture's tmpdir path varies per environment —
+    // [`short_runtime_root`] keeps the forged marker's socket path
+    // valid wherever the suite runs.
+    let runtime = short_runtime_root("forged");
+    // The marker of ANOTHER workspace: the session entry's socket.
+    let other_sock = mysbx::detach::paths(
+        &runtime,
+        &repo.canonicalize().unwrap(),
+        &mysbx::detach::Workspace::Session("other".to_owned()),
+    )
+    .unwrap()
+    .sock;
+    // The bare form under the forged marker — exactly what the
+    // dtach child of a detached run is (B4 step 3). `--detach` is
+    // NOT passed: a nested `--detach` has its own, earlier refusal.
+    let out = spawn_with_args(&inv, &[] as &[&str])
+        .env("MYSBX_DETACHED", &other_sock)
+        .env("XDG_RUNTIME_DIR", &runtime)
+        .output()
+        .expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(mysbx::EXIT_INFRASTRUCTURE));
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        stderr.contains("does not name this workspace's socket"),
+        "{stderr}"
+    );
+    // The other entry was never written: the marker cannot redirect
+    // state files (B4).
+    assert!(!other_sock.exists());
+    let live_paths = detach_paths_live(&runtime, &repo.canonicalize().unwrap());
+    let rec = wait_for_finished_record(&live_paths);
+    assert_eq!(rec.state, mysbx::detach::State::Failed);
+    assert!(
+        rec.error
+            .unwrap_or_default()
+            .contains("does not name this workspace's socket"),
+        "the refusal is the recorded diagnosis"
+    );
+}
+
+#[test]
+fn the_detached_registry_needs_xdg_runtime_dir() {
+    // B3: the registry lives under `$XDG_RUNTIME_DIR` — unset is a
+    // refusal with 70, never a `/tmp` fallback (the reason
+    // `TMUX_TMPDIR` has none either). The test pins the refusal at
+    // the detach-specific seam: the pre-flight refusal of the dry
+    // run, which needs no stubs at all.
+    let (inv, _, _) = fixture_with_backend("detach-no-runtime", &["--detach", "--dry-run"]);
+    let (dtach, _) = dtach_stub(&inv.home, true);
+    let mut cmd = spawn_with_args(&inv, &["--detach", "--dry-run"]);
+    cmd.env("MYSBX_DTACH", &dtach).env_remove("XDG_RUNTIME_DIR");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(mysbx::EXIT_INFRASTRUCTURE));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("XDG_RUNTIME_DIR"),
+        "the refusal names the variable: {stderr}"
+    );
+}
+
+#[test]
+fn a_dtach_that_dies_in_the_startup_is_reported_by_the_outer() {
+    if !is_ssh_keygen_available() {
+        return; // no usable ssh-keygen (the baseline env's uid-0 quirk)
+    }
+    // B4 step 4's "socket gone while starting" branch, end to end:
+    // the dtach stub (variant 2) records its argv and exits 1 — no
+    // socket ever exists, no inner mysbx ever runs — so the outer's
+    // handshake sees the dtach child gone with no live socket and
+    // reports the death with 70. The `starting` record is LEFT in
+    // place (only the pre-spawn failures remove it): the next
+    // `--detach` replaces it, exactly as B5's lifecycle says.
+    let (inv, repo, _) = fixture_with_backend("detach-dtach-dies", &["--detach"]);
+    let (dtach, dtach_record) = dtach_stub(&inv.home, false);
+    let runtime = short_runtime_root("dtach-dies");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let paths = detach_paths_live(&runtime, &repo.canonicalize().unwrap());
+    let mut cmd = spawn_with_args(&inv, &["--detach"]);
+    cmd.env("MYSBX_DTACH", &dtach)
+        .env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(mysbx::EXIT_INFRASTRUCTURE));
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        stderr.contains("the detached run died during startup"),
+        "{stderr}"
+    );
+    // The stub ran — the death is the stub's, not a spawn failure.
+    let recorded = std::fs::read_to_string(&dtach_record).unwrap();
+    assert!(
+        recorded.lines().any(|l| l == "-n"),
+        "the stub saw the launcher argv: {recorded}"
+    );
+    // The `starting` record is left behind (B5: a finished record
+    // stays until `attach` or the next `--detach` replaces it).
+    let rec = mysbx::detach::read(&paths).expect("the starting record is left");
+    assert_eq!(rec.state, mysbx::detach::State::Starting);
+    assert!(!paths.sock.exists(), "no socket was ever created");
+}
+
+#[test]
+fn a_stale_socket_is_replaced_under_the_lock() {
+    if !is_ssh_keygen_available() {
+        return; // no usable ssh-keygen (the baseline env's uid-0 quirk)
+    }
+    // B6 end to end: a plain file at the computed socket path probes
+    // as Stale (it exists but refuses connections), and a `--detach`
+    // removes it under the lock before the launch — the run succeeds
+    // and the junk is gone from the registry directory.
+    let (inv, repo, _) = fixture_with_backend("detach-stale-sock", &["--detach"]);
+    let (dtach, _) = dtach_stub(&inv.home, true);
+    let (bwrap, _) = bwrap_stub(&inv.home);
+    let runtime = short_runtime_root("stale-sock");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let paths = detach_paths_live(&runtime, &repo.canonicalize().unwrap());
+    mysbx::detach::ensure(&paths).unwrap();
+    // A stale corpse at the socket's path: a plain file, never a
+    // socket — the probe's connect(2) fails with something other
+    // than NotFound and the path still exists.
+    std::fs::write(&paths.sock, "corpse").unwrap();
+    assert_eq!(
+        mysbx::detach::probe(&paths.sock),
+        mysbx::detach::Probe::Stale,
+        "the fixture probes stale before the run"
+    );
+    let mut cmd = spawn_with_args(&inv, &["--detach"]);
+    cmd.env("MYSBX_DTACH", &dtach)
+        .env("MYSBX_BWRAP", &bwrap)
+        .env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .env("XDG_RUNTIME_DIR", &runtime)
+        .env("BWRAP_LIVE", inv.home.join("bwrap-live"));
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    // The run went through and the stale file was replaced: a live
+    // record, and the corpse is GONE — the stub dtach binds no
+    // socket, so after the removal the path stays absent (the file
+    // no longer holds the stale junk; a real dtach master would
+    // have its fresh socket there).
+    let rec = wait_for_record(&paths);
+    assert_eq!(rec.state, mysbx::detach::State::Running);
+    assert!(
+        !paths.sock.exists(),
+        "the stale corpse was removed and nothing recreated it: the next run owns the path"
+    );
+    assert!(
+        paths.json.exists(),
+        "the new run's state file replaced the stale entry's registry slot"
+    );
+    std::fs::write(inv.home.join("bwrap-live"), "").unwrap();
+    wait_for_finished_record(&paths);
+}
+
+#[test]
+fn detach_with_the_one_shot_outcome_flags_is_a_usage_error() {
+    // B2 + the D8/D17 extension: `--result` and `--timeout` name the
+    // outcome of a payload run — a detached run's outcome is its
+    // registry record, not a result.json — so `mysbx --detach
+    // --result` and `mysbx --detach --timeout 5` are refused with
+    // the shared usage error (exit 2), never accepted-and-ignored.
+    let (inv, _, _) = fixture_with_backend("detach-result-flags", &["--detach"]);
+    for args in [
+        vec!["--detach", "--result"],
+        vec!["--detach", "--timeout", "5"],
+    ] {
+        let mut cmd = spawn_with_args(&inv, &args);
+        cmd.env_remove("XDG_RUNTIME_DIR");
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        assert_eq!(
+            out.status.code(),
+            Some(2),
+            "{:?}: stdout: {}\nstderr: {}",
+            args,
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+        assert!(
+            stderr.contains("names the outcome of a payload run"),
+            "{:?}: {stderr}",
+            args
+        );
+        assert!(
+            stderr.contains("a detached run's outcome is its registry record"),
+            "{:?}: {stderr}",
+            args
+        );
+        assert!(!stderr.contains("not implemented"), "{:?}: {stderr}", args);
+    }
+}
+
+#[test]
+fn a_foreground_dry_run_carries_no_detached_mark() {
+    // B7 end to end: the foreground argv is byte-identical to the
+    // pre-detach one — no `MYSBX_DETACHABLE` in the environment of a
+    // run that was NOT started by `--detach`, so the multiplexer
+    // entries' reattach loop never fires for a foreground run.
+    let (inv, _, _) = fixture_with_backend("detach-foreground-mark", &["--dry-run"]);
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env_remove("XDG_RUNTIME_DIR");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(
+        !stdout.contains("MYSBX_DETACHABLE"),
+        "the foreground argv carries no detached mark: {stdout}"
+    );
+}
+
+#[test]
+fn usage_and_fish_completions_name_detach_but_not_detachable() {
+    // B2's surface: `--detach` is a documented global flag of the
+    // bare form; `--detachable` is bd myconfig-7ioq.5's flag — parsed
+    // and refused, but NOT in usage.txt or the fish completions,
+    // because no completion may offer what the binary refuses.
+    let usage = include_str!("../src/usage.txt");
+    assert!(
+        usage.contains("--detach"),
+        "usage.txt documents the bare form's start flag"
+    );
+    assert!(
+        !usage.contains("--detachable"),
+        "usage.txt does not offer the refused composition flag"
+    );
+    let fish = include_str!("../completions/mysbx.fish");
+    assert!(
+        fish.contains("-l detach"),
+        "fish offers the --detach completion"
+    );
+    assert!(
+        !fish.contains("--detachable") && !fish.contains("-l detachable"),
+        "fish does not offer the refused composition flag"
     );
 }

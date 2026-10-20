@@ -455,12 +455,15 @@ in
         krunLauncher = cfg.krun.direct.launcher;
         krunRootfs = cfg.krun.direct.rootfs;
         waypipe = cfg.display.package;
+        # The dtach master of detached runs (docs/design/detach.md
+        # B10): pinned so `--detach` needs no host PATH lookup.
+        dtach = pkgs.dtach;
         podmanWaypipe = cfg.podman.waypipe;
         podmanMuxEntries = cfg.podman.muxEntries;
         nono = cfg.nono.package;
         ssh-keygen = pkgs.openssh;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; shell = cfg.shell.path; podmanImage = cfg.podman.image; podmanShell = cfg.podman.shell; podmanPastaSpec = cfg.podman.pastaSpec; podmanEnv = cfg.podman.env; krunRuntime = cfg.krun.runtime; krunScratchSize = if cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null; krunLauncher = cfg.krun.direct.launcher; krunRootfs = cfg.krun.direct.rootfs; waypipe = cfg.display.package; podmanWaypipe = cfg.podman.waypipe; podmanMuxEntries = cfg.podman.muxEntries; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; shell = cfg.shell.path; podmanImage = cfg.podman.image; podmanShell = cfg.podman.shell; podmanPastaSpec = cfg.podman.pastaSpec; podmanEnv = cfg.podman.env; krunRuntime = cfg.krun.runtime; krunScratchSize = if cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null; krunLauncher = cfg.krun.direct.launcher; krunRootfs = cfg.krun.direct.rootfs; waypipe = cfg.display.package; dtach = pkgs.dtach; podmanWaypipe = cfg.podman.waypipe; podmanMuxEntries = cfg.podman.muxEntries; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';

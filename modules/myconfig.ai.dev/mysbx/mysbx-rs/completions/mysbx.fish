@@ -350,6 +350,7 @@ complete -c mysbx -f -n '__mysbx_expects_worktree_verb' -a hunk -d 'The same ran
 # the verb that is not typed yet, and omitting them would teach less.
 complete -c mysbx -n '__mysbx_no_verb' -l dry-run -d 'Print the exact bwrap invocation and exit; creates nothing'
 complete -c mysbx -n '__mysbx_no_verb' -l verbose -d 'Print the run configuration before running'
+complete -c mysbx -n '__mysbx_no_verb' -l detach -d 'Start the bare form under a dtach master; returns once the run is up (mysbx attach reconnects)'
 complete -c mysbx -n '__mysbx_no_verb' -l multiplexer -x -a 'tmux workmux herdr aoe orca none' -d 'The multiplexer of THIS interactive run (bare form only)'
 # The `--<mux>` shorthands (bd myconfig-6tt): pure aliases of
 # `--multiplexer <value>`, bare form only like the long form. Written

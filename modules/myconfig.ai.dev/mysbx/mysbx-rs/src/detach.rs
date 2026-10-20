@@ -28,12 +28,26 @@
 //! `lost`. A stale socket (connection refused) is removed under the
 //! per-workspace lock (detach.md B6) before a new run starts.
 //!
-//! This module is pure data and filesystem plumbing: no CLI, no
-//! process spawning. Every function takes the runtime root as a
-//! parameter; only [`runtime_root_from_env`] and
-//! [`runtime_dir_from_env`] read the environment,
-//! so the tests never mutate it. Zero dependencies, like the rest of
-//! the crate.
+//! This module also OWNS the `--detach` orchestration on top of the
+//! registry (detach.md B2, B4): [`launch_outer`] is the outer
+//! mysbx's half — lock, `starting` record, `dtach -n` spawn,
+//! handshake wait — and [`drive_inner`]/[`inner_spawn_wait`] are
+//! the inner mysbx's: run the pipeline for real, spawn the backend,
+//! record the outcome, clean up. The launcher argv
+//! ([`launcher_argv`]) and the inner-argv filter ([`inner_args_of`])
+//! are pure so the tests assert them exactly (B4 step 2).
+//!
+//! This module is pure data and filesystem plumbing plus the
+//! orchestration around it: no CLI parsing. Every function takes
+//! the runtime root as a parameter; the functions that read
+//! process state or spawn processes are [`runtime_root_from_env`]
+//! and [`runtime_dir_from_env`] (the `XDG_RUNTIME_DIR`/
+//! `MYSBX_RUNTIME_DIR` environment), [`resolve_dtach`] and
+//! [`detach_inner_args`] (`MYSBX_DTACH`, `PATH`, `argv`),
+//! [`launch_outer`] (spawns dtach), and [`drive_inner`]/
+//! [`inner_spawn_wait`] (spawn the backend; the stderr tee touches
+//! fd 2 and starts a reader thread), so the tests never mutate the
+//! environment. Zero dependencies, like the rest of the crate.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -1005,6 +1019,813 @@ pub fn remove_stale(paths: &Paths) -> Result<bool, Error> {
     Ok(false)
 }
 
+// ---- the --detach orchestration (detach.md B2, B4, B10) ---------------------
+
+/// The outer mysbx's launch parameters (detach.md B4): the resolved
+/// repo and the merged backend/multiplexer the run uses, carried as
+/// plain data so `sandbox` hands them over without a borrow of its
+/// whole local scope.
+pub struct Launch<'a> {
+    /// The resolved repo root — the identity the registry hashes.
+    pub repo_root: &'a Path,
+    /// The repo's sidecar.
+    pub sidecar: &'a Path,
+    /// The session NAME of a clone run, or `None` for the live
+    /// workspace.
+    pub session: Option<&'a str>,
+    /// The merged backend of the run.
+    pub backend: &'a str,
+    /// The merged multiplexer of the run.
+    pub multiplexer: &'a str,
+}
+
+/// The original argument tail of the invocation minus `--detach`,
+/// `--detachable` and `--verbose` (detach.md B4 step 2): what the
+/// outer passes to the inner mysbx, so the inner is a plain bare-form
+/// run of the same workspace. Pure over the given arguments so the
+/// tests assert the filter exactly.
+pub fn inner_args_of(args: impl Iterator<Item = String>) -> Vec<String> {
+    args.filter(|a| !matches!(a.as_str(), "--detach" | "--detachable" | "--verbose"))
+        .collect()
+}
+
+/// [`inner_args_of`] over this process's own arguments (without
+/// argv[0]) — the tail the outer relaunches.
+pub fn detach_inner_args() -> Vec<String> {
+    inner_args_of(std::env::args().skip(1))
+}
+
+/// The `dtach` launcher argv (detach.md B4 step 2):
+/// `dtach -n <socket> -r winch <self> <inner args...>`, one entry per
+/// vector element, the executable INCLUDED. `-n` does not attach a
+/// client (the run starts detached), `-r winch` redraws the client's
+/// terminal on attach. Pure, so the tests assert the exact shape.
+pub fn launcher_argv(
+    dtach: &str,
+    sock: &Path,
+    self_exe: &str,
+    inner_args: &[String],
+) -> Vec<String> {
+    let mut argv = vec![
+        dtach.to_owned(),
+        "-n".to_owned(),
+        sock.to_string_lossy().into_owned(),
+        "-r".to_owned(),
+        "winch".to_owned(),
+        self_exe.to_owned(),
+    ];
+    argv.extend(inner_args.iter().cloned());
+    argv
+}
+
+/// The workspace of a run's `--session` flag (detach.md B3): the
+/// named session's clone, or the live checkout.
+fn workspace_of(session: Option<&str>) -> Workspace {
+    match session {
+        Some(name) => Workspace::Session(name.to_owned()),
+        None => Workspace::Live,
+    }
+}
+
+/// Resolve the pinned `dtach` (detach.md B10): `MYSBX_DTACH`, the
+/// `MYSBX_BWRAP` idiom, with the bare `dtach` PATH fallback of an
+/// unwrapped build. An unpinned, missing or non-executable dtach is
+/// `None` — the caller refuses with `70` naming the variable; other
+/// runs are unaffected.
+pub(crate) fn resolve_dtach() -> Option<PathBuf> {
+    let name = match std::env::var("MYSBX_DTACH") {
+        Ok(v) if !v.is_empty() => v,
+        _ => "dtach".to_owned(),
+    };
+    crate::doctor::resolve_executable(&name, std::env::var_os("PATH").as_deref())
+}
+
+/// [`resolve_dtach`] with the operator-facing refusal (detach.md
+/// B10) attached: a `None` resolution prints the two-line refusal —
+/// a missing or non-executable dtach disables `--detach` alone —
+/// and yields the `70` the callers return; the text lives here once
+/// for the launch and the dry run alike.
+pub(crate) fn resolve_dtach_or_refuse() -> Result<PathBuf, i32> {
+    match resolve_dtach() {
+        Some(p) => Ok(p),
+        None => {
+            eprintln!(
+                "mysbx: --detach requires a usable dtach (MYSBX_DTACH) — none was found on PATH"
+            );
+            eprintln!(
+                "  a missing or non-executable dtach disables --detach only, other runs are unaffected (docs/design/detach.md B10)"
+            );
+            Err(crate::EXIT_INFRASTRUCTURE)
+        }
+    }
+}
+
+/// The attach hint of the one-per-workspace refusals and the success
+/// report (detach.md B2): `mysbx attach`, or `mysbx attach --session
+/// NAME` for a session workspace.
+fn attach_hint(session: Option<&str>) -> String {
+    match session {
+        Some(name) => format!("mysbx attach --session {name}"),
+        None => "mysbx attach".to_owned(),
+    }
+}
+
+/// The outer mysbx's half of `--detach` (detach.md B4): take the
+/// workspace lock, remove a stale socket under it, write the
+/// `starting` record, spawn `dtach -n <sock> -r winch <self> <args>`
+/// with `MYSBX_DETACHED=<sock>` and wait until the state file leaves
+/// `starting` or the socket (or the dtach child) is gone — no
+/// timeout, because a first `--session` run may clone a large repo
+/// (B4). The lock guard stays alive until this function returns, so
+/// the registry is serialized from the liveness probe until the
+/// handshake ends (B6).
+pub fn launch_outer(l: &Launch) -> i32 {
+    let workspace = workspace_of(l.session);
+    // The registry location itself is a refusal, not a fallback
+    // question (B3: no `/tmp`).
+    let root = match runtime_root_from_env() {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("mysbx: {e}");
+            return crate::EXIT_INFRASTRUCTURE;
+        }
+    };
+    let paths = match paths(&root, l.repo_root, &workspace) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("mysbx: {e}");
+            return crate::EXIT_INFRASTRUCTURE;
+        }
+    };
+    if let Err(e) = ensure(&paths) {
+        eprintln!("mysbx: {e}");
+        return crate::EXIT_INFRASTRUCTURE;
+    }
+    // One detached run per workspace (B3/B6): the lock serializes the
+    // probe-and-replace below against a concurrent `--detach`.
+    let _lock_guard = match try_lock(&paths) {
+        Ok(guard) => guard,
+        Err(Error::LockContended { .. }) => {
+            eprintln!(
+                "mysbx: another detached run of this workspace is being started — attach with: `{}`",
+                attach_hint(l.session)
+            );
+            return crate::EXIT_INFRASTRUCTURE;
+        }
+        Err(e) => {
+            eprintln!("mysbx: {e}");
+            return crate::EXIT_INFRASTRUCTURE;
+        }
+    };
+    // Liveness is the socket, never the state file (B5): a live run
+    // is refused, a stale corpse is removed under the lock (B6).
+    match probe(&paths.sock) {
+        Probe::Live => {
+            eprintln!(
+                "mysbx: a detached run of this workspace is already live — attach with: `{}`",
+                attach_hint(l.session)
+            );
+            return crate::EXIT_INFRASTRUCTURE;
+        }
+        Probe::Stale => {
+            if let Err(e) = remove_stale(&paths) {
+                eprintln!("mysbx: {e}");
+                return crate::EXIT_INFRASTRUCTURE;
+            }
+        }
+        Probe::Absent => {}
+    }
+    let started_at = crate::result::epoch_secs(std::time::SystemTime::now());
+    let record = Record {
+        state: State::Starting,
+        repo: l.repo_root.to_string_lossy().into_owned(),
+        sidecar: l.sidecar.to_string_lossy().into_owned(),
+        session: l.session.map(str::to_owned),
+        backend: l.backend.to_owned(),
+        multiplexer: l.multiplexer.to_owned(),
+        started_at,
+        finished_at: None,
+        exit_code: None,
+        error: None,
+    };
+    if let Err(e) = write(&paths, &record) {
+        eprintln!("mysbx: {e}");
+        return crate::EXIT_INFRASTRUCTURE;
+    }
+    // dtach is pinned like every other tool (B10): a missing or
+    // non-executable pin disables `--detach` alone. This failure is
+    // BEFORE the spawn, so the just-written `starting` record is
+    // removed again — nothing is registered when no child exists to
+    // write a state after it.
+    let dtach = match resolve_dtach_or_refuse() {
+        Ok(p) => p,
+        Err(code) => {
+            let _ = std::fs::remove_file(&paths.json);
+            return code;
+        }
+    };
+    let self_exe = match std::env::current_exe() {
+        Ok(p) => p.to_string_lossy().into_owned(),
+        Err(e) => {
+            let _ = std::fs::remove_file(&paths.json);
+            eprintln!("mysbx: cannot locate my own executable: {e}");
+            return crate::EXIT_INFRASTRUCTURE;
+        }
+    };
+    // The launch (B4 step 2): the outer's own cwd and environment,
+    // `MYSBX_DETACHED` marks the child, stdio pointed at
+    // `/dev/null` — the outer must not read stdin (B2), its
+    // diagnostics already went to its own stderr.
+    let mut cmd = std::process::Command::new(&dtach);
+    cmd.arg("-n")
+        .arg(&paths.sock)
+        .arg("-r")
+        .arg("winch")
+        .arg(&self_exe)
+        .args(detach_inner_args())
+        .env("MYSBX_DETACHED", &paths.sock)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    let mut child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(e) => {
+            let _ = std::fs::remove_file(&paths.json);
+            eprintln!("mysbx: cannot start {}: {e}", dtach.display());
+            return crate::EXIT_INFRASTRUCTURE;
+        }
+    };
+    // The handshake wait (B4 step 4): poll the state file until it
+    // leaves `starting`, or until the run died during startup — the
+    // socket was live once and went away, or the dtach child exited
+    // and no live socket remains. No timeout: a first `--session`
+    // run may clone a large repo, and a dead inner removes the
+    // socket.
+    let mut socket_seen = false;
+    loop {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        match read(&paths) {
+            Ok(r) if r.state != State::Starting => break report_handshake(&r, l.session),
+            _ => {}
+        }
+        let probe_now = probe(&paths.sock);
+        socket_seen |= probe_now == Probe::Live;
+        let child_gone = matches!(child.try_wait(), Ok(Some(_)));
+        // The run died during startup — the socket was live once and
+        // went away, or the dtach child exited with no live socket —
+        // UNLESS the record it managed to write names the outcome: a
+        // refusal the inner diagnosed, a backend that exited before
+        // the first poll. Re-read once more before declaring the
+        // death, so the diagnosis is reported, never swallowed by a
+        // poll landing in the gap between the record write and the
+        // child's exit.
+        if (socket_seen || child_gone) && probe_now != Probe::Live {
+            match read(&paths) {
+                Ok(r) if r.state != State::Starting => break report_handshake(&r, l.session),
+                _ => {
+                    eprintln!("mysbx: the detached run died during startup");
+                    return crate::EXIT_INFRASTRUCTURE;
+                }
+            }
+        }
+    }
+}
+
+/// Report the handshake outcome (detach.md B4 step 4) from the
+/// terminal-state record the inner wrote.
+fn report_handshake(r: &Record, session: Option<&str>) -> i32 {
+    match r.state {
+        State::Running => {
+            eprintln!("mysbx: detached; attach with: {}", attach_hint(session));
+            0
+        }
+        State::Exited => {
+            eprintln!(
+                "mysbx: the detached run already exited (exit code {})",
+                r.exit_code.unwrap_or(0)
+            );
+            0
+        }
+        State::Failed => {
+            match r.error.as_deref() {
+                Some(error) if !error.is_empty() => {
+                    eprintln!("mysbx: the detached run failed during startup: {error}")
+                }
+                _ => eprintln!("mysbx: the detached run failed during startup"),
+            }
+            crate::EXIT_INFRASTRUCTURE
+        }
+        State::Cancelled => {
+            eprintln!("mysbx: the detached run was cancelled during startup");
+            crate::EXIT_INFRASTRUCTURE
+        }
+        State::Starting => unreachable!("the caller breaks out of starting first"),
+    }
+}
+
+// ---- the inner mysbx (detach.md B4 step 3) ----------------------------------
+
+// The signal numbers (the usual Linux ones — the crate targets
+// NixOS/Linux only; each is a raw <signal.h> constant like the
+// `gui` detach's own set in lib.rs).
+const SIGINT: i32 = 2;
+const SIGQUIT: i32 = 3;
+const SIGTSTP: i32 = 20;
+const SIGHUP: i32 = 1;
+const SIGTERM: i32 = 15;
+const SIG_DFL: usize = 0;
+const SIG_IGN: usize = 1;
+
+/// The number of the terminating signal (`SIGHUP`/`SIGTERM`) that
+/// reached the inner mysbx, `0` for none — the same flag-and-atomic
+/// shape `CANCELLED` in lib.rs gives the `--result` wait loop.
+static TERMINATED: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
+
+/// Whether [`inner_spawn_wait`] already wrote the terminal state of
+/// the run — the distinction [`drive_inner`] needs: a pipeline
+/// refusal happens with no state written by the backend waiter, and
+/// `drive_inner` records it from the stderr capture instead (B5's
+/// `error` field is the `mysbx: ` message of a failed startup).
+static INNER_FINALIZED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The one handler of the terminating signals: record the number,
+/// return. Async-signal-safe like lib.rs's `on_signal`.
+unsafe extern "C" fn on_terminate(signum: i32) {
+    TERMINATED.store(signum, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// `signal(2)` via the raw libc symbol — the zero-dependency idiom of
+/// lib.rs's `libc_signal_catch`/`libc_signal_ignore`, restated here
+/// because the handlers live in this module.
+unsafe fn libc_signal(signum: i32, handler: usize) {
+    #[allow(non_snake_case)]
+    extern "C" {
+        fn signal(signum: i32, handler: usize) -> usize;
+    }
+    signal(signum, handler);
+}
+
+/// Ignore the pty's signals (detach.md B4): `SIGINT`/`SIGQUIT`/`SIGTSTP`
+/// come from the dtach pty and belong to the PAYLOAD, which is in the
+/// same foreground process group — the inner must not die over a
+/// Ctrl-C meant for the shell it supervises.
+unsafe fn ignore_pty_signals() {
+    libc_signal(SIGINT, SIG_IGN);
+    libc_signal(SIGQUIT, SIG_IGN);
+    libc_signal(SIGTSTP, SIG_IGN);
+}
+
+/// Catch `SIGHUP`/`SIGTERM` with [`on_terminate`]: the dtach master
+/// going away (`SIGHUP`) or an operator's end-the-run (`SIGTERM`)
+/// ends the run as `cancelled` (B4).
+unsafe fn catch_terminate_signals() {
+    libc_signal(SIGHUP, on_terminate as unsafe extern "C" fn(i32) as usize);
+    libc_signal(SIGTERM, on_terminate as unsafe extern "C" fn(i32) as usize);
+}
+
+/// Restore the default action for every signal this module installs —
+/// a leftover handler or ignore would eat the NEXT command's Ctrl-C,
+/// the same reason lib.rs's `libc_signal_restore` exists.
+unsafe fn restore_signals() {
+    libc_signal(SIGINT, SIG_DFL);
+    libc_signal(SIGQUIT, SIG_DFL);
+    libc_signal(SIGTSTP, SIG_DFL);
+    libc_signal(SIGHUP, SIG_DFL);
+    libc_signal(SIGTERM, SIG_DFL);
+}
+
+/// `kill(2)` on one pid — the inner forwards the terminating signal to
+/// the backend itself (the whole process group gets it from the
+/// terminal anyway, but the direct kill is not a guess).
+unsafe fn libc_kill_pid(pid: i32, signum: i32) {
+    extern "C" {
+        fn kill(pid: i32, signum: i32) -> i32;
+    }
+    kill(pid, signum);
+}
+
+// ---- the stderr capture tee (detach.md B5) ----------------------------------
+
+/// How much of the inner's stderr the capture keeps: the `error` field
+/// is a diagnosis, not a log (the non-goal: no output log of a
+/// detached run).
+const TEE_CAP: usize = 8 * 1024;
+
+/// The installed tee: the saved real stderr fd (still fd 2's original
+/// target, held open for the reader thread's echo) and the channel
+/// the reader reports the captured text through on EOF.
+struct Tee {
+    saved_fd: i32,
+    captured: std::sync::mpsc::Receiver<String>,
+}
+
+/// The installed tee of the inner mysbx, if any. `Mutex` so a
+/// `tee_restore` racing the pipeline's only thread cannot double-
+/// restore (it is single-threaded in practice; the lock makes that a
+/// guarantee instead of an assumption).
+static TEE: std::sync::Mutex<Option<Tee>> = std::sync::Mutex::new(None);
+
+unsafe fn libc_pipe(fds: &mut [i32; 2]) -> i32 {
+    extern "C" {
+        fn pipe(fds: *mut i32) -> i32;
+    }
+    pipe(fds.as_mut_ptr())
+}
+
+unsafe fn libc_dup(fd: i32) -> i32 {
+    extern "C" {
+        fn dup(fd: i32) -> i32;
+    }
+    dup(fd)
+}
+
+unsafe fn libc_dup2(from: i32, to: i32) -> i32 {
+    extern "C" {
+        fn dup2(oldfd: i32, newfd: i32) -> i32;
+    }
+    dup2(from, to)
+}
+
+unsafe fn libc_close(fd: i32) -> i32 {
+    extern "C" {
+        fn close(fd: i32) -> i32;
+    }
+    close(fd)
+}
+
+/// Capture the inner mysbx's own stderr (detach.md B5): B5's `error`
+/// field records the `mysbx: ` message of a failed startup, and the
+/// capture makes EVERY pipeline refusal land there without touching
+/// each refusal site — the refusals keep printing to stderr, the tee
+/// just keeps a copy. Everything after [`tee_restore`] (the backend
+/// spawn, the payload) writes to the real stderr again, so no
+/// payload output is kept.
+fn tee_install() {
+    let mut fds = [0i32; 2];
+    if unsafe { libc_pipe(&mut fds) } != 0 {
+        return; // no capture, not no run — the tee is best-effort
+    }
+    let saved_fd = unsafe { libc_dup(2) };
+    if saved_fd < 0 {
+        unsafe {
+            libc_close(fds[0]);
+            libc_close(fds[1]);
+        }
+        return;
+    }
+    unsafe { libc_dup2(fds[1], 2) };
+    unsafe { libc_close(fds[1]) };
+    let (tx, rx) = std::sync::mpsc::channel::<String>();
+    std::thread::spawn(move || {
+        use std::io::Read;
+        use std::os::fd::FromRawFd;
+        let mut file = unsafe { std::fs::File::from_raw_fd(fds[0]) };
+        let mut captured = String::new();
+        let mut buf = [0u8; 512];
+        loop {
+            match file.read(&mut buf) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    // Echo to the saved fd first: the pty's own copy
+                    // must survive, the capture is the ADDITIONAL
+                    // copy for the record.
+                    let mut written = 0;
+                    while written < n {
+                        match unsafe { libc_write(saved_fd, &buf[written..n]) } {
+                            Ok(w) if w > 0 => written += w,
+                            _ => break,
+                        }
+                    }
+                    if captured.len() < TEE_CAP {
+                        let rest = &buf[..n.min(TEE_CAP - captured.len())];
+                        captured.push_str(&String::from_utf8_lossy(rest));
+                    }
+                }
+            }
+        }
+        let _ = unsafe { libc_close(saved_fd) };
+        let _ = tx.send(captured);
+    });
+    let mut slot = TEE.lock().unwrap();
+    *slot = Some(Tee {
+        saved_fd,
+        captured: rx,
+    });
+}
+
+/// End the capture and put the real stderr back on fd 2 (idempotent).
+/// Called by `sandbox` before the first child spawn of the inner, so
+/// the backend and the waypipe client inherit the real stderr, and
+/// their output is not kept (the non-goal stands: no output log).
+/// The saved fd is closed once it is back on 2 — one leaked fd per
+/// detached inner otherwise.
+pub(crate) fn tee_restore() {
+    let mut slot = TEE.lock().unwrap();
+    if let Some(tee) = slot.take() {
+        unsafe {
+            libc_dup2(tee.saved_fd, 2);
+            libc_close(tee.saved_fd);
+        }
+    }
+}
+
+/// Restore the stderr (if still captured), wait for the reader to see
+/// EOF and return the captured text — the fallback `error` of a
+/// startup that failed before [`inner_spawn_wait`] could record one.
+/// The saved fd is closed here too: the reader's echo is done (it
+/// saw EOF) and this process's copy must not leak either.
+fn tee_finish() -> String {
+    let slot = {
+        let mut slot = TEE.lock().unwrap();
+        slot.take()
+    };
+    match slot {
+        Some(tee) => {
+            unsafe {
+                libc_dup2(tee.saved_fd, 2);
+                libc_close(tee.saved_fd);
+            }
+            tee.captured.recv().unwrap_or_default()
+        }
+        None => String::new(),
+    }
+}
+
+// `write(2)` with the C signature's `const void *` spelled as the
+// std library's own externs do, so the linker and the checker agree.
+unsafe fn libc_write(fd: i32, buf: &[u8]) -> std::io::Result<usize> {
+    extern "C" {
+        fn write(fd: i32, buf: *const std::ffi::c_void, count: usize) -> isize;
+    }
+    let n = write(fd, buf.as_ptr().cast(), buf.len());
+    if n < 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(n as usize)
+    }
+}
+
+// ---- the inner run (detach.md B4 step 3, B5) ---------------------------------
+
+/// The registry paths of the inner's workspace, recomputed exactly
+/// like [`launch_outer`] computed them — the marker check (B4 step 3)
+/// is that the two processes agree on the socket.
+fn inner_paths(repo_root: &Path, session: Option<&str>) -> Result<Paths, Error> {
+    let root = runtime_root_from_env()?;
+    paths(&root, repo_root, &workspace_of(session))
+}
+
+/// The inner mysbx of a detached run (detach.md B4 step 3): the bare
+/// form under `MYSBX_DETACHED`. Verifies that the marker names THIS
+/// workspace's socket (so it cannot redirect state files), installs
+/// the stderr capture, runs the pipeline for real — the refusals end
+/// up in the capture — and records the outcome of anything
+/// [`inner_spawn_wait`] did not already record.
+pub(crate) fn drive_inner(flags: crate::Flags) -> i32 {
+    let repo = match crate::repo::resolve_cwd() {
+        Ok(r) => r,
+        Err(e) => {
+            // No repo: nothing to record into — the registry entry is
+            // keyed by the repo, and the outer's starting record
+            // reports the death through the handshake.
+            eprintln!("mysbx: {e}");
+            return crate::EXIT_INFRASTRUCTURE;
+        }
+    };
+    let paths = match inner_paths(&repo.root, flags.session.as_deref()) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("mysbx: {e}");
+            return crate::EXIT_INFRASTRUCTURE;
+        }
+    };
+    if let Err(e) = ensure(&paths) {
+        eprintln!("mysbx: {e}");
+        return crate::EXIT_INFRASTRUCTURE;
+    }
+    // The workspace of the run, captured before `sandbox` takes the
+    // flags by value — the fallback records below still need it.
+    let session = flags.session.clone();
+    // The backend/multiplexer of a record the MERGE never produced
+    // (both failure paths below are before the pipeline ran): the
+    // flags' own values when set, `unknown` otherwise — B5's fields
+    // say "the merged values the run uses", and nothing was merged.
+    let unmerged_backend = flags
+        .backend
+        .clone()
+        .unwrap_or_else(|| "unknown".to_owned());
+    let unmerged_multiplexer = flags
+        .multiplexer
+        .map(crate::config::Multiplexer::name)
+        .unwrap_or("unknown")
+        .to_owned();
+    // The marker check (B4 step 3): `MYSBX_DETACHED` must name the
+    // socket THIS workspace computes, so the marker cannot redirect
+    // state files onto another run's registry entry.
+    let found = std::env::var("MYSBX_DETACHED").unwrap_or_default();
+    let expected = paths.sock.to_string_lossy().into_owned();
+    if found != expected {
+        let error = format!(
+            "MYSBX_DETACHED ({found}) does not name this workspace's socket ({expected}) \
+             — refusing to run (detach.md B4)"
+        );
+        let record = Record {
+            state: State::Failed,
+            repo: repo.root.to_string_lossy().into_owned(),
+            sidecar: repo.sidecar.to_string_lossy().into_owned(),
+            session,
+            backend: unmerged_backend.clone(),
+            multiplexer: unmerged_multiplexer.clone(),
+            started_at: crate::result::epoch_secs(std::time::SystemTime::now()),
+            finished_at: Some(crate::result::epoch_secs(std::time::SystemTime::now())),
+            exit_code: None,
+            error: Some(error.clone()),
+        };
+        // Best-effort: the eprintln below is the diagnosis, the
+        // record is what `attach` reads later.
+        let _ = write(&paths, &record);
+        eprintln!("mysbx: {error}");
+        return crate::EXIT_INFRASTRUCTURE;
+    }
+    tee_install();
+    INNER_FINALIZED.store(false, std::sync::atomic::Ordering::SeqCst);
+    let code = crate::sandbox(
+        flags,
+        crate::bwrap::Payload::Shell,
+        crate::RunMode::DetachedInner,
+    );
+    let captured = tee_finish();
+    if !INNER_FINALIZED.load(std::sync::atomic::Ordering::SeqCst) {
+        // A startup the backend waiter never reached: a pipeline
+        // refusal. Its `mysbx: ` message is the capture — B5's `error`
+        // field is exactly that message.
+        let error = if captured.trim().is_empty() {
+            "the detached run failed during startup".to_owned()
+        } else {
+            captured.trim().to_owned()
+        };
+        let record = Record {
+            state: State::Failed,
+            repo: repo.root.to_string_lossy().into_owned(),
+            sidecar: repo.sidecar.to_string_lossy().into_owned(),
+            session,
+            backend: unmerged_backend,
+            multiplexer: unmerged_multiplexer,
+            started_at: crate::result::epoch_secs(std::time::SystemTime::now()),
+            finished_at: Some(crate::result::epoch_secs(std::time::SystemTime::now())),
+            exit_code: None,
+            error: Some(error),
+        };
+        let _ = write(&paths, &record);
+    }
+    code
+}
+
+/// Spawn the backend of the inner run and wait for it, recording the
+/// outcome in the registry state file (detach.md B4/B5): `running`
+/// after the spawn, `exited`/`failed` with the backend's exit code,
+/// `cancelled` when `SIGHUP`/`SIGTERM` ended the run. The backend's
+/// argv is the interactive one the pipeline built — the payload
+/// always has the dtach pty (B4). Also owns the signal policy of the
+/// inner: the pty's signals are ignored, the terminating ones are
+/// caught and forwarded.
+pub(crate) fn inner_spawn_wait(
+    mut cmd: std::process::Command,
+    repo: &crate::repo::Repo,
+    session: Option<&str>,
+    backend: &str,
+    multiplexer: &str,
+) -> i32 {
+    let paths = match inner_paths(&repo.root, session) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("mysbx: {e}");
+            return crate::EXIT_INFRASTRUCTURE;
+        }
+    };
+    let started_at = crate::result::epoch_secs(std::time::SystemTime::now());
+    let base = || Record {
+        state: State::Running,
+        repo: repo.root.to_string_lossy().into_owned(),
+        sidecar: repo.sidecar.to_string_lossy().into_owned(),
+        session: session.map(str::to_owned),
+        backend: backend.to_owned(),
+        multiplexer: multiplexer.to_owned(),
+        started_at,
+        finished_at: None,
+        exit_code: None,
+        error: None,
+    };
+    // The record of a terminal state: `finished_at` always, the rest
+    // by the outcome.
+    let finalize = |mut r: Record| {
+        r.finished_at = Some(crate::result::epoch_secs(std::time::SystemTime::now()));
+        let res = write(&paths, &r);
+        INNER_FINALIZED.store(true, std::sync::atomic::Ordering::SeqCst);
+        if let Err(e) = res {
+            // Best-effort like result.json: the run happened, its
+            // outcome is what it is — the operator learns the state
+            // was not recorded.
+            eprintln!("mysbx: {e}");
+        }
+    };
+    unsafe {
+        ignore_pty_signals();
+        catch_terminate_signals();
+    }
+    let mut child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(e) => {
+            let mut r = base();
+            r.state = State::Failed;
+            r.error = Some(format!("cannot exec the backend: {e}"));
+            finalize(r);
+            eprintln!("mysbx: cannot exec the backend: {e}");
+            unsafe { restore_signals() };
+            return crate::EXIT_INFRASTRUCTURE;
+        }
+    };
+    let r = base();
+    if let Err(e) = write(&paths, &r) {
+        eprintln!("mysbx: {e}");
+    }
+    // The wait loop: the same 50ms poll `run_with_result` uses. A
+    // terminating signal forwards to the backend and waits for its
+    // end — the run is `cancelled` (B4), the exit code is the shell's
+    // `128 + signum`.
+    let mut signum: i32;
+    let waited: Option<std::process::ExitStatus>;
+    loop {
+        signum = TERMINATED.load(std::sync::atomic::Ordering::SeqCst);
+        if signum != 0 {
+            unsafe { libc_kill_pid(child.id() as i32, signum) };
+            // Keep waiting: the record is written once the backend
+            // has actually ended, never before.
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    waited = Some(status);
+                    break;
+                }
+                _ => std::thread::sleep(std::time::Duration::from_millis(50)),
+            }
+        } else {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    waited = Some(status);
+                    break;
+                }
+                Ok(None) => std::thread::sleep(std::time::Duration::from_millis(50)),
+                Err(e) => {
+                    eprintln!("mysbx: cannot wait for the backend: {e}");
+                    let mut r = base();
+                    r.state = State::Failed;
+                    r.error = Some(format!("cannot wait for the backend: {e}"));
+                    finalize(r);
+                    unsafe { restore_signals() };
+                    return crate::EXIT_INFRASTRUCTURE;
+                }
+            }
+        }
+    }
+    let status = waited.expect("the loop only exits with a status");
+    let exit = if signum != 0 {
+        let mut r = base();
+        r.state = State::Cancelled;
+        finalize(r);
+        128 + signum
+    } else {
+        use std::os::unix::process::ExitStatusExt;
+        if let Some(code) = status.code() {
+            let mut r = base();
+            r.state = if code == 0 {
+                State::Exited
+            } else {
+                State::Failed
+            };
+            // B5's `exitCode` is "the backend's exit code" — a
+            // code-0 exit is recorded as `Some(0)`, not left null.
+            r.exit_code = Some(code);
+            finalize(r);
+            code
+        } else {
+            // A backend killed by its own crash: no exit code exists
+            // to record (B4 records the EXIT code, a signal has
+            // none), so the state is `failed` with the signal named
+            // and the exit code is mysbx's infrastructure `70`.
+            let mut r = base();
+            r.state = State::Failed;
+            r.error = Some(format!(
+                "the backend died by signal {}",
+                crate::result::signal_name(status.signal().unwrap_or(0))
+            ));
+            finalize(r);
+            crate::EXIT_INFRASTRUCTURE
+        }
+    };
+    unsafe { restore_signals() };
+    exit
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1014,8 +1835,11 @@ mod tests {
     /// has no dependencies. Unique per test name and pid, cleaned up
     /// like the repo.rs helper it mirrors.
     fn tmpdir(name: &str) -> PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("mysbx-detach-test-{}-{name}", std::process::id()));
+        // A SHORT prefix: the socket paths these fixtures build are
+        // capped by the kernel's sun_path, and the sandbox a `nix
+        // build` runs in has a deep $TMPDIR — every character of the
+        // prefix is one fewer for the fixture's name.
+        let dir = std::env::temp_dir().join(format!("dt-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -1574,5 +2398,63 @@ mod tests {
         let held = lock(&p).unwrap();
         assert!(!remove_stale(&p).unwrap());
         drop(held);
+    }
+
+    // ---- the launch argv (detach.md B4 step 2) -----------------------
+
+    #[test]
+    fn inner_args_drop_the_three_launch_flags_and_keep_the_rest() {
+        let args = [
+            "--session".to_owned(),
+            "fix-1".to_owned(),
+            "--verbose".to_owned(),
+            "--detach".to_owned(),
+            "--detachable".to_owned(),
+            "--dry-run".to_owned(),
+            "--ro".to_owned(),
+        ];
+        assert_eq!(
+            inner_args_of(args.into_iter()),
+            ["--session", "fix-1", "--dry-run", "--ro"]
+        );
+        // The filter is positional and drops every occurrence, so a
+        // pathological `--session --detach` (a session NAMED
+        // `--detach`) leaves the inner a value-less `--session` — a
+        // parse refusal there, not a silent misparse; value-awareness
+        // is not worth the coupling to `split_global_flags`.
+        assert_eq!(
+            inner_args_of(
+                [
+                    "--detach".to_owned(),
+                    "--session".to_owned(),
+                    "--detach".to_owned()
+                ]
+                .into_iter()
+            ),
+            ["--session"]
+        );
+    }
+
+    #[test]
+    fn the_launcher_argv_is_dtach_n_sock_winch_self_then_the_inner_args() {
+        let argv = launcher_argv(
+            "/nix/store/aaaa-dtach/bin/dtach",
+            Path::new("/run/user/1000/mysbx/abc/live.sock"),
+            "/nix/store/bbbb-mysbx/bin/mysbx",
+            &["--session".to_owned(), "fix-1".to_owned()],
+        );
+        assert_eq!(
+            argv,
+            vec![
+                "/nix/store/aaaa-dtach/bin/dtach".to_owned(),
+                "-n".to_owned(),
+                "/run/user/1000/mysbx/abc/live.sock".to_owned(),
+                "-r".to_owned(),
+                "winch".to_owned(),
+                "/nix/store/bbbb-mysbx/bin/mysbx".to_owned(),
+                "--session".to_owned(),
+                "fix-1".to_owned(),
+            ]
+        );
     }
 }

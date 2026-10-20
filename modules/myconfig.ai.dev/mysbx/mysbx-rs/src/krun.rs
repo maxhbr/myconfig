@@ -226,6 +226,13 @@ pub struct Params<'a> {
     /// the guest init's timed step trace so the boot gap is
     /// narrated guest-side.
     pub verbose: bool,
+    /// Whether THIS run is (the inner of) a detached run
+    /// (docs/design/detach.md B7): the guest environment then carries
+    /// `MYSBX_DETACHABLE=1`, set after `[env]`/`TMUX_TMPDIR` in
+    /// `sandbox_env` — the krun spelling of
+    /// bwrap::Params::detachable. Foreground runs pass `false` and
+    /// their argv stays byte-identical.
+    pub detachable: bool,
 }
 
 /// The two trust TEXTS of a run's git trust (bd myconfig-dak.8):
@@ -932,6 +939,14 @@ fn sandbox_env(
     // spike's finding), never on a host-shared location.
     if mux.starts_a_session() {
         set("TMUX_TMPDIR", crate::bwrap::MUX_SOCKET_DIR.to_owned());
+    }
+    // The detached-run mark (docs/design/detach.md B7): the krun
+    // spelling of the bwrap backend's `--setenv`, set after the
+    // layers and the infrastructure block so no configuration layer
+    // can set or unset it — foreground runs pass `detachable: false`
+    // and their argv stays byte-identical.
+    if params.detachable {
+        set("MYSBX_DETACHABLE", "1".to_owned());
     }
     // PATH LAST of the infrastructure block, like the bwrap
     // backend's own ordering: the tool closure is this wrapper's

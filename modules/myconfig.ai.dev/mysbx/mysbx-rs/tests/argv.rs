@@ -107,6 +107,7 @@ fn params() -> Params<'static> {
         waypipe: None,
         workspace: Workspace::Live,
         inner: None,
+        detachable: false,
     }
 }
 
@@ -797,6 +798,110 @@ fn golden_ca_bundle_pin() {
     )
     .unwrap();
     assert_golden("ca-bundle-pin.txt", &argv);
+}
+
+#[test]
+fn a_detached_run_sets_mysbx_detachable_after_the_config_env() {
+    // docs/design/detach.md B7: the argv of a detached run carries
+    // `MYSBX_DETACHABLE=1` — set after `[env]` like `TMUX_TMPDIR`, so
+    // no configuration layer can set or unset it — and a foreground
+    // run's argv does not carry it at all (B7's byte-identity
+    // promise, checked against the same fixture with the flag off).
+    let params = Params {
+        detachable: true,
+        ..params()
+    };
+    let mut cfg = base(true);
+    cfg.env.insert("MYSBX_DETACHABLE".into(), "0".into());
+    let argv = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    // The infrastructure setenv is LAST among the MYSBX_DETACHABLE
+    // spellings — the later `--setenv` wins, so `[env]` cannot
+    // unset the mark.
+    let at = argv
+        .windows(3)
+        .rfind(|w| w[0] == "--setenv" && w[1] == "MYSBX_DETACHABLE")
+        .expect("the detached mark is set");
+    assert_eq!(at[2], "1");
+    // And it sits after the `[env]` setenvs (the section order the
+    // ca-bundle pins' test pins): after the config layer's own
+    // MYSBX_DETACHABLE spelling, with nothing of `[env]` following
+    // it.
+    let config_at = argv
+        .windows(3)
+        .position(|w| w[0] == "--setenv" && w[1] == "MYSBX_DETACHABLE" && w[2] == "0")
+        .expect("the `[env]` spelling is there too");
+    let infra_at = argv
+        .windows(3)
+        .position(|w| w[0] == "--setenv" && w[1] == "MYSBX_DETACHABLE" && w[2] == "1")
+        .expect("the infrastructure spelling is there too");
+    assert!(config_at < infra_at, "after `[env]`");
+    // The foreground twin: the same argv without the flag has NO
+    // spelling beyond the `[env]` one — byte-identity of the
+    // foreground argv is the acceptance test of B7.
+    let plain = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &crate::params(),
+    )
+    .unwrap();
+    assert_eq!(
+        plain
+            .windows(3)
+            .filter(|w| w[0] == "--setenv" && w[1] == "MYSBX_DETACHABLE")
+            .count(),
+        1,
+        "only the `[env]` spelling, never the mark: {plain:?}"
+    );
+}
+
+#[test]
+fn a_detached_nono_run_carries_the_mark_in_the_payload_env_segment() {
+    // B7 on the layered backend (backends.md D1): nono's own
+    // `--setenv` set carries only nono's infrastructure, so the
+    // mark rides the payload env segment beside `TMUX_TMPDIR`.
+    let p = Params {
+        detachable: true,
+        inner: Some(Inner {
+            argv: &["nono".to_owned(), "run".to_owned()],
+            env_bin: "env",
+        }),
+        ..params()
+    };
+    let argv = bwrap_argv(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &p,
+    )
+    .unwrap();
+    assert!(argv.contains(&"MYSBX_DETACHABLE=1".to_owned()), "{argv:?}");
+    // The foreground twin carries it not.
+    let p = Params {
+        inner: Some(Inner {
+            argv: &["nono".to_owned(), "run".to_owned()],
+            env_bin: "env",
+        }),
+        ..params()
+    };
+    let argv = bwrap_argv(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &p,
+    )
+    .unwrap();
+    assert!(!argv.contains(&"MYSBX_DETACHABLE=1".to_owned()), "{argv:?}");
 }
 
 #[test]
@@ -1917,6 +2022,7 @@ fn a_pinned_sanitized_nix_conf_is_bound_read_only() {
         waypipe: None,
         workspace: Workspace::Live,
         inner: None,
+        detachable: false,
     };
     let argv = bwrap_argv(
         &base(true),
@@ -1957,6 +2063,7 @@ fn a_pinned_bin_sh_is_bound_read_only_into_the_empty_root() {
         waypipe: None,
         workspace: Workspace::Live,
         inner: None,
+        detachable: false,
     };
     let argv = bwrap_argv(
         &base(true),
@@ -2824,6 +2931,7 @@ fn a_relocated_writable_parent_of_the_sidecar_is_refused() {
         waypipe: None,
         workspace: Workspace::Live,
         inner: None,
+        detachable: false,
     };
     let mut cfg = base(true);
     cfg.mounts
@@ -2855,6 +2963,7 @@ fn a_writable_mount_of_the_sidecar_directory_itself_is_refused() {
         waypipe: None,
         workspace: Workspace::Live,
         inner: None,
+        detachable: false,
     };
     let mut cfg = base(true);
     cfg.mounts
@@ -2888,6 +2997,7 @@ fn a_read_only_mount_of_the_sidecar_stays_allowed() {
         waypipe: None,
         workspace: Workspace::Live,
         inner: None,
+        detachable: false,
     };
     let mut cfg = base(true);
     cfg.mounts
@@ -2914,6 +3024,7 @@ fn a_writable_mount_unrelated_to_the_policy_files_stays_allowed() {
         waypipe: None,
         workspace: Workspace::Live,
         inner: None,
+        detachable: false,
     };
     let mut cfg = base(true);
     cfg.mounts
@@ -2941,6 +3052,7 @@ fn the_implicit_repo_bind_exposing_a_policy_file_is_refused() {
         waypipe: None,
         workspace: Workspace::Live,
         inner: None,
+        detachable: false,
     };
     let cfg = base(true);
     let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params)
@@ -2970,6 +3082,7 @@ fn a_git_dir_exposing_a_policy_file_is_refused() {
         waypipe: None,
         workspace: Workspace::Live,
         inner: None,
+        detachable: false,
     };
     let mut cfg = base(true);
     cfg.git_dirs = vec![PathBuf::from("/synth/main/.git")];
@@ -3003,6 +3116,7 @@ fn an_absent_policy_file_does_not_forbid_its_would_be_parent() {
         waypipe: None,
         workspace: Workspace::Live,
         inner: None,
+        detachable: false,
     };
     let mut cfg = base(true);
     cfg.mounts
@@ -3035,6 +3149,7 @@ fn params_with(policy: &[mysbx::bwrap::PolicyPath]) -> Params<'_> {
         waypipe: None,
         workspace: Workspace::Live,
         inner: None,
+        detachable: false,
     }
 }
 
@@ -3237,6 +3352,7 @@ fn clone_params() -> Params<'static> {
             clone: Path::new(SYNTH_CLONE),
         },
         inner: None,
+        detachable: false,
     }
 }
 
@@ -3651,6 +3767,9 @@ fn podman_params() -> PodmanParams<'static> {
         pids_limit: None,
         memory: None,
         cpus: None,
+        // Foreground runs pass `false` (detach.md B7): the argv stays
+        // byte-identical, the goldens pin it.
+        detachable: false,
     }
 }
 
@@ -4888,6 +5007,46 @@ fn podman_attached_run_wires_stdio() {
     assert!(
         !argv.contains(&"--interactive".to_string()),
         "opt-out drops the flag: {argv:?}"
+    );
+}
+
+#[test]
+fn a_detached_podman_run_carries_the_mark_after_the_config_env() {
+    // B7 on the podman backends: `--env MYSBX_DETACHABLE=1` after the
+    // `[env]` entries — the podman spelling of the bwrap `--setenv`,
+    // with the same foreground byte-identity promise.
+    let mut params = podman_params();
+    params.detachable = true;
+    let mut cfg = podman_base(true);
+    cfg.env.insert("MYSBX_DETACHABLE".into(), "0".into());
+    let argv = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    let mark_at = argv
+        .windows(2)
+        .position(|w| w[0] == "--env" && w[1] == "MYSBX_DETACHABLE=1")
+        .expect("the detached mark is set");
+    let config_at = argv
+        .windows(2)
+        .position(|w| w[0] == "--env" && w[1] == "MYSBX_DETACHABLE=0")
+        .expect("the `[env]` spelling is there too");
+    assert!(config_at < mark_at, "after the `[env]` entries");
+    let plain = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &podman_params(),
+    )
+    .unwrap();
+    assert!(
+        !plain.contains(&"MYSBX_DETACHABLE=1".to_owned()),
+        "the foreground argv carries no mark: {plain:?}"
     );
 }
 
@@ -6540,6 +6699,7 @@ fn nono_a_daemon_source_is_refused_under_an_allowlist_too() {
     // backend at step 4b; the layout itself does not filter).
     let p = Params {
         inner: None,
+        detachable: false,
         ..params()
     };
     bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &p)

@@ -261,6 +261,13 @@ pub struct Params<'a> {
     /// channel, bound rw at itself so the guest finds it where the
     /// host created it.
     pub waypipe: Option<Waypipe<'a>>,
+    /// Whether THIS run is (the inner of) a detached run
+    /// (docs/design/detach.md B7): the argv then carries
+    /// `MYSBX_DETACHABLE=1`, set after `[env]` like `TMUX_TMPDIR`,
+    /// so no configuration layer can set or unset it — the entry
+    /// scripts' reattach loop keys on it. Foreground runs pass
+    /// `false` and their argv stays byte-identical.
+    pub detachable: bool,
     /// Which tree this run works in (workspace.md D1): the live repo
     /// (the default, unchanged) or a named session's clone (D3/D4 —
     /// the argv differences are exactly the workspace's). A
@@ -1115,6 +1122,18 @@ pub fn bwrap_argv(
                 }
             }
         }
+        // `MYSBX_DETACHABLE` marks (the inner of) a detached run
+        // (docs/design/detach.md B7): with it set, the multiplexer
+        // entry scripts loop on their client's return instead of
+        // exec'ing it, so the session survives its own detach. Set
+        // after `[env]` like `TMUX_TMPDIR`, so no configuration layer
+        // can set or unset it; foreground runs pass `false` and
+        // their argv stays byte-identical.
+        if params.detachable {
+            argv.push("--setenv".into());
+            argv.push("MYSBX_DETACHABLE".into());
+            argv.push("1".into());
+        }
     }
 
     // 7. work in the repo.
@@ -1208,6 +1227,14 @@ pub fn bwrap_argv(
                     argv.push(format!("MYSBX_SESSION_NAME={session_name}"));
                 }
             }
+        }
+        // `MYSBX_DETACHABLE` mirrors the pure-bwrap `--setenv` of
+        // the section above (detach.md B7): the detached-run mark
+        // the entry scripts' reattach loop keys on, riding the
+        // payload env segment because nono's own `--setenv` set
+        // carries only nono's infrastructure (backends.md D1).
+        if params.detachable {
+            argv.push("MYSBX_DETACHABLE=1".into());
         }
     }
     match payload {
@@ -2221,6 +2248,7 @@ mod tests {
             waypipe: None,
             workspace: Workspace::Live,
             inner: None,
+            detachable: false,
         }
     }
 

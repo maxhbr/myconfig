@@ -76,9 +76,12 @@ host-side keypair verb `ssh-pubkey`
 ([config.md](./config.md) D22 — prints the public half of the sandbox's
 generated ssh keypair, generating it when enabled and missing), the
 global flag `--session <name>` ([workspace.md](./workspace.md) D1-D5 —
-the clone run mode), plus the global flags `--dry-run` (D9),
+the clone run mode), the global flags `--dry-run` (D9),
 `--verbose` (D10), `--result`/`--timeout` (D17), `--multiplexer`
-(D14) and `--backend` (D18). Both enum flags also accept a
+(D14), `--backend` (D18) and `--detach` (D21, the decisions live in
+[detach.md](./detach.md) B1-B10 — the bare form started under a
+host-side `dtach` master; `--detachable` and `attach` follow with
+bd myconfig-7ioq.5). Both enum flags also accept a
 `--<value>` shorthand of every value they take (bd myconfig-6tt):
 `--tmux` == `--multiplexer tmux` … `--none` == `--multiplexer none`,
 and `--bubblewrap` == `--backend bubblewrap` … `--krun` == `--backend

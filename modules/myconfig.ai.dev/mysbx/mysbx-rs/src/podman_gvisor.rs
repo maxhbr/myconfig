@@ -376,6 +376,13 @@ pub struct Params<'a> {
     /// container mounts nothing from the host `/nix/store`, so no
     /// fallback could exist.
     pub waypipe: Option<Waypipe<'a>>,
+    /// Whether THIS run is (the inner of) a detached run
+    /// (docs/design/detach.md B7): the argv then carries
+    /// `--env MYSBX_DETACHABLE=1` after the `[env]` entries, the
+    /// podman spelling of bwrap::Params::detachable — no
+    /// configuration layer can set or unset it, and foreground runs
+    /// pass `false` with a byte-identical argv.
+    pub detachable: bool,
     /// Which tree this run works in (workspace.md D1): the live repo
     /// (the default, unchanged) or a named session's clone (D3/D4 —
     /// the argv differences are exactly the workspace's). A
@@ -1102,6 +1109,15 @@ pub fn podman_run_argv(
             MUX_SOCKET_DIR
         };
         argv.extend(["--env".into(), format!("TMUX_TMPDIR={dir}")]);
+    }
+    // `MYSBX_DETACHABLE` marks (the inner of) a detached run
+    // (detach.md B7) — the podman spelling of the bwrap backend's
+    // `--setenv`, emitted after the layers' `[env]` entries like
+    // every infrastructure variable, so no configuration layer can
+    // set or unset it. Foreground runs pass `detachable: false`
+    // and their argv stays byte-identical.
+    if params.detachable {
+        argv.extend(["--env".into(), "MYSBX_DETACHABLE=1".to_owned()]);
     }
     // `XDG_RUNTIME_DIR` of a `display = "waypipe"` run (D18):
     // infrastructure like `HOME`, anchoring the guest waypipe

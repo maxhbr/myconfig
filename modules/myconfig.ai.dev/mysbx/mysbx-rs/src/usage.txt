@@ -1,7 +1,7 @@
 mysbx - my sandboxing tool
 
 Usage:
-  mysbx [--dry-run] [--verbose] [--multiplexer <mux>] [--backend <name>] [--session <name>] [--ro <path>]... [--rw <path>]...
+  mysbx [--detach] [--dry-run] [--verbose] [--multiplexer <mux>] [--backend <name>] [--session <name>] [--ro <path>]... [--rw <path>]...
   mysbx run [--dry-run] [--verbose] [--result] [--timeout <seconds>] [--backend <name>] [--session <name>] [--ro <path>]... [--rw <path>]... -- COMMAND...
   mysbx gui [ARG...]
   mysbx fetch | merge | push | diff NAME [verb-arguments...]
@@ -207,6 +207,22 @@ Commands:
   help          print this help
 
 Options:
+  --detach     start the bare form's sandbox under a host-side dtach
+                master and return once the run is up: the terminal can
+                close, the sandbox keeps running (docs/design/
+                detach.md). It works without a terminal on stdin, so
+                scripts and agents can start one. One detached run per
+                workspace — a second --detach for the live repo or a
+                session is refused and names `mysbx attach`, the
+                command that reconnects later. Bare form only: every
+                verb rejects the flag, and inside a detached run it is
+                refused too. Needs $XDG_RUNTIME_DIR (the registry of
+                detached runs lives there) and a usable dtach
+                (MYSBX_DTACH); with --dry-run the dtach launcher argv
+                is printed, a blank line, then the backend argv the
+                detached run would spawn — nothing is created.
+                podman-gvisor and podman-krun refuse it until their
+                container names are per run (bd myconfig-cad)
   --dry-run     print the exact bwrap invocation — the executable
                 (argv[0]) first, then the sandbox argv, one argument
                 per line — and exit; must precede the command, creates
