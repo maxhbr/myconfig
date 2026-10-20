@@ -36,6 +36,9 @@
 # |                | depmod set (`modules.alias`, ...), which collides with the    |
 # |                | kernel's in the module aggregator's buildEnv. Removed in     |
 # |                | postInstall for the linuxPackages sets in use.               |
+# | aggregate-    | The new `modules.cer` merge `cat`s `<module>.ko.cer` for every |
+# | Modules        | external module; unsigned ones (framework-laptop-kmod) have   |
+# |                | none and the module tree fails. Missing certs are skipped.    |
 # | pass-secret-   | Upstream calls `asyncio.get_event_loop()` in its entry point, |
 # | service        | which since Python 3.14 raises `RuntimeError: There is no    |
 # |                | current event loop` instead of implicitly creating one. The   |
@@ -127,6 +130,32 @@
         "linuxPackages_6_18"
       ] (name: fixV4l2loopback prev.${name})
     )
+
+    # aggregateModules: the module tree merges each external module's
+    # single-module certificate into `modules.cer`
+    # (`sed … modules.dep | xargs -d'\n' cat >> modules.cer`), which aborts
+    # the build for a module installed without one — framework-laptop-kmod
+    # copies an unsigned `framework_laptop.ko` by hand:
+    #   cat: extra/framework_laptop.ko.cer: No such file or directory
+    # The kernel config has MODULE_SIG but not MODULE_SIG_FORCE, so an
+    # unsigned module needs no certificate; missing ones are skipped. The
+    # replace is asserted, so an upstream rewrite of that line fails loudly.
+    # See doc/TODOs/drop-aggregatemodules-missing-cer-override.md.
+    (_final: prev: {
+      aggregateModules =
+        modules:
+        (prev.aggregateModules modules).overrideAttrs (old: {
+          postBuild =
+            let
+              from = "| xargs -d'\\n' cat >> modules.cer";
+              to = ''| while IFS= read -r cer; do if [ -e "$cer" ]; then cat -- "$cer"; fi; done >> modules.cer'';
+            in
+            if prev.lib.hasInfix from old.postBuild then
+              prev.lib.replaceStrings [ from ] [ to ] old.postBuild
+            else
+              throw "flake.pkgs_overrides.nix: aggregateModules postBuild changed upstream; re-check the modules.cer override";
+        });
+    })
 
     # voxtype-onnx: build the optional `osd-gtk4` cargo feature so the GTK4
     # OSD binary (`voxtype-osd-gtk4`) ships with the package. Upstream nixpkgs
