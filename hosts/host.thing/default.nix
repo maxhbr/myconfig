@@ -155,9 +155,12 @@
         };
         dev.hermes = {
           enable = false;
-          microvm = {
+          service = {
             enable = true;
-            autostart = true;
+            microvm = {
+              enable = true;
+              autostart = true;
+            };
           };
         };
         # open-webui = {
