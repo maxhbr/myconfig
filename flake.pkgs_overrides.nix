@@ -32,6 +32,10 @@
 # |                | output (sphinx-hook reads `sphinxBuilders` as a scalar under  |
 # |                | `__structuredAttrs`), `sqliteschema` rejects `typepy` 2.0.0.  |
 # |                | Taken from the `nixpkgs-sbomnix` input (binary-cached).       |
+# | v4l2loopback   | The module output now carries a full `lib/modules/<ver>/`     |
+# |                | depmod set (`modules.alias`, ...), which collides with the    |
+# |                | kernel's in the module aggregator's buildEnv. Removed in     |
+# |                | postInstall for the linuxPackages sets in use.               |
 # | pass-secret-   | Upstream calls `asyncio.get_event_loop()` in its entry point, |
 # | service        | which since Python 3.14 raises `RuntimeError: There is no    |
 # |                | current event loop` instead of implicitly creating one. The   |
@@ -90,6 +94,39 @@
     (self: _super: {
       sbomnix = self.nixpkgs-sbomnix.sbomnix;
     })
+
+    # v4l2loopback: its output now ships the depmod files
+    # (`lib/modules/<ver>/modules.alias`, `modules.dep`, ...) next to the
+    # module, and the kernel-module aggregator (a buildEnv) refuses the
+    # collision with the kernel's own copies:
+    #   pkgs.buildEnv error: two given paths contain a conflicting subpath
+    # The aggregator regenerates them with depmod anyway, so they are
+    # dropped here; `updates/v4l2loopback.ko.{xz,cer}` stay. Applied to
+    # every linuxPackages set a host may select, so the module from
+    # `boot.extraModulePackages` and the one `programs.obs-studio` adds
+    # resolve to the same fixed derivation. See
+    # doc/TODOs/drop-v4l2loopback-depmod-files-override.md.
+    (
+      _final: prev:
+      let
+        fixV4l2loopback =
+          kernelPackages:
+          kernelPackages.extend (
+            _kfinal: kprev: {
+              v4l2loopback = kprev.v4l2loopback.overrideAttrs (old: {
+                postInstall = (old.postInstall or "") + ''
+                  rm -f "$out"/lib/modules/*/modules.*
+                '';
+              });
+            }
+          );
+      in
+      prev.lib.genAttrs [
+        "linuxPackages"
+        "linuxPackages_latest"
+        "linuxPackages_6_18"
+      ] (name: fixV4l2loopback prev.${name})
+    )
 
     # voxtype-onnx: build the optional `osd-gtk4` cargo feature so the GTK4
     # OSD binary (`voxtype-osd-gtk4`) ships with the package. Upstream nixpkgs
