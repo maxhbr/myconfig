@@ -582,7 +582,7 @@ pub fn podman_run_argv(
     // basename apart; the run id keeps parallel runs in ONE checkout
     // apart — with a per-repo name `--replace` would silently kill the
     // running sibling (bd myconfig-cad).
-    let repo_id = fnv1a10(&root);
+    let repo_id = crate::repo::fnv1a10(&root);
     let container_name = format!(
         "mysbx-{}-{}-{}",
         repo.root
@@ -1309,20 +1309,6 @@ pub fn parse_krun_ram_mib(raw: &str) -> Result<u64, Error> {
         });
     }
     Ok(mib)
-}
-
-/// First 10 hex chars of the FNV-1a 64 hash of `path` — a stable,
-/// dependency-free digest for the container-name suffix (the zero-
-/// dependency crate's equivalent of the gvisor tier's `sha256sum`-
-/// exec'ing `repo_id`; colossally unlikely to collide at 40 bits for
-/// the handful of repos one host runs).
-fn fnv1a10(path: &str) -> String {
-    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    for byte in path.as_bytes() {
-        hash ^= u64::from(*byte);
-        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-    format!("{hash:016x}")[..10].to_owned()
 }
 
 /// Add a bind mount to the argv.

@@ -521,7 +521,7 @@ pub fn stage_binds(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Vec<(Strin
         binds.push((
             mount.path.clone(),
             read_only,
-            format!("m-{}", fnv1a10(&sandbox_path)),
+            format!("m-{}", crate::repo::fnv1a10(&sandbox_path)),
         ));
     }
     if matches!(params.workspace, Workspace::Live) {
@@ -1010,26 +1010,12 @@ fn share_of_mount(mount: &crate::config::Mount, workspace: &Workspace) -> Result
     // MYSBX_KRUN_SHARES encoding is `;`-separated) and must be a
     // stable identity of the share across runs — a digest of the
     // sandbox path always satisfies both.
-    let slot = format!("m-{}", fnv1a10(&sandbox_path));
+    let slot = format!("m-{}", crate::repo::fnv1a10(&sandbox_path));
     Ok(Share {
         slot,
         sandbox_path,
         read_only,
     })
-}
-
-/// First 10 hex chars of the FNV-1a 64 hash of `path` — the same
-/// stable digest podman_gvisor.rs uses for container names: a
-/// share's tag must not contain whitespace or `;` (the launcher's
-/// MYSBX_KRUN_SHARES encoding is `;`-separated), and a digest always
-/// satisfies that.
-fn fnv1a10(path: &str) -> String {
-    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    for byte in path.as_bytes() {
-        hash ^= u64::from(*byte);
-        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-    format!("{hash:016x}")[..10].to_owned()
 }
 
 fn krun_limit(key: &'static str) -> impl Fn(crate::podman_gvisor::Error) -> Error {

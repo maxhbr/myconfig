@@ -26,6 +26,7 @@
 
 pub mod bwrap;
 pub mod config;
+pub mod detach;
 pub mod doctor;
 pub mod handoff;
 pub mod krun;
@@ -5186,8 +5187,8 @@ const APPROVAL_COMMENT: &str = "# Added by `mysbx init --approve-git-dirs`: git 
      # (docs/design/config.md D3); remove an entry to refuse the\n\
      # bind.\n";
 
-/// Replace a policy file's contents by writing a temporary file next
-/// to it and renaming it over the original (review-4 item 3): an
+/// Replace a file's contents by writing a temporary file next to it
+/// and renaming it over the original (review-4 item 3): an
 /// interruption mid-write must never leave a TRUNCATED policy — that
 /// would be a config granting less than the operator wrote, or none at
 /// all, discovered only on the next run. `rename(2)` within the same
@@ -5197,7 +5198,7 @@ const APPROVAL_COMMENT: &str = "# Added by `mysbx init --approve-git-dirs`: git 
 /// The temporary name carries the pid, so two concurrent approvals
 /// cannot clobber each other's staging file; the leftover is removed
 /// on failure.
-fn write_atomically(path: &std::path::Path, contents: &str) -> Result<(), String> {
+pub(crate) fn write_atomically(path: &std::path::Path, contents: &str) -> Result<(), String> {
     let dir = path.parent().unwrap_or(std::path::Path::new("."));
     let name = path
         .file_name()

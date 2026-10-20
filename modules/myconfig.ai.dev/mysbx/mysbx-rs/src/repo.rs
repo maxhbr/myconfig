@@ -390,6 +390,21 @@ fn sibling_sidecar(dir: &Path) -> PathBuf {
     PathBuf::from(name)
 }
 
+/// First 10 hex chars of the FNV-1a 64 hash of `path` — a stable,
+/// dependency-free digest for short, collision-unlikely identifiers
+/// of a path: the podman container-name suffix and the krun share
+/// slots (a share's tag must not contain whitespace or `;`, which a
+/// digest always satisfies), and the per-repo directory name of the
+/// detached-run registry (detach.md B3).
+pub fn fnv1a10(path: &str) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in path.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{hash:016x}")[..10].to_owned()
+}
+
 /// `<parent>/<basename>__worktrees` — the workmux worktrees sibling
 /// (see [`Repo::worktrees`]): the same sibling spelling workmux itself
 /// uses (`dirname(top)/<basename>__worktrees`), so the path the
@@ -518,6 +533,14 @@ mod tests {
         let home = base.join(FAKE_HOME_SUB);
         touch_dir(&home);
         home
+    }
+
+    #[test]
+    fn fnv1a10_is_stable_and_discriminating() {
+        // The empty string hashes to the offset basis itself, so the
+        // digest is its first 10 hex chars.
+        assert_eq!(fnv1a10(""), "cbf29ce484");
+        assert_ne!(fnv1a10("/a"), fnv1a10("/b"), "different paths must differ");
     }
 
     #[test]
