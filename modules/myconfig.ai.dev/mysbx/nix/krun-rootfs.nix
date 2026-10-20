@@ -192,7 +192,7 @@ let
     # EBUSY of finding 9 is virtiofs-on-virtiofs only). The first
     # component of a share's sandbox path carries nothing but the
     # rootfs skeleton below it, so covering it costs no content —
-    # and the share's link then lives on writable tmpfs. Mounted
+    # and the share's mountpoint then lives on writable tmpfs. Mounted
     # once per component, shared by every share under it.
     tmpfs_first_components=""
     mounted_devices=""
@@ -254,9 +254,9 @@ let
     # runs only — the seventh live finding killed that route for
     # real configs). Each device is mounted ONCE under
     # /tmp/mysbx-shares keyed by its tag; the SLOT is the share's
-    # dir inside it, and the SANDBOX path is a link at the device
-    # mount's slot — the payload's contract is the sandbox layout,
-    # the tmpfs placement is this init's.
+    # dir inside it, and the SANDBOX path is a bind mount of the
+    # device mount's slot — the payload's contract is the sandbox
+    # layout, the tmpfs placement is this init's.
     share_records="''${share_records:-}"
     if [ -z "$manifest" ]; then
         shares="''${MYSBX_KRUN_SHARES:-}"
@@ -303,23 +303,22 @@ let
         # The sandbox path already links at the mount (the rootfs
         # baked /nix/store and /mysbx-home): nothing to place.
         [ "$(  "$BB" readlink "$sandbox" || true)" = "$sharetarget" ] && continue
-        # Where does the link live? /tmp/... for tmpfs-rooted paths,
-        # /mysbx-home/... for the home's state shares (through the
-        # baked /mysbx-home link), a fresh tmpfs at the FIRST
+        # Where does the mountpoint live? /tmp/... for tmpfs-rooted
+        # paths, /mysbx-home/... for the home's state shares (through
+        # the baked /mysbx-home link), a fresh tmpfs at the FIRST
         # component for everything else (the ro root can hold no new
         # entries; mounting a tmpfs OVER a root-share subdirectory is
         # fine — libkrun's own implicit init mounts devtmpfs/proc/
         # sysfs exactly that way, the EBUSY of the spike's finding 9
-        # is virtiofs-on-virtiofs only). The parents of the link are
+        # is virtiofs-on-virtiofs only).
         case "$sandbox" in
             /tmp/*|/mysbx-home/*)
                 # The parents on the tmpfs (the ninth live finding:
                 # the home tree creates only the XDG roots — a share
                 # below a DEEPER path, .config/workmux/config.yaml,
-                # needs its parents created, `ln` does not).
+                # needs its parents created).
                 "$BB" mkdir -p "$(  "$BB" dirname "$sandbox")" \
                     || fail "cannot create the parents of $sandbox"
-                linktarget=$sandbox
                 ;;
             /*/*)
                 first=''${sandbox#/}
@@ -332,24 +331,57 @@ let
                         tmpfs_first_components=" $tmpfs_first_components $first "
                         ;;
                 esac
-                # The parents of the link live ON the tmpfs just
-                # mounted at $first — creating the real parent path
-                # after the mount writes into the tmpfs.
+                # The parents live ON the tmpfs just mounted at
+                # $first — creating the real parent path after the
+                # mount writes into the tmpfs.
                 "$BB" mkdir -p "$(  "$BB" dirname "$sandbox")" \
                     || fail "cannot create the parents of $sandbox"
-                linktarget=$sandbox
                 ;;
             *)
                 fail "the share path $sandbox cannot be placed (a krun mount dest needs a parent)"
                 ;;
         esac
-        # A state share may collide with an XDG dir the home tree
-        # just created (.cache and friends): the share REPLACES it,
-        # like the bwrap backend's later bind replaces the tmpfs dir.
-        [ -e "$linktarget" ] && "$BB" rm -rf "$linktarget"
-        step "linked $sandbox at $sharetarget"
-        "$BB" ln -sfn "$sharetarget" "$linktarget" \
-            || fail "cannot link $sandbox at $sharetarget"
+        # The sandbox path is a BIND MOUNT of the device slot, not a
+        # symlink: getcwd() and realpath() then report the sandbox
+        # path, as on the bwrap/podman backends, so tools that
+        # canonicalize (git worktree metadata, aoe, herdr) never see
+        # the /tmp/mysbx-shares spelling. A bind is no new virtiofs
+        # device, so finding 9 does not apply. The mountpoint takes
+        # the slot's type; a state share mounts OVER an XDG dir the
+        # home tree created (.cache and friends), like the bwrap
+        # backend's later bind over the tmpfs dir. Nothing is ever
+        # removed recursively: only a symlink or a type-mismatched
+        # empty entry is replaced.
+        if [ -d "$sharetarget" ]; then
+            if [ -L "$sandbox" ] || { [ -e "$sandbox" ] && [ ! -d "$sandbox" ]; }; then
+                "$BB" rm -f "$sandbox" \
+                    || fail "cannot replace $sandbox with a directory mountpoint"
+            fi
+            "$BB" mkdir -p "$sandbox" \
+                || fail "cannot create the mountpoint $sandbox"
+        else
+            if [ -L "$sandbox" ]; then
+                "$BB" rm -f "$sandbox" \
+                    || fail "cannot replace $sandbox with a file mountpoint"
+            elif [ -d "$sandbox" ]; then
+                "$BB" rmdir "$sandbox" \
+                    || fail "cannot replace the directory $sandbox with a file mountpoint"
+            fi
+            [ -e "$sandbox" ] || : > "$sandbox" \
+                || fail "cannot create the mountpoint $sandbox"
+        fi
+        # The canonical mountpoint: a parent may be a symlink (the
+        # baked /mysbx-home), and busybox's remount looks the target
+        # up in /proc/mounts by its literal, resolved spelling.
+        mnt=$("$BB" readlink -f "$sandbox") \
+            || fail "cannot resolve the mountpoint $sandbox"
+        step "binding $sandbox ($mnt) to $sharetarget"
+        "$BB" mount -o bind "$sharetarget" "$mnt" \
+            || fail "cannot bind $sharetarget at $sandbox"
+        if [ "$mode" = ro ]; then
+            "$BB" mount -o remount,bind,ro "$mnt" \
+                || fail "cannot make the bind of $sandbox read-only"
+        fi
     done < "$records_file"
     "$BB" rm -f "$records_file"
 
@@ -620,17 +652,10 @@ let
     # The workdir, applied AFTER the shares exist (the manifest's
     # chdir record — the cmdline route had /init.krun chdir BEFORE
     # the workspace share was mounted, silently landing at /).
-    # PWD follows (bd myconfig-mr4): the workspace share's sandbox
-    # path is a SYMLINK at the backing mount (finding 9 — no
-    # virtiofs device may nest below the root share), and a shell
-    # that starts with NO usable PWD derives one from getcwd() —
-    # the PHYSICAL backing path. busybox ash also exports a LOGICAL
-    # PWD after its own cd, but a payload whose PWD arrives unset
-    # (or already physical) still starts in the backing spelling.
-    # Exporting PWD=$manifest_chdir after the cd pins the sandbox
-    # path in the exec environment; getcwd()/pwd -P keep reporting
-    # the backing path — kernel-true and honest, the parity claim
-    # is only about the spelling tools read from $PWD.
+    # PWD follows (bd myconfig-mr4): the workspace share is a bind
+    # mount at its sandbox path, so getcwd() already reports it;
+    # the export additionally pins the record's exact spelling when
+    # a PARENT of the chdir is a symlink (the baked /mysbx-home).
     if [ -n "$manifest_chdir" ]; then
         step "chdir to the workspace: $manifest_chdir"
         cd "$manifest_chdir" \

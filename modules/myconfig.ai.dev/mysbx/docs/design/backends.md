@@ -818,7 +818,9 @@ baked `/nix/store` link targets
 `/tmp/mysbx-shares/stage-ro/store`), so the device count is a
 CONSTANT 2 whatever the config mounts; the share records carry
 `DEVICE SLOT DEST ro|rw` and the init mounts each device once,
-linking each dest at `<device-mount>/<slot>`. The guest init traces
+bind-mounting `<device-mount>/<slot>` at each dest (a bind is no
+new virtiofs device, so finding 9 does not apply, and `getcwd()`
+reports the dest, not the `/tmp/mysbx-shares` backing path). The guest init traces
 every step to the console when the host sets `MYSBX_KRUN_TRACE=1`
 (a silent hang leaves diagnosable evidence — the live-run finding
 of bd myconfig-2n8).

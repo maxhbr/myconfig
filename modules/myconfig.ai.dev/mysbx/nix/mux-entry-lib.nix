@@ -69,6 +69,21 @@
     fi
   '';
 
+  # Sets `repo_root` and `worktrees` — the workmux-convention
+  # `<repo>__worktrees` sibling — and warns when the sibling is absent.
+  # The argv builder binds the sibling rw at its real host path only
+  # when it exists (`repo.rs::Repo::worktrees`), so `-d` is the bind
+  # test; a run never creates it (../docs/design/config.md D13).
+  # `$PWD` is the repo root: mysbx `--chdir`s there.
+  worktreesSibling = self: ''
+    repo_root="$PWD"
+    worktrees="$(dirname "$repo_root")/$(basename "$repo_root")__worktrees"
+    if [ ! -d "$worktrees" ]; then
+        echo "${self}: no $worktrees — it is not created here (mysbx config.md D13);" >&2
+        echo "${self}: worktrees cannot land there until the sibling exists on the host" >&2
+    fi
+  '';
+
   # tmux resolves the pane shell from /etc/passwd, which the mysbx base
   # does not bind at all — every tmux-based multiplexer therefore needs
   # a real interactive shell pinned via `SHELL` (which tmux's

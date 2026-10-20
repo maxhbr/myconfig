@@ -1504,11 +1504,10 @@ fn podman_trusted_git_paths(
 }
 
 /// The BACKING-path variants of a krun run's trusted paths (bd
-/// myconfig-n4b): the guest init links each sandbox path at its
-/// staging device's slot, and nix's libgit2 fetcher REALPATHS the
-/// symlink before its safe.directory comparison — so every trusted
-/// path that IS a share gains its backing spelling in both trust
-/// files. The map is krun::backing_paths' (sandbox -> backing).
+/// myconfig-n4b): the guest init bind-mounts each sandbox path from
+/// its staging device's slot, and the device mount stays reachable at
+/// the backing path — so every trusted path that IS a share gains its
+/// backing spelling in both trust files. The map is krun::backing_paths' (sandbox -> backing).
 fn krun_trusted_with_backing(paths: &[String], backing: &[(String, String)]) -> Vec<String> {
     let mut out = paths.to_vec();
     for p in paths {
@@ -2622,10 +2621,9 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 };
                 let libgit2_trusted = libgit2_trusted_paths(&repo, workspace.clone());
                 // The share BACKING variants (bd myconfig-n4b): the
-                // init links each sandbox path at its staging
-                // device's slot, and nix's libgit2 fetcher REALPATHs
-                // the symlink before its safe.directory comparison —
-                // the live finding on 'thing'. Both trust files name
+                // init bind-mounts each sandbox path from its staging
+                // device's slot, and the device mount stays reachable
+                // at the backing path. Both trust files name
                 // both spellings of every trusted path that IS a
                 // share: the same exact-path trust, two views of one
                 // tree. The params carry the run's WORKSPACE (the
@@ -3003,10 +3001,9 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 };
                 let libgit2_trusted = libgit2_trusted_paths(&repo, workspace.clone());
                 // The share BACKING variants (bd myconfig-n4b): the
-                // init links each sandbox path at its staging
-                // device's slot, and nix's libgit2 fetcher REALPATHs
-                // the symlink before its safe.directory comparison —
-                // the live finding on 'thing'. Both trust files name
+                // init bind-mounts each sandbox path from its staging
+                // device's slot, and the device mount stays reachable
+                // at the backing path. Both trust files name
                 // both spellings of every trusted path that IS a
                 // share: the same exact-path trust, two views of one
                 // tree. The params carry the run's WORKSPACE (the

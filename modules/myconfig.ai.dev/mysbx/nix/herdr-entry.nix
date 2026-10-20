@@ -127,17 +127,12 @@ writeShellApplication {
     # and discards all output because the TUI owns the terminal from
     # here on. Same mechanism, and the same reason, as the bubblewrap
     # jail tier (../../programs.herdr.nix, `herdr-jail-entry`).
-    repo_root="$PWD"
+    ${muxLib.worktreesSibling "mysbx-herdr-entry"}
 
     # Point herdr's worktree root at the workmux sibling — placed here,
-    # before `exec`, so it is configured once at session start. The
-    # `-d` test is the BIND test: the argv builder mounts the sibling
-    # rw at its real host path only when it exists (repo.rs
-    # `Repo::worktrees`), so a visible directory is a writable one, and
-    # an absent one keeps the key unset — mysbx's "a run never creates
-    # the sibling" guard (config.md D13) is preserved: the script
-    # configures, it never `mkdir`s.
-    worktrees="$(dirname "$repo_root")/$(basename "$repo_root")__worktrees"
+    # before `exec`, so it is configured once at session start. Without
+    # the sibling the key stays unset and herdr falls back to its own
+    # default (`~/.herdr/worktrees`), the ephemeral tmpfs home.
     if [ -d "$worktrees" ]; then
         # The path goes into a TOML basic string, so `\` and `"` must
         # be escaped and control characters (which TOML forbids there)
@@ -157,13 +152,6 @@ writeShellApplication {
                     >> "$HOME/.config/herdr/config.toml"
                 ;;
         esac
-    else
-        # No sibling: herdr's worktree actions fall back to herdr's own
-        # default (`~/.herdr/worktrees`), which is the sandbox's tmpfs
-        # home and therefore ephemeral — the same outcome `workmux add`
-        # has here, said out loud once before the TUI owns the screen.
-        echo "mysbx-herdr-entry: no $worktrees — it is not created here (mysbx config.md D13);" >&2
-        echo "mysbx-herdr-entry: herdr worktrees use herdr's default until the sibling exists on the host" >&2
     fi
 
     # Pre-start herdr's server and wait for it to be reachable. Without

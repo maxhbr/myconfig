@@ -115,17 +115,30 @@ class InitTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_shares_are_bind_mounted_not_linked(self):
+        # The sandbox path of a share is a bind mount of its device slot,
+        # so getcwd()/realpath() report the sandbox path, never the
+        # /tmp/mysbx-shares backing spelling.
+        start = INIT.index('while IFS=" " read -r tag slot sandbox mode; do')
+        end = INIT.index('done < "$records_file"', start)
+        loop = INIT[start:end]
+        # Both mounts target the RESOLVED mountpoint: busybox's remount
+        # looks it up in /proc/mounts, which records /tmp/mysbx-home/...
+        # for a /mysbx-home/... share (the baked link).
+        self.assertIn('mnt=$("$BB" readlink -f "$sandbox")', loop)
+        self.assertIn('"$BB" mount -o bind "$sharetarget" "$mnt"', loop)
+        self.assertIn('"$BB" mount -o remount,bind,ro "$mnt"', loop)
+        self.assertNotRegex(loop, r'"\$BB"\s+ln\b')
+        self.assertNotRegex(loop, r'"\$BB"\s+rm\s+-rf\b')
+
     def test_chdir_exports_the_logical_pwd(self):
-        # bd myconfig-mr4: the workspace share's sandbox path is a SYMLINK
-        # at the virtiofs backing mount (finding 9), so a payload shell
-        # that starts without a usable $PWD derives one from getcwd() --
-        # the PHYSICAL backing path. The init must therefore pin the
-        # chdir record's spelling in the exec environment: cd through
-        # the symlink, then export PWD=<the record>. This executes the
-        # REAL generated init text (cd + export + a probe payload)
-        # under the baked static busybox, with the symlinked layout the
-        # guest builds, and checks both the exported PWD and the
-        # physical getcwd a tool still honestly reports.
+        # bd myconfig-mr4: the init pins the chdir record's spelling in
+        # the exec environment: cd, then export PWD=<the record>. The
+        # shares are bind mounts in the guest, but a parent of the chdir
+        # may still be a symlink (the baked /mysbx-home), so this runs
+        # the REAL generated init text under the baked static busybox
+        # with a symlinked layout (no mounts are possible here) and
+        # checks the exported PWD against the physical getcwd.
         start = INIT.index('if [ -n "$manifest_chdir" ]; then')
         end = INIT.index("\nfi\n", start) + len("\nfi\n")
         block = INIT[start:end]

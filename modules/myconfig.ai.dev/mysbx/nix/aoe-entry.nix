@@ -16,10 +16,18 @@
 # `aoe` creates its own state lazily on first run, under the sandbox
 # `HOME` (`/mysbx-home`, a tmpfs — D14): per sandbox and per run, unless
 # a repository declares a `state-dirs` entry for it (D15).
+#
+# Worktree placement follows the workmux convention
+# (`<repo>__worktrees/<branch>`): `[worktree] path_template` is set to
+# an ABSOLUTE path computed from the repo root at start time, written
+# into a marked block of `aoe`'s global `config.toml`; a user-owned
+# `[worktree]` table (persisted via `state-dirs`) is left alone.
 {
   lib,
   writeShellApplication,
   coreutils,
+  gnused,
+  gnugrep,
   bashInteractive,
   # The interactive payload shell of the sandbox (../default.nix
   # `shell.path`, bd myconfig-l44): the HOST's shell, so a pane
@@ -41,14 +49,51 @@ writeShellApplication {
     aoe
     tmux
     coreutils
+    gnused
+    gnugrep
     bashInteractive
   ];
   text = ''
     ${muxLib.requireSocketDir "mysbx-aoe-entry"}
     ${muxLib.pinShell (if payloadShell != null then payloadShell else lib.getExe bashInteractive)}
 
-    # mysbx `--chdir`s into the repo root, so `aoe` manages the
-    # repository it was started for without being told which one.
+    ${muxLib.worktreesSibling "mysbx-aoe-entry"}
+
+    config_base="''${XDG_CONFIG_HOME:-}"
+    case $config_base in
+        /*) ;;
+        *) config_base="$HOME/.config" ;;
+    esac
+    aoe_config="$config_base/agent-of-empires/config.toml"
+    begin_marker="# BEGIN mysbx-aoe-entry"
+    end_marker="# END mysbx-aoe-entry"
+    mkdir -p "$(dirname "$aoe_config")"
+    touch "$aoe_config"
+    stripped="$(sed "/^$begin_marker\$/,/^$end_marker\$/d" "$aoe_config")"
+    case $worktrees in
+        *[[:cntrl:]]*)
+            echo "mysbx-aoe-entry: repository path contains control characters:" >&2
+            echo "mysbx-aoe-entry: $worktrees — aoe keeps its worktree default" >&2
+            printf '%s\n' "$stripped" >"$aoe_config"
+            ;;
+        *)
+            if printf '%s\n' "$stripped" | grep -q '^[[:space:]]*\[worktree\]'; then
+                echo "mysbx-aoe-entry: $aoe_config has its own [worktree] table; not overriding it" >&2
+                printf '%s\n' "$stripped" >"$aoe_config"
+            else
+                template="$worktrees/{branch}"
+                template="''${template//\\/\\\\}"
+                template="''${template//\"/\\\"}"
+                {
+                    [ -n "$stripped" ] && printf '%s\n' "$stripped"
+                    printf '%s\n' "$begin_marker"
+                    printf '[worktree]\npath_template = "%s"\n' "$template"
+                    printf '%s\n' "$end_marker"
+                } >"$aoe_config"
+            fi
+            ;;
+    esac
+
     # `exec`: `aoe` owns the terminal and its exit code propagates
     # unchanged (../docs/design/cli.md D8).
     exec aoe "$@"

@@ -46,8 +46,8 @@
 //!    DEST is the GUEST path of the share mount — under
 //!    `/tmp/mysbx-shares/` on the guest tmpfs, never below another
 //!    virtiofs mount (spike finding 9: nesting returns EBUSY); the
-//!    payload sees each share at its SANDBOX path through the rootfs
-//!    symlink farm the guest init mounts (section 5 of the init).
+//!    payload sees each share at its SANDBOX path through a bind
+//!    mount the guest init places (section 5 of the init).
 //! 4. `--env K=V` — the payload environment, in the exact order
 //!    bwrap.rs/podman_gvisor.rs emit it (config layers, then
 //!    infrastructure, then the forwarded host variables). The
@@ -93,8 +93,8 @@ pub type HostEnv = std::collections::BTreeMap<String, String>;
 /// can take no mountpoints below it, and NESTING a second virtiofs
 /// device under the root share returns EBUSY — spike finding 9),
 /// then mounts every share's tag under this directory keyed by the
-/// tag, so the sandbox paths the payload sees are symlinks the init
-/// controls.
+/// tag, and bind-mounts each sandbox path the payload sees from its
+/// slot.
 pub const GUEST_SHARE_ROOT: &str = "/tmp/mysbx-shares";
 
 /// The sandbox-path sentinel of a LINKLESS share (bd myconfig-j23):
@@ -329,8 +329,8 @@ impl std::fmt::Display for Error {
 /// guest init (bd myconfig-dak.5) mounts each DEVICE once, under
 /// [`GUEST_SHARE_ROOT`] keyed by the device tag (nesting a virtiofs
 /// device under another virtiofs mount returns EBUSY, spike finding
-/// 9, so nothing ever mounts at the sandbox path directly), and then
-/// links each sandbox path at `<device-mount>/<slot>`, so the
+/// 9, so no DEVICE ever mounts at the sandbox path directly), and
+/// then bind-mounts `<device-mount>/<slot>` at each sandbox path, so the
 /// payload's contract is the SANDBOX layout, the tmpfs placement is
 /// the init's. The `MYSBX_KRUN_SHARES` encoding the launcher hands
 /// the init is one `DEVICE SLOT SANDBOX_PATH ro|rw` entry per share.
@@ -597,11 +597,9 @@ fn krun_shares(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Result<Vec<Sha
 
 /// The GUEST-side backing path of every share — `<GUEST_SHARE_ROOT>/
 /// <stage-device>/<slot>` (the init mounts each device there and
-/// links each sandbox path at its slot). nix's libgit2 fetcher
-/// REALPATHs a symlinked workspace before its `safe.directory`
-/// comparison (live finding on 'thing', bd myconfig-n4b), so the
-/// trust texts must name the BACKING path too — exact paths only,
-/// never a bare `*`.
+/// bind-mounts each sandbox path from its slot). The device mount
+/// stays reachable at that path, so the trust texts name the BACKING
+/// path too (bd myconfig-n4b) — exact paths only, never a bare `*`.
 pub fn backing_paths(
     cfg: &Merged,
     repo: &Repo,

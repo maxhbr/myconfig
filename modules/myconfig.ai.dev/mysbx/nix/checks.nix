@@ -424,8 +424,8 @@ in
   # workmux `<repo>__worktrees` sibling — the same registry
   # `Repo::worktrees` binds — and must do so ONLY for an existing
   # (i.e. bound) directory, never create it. The check extracts the
-  # entry's own placement block (`worktrees="$(dirname …` to its
-  # `fi`), runs it against both a present and an absent sibling, and
+  # entry's own placement code (the shared sibling discovery and the
+  # `[worktrees]` block), runs it against both a present and an absent sibling, and
   # validates the generated session config with herdr's own
   # `config check` — the parser that would silently fall back to its
   # default on a broken value otherwise. The entry's server pre-start
@@ -485,10 +485,13 @@ in
           fail "the entry must never mkdir the worktrees sibling (config.md D13)"
         fi
 
-        # Extract the entry's own placement block — `worktrees="$(dirname
-        # …` through its `fi` — so the check runs the very code the
-        # sandbox runs, not a re-implementation of it.
-        block="$(sed -n '/^worktrees="\$(dirname/,/^fi$/p' "$entry")" \
+        # Extract the entry's own placement code — the shared sibling
+        # discovery (`repo_root="$PWD"` through its `fi`) plus the
+        # `[worktrees]` block (`if [ -d "$worktrees" ]` through its
+        # `fi`) — so the check runs the very code the sandbox runs, not
+        # a re-implementation of it.
+        block="$(sed -n '/^repo_root="\$PWD"$/,/^fi$/p' "$entry")
+        $(sed -n '/^if \[ -d "\$worktrees" \]; then$/,/^fi$/p' "$entry")" \
           || fail "cannot extract the placement block"
         printf '%s\n' "$block" | grep -q '^if \[ -d "\$worktrees" \]' \
           || fail "the extracted block is not gated on the sibling existing"
@@ -500,7 +503,7 @@ in
         # repository-local root.
         mkdir -p "$tmp/repo" "$tmp/repo__worktrees" "$tmp/home/.config/herdr"
         cat "$baseConfigPath" > "$tmp/home/.config/herdr/config.toml"
-        repo_root="$tmp/repo" HOME="$tmp/home" bash -c "$block" \
+        (cd "$tmp/repo" && HOME="$tmp/home" bash -c "$block") \
           || fail "the placement block failed on an existing sibling"
         grep -q '^directory = "'"$tmp"'/repo__worktrees"$' \
           "$tmp/home/.config/herdr/config.toml" \
@@ -513,7 +516,7 @@ in
         # tmpfs home and is therefore ephemeral.
         rm -rf "$tmp/repo__worktrees"
         cat "$baseConfigPath" > "$tmp/home/.config/herdr/config.toml"
-        repo_root="$tmp/repo" HOME="$tmp/home" bash -c "$block" \
+        (cd "$tmp/repo" && HOME="$tmp/home" bash -c "$block") \
           || fail "the placement block failed on an absent sibling"
         if grep -q '^\[worktrees\]' "$tmp/home/.config/herdr/config.toml"; then
           fail "an absent sibling must leave [worktrees] unset"

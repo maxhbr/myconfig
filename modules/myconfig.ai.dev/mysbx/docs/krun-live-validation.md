@@ -211,28 +211,29 @@ curl.
 
 ### 2.6 PWD parity with the other backends (bd myconfig-mr4)
 
-The workspace share's sandbox path is a SYMLINK at the virtiofs
-backing mount (finding 9), so the kernel's `getcwd()` honestly
-reports the backing spelling — `pwd -P` KEEPS reporting it, that is
-kernel-true and not a bug. The parity claim is only about `$PWD`,
-the spelling tools read:
+The guest init bind-mounts every share at its sandbox path, so both
+`$PWD` and the kernel's `getcwd()` report the repo path — the same
+spelling bwrap and podman start the payload with:
 
 ```bash
 # interactive shell in the VM, started in the repo:
-printf 'PWD=%s\n' "$PWD"           # == the repo path, NOT
-                                 # /tmp/mysbx-shares/stage-rw/...
-pwd -P                             # the backing path — expected
-pwd                                # == $PWD (the logical spelling)
-# a multiplexer pane too (herdr/tmux/workmux sessions inherit the
-# init's export through the entry script):
-#   echo "$PWD" in a pane == the repo path
+printf 'PWD=%s\n' "$PWD"           # == the repo path
+pwd -P                             # == the repo path, NOT
+                                   # /tmp/mysbx-shares/stage-rw/...
+findmnt -n -o SOURCE,OPTIONS "$PWD"  # a bind of stage-rw[/workspace]
+# with a <repo>__worktrees sibling on the host:
+pwd -P "$(dirname "$PWD")/$(basename "$PWD")__worktrees"  # the sibling path
+# a multiplexer pane too (herdr/tmux/workmux/aoe):
+#   pwd -P in a pane == the repo path
 ```
 
-Verify: `$PWD` and `pwd` report the repo path — the same spelling
-bwrap and podman start the payload with — in the interactive shell
-AND inside multiplexer panes. `pwd -P` reports the backing path and
-that is correct (no structural mount change hides it; the fix
-exports the spelling in the guest init after the manifest chdir).
+Verify: `$PWD`, `pwd` and `pwd -P` report the repo path in the
+interactive shell AND inside multiplexer panes; under
+`multiplexer = "aoe"`, a new worktree session lands in
+`<repo>__worktrees/<branch>` and `git worktree list` on the HOST
+shows the host paths (no `/tmp/mysbx-shares/...` in
+`.git/worktrees/*/gitdir`); a read-only mount refuses writes
+(`touch` → EROFS) at its sandbox path.
 
 ## 3. Recording
 
@@ -291,8 +292,8 @@ experimental-features = "nix-command flakes"
 1. **Trust (bd myconfig-n4b):** the fetch must get PAST libgit2's
    safe.directory check. The trust files name BOTH spellings of the
    workspace — the sandbox path and the share backing path
-   `/tmp/mysbx-shares/stage-rw/workspace` — because nix's libgit2
-   fetcher REALPATHS the workspace symlink before the comparison.
+   `/tmp/mysbx-shares/stage-rw/workspace` — because the device
+   mount stays reachable at the backing path.
    Failure shape if broken: `repository path ... is not owned by
    current user`.
 
