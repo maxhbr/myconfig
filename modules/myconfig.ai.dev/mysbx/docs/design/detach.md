@@ -5,7 +5,7 @@ SPDX-License-Identifier: MIT
 
 # Design: detached runs — a sandbox that keeps running without a terminal
 
-Status: proposed (bd myconfig-7ioq; acceptance: myconfig-7ioq.1).
+Status: agreed (bd myconfig-7ioq; acceptance: myconfig-7ioq.1).
 This is the decision record for running a mysbx sandbox in the
 background and attaching a terminal to it later — the workflow aoe and
 workmux give on the host, where the tmux server lives outside any

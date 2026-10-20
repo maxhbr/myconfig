@@ -61,7 +61,7 @@ _Avoid_: bind, share, volume
 **Detached run**:
 An interactive run whose terminal is held by a host-side `dtach` master
 instead of the terminal that started it, reached again with
-`mysbx attach` (proposed, `docs/design/detach.md`). One per workspace
+`mysbx attach` (`docs/design/detach.md`). One per workspace
 (the live repo or a session).
 _Avoid_: background job, daemon, server
 
