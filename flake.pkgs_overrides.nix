@@ -28,6 +28,10 @@
 # |                | pandas 3.x, so `pythonRuntimeDepsCheckHook` rejects the      |
 # |                | build. Relaxed via `pythonRelaxDeps`. Breaks the             |
 # |                | sbomnix -> dfdiskcache -> pandas build chain.                 |
+# | sbomnix        | Two deps fail at the pinned rev: `reuse` misses its `man`      |
+# |                | output (sphinx-hook reads `sphinxBuilders` as a scalar under  |
+# |                | `__structuredAttrs`), `sqliteschema` rejects `typepy` 2.0.0.  |
+# |                | Taken from the `nixpkgs-sbomnix` input (binary-cached).       |
 # | pass-secret-   | Upstream calls `asyncio.get_event_loop()` in its entry point, |
 # | service        | which since Python 3.14 raises `RuntimeError: There is no    |
 # |                | current event loop` instead of implicitly creating one. The   |
@@ -75,6 +79,16 @@
           });
         })
       ];
+    })
+
+    # sbomnix: at the pinned nixpkgs two of its dependencies fail to build
+    # (`python3.14-reuse` misses its `man` output, `python3.14-sqliteschema`
+    # rejects `typepy` 2.0.0), and master/nixos-unstable-small are broken the
+    # same way. Take it from the `nixpkgs-sbomnix` input instead, whose whole
+    # sbomnix closure is binary-cached. See
+    # doc/TODOs/drop-sbomnix-nixpkgs-pin.md.
+    (self: _super: {
+      sbomnix = self.nixpkgs-sbomnix.sbomnix;
     })
 
     # voxtype-onnx: build the optional `osd-gtk4` cargo feature so the GTK4

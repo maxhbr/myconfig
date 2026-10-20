@@ -6,6 +6,8 @@
     nixos-unstable-small.url = "github:nixos/nixpkgs?ref=nixos-unstable-small";
     nixos-unstable.url = "github:nixos/nixpkgs?ref=nixos-unstable";
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
+    # sbomnix only (flake.pkgs_overrides.nix, doc/TODOs/drop-sbomnix-nixpkgs-pin.md)
+    nixpkgs-sbomnix.url = "github:nixos/nixpkgs/fe13242281a67641c0102cdb1087f0ebe586c7df";
 
     nix-index-database.url = "github:nix-community/nix-index-database";
     nix-index-database.inputs.nixpkgs.follows = "nixpkgs";
@@ -129,6 +131,7 @@
                           (mkSubPkgsOverlay "master" inputs.master)
                           (mkSubPkgsOverlay "nixos-unstable" inputs.nixos-unstable)
                           (mkSubPkgsOverlay "nixos-unstable-small" inputs.nixos-unstable-small)
+                          (mkSubPkgsOverlay "nixpkgs-sbomnix" inputs.nixpkgs-sbomnix)
                           # (mkSubPkgsOverlay "nixos-2511" inputs.rel2511)
                           # (mkSubPkgsOverlay "nixos-2505" inputs.rel2505)
                           # (mkSubPkgsOverlay "nixos-2405" inputs.rel2405)
