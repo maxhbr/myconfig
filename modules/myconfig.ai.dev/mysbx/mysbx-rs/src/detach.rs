@@ -1886,11 +1886,23 @@ struct Tee {
 /// guarantee instead of an assumption).
 static TEE: std::sync::Mutex<Option<Tee>> = std::sync::Mutex::new(None);
 
+// `pipe(2)` — the tee tests' sink pipes (the tee itself uses
+// `pipe2` with `O_CLOEXEC` below).
+#[cfg(test)]
 unsafe fn libc_pipe(fds: &mut [i32; 2]) -> i32 {
     extern "C" {
         fn pipe(fds: *mut i32) -> i32;
     }
     pipe(fds.as_mut_ptr())
+}
+
+// `pipe2(2)` — the tee's pipe is born close-on-exec (detach.md B4:
+// the backend's exec must not inherit the capture descriptors).
+unsafe fn libc_pipe2(fds: &mut [i32; 2], flags: i32) -> i32 {
+    extern "C" {
+        fn pipe2(fds: *mut i32, flags: i32) -> i32;
+    }
+    pipe2(fds.as_mut_ptr(), flags)
 }
 
 unsafe fn libc_dup(fd: i32) -> i32 {
@@ -1914,6 +1926,53 @@ unsafe fn libc_close(fd: i32) -> i32 {
     close(fd)
 }
 
+// `fcntl(2)`'s FD_CLOEXEC probe: nonzero when the fd is
+// close-on-exec (the tee tests assert the flag).
+#[cfg(test)]
+unsafe fn libc_fcntl_cloexec_probe(fd: i32) -> i32 {
+    extern "C" {
+        fn fcntl(fd: i32, cmd: i32, ...) -> i32;
+    }
+    const F_GETFD: i32 = 1;
+    fcntl(fd, F_GETFD) & 1
+}
+
+// `fcntl(2)`'s `F_SETFD` with `FD_CLOEXEC`: set close-on-exec.
+unsafe fn libc_fcntl_setfd_cloexec(fd: i32) {
+    extern "C" {
+        fn fcntl(fd: i32, cmd: i32, ...) -> i32;
+    }
+    const F_SETFD: i32 = 2;
+    let _ = fcntl(fd, F_SETFD, 1);
+}
+
+// `fcntl(2)`'s int-valued query, test-only (the sink's capacity).
+#[cfg(test)]
+const F_GETPIPE_SZ: i32 = 1032;
+
+#[cfg(test)]
+unsafe fn libc_fcntl_int(fd: i32, cmd: i32) -> i32 {
+    extern "C" {
+        fn fcntl(fd: i32, cmd: i32, ...) -> i32;
+    }
+    fcntl(fd, cmd)
+}
+
+// `read(2)` for the test's drain; the same extern shape as
+// `libc_write` below.
+#[cfg(test)]
+unsafe fn libc_read(fd: i32, buf: &mut [u8]) -> std::io::Result<usize> {
+    extern "C" {
+        fn read(fd: i32, buf: *mut std::ffi::c_void, count: usize) -> isize;
+    }
+    let n = read(fd, buf.as_mut_ptr().cast(), buf.len());
+    if n < 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(n as usize)
+    }
+}
+
 /// Capture the inner mysbx's own stderr (detach.md B5): B5's `error`
 /// field records the `mysbx: ` message of a failed startup, and the
 /// capture makes EVERY pipeline refusal land there without touching
@@ -1923,7 +1982,11 @@ unsafe fn libc_close(fd: i32) -> i32 {
 /// payload output is kept.
 fn tee_install() {
     let mut fds = [0i32; 2];
-    if unsafe { libc_pipe(&mut fds) } != 0 {
+    // O_CLOEXEC: the pipe is the capture's plumbing — the backend's
+    // exec must not carry it (the `libc_dup2` below always clears
+    // the flag on fd 2's number again, that is what fd 2 is for).
+    const O_CLOEXEC: i32 = 0o2000000; // Linux's octal flag
+    if unsafe { libc_pipe2(&mut fds, O_CLOEXEC) } != 0 {
         return; // no capture, not no run — the tee is best-effort
     }
     let saved_fd = unsafe { libc_dup(2) };
@@ -1934,6 +1997,12 @@ fn tee_install() {
         }
         return;
     }
+    // The saved fd is close-on-exec too: it only serves the reader
+    // thread's echo and this process's `dup2` restores — a spawned
+    // backend (which may outlive the tee's use of fd 2) must not
+    // inherit it. `tee_restore`'s `dup2` onto 2 clears the flag on
+    // the destination number, which is the inheritable copy.
+    unsafe { libc_fcntl_setfd_cloexec(saved_fd) };
     unsafe { libc_dup2(fds[1], 2) };
     unsafe { libc_close(fds[1]) };
     let (tx, rx) = std::sync::mpsc::channel::<String>();
@@ -1978,14 +2047,15 @@ fn tee_install() {
 /// Called by `sandbox` before the first child spawn of the inner, so
 /// the backend and the waypipe client inherit the real stderr, and
 /// their output is not kept (the non-goal stands: no output log).
-/// The saved fd is closed once it is back on 2 — one leaked fd per
-/// detached inner otherwise.
+/// The saved fd is NOT closed here: the reader thread still echoes
+/// to it until it sees the EOF — it is the sole closer (the reader
+/// above), so the number is never closed twice and never reused
+/// under a live writer.
 pub(crate) fn tee_restore() {
     let mut slot = TEE.lock().unwrap();
     if let Some(tee) = slot.take() {
         unsafe {
             libc_dup2(tee.saved_fd, 2);
-            libc_close(tee.saved_fd);
         }
     }
 }
@@ -1993,8 +2063,8 @@ pub(crate) fn tee_restore() {
 /// Restore the stderr (if still captured), wait for the reader to see
 /// EOF and return the captured text — the fallback `error` of a
 /// startup that failed before [`inner_spawn_wait`] could record one.
-/// The saved fd is closed here too: the reader's echo is done (it
-/// saw EOF) and this process's copy must not leak either.
+/// The saved fd is the reader's to close (see [`tee_restore`]): after
+/// the `recv` below it is gone — EOF was seen, the echo is done.
 fn tee_finish() -> String {
     let slot = {
         let mut slot = TEE.lock().unwrap();
@@ -2004,7 +2074,6 @@ fn tee_finish() -> String {
         Some(tee) => {
             unsafe {
                 libc_dup2(tee.saved_fd, 2);
-                libc_close(tee.saved_fd);
             }
             tee.captured.recv().unwrap_or_default()
         }
@@ -2291,6 +2360,10 @@ pub(crate) fn inner_spawn_wait(
 mod tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
+
+    /// The tee tests touch the process's fd 2 and the global TEE:
+    /// one at a time.
+    static TEE_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     /// A fresh temporary directory per test; hand-rolled, the crate
     /// has no dependencies. Unique per test name and pid, cleaned up
@@ -2920,6 +2993,121 @@ mod tests {
     }
 
     #[test]
+    fn the_saved_stderr_fd_is_not_reused_before_the_reader_drains() {
+        let _tee_guard = TEE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        // Invariant: the reader thread is the SOLE closer of the
+        // saved fd — while it is blocked mid-echo, the number stays
+        // pinned, and files opened after `tee_restore` never land
+        // on it. Pinning the reader: fd 2 is a FULL pipe when the
+        // tee is installed, so the reader's echo blocks on its
+        // first write; `tee_restore` runs while it is blocked, the
+        // probes take the low free numbers, and the drain lets the
+        // reader finish — a second closer would land on a probe.
+        //
+        // `libc_write` on fd 2, not `eprintln!`: the test harness
+        // captures the macro's output before fd 2, so only a raw
+        // write reaches the tee.
+        let real_stderr = unsafe { libc_dup(2) };
+        assert!(real_stderr >= 0);
+        unsafe { libc_fcntl_setfd_cloexec(real_stderr) };
+        let mut sink = [0i32; 2];
+        assert_eq!(unsafe { libc_pipe(&mut sink) }, 0);
+        unsafe {
+            libc_fcntl_setfd_cloexec(sink[0]);
+            libc_fcntl_setfd_cloexec(sink[1]);
+        }
+        // Fill the sink to its exact capacity: the next write blocks.
+        let cap = unsafe { libc_fcntl_int(sink[1], F_GETPIPE_SZ) };
+        assert!(cap > 0);
+        let mut filled = 0usize;
+        while filled < cap as usize {
+            let want = (cap as usize - filled).min(4096);
+            let n = unsafe { libc_write(sink[1], &[b'j'; 4096][..want]) }
+                .expect("the sink fills without blocking");
+            assert!(n > 0);
+            filled += n;
+        }
+        unsafe { libc_dup2(sink[1], 2) }; // fd 2 = the full sink
+        tee_install();
+        // Vacuity guard: fd 2 is now the tee's pipe, not the sink.
+        let held_2 = std::fs::read_link("/proc/self/fd/2").expect("fd 2 resolves");
+        let held_sink =
+            std::fs::read_link(format!("/proc/self/fd/{}", sink[1])).expect("sink resolves");
+        assert_ne!(held_2, held_sink, "the tee holds fd 2 (vacuity guard)");
+        let _ = unsafe { libc_write(2, b"mysbx: tee reuse probe\n") };
+        // The reader has read the probe text and is blocked inside
+        // its echo write to the full sink.
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        tee_restore(); // the dup2 back; the saved fd stays OPEN
+                       // Enough files to cover every low free number, the saved
+                       // fd's included — one of them lands exactly on it. Raw fds,
+                       // not `File`s: a probe closed behind the test's back must be
+                       // an assertion failure, not an I/O-safety abort.
+        let dir = tmpdir("tee-reuse-probe");
+        let probe_fds: Vec<i32> = (0..64)
+            .map(|i| {
+                use std::os::fd::IntoRawFd;
+                std::fs::File::create(dir.join(format!("probe-{i}")))
+                    .expect("a probe opens")
+                    .into_raw_fd()
+            })
+            .collect();
+        // The drain: the reader's echo completes, it sees EOF and
+        // closes — a second closer would land on a probe fd here.
+        let mut drain = [0u8; 4096];
+        let _ = unsafe { libc_read(sink[0], &mut drain) };
+        let mut victim = None;
+        for _ in 0..100 {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            victim = probe_fds
+                .iter()
+                .copied()
+                .find(|fd| std::fs::read_link(format!("/proc/self/fd/{fd}")).is_err());
+            if victim.is_some() {
+                break;
+            }
+        }
+        // The real stderr comes back BEFORE any output of a failure.
+        unsafe { libc_dup2(real_stderr, 2) };
+        assert!(
+            victim.is_none(),
+            "a reused descriptor was closed (fd {victim:?}): the \
+             saved fd has more than one closer"
+        );
+        for i in 0..64 {
+            let content =
+                std::fs::read_to_string(dir.join(format!("probe-{i}"))).expect("probe reads");
+            assert!(content.is_empty(), "probe-{i} was written to: {content}");
+        }
+        for fd in probe_fds {
+            unsafe { libc_close(fd) };
+        }
+        unsafe {
+            libc_close(sink[0]);
+            libc_close(sink[1]);
+            libc_close(real_stderr);
+        }
+    }
+
+    #[test]
+    fn tee_finish_still_returns_the_captured_text() {
+        let _tee_guard = TEE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        tee_install();
+        // `libc_write` on fd 2, not `eprintln!` (the harness captures
+        // the macro before fd 2 — see the reuse test).
+        let _ = unsafe { libc_write(2, b"mysbx: tee finish probe\n") };
+        let captured = tee_finish();
+        assert_eq!(
+            captured.trim(),
+            "mysbx: tee finish probe",
+            "the capture survives the ownership fix (B5's error field)"
+        );
+        // fd 2 is the real stderr again and inheritable: the restore's
+        // dup2 clears close-on-exec on the destination.
+        assert_eq!(unsafe { libc_fcntl_cloexec_probe(2) }, 0);
+    }
+
+    #[test]
     fn the_attach_argv_is_dtach_a_sock_winch_z() {
         let argv = attach_argv(
             "/nix/store/aaaa-dtach/bin/dtach",
@@ -2936,5 +3124,64 @@ mod tests {
                 "-z".to_owned(),
             ]
         );
+    }
+
+    #[test]
+    fn the_tee_pipe_and_the_saved_fd_are_close_on_exec() {
+        let _tee_guard = TEE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        // The pipe and the dup'd saved fd crossed the exec into the
+        // backend: captured startup stderr could ride along in the
+        // payload's fd table. Close-on-exec on every descriptor the
+        // tee creates keeps the exec boundary clean (detach.md B4's
+        // exec, B5's capture) even though the reader thread may still
+        // hold the saved fd when the backend spawns.
+        let before = open_fds();
+        tee_install();
+        let after = open_fds();
+        let created: Vec<(i32, i32)> = after
+            .iter()
+            .filter(|fd| !before.contains(fd))
+            .map(|fd| (*fd, unsafe { libc_fcntl_cloexec_probe(*fd) }))
+            .collect();
+        tee_restore();
+        // Cleanup before any assertion — a panic here must not
+        // poison fd 2 for the sibling tests. The slot is gone (the
+        // restore took it), so this returns at once; the reader
+        // drains in the background.
+        let _ = tee_finish();
+        assert!(
+            !created.is_empty(),
+            "the tee installed without creating descriptors (vacuity)"
+        );
+        let leaked: Vec<i32> = created
+            .iter()
+            .filter(|(_, flag)| *flag == 0)
+            .map(|(fd, _)| *fd)
+            .collect();
+        assert!(
+            leaked.is_empty(),
+            "the tee created non-close-on-exec fds: {leaked:?} \
+             (flags: {created:?})"
+        );
+        assert_eq!(
+            unsafe { libc_fcntl_cloexec_probe(2) },
+            0,
+            "fd 2 is inheritable again after the restore (dup2 clears \
+             the flag on its destination)"
+        );
+    }
+
+    /// The fd numbers the process holds right now.
+    fn open_fds() -> Vec<i32> {
+        std::fs::read_dir("/proc/self/fd")
+            .expect("fd list")
+            .map(|e| {
+                e.expect("fd entry")
+                    .file_name()
+                    .to_string_lossy()
+                    .parse()
+                    .expect("fd numbers")
+            })
+            .collect()
     }
 }
