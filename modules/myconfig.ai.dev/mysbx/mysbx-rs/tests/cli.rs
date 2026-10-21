@@ -4066,6 +4066,157 @@ fn a_mount_without_a_runtime_dir_is_allowed() {
     );
 }
 
+#[test]
+fn a_runtime_dir_under_the_repo_is_refused_on_the_workspace_bind() {
+    // detach.md B8 names EVERY effective bind source, not just the
+    // configured mounts: the workspace bind — the repo itself, rw —
+    // is an ancestor of a runtime dir placed inside the repo
+    // (`$REPO/.runtime`), so the refusal must fire although no
+    // `[[mounts]]` entry is involved at all. On every backend and
+    // under `--dry-run` too: the check sits before the backend
+    // dispatch and before the dry-run return.
+    for backend in ["bubblewrap", "podman-gvisor"] {
+        let (inv, repo, sidecar) = fixture(&format!("expose-repo-{backend}"), &["--dry-run"]);
+        std::fs::write(
+            sidecar.join("config.toml"),
+            format!("backend = \"{backend}\"\n"),
+        )
+        .unwrap();
+        let runtime = repo.join(".runtime");
+        std::fs::create_dir_all(&runtime).unwrap();
+        let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+        cmd.env("XDG_RUNTIME_DIR", &runtime);
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert_eq!(
+            out.status.code(),
+            Some(mysbx::EXIT_INFRASTRUCTURE),
+            "{backend}: stdout: {stdout}\nstderr: {stderr}"
+        );
+        assert!(
+            stderr.contains("runtime root") && stderr.contains("detach.md B8"),
+            "{backend}: unexpected stderr: {stderr}"
+        );
+        // The message names the repo bind as the exposing source.
+        assert!(
+            stderr.contains(repo.to_string_lossy().as_ref()),
+            "{backend}: the refusal must name the workspace bind: {stderr}"
+        );
+    }
+}
+
+#[test]
+fn a_runtime_dir_under_the_worktrees_sibling_is_refused() {
+    // detach.md B8 for the `__worktrees` sibling: an implicit rw bind
+    // of every live run, discovered per run — a runtime dir below it
+    // exposes the registry through a source no `[[mounts]]` entry
+    // ever names. The sibling must exist for the bind (and therefore
+    // the check) to fire.
+    let (inv, repo, _sidecar) = fixture_with_backend("expose-worktrees", &["--dry-run"]);
+    let worktrees = repo.parent().unwrap().join(format!(
+        "{}__worktrees",
+        repo.file_name().unwrap().to_string_lossy()
+    ));
+    std::fs::create_dir_all(&worktrees).unwrap();
+    let runtime = worktrees.join("runtime");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        out.status.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "stdout: {stdout}\nstderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("runtime root") && stderr.contains("detach.md B8"),
+        "unexpected stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains(worktrees.to_string_lossy().as_ref()),
+        "the refusal must name the worktrees bind: {stderr}"
+    );
+}
+
+#[test]
+fn a_runtime_dir_under_a_state_dir_backing_is_refused() {
+    // detach.md B8 for the state-dir backings: every entry of
+    // `state-dirs` is an implicit rw bind whose host source lives
+    // under `<sidecar>/state/` — a runtime dir below that backing
+    // exposes the registry through the very store the run is about
+    // to persist its writes in.
+    let (inv, _, sidecar) = fixture("expose-state", &["--dry-run"]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nstate-dirs = [\"work\"]\n",
+    )
+    .unwrap();
+    let runtime = sidecar.join("state").join("work").join("runtime");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        out.status.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "stdout: {stdout}\nstderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("runtime root") && stderr.contains("detach.md B8"),
+        "unexpected stderr: {stderr}"
+    );
+}
+
+#[test]
+fn a_runtime_dir_under_a_git_dir_is_refused() {
+    // detach.md B8 for the approved git-dirs: a linked-worktree run
+    // binds the git dir the `.git` FILE points at, rw — a runtime
+    // dir below that bind exposes the registry through a source the
+    // operator approved for git metadata, not for the registry.
+    let base = target_tmpdir("expose-gitdir");
+    let (worktree, gitdir) = make_worktree_fixture(&base, "wt");
+    let sidecar = base.join("wt.mysbx");
+    init_sidecar(&sidecar);
+    // The approval the run needs to reach the dry-run stage at all.
+    std::fs::write(
+        sidecar.join("config.toml"),
+        format!(
+            "backend = \"bubblewrap\"\ngit-dirs = [\"{}\"]\n",
+            gitdir.display()
+        ),
+    )
+    .unwrap();
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg").join("mysbx")).unwrap();
+    let inv = Invocation {
+        args: vec![],
+        cwd: worktree.clone(),
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let runtime = gitdir.join("runtime");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        out.status.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "stdout: {stdout}\nstderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("runtime root") && stderr.contains("detach.md B8"),
+        "unexpected stderr: {stderr}"
+    );
+}
+
 // ---- the policy PATHNAME is protected end to end (review-4 item 1) ----
 
 /// Run the bare form with a backend that cannot be executed: the guard

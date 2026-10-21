@@ -321,7 +321,7 @@ impl fmt::Display for Error {
                 relation,
             } => write!(
                 f,
-                "the mount source {} {} the runtime root {} \
+                "the bind source {} {} the runtime root {} \
                  ($XDG_RUNTIME_DIR/mysbx, the registry of detached runs) — \
                  a sandbox that could reach it could type into every \
                  detached run of the user (detach.md B8)",
@@ -400,24 +400,44 @@ fn registry_root_from(runtime_dir: &Path) -> PathBuf {
     std::fs::canonicalize(&root).unwrap_or(root)
 }
 
-/// Refuse a mount whose source is the runtime root, below it or
-/// above it (detach.md B8): a process that can connect to a dtach
-/// socket can type into that terminal, so a sandbox that could reach
-/// `$XDG_RUNTIME_DIR/mysbx/` could type into every detached run of
-/// the user — including runs of other repos with other grants. This
-/// is a refusal of every run, detached or not: a foreground run
-/// could reach detached ones just the same.
-///
-/// An unset or relative `$XDG_RUNTIME_DIR` passes: without a
-/// runtime root there is nothing at, below or above to refuse —
-/// detached runs refuse the variable themselves (B3, no fallback),
-/// but a foreground run must not break over an environment without
-/// it. Pure, so the tests never mutate the environment; the mount
-/// sources are the merge's canonicalized values (config.md D8),
-/// compared as stored.
+/// The mount-shaped spelling of [`check_source_exposure`] (detach.md
+/// B8): the sources are the mounts' `path` values — the merge's
+/// canonicalized values (config.md D8), compared as stored. The
+/// run pipeline checks the FULL effective source list — configured
+/// mounts AND the implicit binds — with [`check_source_exposure`];
+/// this form serves the mount-level unit tests.
 pub fn check_mount_exposure(
     runtime_dir: Option<&std::ffi::OsStr>,
     mounts: &[crate::config::Mount],
+) -> Result<(), Error> {
+    let sources: Vec<std::path::PathBuf> = mounts
+        .iter()
+        .map(|m| std::path::PathBuf::from(&m.path))
+        .collect();
+    check_source_exposure(runtime_dir, &sources)
+}
+
+/// Refuse an effective bind source — configured or implicit — whose
+/// path is the runtime root, below it or above it (detach.md B8): a
+/// process that can connect to a dtach socket can type into that
+/// terminal, so a sandbox that could reach
+/// `$XDG_RUNTIME_DIR/mysbx/` could type into every detached run of
+/// the user — including runs of other repos with other grants. The
+/// sources are the run's FULL effective bind set: the configured
+/// `[[mounts]]` AND the implicit binds every backend's argv emits —
+/// the workspace (the repo, or a session's clone), the approved
+/// git-dirs, the `__worktrees` sibling, the state-dir backings under
+/// the sidecar and the waypipe socket dir. A source a backend never
+/// binds is at worst a stricter refusal in an exotic layout; a
+/// source it DOES bind lets the payload walk to the registry.
+///
+/// An unset or relative `$XDG_RUNTIME_DIR` passes, like in
+/// [`check_mount_exposure`]. Pure, so the tests never mutate the
+/// environment; the implicit sources are the same raw paths the
+/// argv builders bind, compared as stored.
+pub fn check_source_exposure(
+    runtime_dir: Option<&std::ffi::OsStr>,
+    sources: &[std::path::PathBuf],
 ) -> Result<(), Error> {
     let Some(raw) = runtime_dir else {
         return Ok(());
@@ -427,9 +447,8 @@ pub fn check_mount_exposure(
         return Ok(());
     }
     let root = registry_root_from(dir);
-    for m in mounts {
-        let source = Path::new(&m.path);
-        let relation = if source == root {
+    for source in sources {
+        let relation = if source == &root {
             Some(RuntimeRootRelation::Equal)
         } else if source.starts_with(&root) {
             Some(RuntimeRootRelation::Below)
@@ -440,7 +459,7 @@ pub fn check_mount_exposure(
         };
         if let Some(relation) = relation {
             return Err(Error::RuntimeRootExposed {
-                source: source.to_path_buf(),
+                source: source.clone(),
                 runtime_root: root,
                 relation,
             });
@@ -2715,6 +2734,82 @@ mod tests {
             }
             other => panic!("expected RuntimeRootExposed, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn an_implicit_source_exposing_the_runtime_root_is_refused() {
+        // detach.md B8 for the sources-level check: the implicit binds
+        // — the workspace, the approved git-dirs, the `__worktrees`
+        // sibling, the state-dir backings, the waypipe socket dir, a
+        // session's clone — refuse exactly like a configured mount,
+        // because each of them is a rw bind the payload could walk
+        // to the registry from. One shape per relation.
+        let repo = tmpdir("expose-sources-repo");
+        let sidecar = tmpdir("expose-sources-sidecar");
+        let runtime = repo.join(".runtime");
+        std::fs::create_dir_all(&runtime).unwrap();
+        // Above: the workspace bind contains the runtime root — the
+        // `XDG_RUNTIME_DIR=$REPO/.runtime` shape the CLI test pins.
+        match check_source_exposure(
+            Some(runtime.as_os_str()),
+            &[repo.clone(), sidecar.join("state").join(".ssh")],
+        ) {
+            Err(Error::RuntimeRootExposed {
+                relation, source, ..
+            }) => {
+                assert_eq!(relation, RuntimeRootRelation::Above);
+                assert_eq!(source, repo);
+            }
+            other => panic!("expected RuntimeRootExposed, got {other:?}"),
+        }
+        // Below: a state-dir backing inside the registry.
+        let backing = runtime.join("mysbx").join("repo").join("work");
+        match check_source_exposure(
+            Some(runtime.as_os_str()),
+            &[sidecar.join("state").join("work"), backing],
+        ) {
+            Err(Error::RuntimeRootExposed { relation, .. }) => {
+                assert_eq!(relation, RuntimeRootRelation::Below);
+            }
+            other => panic!("expected RuntimeRootExposed, got {other:?}"),
+        }
+        // Below: a git-dir, worktrees sibling, waypipe dir or
+        // clone under the registry root.
+        let registry = runtime.join("mysbx");
+        for label in ["git-dir", "worktrees", "waypipe", "clone"] {
+            match check_source_exposure(Some(runtime.as_os_str()), &[registry.join(label)]) {
+                Err(Error::RuntimeRootExposed { relation, .. }) => {
+                    assert_eq!(relation, RuntimeRootRelation::Below, "{label}");
+                }
+                other => panic!("{label}: expected RuntimeRootExposed, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn an_implicit_source_unrelated_to_the_runtime_root_is_allowed() {
+        // The sources-level check is no stricter than the mount
+        // check: a workspace, git-dir, worktrees sibling, state
+        // backing, waypipe dir and clone outside the runtime dir all
+        // pass — the fixtures' own layout (`<base>/runtime` beside
+        // the repo) must keep working.
+        let runtime = tmpdir("expose-sources-ok-runtime");
+        let base = tmpdir("expose-sources-ok-base");
+        std::fs::create_dir_all(runtime.join("mysbx")).unwrap();
+        check_source_exposure(
+            Some(runtime.as_os_str()),
+            &[
+                base.join("repo"),
+                base.join(".git"),
+                base.join("repo__worktrees"),
+                base.join("repo.mysbx").join("state").join(".ssh"),
+                base.join("repo.mysbx").join("waypipe").join("1234"),
+                base.join("repo.mysbx").join("clones").join("feature"),
+            ],
+        )
+        .expect("sources outside the runtime dir expose nothing");
+        check_source_exposure(None, &[base.join("repo")])
+            .expect("no runtime root, nothing to refuse");
     }
 
     // ---- state round-trip (detach.md B5) -----------------------------

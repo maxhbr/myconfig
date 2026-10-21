@@ -2115,19 +2115,54 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
 
     // 3ab. the runtime-root exposure refusal (detach.md B8): a
     // process that can connect to a dtach socket can type into
-    // that terminal, so a mount whose source is
+    // that terminal, so a source that is
     // `$XDG_RUNTIME_DIR/mysbx` — or below or above it — would let
     // the sandbox reach the registry of detached runs, including
     // runs of other repos with other grants. Every run is refused,
     // detached or not (a foreground run could reach detached ones
     // just the same), before the backend check and before the
     // `--dry-run` early return, so a dry run audits the refusal
-    // too. The waypipe socket bind is a sibling
-    // (`$XDG_RUNTIME_DIR/<display>`), never a `Mount`, and stays
-    // allowed. An unset or relative `$XDG_RUNTIME_DIR` passes:
-    // there is no runtime root to expose.
+    // too. An unset or relative `$XDG_RUNTIME_DIR` passes: there
+    // is no runtime root to expose.
+    //
+    // The refusal covers EVERY effective bind source, not just the
+    // configured mounts: the implicit binds the argv assembles in
+    // section 4 are rw sources just the same, and the repo bind —
+    // the ancestor of a runtime dir placed inside the repo — would
+    // expose the registry through a source no `[[mounts]]` entry
+    // ever names. In a live run that is the workspace (the repo
+    // root itself), the approved git-dirs, the `__worktrees`
+    // sibling, the state-dir backings under `<sidecar>/state/` and
+    // — for a waypipe run — the per-run socket dir
+    // `<sidecar>/waypipe/<pid>`; in a clone run (workspace.md D3)
+    // the workspace bind is the session's clone instead, and the
+    // git-dirs, worktrees and state backings are NOT bound. The
+    // waypipe socket dir is the BIND source under the sidecar, not
+    // the in-sandbox `$XDG_RUNTIME_DIR/<display>` sibling, which
+    // is never a bind and stays allowed.
+    let mut exposure_sources: Vec<std::path::PathBuf> = merged
+        .mounts
+        .iter()
+        .map(|m| std::path::PathBuf::from(&m.path))
+        .collect();
+    match &session {
+        Some(s) => exposure_sources.push(s.clone.clone()),
+        None => {
+            exposure_sources.push(repo.root.clone());
+            exposure_sources.extend(repo.git_dirs.iter().cloned());
+            if let Some(worktrees) = &repo.worktrees {
+                exposure_sources.push(worktrees.clone());
+            }
+            for entry in merged.effective_state_dirs() {
+                exposure_sources.push(repo.sidecar.join("state").join(entry));
+            }
+        }
+    }
+    if merged.display.is_waypipe() {
+        exposure_sources.push(waypipe_socket_dir(&repo, std::process::id()));
+    }
     if let Err(e) =
-        detach::check_mount_exposure(detach::runtime_dir_from_env().as_deref(), &merged.mounts)
+        detach::check_source_exposure(detach::runtime_dir_from_env().as_deref(), &exposure_sources)
     {
         eprintln!("mysbx: {e}");
         return EXIT_INFRASTRUCTURE;
@@ -2624,7 +2659,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         mode,
         RunMode::Detached | RunMode::Detachable | RunMode::DetachedInner
     );
-    let waypipe_socket_dir = repo.sidecar.join("waypipe").join(pid.to_string());
+    let waypipe_socket_dir = waypipe_socket_dir(&repo, pid);
     let waypipe_socket_dir_str = waypipe_socket_dir.to_string_lossy().into_owned();
     // The guest-root git trust of the krun variant (bd myconfig-zj2):
     // the payload runs as guest root while the repo mounts keep their
@@ -4884,6 +4919,14 @@ fn ensure_ssh_key(
         println!("## ssh public key: {}", key.trim_end());
     }
     Ok(SshKeyOutcome::Created)
+}
+
+/// The per-run waypipe token directory (config.md D18):
+/// `<sidecar>/waypipe/<pid>` — the BIND source the runtime-root
+/// exposure check (3ab, detach.md B8) and the waypipe channel both
+/// name, so the check and the bind cannot drift apart.
+fn waypipe_socket_dir(repo: &repo::Repo, pid: u32) -> std::path::PathBuf {
+    repo.sidecar.join("waypipe").join(pid.to_string())
 }
 
 /// Create the per-run waypipe token directory `<sidecar>/waypipe/<pid>`

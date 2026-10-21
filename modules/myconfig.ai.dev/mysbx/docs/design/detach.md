@@ -300,12 +300,29 @@ repos with other grants. So:
 
 - No base mount exposes it. Backends already pin `XDG_RUNTIME_DIR` to
   the sandbox home (`bwrap.rs`, `podman_gvisor.rs`).
-- A configured mount, `--ro` or `--rw` whose source is the runtime
-  root, below it or above it (`$XDG_RUNTIME_DIR`, `/run/user`, `/run`,
-  `/`) is refused (`70`) for every run, detached or not: a foreground
-  run could reach detached ones just the same. The refusal names the
-  runtime root and this decision. The waypipe socket bind is a sibling
-  (`$XDG_RUNTIME_DIR/<display>`), not covered.
+- Every effective bind source — not only the configured mounts — is
+  checked the same way, in one place, before the backend dispatch
+  and before the `--dry-run` early return:
+  - A configured mount, `--ro` or `--rw` whose source is the runtime
+    root, below it or above it (`$XDG_RUNTIME_DIR`, `/run/user`, `/run`,
+    `/`) is refused (`70`) for every run, detached or not: a
+    foreground run could reach detached ones just the same.
+  - The implicit binds are checked too: the workspace bind (the repo
+    in a live run, the session's clone in a clone run), the approved
+    git-dirs, the `__worktrees` sibling, the state-dir backings under
+    `<sidecar>/state/` and the waypipe socket dir
+    `<sidecar>/waypipe/<pid>` — a runtime root below or above any of
+    them is refused with the same message and the same `70`, because
+    each is an rw bind the payload could walk to the registry from.
+  - Fixed infrastructure binds — the store share, the pinned
+    `/bin/sh`, `nix.conf`, the CA bundle, the tools `bin` — are not
+    per-run sources and stay outside the check: the store is
+    read-only, so no registry can exist under them (B3's creation
+    refuses a runtime root there), and there is nothing to expose.
+- The refusal names the runtime root and this decision. The
+  in-sandbox waypipe display socket
+  (`$XDG_RUNTIME_DIR/<display>`, created in-sandbox, never bound
+  from the host) is a sibling of the runtime root — not covered.
 - `MYSBX_DETACHED` is not forwarded into the sandbox.
 
 ### B9: Interactions with existing decisions
