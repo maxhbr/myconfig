@@ -1,5 +1,6 @@
-# Every key of the schema, as a sidecar config would use them. The repo
-# itself is not part of the schema — it is implicit (config.md D13).
+# Every key of the schema, as a sidecar config would use them (`Config::KEYS`
+# in src/config.rs pins the set). The repo itself is not part of the schema —
+# it is implicit (config.md D13).
 backend = "bwrap"
 network = true
 
@@ -24,6 +25,15 @@ display = "waypipe"
 # `<repo>.mysbx/state/<entry>` and bound rw at `/mysbx-home/<entry>`.
 state-dirs = [".local/share/opencode", ".local/state/opencode"]
 
+# Git metadata outside the work tree (config.md D13): the approval list
+# for the targets a repo's `.git` FILE may point at. A path here in
+# either layer approves it; the pointer inside the repo approves nothing.
+git-dirs = ["/home/user/src"]
+
+# Host variables forwarded at launch (config.md D6): NAMES only, never
+# values — a credential stays in the host environment.
+forward-env = ["OPENAI_API_KEY"]
+
 # The network allowlist (bd myconfig-mo3.1/myconfig-6di.2): the domains
 # the sandbox may connect to and the TCP ports it may connect to and
 # listen on. Backend-agnostic policy — the `nono` backend enforces them
@@ -32,6 +42,12 @@ state-dirs = [".local/share/opencode", ".local/state/opencode"]
 allow-domains = ["api.openai.com", "github.com"]
 connect-ports = [443, 22]
 listen-ports = [8080]
+
+# Resource limits (config.md D23): the podman backends enforce them, the
+# others warn. A krun VM takes whole vCPUs and more than 128 MiB.
+memory = "8g"
+cpus = 4
+pids-limit = 512
 
 [[mounts]]
 path = "/home/user/.config/pi"

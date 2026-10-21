@@ -372,7 +372,9 @@ failure mode this tool must not have.
 
 The example configurations in `mysbx-rs/tests/assets/` are part of the
 specification: `valid/` shows what users may write, `invalid/` pins down
-what must be rejected.
+what must be rejected. `valid/full.toml` uses every key of
+`Config::KEYS`, and `valid/minimal.toml` is a copy of what `mysbx init`
+writes (D12); both are held to that by `tests/config_parse.rs`.
 
 ### D12: `mysbx init` is idempotent
 
@@ -383,6 +385,17 @@ It is also the *only* way a repository becomes usable: a sandbox run
 creates nothing and refuses an uninitialized repository (cli.md D13).
 The one other command that writes this file is `mysbx edit` (cli.md
 D12), whose purpose is exactly that file.
+
+**The template documents the whole schema.** Every top-level key of
+`Config::KEYS` (`mysbx-rs/src/config.rs`) appears in the fresh file as a
+commented example with the decision that owns it, so an operator can see
+what exists without reading these docs first. Commented keys decide
+nothing: the only active line is the `multiplexer` value `init` records
+from the user layer (D17). A key added to the parser but not to the
+template fails `tests/cli.rs`
+(`init_template_documents_every_schema_key`), which compares the template
+against that list. The root keys are emitted before the `[env]`/`[nix]`
+table headers — a root key written after one would belong to that table.
 
 ### D13: The repo is implicit
 

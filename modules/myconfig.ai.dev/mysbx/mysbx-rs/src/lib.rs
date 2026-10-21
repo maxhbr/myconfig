@@ -4877,6 +4877,97 @@ fn user_layer_multiplexer() -> Option<config::Multiplexer> {
     }
 }
 
+/// The root-table part of a fresh sidecar `config.toml`
+/// ([`ensure_sidecar_config`]): every top-level schema key, commented, with
+/// the design-doc decision that owns it next to it. `init` and `edit` both
+/// write it.
+///
+/// The table sections (`[env]`, `[nix]`) live in
+/// [`SIDECAR_TEMPLATE_TABLES`] and are appended LAST: a root key written
+/// after a table header would belong to that table, so the template must
+/// not interleave them.
+const SIDECAR_TEMPLATE_ROOT: &str = r#"# mysbx sidecar config
+# The repo this sidecar belongs to is implicit: it is always mounted
+# read-write at its real host path and cannot be changed here
+# (docs/design/config.md D13).
+#
+# Every schema key is listed below in commented form: a commented key
+# decides nothing, so a fresh file leaves the host-wide layer
+# ($XDG_CONFIG_HOME/mysbx/config.toml) in charge. Uncomment only what
+# this repository needs.
+#
+# Everything is opt-in. Give a host-home path a `dest` under
+# /mysbx-home: HOME is /mysbx-home inside the sandbox, so a config
+# bound at its host path is invisible there (config.md D14).
+#
+# backend = "bubblewrap"         # bubblewrap | nono | podman-gvisor | podman-krun | krun
+# network = false                # the network is shared unless a layer denies
+#                                # it; a sidecar may deny, never re-enable (D7)
+# display = "off"                # off | waypipe, a Wayland channel (D18)
+#
+# The network allowlist (D21): backend-agnostic, enforced by `nono` and
+# refused by a backend that cannot enforce it.
+#
+# allow-domains = ["api.openai.com", "github.com"]
+# connect-ports = [443, 22]
+# listen-ports = [8080]
+#
+# Additional host paths (D8): `path` absolute, `~/…` or relative to
+# this file; `dest` absolute and in-sandbox (default: the same path);
+# `mode` ro (default) or rw.
+#
+# [[mounts]]
+# path = "/home/user/.config/git"
+# dest = "/mysbx-home/.config/git"
+# mode = "ro"
+#
+# State directories (D15) persist across runs: each entry is backed by
+# <repo>.mysbx/state/<entry> and bound rw at /mysbx-home/<entry>.
+#
+# state-dirs = [".local/share/opencode", ".local/state/opencode"]
+#
+# Git metadata from outside the work tree (D13) that a `.git` FILE may
+# point at — an approval list, because the pointer inside the repo is
+# untrusted content (D3).
+#
+# git-dirs = ["/home/user/src"]
+#
+# Host variables to forward (D6): NAMES only — the values are read from
+# the host environment at launch, so no credential enters this file.
+#
+# forward-env = ["OPENAI_API_KEY"]
+#
+# Resource limits (D23): enforced by the podman backends, warned about
+# by the others. A krun VM takes whole vCPUs and more than 128 MiB.
+#
+# memory = "8g"
+# cpus = 4
+# pids-limit = 1024
+#
+# The sandbox's own ssh keypair (D22) is always generated:
+# an ed25519 key at <repo>.mysbx/state/.ssh/id_ed25519, bound rw at
+# /mysbx-home/.ssh. Register the public key (printed on creation, and
+# by `mysbx ssh-pubkey`) as a GitHub deploy key or a gitolite keydir
+# entry, and git over ssh works without any host credential.
+"#;
+
+/// The table sections of a fresh sidecar `config.toml`: appended after the
+/// root keys and the recorded `multiplexer`/`git-dirs` values, because
+/// nothing may follow a table header that belongs to the root table.
+const SIDECAR_TEMPLATE_TABLES: &str = r#"#
+# Variables for the sandbox (D6). A sidecar may ADD variables the user
+# config does not set; overriding one the user set is refused (D7).
+#
+# [env]
+# EDITOR = "nvim"
+#
+# Nix settings, rendered as NIX_CONFIG (D24). NIX_CONFIG itself cannot
+# be set through [env]: write the settings here.
+#
+# [nix]
+# experimental-features = "nix-command flakes"
+"#;
+
 /// What [`ensure_sidecar_config`] found: writing the default config or
 /// finding an existing one. `init` reports the difference; `edit` does
 /// not care (it opens the file either way).
@@ -4910,36 +5001,13 @@ fn ensure_sidecar_config(repo: &repo::Repo, snapshot_git_dirs: bool) -> Result<O
     // repo this sidecar belongs to, always mounted rw at its real path. It
     // is deliberately not written into the config — the schema has no
     // `[repo]` table (docs/design/config.md D11).
-    let contents = "# mysbx sidecar config\n\
-# The repo this sidecar belongs to is implicit: it is always mounted\n\
-# read-write at its real host path and cannot be changed here\n\
-# (docs/design/config.md D13).\n\
-#\n\
-# Everything else in the sandbox is opt-in. Give a host-home path a\n\
-# `dest` under /mysbx-home: HOME is /mysbx-home inside the sandbox, so\n\
-# a config bound at its host path is invisible there (config.md D14).\n\
-# Examples:\n\
-#\n\
-# [[mounts]]\n\
-# path = \"/home/user/.config/git\"\n\
-# dest = \"/mysbx-home/.config/git\"\n\
-# mode = \"ro\"\n\
-#\n\
-# State directories persist across runs (config.md D15): each entry\n\
-# is backed by <repo>.mysbx/state/<entry> and bound rw at\n\
-# /mysbx-home/<entry>:\n\
-#\n\
-# state-dirs = [\".local/share/opencode\"]\n\
-#\n\
-# The sandbox's own ssh keypair (config.md D22) is always generated:\n\
-# an ed25519 key at <repo>.mysbx/state/.ssh/id_ed25519, bound rw at\n\
-# /mysbx-home/.ssh. Register the public key (printed on creation,\n\
-# and by `mysbx ssh-pubkey`) as a GitHub deploy key or a gitolite\n\
-# keydir entry, and git over ssh works without any host credential.\n\
-#\n\
-# [env]\n\
-# EDITOR = \"nvim\"\n";
-    let mut contents = contents.to_owned();
+    //
+    // Every schema key appears here as a COMMENTED example: a key a fresh
+    // operator has to look up in the design docs first is a key the file
+    // should have shown them. `tests/cli.rs` pins that this list stays
+    // complete as the schema grows, and that the template decides nothing
+    // (a commented key is not a policy).
+    let mut contents = SIDECAR_TEMPLATE_ROOT.to_owned();
     contents.push_str(&multiplexer_template(user_layer_multiplexer()));
     if snapshot_git_dirs && !repo.git_dirs.is_empty() {
         contents.push_str(
@@ -4983,6 +5051,7 @@ fn ensure_sidecar_config(repo: &repo::Repo, snapshot_git_dirs: bool) -> Result<O
         }
         contents.push_str("]\n");
     }
+    contents.push_str(SIDECAR_TEMPLATE_TABLES);
     if let Err(e) = std::fs::write(&config, contents) {
         return Err(format!("cannot write {}: {e}", config.display()));
     }

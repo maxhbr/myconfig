@@ -249,7 +249,15 @@ The `config.toml` file in the sidecar defines
   `listen-ports` — [`config.md` D21](./docs/design/config.md)) names
   what a sandbox with the network on may reach; it is enforced on the
   nono backend and refused on the others
+- resource limits (`memory`, `cpus`, `pids-limit` —
+  [`config.md` D23](./docs/design/config.md)): enforced by the podman
+  backends, warned about by the others
 - ...
+
+`mysbx init` writes a `config.toml` that lists **every** schema key as a
+commented example, so the file itself is the reference: uncomment what
+this repository needs, and nothing else changes (the host-wide layer
+stays in charge of what you leave commented).
 
 It is deliberately placed outside of the repo and the sandbox.
 

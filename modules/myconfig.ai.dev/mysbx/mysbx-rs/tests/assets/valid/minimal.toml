@@ -3,18 +3,81 @@
 # read-write at its real host path and cannot be changed here
 # (docs/design/config.md D13).
 #
-# Everything else in the sandbox is opt-in. Examples:
+# Every schema key is listed below in commented form: a commented key
+# decides nothing, so a fresh file leaves the host-wide layer
+# ($XDG_CONFIG_HOME/mysbx/config.toml) in charge. Uncomment only what
+# this repository needs.
+#
+# Everything is opt-in. Give a host-home path a `dest` under
+# /mysbx-home: HOME is /mysbx-home inside the sandbox, so a config
+# bound at its host path is invisible there (config.md D14).
+#
+# backend = "bubblewrap"         # bubblewrap | nono | podman-gvisor | podman-krun | krun
+# network = false                # the network is shared unless a layer denies
+#                                # it; a sidecar may deny, never re-enable (D7)
+# display = "off"                # off | waypipe, a Wayland channel (D18)
+#
+# The network allowlist (D21): backend-agnostic, enforced by `nono` and
+# refused by a backend that cannot enforce it.
+#
+# allow-domains = ["api.openai.com", "github.com"]
+# connect-ports = [443, 22]
+# listen-ports = [8080]
+#
+# Additional host paths (D8): `path` absolute, `~/…` or relative to
+# this file; `dest` absolute and in-sandbox (default: the same path);
+# `mode` ro (default) or rw.
 #
 # [[mounts]]
 # path = "/home/user/.config/git"
+# dest = "/mysbx-home/.config/git"
 # mode = "ro"
+#
+# State directories (D15) persist across runs: each entry is backed by
+# <repo>.mysbx/state/<entry> and bound rw at /mysbx-home/<entry>.
+#
+# state-dirs = [".local/share/opencode", ".local/state/opencode"]
+#
+# Git metadata from outside the work tree (D13) that a `.git` FILE may
+# point at — an approval list, because the pointer inside the repo is
+# untrusted content (D3).
+#
+# git-dirs = ["/home/user/src"]
+#
+# Host variables to forward (D6): NAMES only — the values are read from
+# the host environment at launch, so no credential enters this file.
+#
+# forward-env = ["OPENAI_API_KEY"]
+#
+# Resource limits (D23): enforced by the podman backends, warned about
+# by the others. A krun VM takes whole vCPUs and more than 128 MiB.
+#
+# memory = "8g"
+# cpus = 4
+# pids-limit = 1024
+#
+# The sandbox's own ssh keypair (D22) is always generated:
+# an ed25519 key at <repo>.mysbx/state/.ssh/id_ed25519, bound rw at
+# /mysbx-home/.ssh. Register the public key (printed on creation, and
+# by `mysbx ssh-pubkey`) as a GitHub deploy key or a gitolite keydir
+# entry, and git over ssh works without any host credential.
+
+# The interactive payload: which terminal multiplexer `mysbx`
+# starts instead of a plain shell (docs/design/config.md D17).
+# One of: "tmux", "workmux", "herdr", "aoe", "orca", "none".
+# `mysbx run -- CMD` is never wrapped in a session (cli.md D11).
+# Recorded from the host-wide user configuration layer, so this
+# file changes nothing until you edit it — the sidecar wins.
+multiplexer = "none"
+#
+# Variables for the sandbox (D6). A sidecar may ADD variables the user
+# config does not set; overriding one the user set is refused (D7).
 #
 # [env]
 # EDITOR = "nvim"
-
-# The interactive payload: which terminal multiplexer `mysbx` starts
-# instead of a plain shell (docs/design/config.md D17).
-# One of: "tmux", "workmux", "herdr", "aoe", "orca", "none".
-# `init` records the value the user configuration layer names, so this
-# file changes nothing until it is edited — the sidecar wins.
-multiplexer = "none"
+#
+# Nix settings, rendered as NIX_CONFIG (D24). NIX_CONFIG itself cannot
+# be set through [env]: write the settings here.
+#
+# [nix]
+# experimental-features = "nix-command flakes"

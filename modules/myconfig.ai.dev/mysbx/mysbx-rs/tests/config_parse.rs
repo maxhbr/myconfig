@@ -104,6 +104,16 @@ fn minimal_config_is_what_init_writes() {
     assert_eq!(c.network, None);
     assert!(c.mounts.is_empty());
     assert!(c.env.is_empty());
+    // Every other key is present but commented: the file documents the
+    // whole schema while deciding nothing (config.md D11/D12).
+    let text = std::fs::read_to_string(asset("valid/minimal.toml")).unwrap();
+    for key in Config::KEYS {
+        let shown = text.contains(&format!("# {key} ="))
+            || text.contains(&format!("\n{key} ="))
+            || text.contains(&format!("[[{key}]]"))
+            || text.contains(&format!("[{key}]"));
+        assert!(shown, "minimal.toml does not show `{key}`");
+    }
 }
 
 #[test]
@@ -149,6 +159,23 @@ fn full_config() {
     assert_eq!(c.allow_domains, vec!["api.openai.com", "github.com"]);
     assert_eq!(c.connect_ports, vec![443, 22]);
     assert_eq!(c.listen_ports, vec![8080]);
+
+    // git-dirs (D13) and forward-env (D6): stored verbatim, resolved by
+    // the merge.
+    assert_eq!(c.git_dirs, vec!["/home/user/src"]);
+    assert_eq!(c.forward_env, vec!["OPENAI_API_KEY"]);
+
+    // Resource limits (D23): `cpus` is kept in the string form podman's
+    // `--cpus` takes, so an integer and a float spelling stay distinct.
+    assert_eq!(c.memory.as_deref(), Some("8g"));
+    assert_eq!(c.cpus.as_deref(), Some("4"));
+    assert_eq!(c.pids_limit, Some(512));
+
+    // `full.toml` claims to use every schema key: hold it to that.
+    let text = std::fs::read_to_string(asset("valid/full.toml")).unwrap();
+    for key in Config::KEYS {
+        assert!(text.contains(key), "full.toml does not use `{key}`");
+    }
 }
 
 #[test]

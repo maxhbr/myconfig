@@ -1700,6 +1700,60 @@ fn the_ssh_pubkey_dry_run_prints_the_plan_and_generates_nothing() {
 }
 
 #[test]
+fn init_template_documents_every_schema_key() {
+    // The template is the operator's map of the schema: a key the parser
+    // accepts but the fresh file never shows is a key nobody uncomments.
+    // Pinned against `Config::KEYS`, so adding a key to the parser without
+    // adding it here fails this test instead of silently narrowing the
+    // template (config.md D11/D12).
+    let (inv, _, sidecar) = fixture_uninited("template-keys", &["init"]);
+    let (code, _stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let text = std::fs::read_to_string(sidecar.join("config.toml")).unwrap();
+    for key in mysbx::config::Config::KEYS {
+        // A table key appears as a header (`[[mounts]]`, `[env]`), a scalar
+        // key as a commented `key = …` line.
+        let shown = text.contains(&format!("# {key} ="))
+            || text.contains(&format!("\n{key} ="))
+            || text.contains(&format!("[[{key}]]"))
+            || text.contains(&format!("[{key}]"));
+        assert!(shown, "the init template does not show `{key}`:\n{text}");
+    }
+    // Every key is COMMENTED (except the recorded `multiplexer`, see
+    // below): a template that decided a backend or a mount would sandbox
+    // a repo by accident.
+    assert_eq!(
+        active_lines(&text),
+        vec!["multiplexer = \"none\""],
+        "{text}"
+    );
+    // The file mysbx just wrote parses as the empty policy it claims to be.
+    let parsed = mysbx::config::Config::parse(&text).expect("the template must parse");
+    assert_eq!(
+        parsed,
+        mysbx::config::Config {
+            multiplexer: parsed.multiplexer,
+            ..mysbx::config::Config::default()
+        },
+        "{text}"
+    );
+    // Both table sections are present, and LAST — a root key after a table
+    // header would belong to that table.
+    let env = text.find("[env]").expect("[env] section");
+    let nix = text.find("[nix]").expect("[nix] section");
+    assert!(env < nix, "{text}");
+    for (key, at) in [
+        ("mounts", text.find("[[mounts]]")),
+        ("network", text.find("network =")),
+    ] {
+        assert!(
+            at.expect(key) < env,
+            "`{key}` must sit in the root table:\n{text}"
+        );
+    }
+}
+
+#[test]
 fn init_template_mentions_state_dirs() {
     // The init template documents every schema key; `state-dirs` must
     // appear in it (commented), or a new operator would never learn the
@@ -3356,8 +3410,11 @@ fn edit_creating_the_sidecar_approves_nothing() {
 
     let config = base.join("wt.mysbx").join("config.toml");
     let written = std::fs::read_to_string(&config).unwrap();
+    // The template SHOWS the key as a commented example (config.md D12),
+    // so the assertion is about the written file deciding it: an active
+    // `git-dirs = [` line or the discovered path.
     assert!(
-        !written.contains("git-dirs"),
+        !written.contains("\ngit-dirs ="),
         "`edit` must not approve: {written}"
     );
     assert!(
@@ -3412,7 +3469,7 @@ fn approve_git_dirs_recovers_an_unapproved_sidecar() {
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(stderr.contains("not approved"), "stderr: {stderr}");
     let written = std::fs::read_to_string(sidecar.join("config.toml")).unwrap();
-    assert!(!written.contains("git-dirs"), "{written}");
+    assert!(!written.contains("\ngit-dirs ="), "{written}");
 
     // The recovery: explicit init with the flag.
     let (code, stdout, stderr) = run_binary(&inv(vec!["init", "--approve-git-dirs"]));

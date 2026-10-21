@@ -493,6 +493,30 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {}
 
 impl Config {
+    /// Every spelling [`Config::from_table`] accepts at the top level, i.e.
+    /// the whole schema. Public so the `init` template can be pinned
+    /// against it — a key added to the parser but not to the template is a
+    /// key a fresh operator never sees (see `SIDECAR_TEMPLATE_ROOT` in
+    /// `lib.rs`, and the test that compares the two).
+    pub const KEYS: &'static [&'static str] = &[
+        "backend",
+        "network",
+        "multiplexer",
+        "display",
+        "mounts",
+        "env",
+        "nix",
+        "git-dirs",
+        "state-dirs",
+        "forward-env",
+        "allow-domains",
+        "connect-ports",
+        "listen-ports",
+        "memory",
+        "cpus",
+        "pids-limit",
+    ];
+
     /// Parse a configuration from TOML text.
     pub fn parse(input: &str) -> Result<Config, Error> {
         let root = toml::parse(input).map_err(Error::Syntax)?;
@@ -1356,5 +1380,25 @@ mod tests {
                 Config::parse(&format!("[[mounts]]\npath = \"/a\"\ndest = \"{d}\"\n")).unwrap_err();
             assert!(e.to_string().contains("must be absolute"), "{d}: {e}");
         }
+    }
+
+    #[test]
+    fn keys_lists_exactly_the_accepted_top_level_spellings() {
+        // The list exists for the `init` template check; it must not drift
+        // from `from_table`. A key the parser accepts but `KEYS` omits
+        // would silently fall out of the template again.
+        for key in Config::KEYS {
+            assert!(
+                !matches!(Config::parse(&format!("{key} = 1\n")), Err(Error::Schema(m)) if m.contains("unknown key")),
+                "`{key}` is in KEYS but the parser calls it unknown"
+            );
+        }
+        // And the reverse, over a spelling that is NOT a key.
+        let not_a_key = "egress";
+        assert!(!Config::KEYS.contains(&not_a_key));
+        assert!(matches!(
+            Config::parse(&format!("{not_a_key} = \"x\"\n")),
+            Err(Error::Schema(m)) if m.contains("unknown key")
+        ));
     }
 }
