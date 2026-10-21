@@ -863,6 +863,118 @@ fn a_detached_run_sets_mysbx_detachable_after_the_config_env() {
     );
 }
 
+// The supervisor tie of a detached-inner run's argv (detach.md B4):
+// detached-inner run's bwrap argv carries `--die-with-parent`, so
+// the pid-namespace payload dies with the bwrap supervisor when the
+// run is cancelled — while the foreground twin stays byte-identical,
+// the same acceptance shape as B7's mark test above.
+#[test]
+fn a_detached_run_carries_die_with_parent_before_the_first_dashdash() {
+    let params = Params {
+        detachable: true,
+        ..params()
+    };
+    let argv = bwrap_argv(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    // The flag is present …
+    assert!(
+        argv.contains(&"--die-with-parent".to_owned()),
+        "the detached argv carries the supervisor tie: {argv:?}"
+    );
+    // … as a bwrap ROOT option: before the first `--` (the payload
+    // separator), like `--unshare-all` — options after the first
+    // `--` would belong to the payload argv.
+    let first_dashdash = argv
+        .iter()
+        .position(|a| a == "--")
+        .expect("the payload separator");
+    let flag_at = argv
+        .iter()
+        .position(|a| a == "--die-with-parent")
+        .expect("the flag");
+    assert!(
+        flag_at < first_dashdash,
+        "a root option, before the payload `--`: {argv:?}"
+    );
+    // The foreground twin: byte-identity — no `--die-with-parent` at
+    // all in a foreground run's argv.
+    let plain = bwrap_argv(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &crate::params(),
+    )
+    .unwrap();
+    assert!(
+        !plain.contains(&"--die-with-parent".to_owned()),
+        "the foreground argv stays byte-identical: {plain:?}"
+    );
+}
+
+#[test]
+fn a_detached_nono_run_carries_die_with_parent_in_the_bwrap_root_segment() {
+    // The same supervisor tie on the layered backend (detach.md B4,
+    // backends.md D1): nono's argv rides INSIDE bwrap's, so the flag
+    // rides the bwrap root segment — never nono's or the payload env
+    // segment.
+    let p = Params {
+        detachable: true,
+        inner: Some(Inner {
+            argv: &["nono".to_owned(), "run".to_owned()],
+            env_bin: "env",
+        }),
+        ..params()
+    };
+    let argv = bwrap_argv(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &p,
+    )
+    .unwrap();
+    // Before the first `--` (the root segment), and present at all.
+    let first_dashdash = argv
+        .iter()
+        .position(|a| a == "--")
+        .expect("the payload separator");
+    let flag_at = argv
+        .iter()
+        .position(|a| a == "--die-with-parent")
+        .expect("the detached layered argv carries the tie: {argv:?}");
+    assert!(
+        flag_at < first_dashdash,
+        "a root option, before the payload `--`: {argv:?}"
+    );
+    // The foreground twin carries it not.
+    let p = Params {
+        inner: Some(Inner {
+            argv: &["nono".to_owned(), "run".to_owned()],
+            env_bin: "env",
+        }),
+        ..params()
+    };
+    let argv = bwrap_argv(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &p,
+    )
+    .unwrap();
+    assert!(
+        !argv.contains(&"--die-with-parent".to_owned()),
+        "the foreground layered argv stays byte-identical: {argv:?}"
+    );
+}
+
 #[test]
 fn a_detached_nono_run_carries_the_mark_in_the_payload_env_segment() {
     // B7 on the layered backend (backends.md D1): nono's own

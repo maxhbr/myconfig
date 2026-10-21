@@ -9396,6 +9396,72 @@ fn verbose_reaches_the_krun_launcher_argv() {
 }
 
 #[test]
+fn a_detached_krun_wrap_carries_die_with_parent() {
+    // The supervisor tie of a detached-inner krun run (detach.md B4,
+    // the same flag the bubblewrap backend's argv carries): the bwrap
+    // wrap of the launcher — and with it the in-process microVM —
+    // dies with the supervisor, so an abruptly dead inner orphans no
+    // live VM. The foreground argv stays byte-identical.
+    let (inv, _, sidecar) = fixture("krun-detach-die-with-parent", &[]);
+    // The krun backend mirrors the repo's host path into the guest
+    // and refuses a share below a first component the rootfs bakes
+    // no mountpoint for (krun.rs's check_share_root) — a repo under
+    // a deep $TMPDIR prefix the guest does not know is a real
+    // refusal, the same one the krun argv siblings hit; the tie is
+    // then unassertable in that environment.
+    {
+        let first = inv
+            .cwd
+            .strip_prefix("/")
+            .ok()
+            .and_then(|p| p.components().next())
+            .and_then(|c| c.as_os_str().to_str())
+            .map(|c| format!("/{c}"))
+            .unwrap_or_default();
+        if !matches!(
+            first.as_str(),
+            "/tmp" | "/home" | "/etc" | "/srv" | "/mnt" | "/media" | "/opt" | "/data"
+        ) {
+            return; // the guest bakes no mountpoint for this prefix
+        }
+    }
+    std::fs::write(sidecar.join("config.toml"), "backend = \"krun\"\n").unwrap();
+    let rootfs = sidecar.join("rootfs-stub");
+    std::fs::create_dir_all(rootfs.join("bin")).unwrap();
+    std::fs::write(rootfs.join("bin/mysbx-init"), "#!/bin/sh\n").unwrap();
+    let runtime = short_runtime_root("krun-die-with-parent");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let (dtach, _) = dtach_stub(&inv.home, true);
+    let mut cmd = spawn_with_args(&inv, &["--detach", "--dry-run"]);
+    cmd.env("MYSBX_KRUN_LAUNCHER", "/does/not/matter/dry-run")
+        .env("MYSBX_KRUN_ROOTFS", rootfs.to_str().unwrap())
+        .env("XDG_RUNTIME_DIR", &runtime)
+        .env("MYSBX_DTACH", &dtach);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let detached = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(
+        detached.lines().any(|l| l == "--die-with-parent"),
+        "a detached krun wrap carries the supervisor tie: {detached}"
+    );
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_KRUN_LAUNCHER", "/does/not/matter/dry-run")
+        .env("MYSBX_KRUN_ROOTFS", rootfs.to_str().unwrap());
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(0));
+    let plain = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(
+        !plain.lines().any(|l| l == "--die-with-parent"),
+        "the foreground krun argv stays byte-identical: {plain}"
+    );
+}
+
+#[test]
 fn the_hoisted_sweep_cleans_both_krun_backends_debris() {
     // bd myconfig-6xl: the per-run dir sweep is HOISTED above the arm
     // dispatch, so a podman-krun run reclaims gittrust/<pid>/ debris
@@ -10502,21 +10568,29 @@ unsafe fn libc_close(fd: i32) {
 /// A stub `bwrap`: records its inherited ignored-signal mask, then
 /// its own argv, sleeps until `$BWRAP_LIVE` appears (the test controls
 /// how long the "backend" runs), then exits with `$BWRAP_EXIT`
-/// (default 0).
+/// (default 0). With `$BWRAP_TREE_FILE` set it ALSO forks a
+/// long-lived grandchild before the wait loop and reports the pid
+/// tree (`$PPID` = the inner mysbx, `$!` = the grandchild) into that
+/// file — the cancel test's window into which processes of the run's
+/// group survive the group kill. Tests that do not set the variable
+/// are unaffected.
 fn bwrap_stub(base: &Path) -> (PathBuf, PathBuf) {
     let record = base.join("bwrap-record.txt");
     let stub = base.join("bwrap-stub");
     std::fs::write(
         &stub,
         format!(
-            "#!/bin/sh\ngrep '^SigIgn:' /proc/self/status > {}.tmp\n\
-             printf '%s\\n' \"$@\" >> {}.tmp\n\
-             mv -f {}.tmp {}\n\
+            "#!/bin/sh\ngrep '^SigIgn:' /proc/self/status > {r}.tmp\n\
+             printf '%s\\n' \"$@\" >> {r}.tmp\n\
+             if [ -n \"$BWRAP_TREE_FILE\" ]; then\n\
+               sleep 300 &\n\
+               printf '%s %s\\n' \"$PPID\" \"$!\" > \"$BWRAP_TREE_FILE.tmp\"\n\
+               mv -f \"$BWRAP_TREE_FILE.tmp\" \"$BWRAP_TREE_FILE\"\n\
+             fi\n\
+             mv -f {r}.tmp {rec}\n\
              while [ ! -e \"$BWRAP_LIVE\" ]; do sleep 0.05; done\nexit \"${{BWRAP_EXIT:-0}}\"\n",
-            record.display(),
-            record.display(),
-            record.display(),
-            record.display()
+            r = record.display(),
+            rec = record.display()
         ),
     )
     .unwrap();
@@ -10837,6 +10911,87 @@ fn wait_for_finished_record(paths: &mysbx::detach::Paths) -> mysbx::detach::Reco
 }
 
 #[test]
+fn a_cancelled_detached_run_leaves_no_surviving_process() {
+    if !is_ssh_keygen_available() {
+        return; // no usable ssh-keygen (the baseline env's uid-0 quirk)
+    }
+    // B4 + bd myconfig-7ioq.11: a `SIGTERM` to the inner cancels the
+    // run — the backend's WHOLE process group gets it, so a
+    // daemonized child the backend spawned in the host group cannot
+    // outlive the `cancelled` record: the group kill must reach
+    // every process the backend forked into the run's group. The
+    // stub bwrap forks that very child and reports the pid
+    // tree through `BWRAP_TREE_FILE`; the outer spawn runs in its own
+    // process group (`process_group(0)`), because the stub dtach does
+    // not `setsid` — the inner shares the OUTER's group, and without
+    // the grouping the group kill would TERM the test harness itself.
+    let (inv, repo, _) = fixture_with_backend("detach-cancel-group", &["--detach"]);
+    let (dtach, _) = dtach_stub(&inv.home, true);
+    let (bwrap, bwrap_record) = bwrap_stub(&inv.home);
+    let runtime = short_runtime_root("cancel-group");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let paths = detach_paths_live(&runtime, &repo.canonicalize().unwrap());
+    let tree_file = inv.home.join("bwrap-tree.txt");
+    let mut cmd = spawn_with_args(&inv, &["--detach"]);
+    cmd.env("MYSBX_DTACH", &dtach)
+        .env("MYSBX_BWRAP", &bwrap)
+        .env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .env("XDG_RUNTIME_DIR", &runtime)
+        .env("BWRAP_LIVE", inv.home.join("bwrap-live"))
+        .env("BWRAP_TREE_FILE", &tree_file);
+    // The outer (and with it the inner, through the non-setsid stub
+    // dtach) runs in its own group: the group kill must reach the
+    // run's processes only, never the harness that spawned it.
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    // The backend's argv record (which also means the stub forked its
+    // tree by now), then the tree itself.
+    let _recorded = wait_for_file(&bwrap_record);
+    let tree = wait_for_file(&tree_file);
+    let (inner_pid, grandchild_pid): (u32, u32) = {
+        let mut it = tree.split_whitespace();
+        let inner: u32 = it
+            .next()
+            .unwrap_or_else(|| panic!("no inner pid in the tree record: {tree}"))
+            .parse()
+            .unwrap_or_else(|_| panic!("not a pid: {tree}"));
+        let grandchild: u32 = it
+            .next()
+            .unwrap_or_else(|| panic!("no grandchild pid in the tree record: {tree}"))
+            .parse()
+            .unwrap_or_else(|_| panic!("not a pid: {tree}"));
+        (inner, grandchild)
+    };
+    // End the run the way an operator does: `kill <pid of the inner>`.
+    unsafe { libc_kill(inner_pid, 15) };
+    // The run ends `cancelled` once the backend is reaped.
+    let rec = wait_for_finished_record(&paths);
+    assert_eq!(rec.state, mysbx::detach::State::Cancelled);
+    // The grandchild died with the group — poll /proc, the group TERM
+    // needs no ordering guarantee from the scheduler.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while Path::new(&format!("/proc/{grandchild_pid}")).exists() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the grandchild {grandchild_pid} survived the cancelled run"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    // Best-effort cleanup so a failure does not leak the 300s
+    // sleep into the machine.
+    unsafe { libc_kill(grandchild_pid, 9) };
+}
+
+#[test]
 fn a_detached_run_that_fails_the_startup_records_the_error_and_the_outer_reports_70() {
     if !is_ssh_keygen_available() {
         return; // no usable ssh-keygen (the baseline env's uid-0 quirk)
@@ -11092,6 +11247,13 @@ fn the_inner_detached_run_spawns_the_backend_with_the_detachable_mark() {
     assert!(
         mark,
         "the mark reached the backend's environment: {recorded}"
+    );
+    // The supervisor tie of the same argv (bd myconfig-7ioq.11): a
+    // detached-inner run's bwrap carries `--die-with-parent`, so a
+    // cancelled run leaves nothing in the pid namespace behind.
+    assert!(
+        lines.contains(&"--die-with-parent"),
+        "the backend argv carries the supervisor tie: {recorded}"
     );
     std::fs::write(inv.home.join("bwrap-live"), "").unwrap();
 }

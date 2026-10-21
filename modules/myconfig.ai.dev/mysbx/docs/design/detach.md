@@ -29,8 +29,8 @@ Vocabulary, on top of [`../../CONTEXT.md`](../../CONTEXT.md):
 
 Today the sandbox lives exactly as long as the foreground process:
 
-- `lib.rs` ends a run in `exec` of the backend (bubblewrap with
-  `--die-with-parent`, `podman run --rm`, the krun launcher).
+- `lib.rs` ends a run in `exec` of the backend (bubblewrap,
+  `podman run --rm`, the krun launcher).
 - The multiplexer entries (`nix/*-entry.nix`) end in
   `exec tmux attach` / `exec herdr` / `exec aoe`.
 - So a multiplexer detach ends the client, the payload, the sandbox and
@@ -186,14 +186,21 @@ The inner mysbx **waits** for the backend instead of `exec`'ing it (the
 - the per-run host state it owns (git trust file, krun stage and GC
   roots, waypipe client) is cleaned up after the run, which an exec
   cannot do;
-- bubblewrap's `--die-with-parent` and the waypipe `PDEATHSIG` keep a
-  parent that lives as long as the run.
+- the inner mysbx IS the parent that lives as long as the run, and
+  the sandbox is tied to it: the backend argv of a detached-inner
+  run carries `--die-with-parent` (the pid-namespace payload dies
+  with the bwrap supervisor; the foreground argv stays
+  byte-identical), and the waypipe client is tied by `PDEATHSIG`.
 
 Signals in the inner mysbx: `SIGINT`, `SIGQUIT` and `SIGTSTP` are
 ignored. They come from the pty and belong to the payload, which is in
 the same foreground process group. `SIGHUP` (the dtach master went
-away) and `SIGTERM` are forwarded to the backend and the run is recorded
-as `cancelled`. The backend is spawned with all five reset to `SIG_DFL`
+away) and `SIGTERM` are forwarded to the backend's whole process
+group — the inner mysbx itself survives, it catches the two — and the
+run is recorded as `cancelled` once the backend is reaped; the
+pid-namespace processes die with the bwrap supervisor
+(`--die-with-parent`). The backend is spawned with all five reset
+to `SIG_DFL`
 — ignored dispositions cross the `exec`, so the ignores above stay in
 the inner mysbx itself and never reach the payload.
 

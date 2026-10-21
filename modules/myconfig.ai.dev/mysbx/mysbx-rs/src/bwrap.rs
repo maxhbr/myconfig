@@ -510,6 +510,13 @@ pub fn bwrap_argv(
             && cfg.connect_ports.is_empty()
             && cfg.listen_ports.is_empty());
     let mut argv: Vec<String> = vec!["--clearenv".into(), "--unshare-all".into()];
+    // The supervisor tie of a detached-inner run (detach.md B4): the
+    // payload dies with the bwrap supervisor, so a cancelled run leaves
+    // nothing in the pid namespace behind. Foreground runs pass `false`
+    // and their argv stays byte-identical.
+    if params.detachable {
+        argv.push("--die-with-parent".into());
+    }
     if cfg.network {
         argv.push("--share-net".into());
         // Sharing the network namespace alone does not give the new

@@ -1868,14 +1868,24 @@ unsafe fn reset_signals_for_child() -> std::io::Result<()> {
     Ok(())
 }
 
-/// `kill(2)` on one pid — the inner forwards the terminating signal to
-/// the backend itself (the whole process group gets it from the
-/// terminal anyway, but the direct kill is not a guess).
+/// `kill(2)`: one raw call — a positive pid signals one process, a
+/// negative one the whole process group (the wait loop below uses
+/// the group form).
 unsafe fn libc_kill_pid(pid: i32, signum: i32) {
     extern "C" {
         fn kill(pid: i32, signum: i32) -> i32;
     }
     kill(pid, signum);
+}
+
+/// `getpgrp(2)` via the raw libc symbol — the zero-dependency idiom
+/// lib.rs's helpers use, restated here because the wait loop lives in
+/// this module.
+unsafe fn libc_getpgrp() -> i32 {
+    extern "C" {
+        fn getpgrp() -> i32;
+    }
+    getpgrp()
 }
 
 // ---- the stderr capture tee (detach.md B5) ----------------------------------
@@ -2298,15 +2308,17 @@ pub(crate) fn inner_spawn_wait(
         eprintln!("mysbx: {e}");
     }
     // The wait loop: the same 50ms poll `run_with_result` uses. A
-    // terminating signal forwards to the backend and waits for its
-    // end — the run is `cancelled` (B4), the exit code is the shell's
-    // `128 + signum`.
+    // terminating signal forwards to the backend's whole process
+    // group (the inner itself survives — it catches the two, and
+    // `--die-with-parent` takes the pid-namespace payload when the
+    // bwrap supervisor dies) and waits for its end — the run is
+    // `cancelled` (B4), the exit code is the shell's `128 + signum`.
     let mut signum: i32;
     let waited: Option<std::process::ExitStatus>;
     loop {
         signum = TERMINATED.load(std::sync::atomic::Ordering::SeqCst);
         if signum != 0 {
-            unsafe { libc_kill_pid(child.id() as i32, signum) };
+            unsafe { libc_kill_pid(-libc_getpgrp(), signum) };
             // Keep waiting: the record is written once the backend
             // has actually ended, never before.
             match child.try_wait() {

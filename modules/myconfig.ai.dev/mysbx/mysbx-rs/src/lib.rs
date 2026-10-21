@@ -3393,8 +3393,17 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             let mut inner_argv: Vec<String> = Vec::with_capacity(krun_argv.len() + 1);
             inner_argv.push(krun_launcher.clone());
             inner_argv.extend(krun_argv);
-            let mut argv: Vec<String> = vec![
-                "--clearenv".into(),
+            let mut argv: Vec<String> = vec!["--clearenv".into()];
+            // The supervisor tie of a detached-inner run (detach.md
+            // B4, the same flag the bubblewrap backend's argv
+            // carries): the launcher — and with it the in-process
+            // microVM — dies with the bwrap supervisor, so an
+            // abruptly dead inner orphans no live VM. The foreground
+            // argv stays byte-identical.
+            if detachable {
+                argv.push("--die-with-parent".into());
+            }
+            argv.extend([
                 "--ro-bind".into(),
                 "/nix/store".into(),
                 "/nix/store".into(),
@@ -3406,7 +3415,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 "/dev/kvm".into(),
                 "--proc".into(),
                 "/proc".into(),
-            ];
+            ]);
             // network = false (bd myconfig-dak.6): the guest layer is
             // the launcher's --network none (the vsock disabled — no
             // socket path at all), and this HOST layer takes the
