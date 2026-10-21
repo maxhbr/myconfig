@@ -57,12 +57,15 @@
 #                 multiplexer entries loop instead of exec'ing their
 #                 client, so an inner detach prints the prompt and
 #                 Enter reattaches, q ends the run, and a dead server
-#                 ends it too. Replayed against a stateful tmux STUB
-#                 (a real `attach-session` needs a pty the build
-#                 sandbox lacks); aoe and herdr are covered by the
-#                 same fragment, asserted statically — the live
-#                 reattach of aoe/herdr is the bead's manual
-#                 acceptance.
+#                 ends it too — within ~1s of the server dying, even
+#                 while the prompt is shown (the wait polls with
+#                 `read -t 1`, bd myconfig-7ioq.15). Replayed against
+#                 a stateful tmux STUB (a real `attach-session` needs
+#                 a pty the build sandbox lacks); aoe's every-socket
+#                 probe is replayed too (a named-socket server), herdr
+#                 is covered by the same fragment, asserted statically
+#                 — the live reattach of aoe/herdr is the bead's
+#                 manual acceptance.
 #
 # Wired into `nix flake check` for `x86_64-linux` in `flake.nix`.
 #
@@ -635,10 +638,15 @@ in
   # against a stateful tmux STUB — a real `attach-session` needs a
   # pty the build sandbox lacks. The stub kills the alive marker on
   # the SECOND attach, which replays the last-pane-exit scenario
-  # (server has no session → the run ends). aoe and herdr use the
-  # same fragment with their own attach/probe; they are asserted
-  # statically because the live reattach of aoe/herdr is the bead's
-  # MANUAL acceptance, not a build-time one.
+  # (server has no session → the run ends), and the kill runner
+  # (bd myconfig-7ioq.15) kills the marker WHILE the gate waits at
+  # the prompt with a silent stdin — the wait must poll (`read -t`)
+  # and re-probe, or the run hangs and the timeout bound fails it.
+  # aoe's every-socket probe (bd myconfig-7ioq.15) is replayed by its
+  # own runner against a named-socket server; herdr uses the same
+  # fragment with its own attach/probe and is asserted statically
+  # because the live reattach of aoe/herdr is the bead's MANUAL
+  # acceptance, not a build-time one.
   mysbx-reattach-loop-test =
     let
       lib = inputs.nixpkgs.lib;
@@ -655,8 +663,25 @@ in
         workmux = workmuxStub;
         tmux = cfg.tmux.package;
       };
+      # The aoe stub is stateful like the tmux stub below: an attach
+      # run counts, creates the alive marker on the first run and
+      # removes it on the second (the (g) replay feeds `q` before a
+      # second run, so the marker stays for the probe).
       aoeStub = pkgs.writeShellScriptBin "aoe" ''
-        exit 0
+        state="''${TMPDIR:-/tmp}/mysbx-reattach-stub"
+        mkdir -p "$state"
+        count_file="$state/attach"
+        alive_file="$state/alive"
+        count=0
+        [ -f "$count_file" ] && count=$(cat "$count_file")
+        count=$((count + 1))
+        printf '%s' "$count" >"$count_file"
+        if [ "$count" -ge 2 ]; then
+          rm -f "$alive_file"
+        else
+          : >"$alive_file"
+        fi
+        exit "''${MYSBX_STUB_ATTACH_EXIT:-0}"
       '';
       aoeEntry = pkgs.callPackage ./aoe-entry.nix {
         aoe = aoeStub;
@@ -674,13 +699,18 @@ in
       # A stateful tmux stub: `attach-session` increments a counter,
       # creates the alive marker on the FIRST attach (a fresh server
       # has a session) and kills it on the SECOND (the last-pane-exit
-      # replay), `has-session` stats the marker, and anything else
-      # passes through with exit 0. The attach exit code is
-      # overridable via `MYSBX_STUB_ATTACH_EXIT` for the plain-path
-      # scenario (d). Matches on the whole argv so the entries' SHORT
-      # `tmux attach-session` (the fragment) and the `exec`-form
-      # `tmux -S … attach-session` (the plain path) land in the same
-      # arm.
+      # replay), `has-session` stats the marker, `ls` is the aoe
+      # probe (below): a `ls` WITHOUT `-S` asks tmux's DEFAULT
+      # socket — dead unless the stub is told otherwise — and a `ls`
+      # with `-S <socket>` answers from the marker, so a server on a
+      # NAMED socket is alive exactly when the marker exists (the
+      # aoe `[tmux] socket_name` situation, bd myconfig-7ioq.15).
+      # Anything else passes through with exit 0. The attach exit
+      # code is overridable via `MYSBX_STUB_ATTACH_EXIT` for the
+      # plain-path scenario (d). Matches on the whole argv so the
+      # entries' SHORT `tmux attach-session` (the fragment) and the
+      # `exec`-form `tmux -S … attach-session` (the plain path) land
+      # in the same arm.
       tmuxStub = pkgs.writeShellScriptBin "tmux" ''
         state="''${TMPDIR:-/tmp}/mysbx-reattach-stub"
         case " $* " in
@@ -701,6 +731,21 @@ in
               ;;
           *" has-session "*)
               [ -e "''${TMPDIR:-/tmp}/mysbx-reattach-stub/alive" ]
+              ;;
+          *" ls "*)
+              # `ls` (aoe's probe): a plain `ls` asks tmux's DEFAULT
+              # socket and answers DEAD — the (g) scenario's server
+              # lives on a NAMED socket, so only a probe that asks
+              # `-S <socket>` can see it (the aoe `[tmux]
+              # socket_name` situation, bd myconfig-7ioq.15).
+              case " $* " in
+                *" -S "*)
+                    [ -e "''${TMPDIR:-/tmp}/mysbx-reattach-stub/alive" ]
+                    ;;
+                *)
+                    exit 1
+                    ;;
+              esac
               ;;
           *)
               exit 0
@@ -738,6 +783,115 @@ in
         printf '%s' "$stdin" \
           | MYSBX_DETACHABLE=''${MYSBX_DETACHABLE:-} bash -c "set -o errexit
         $prelude
+        $gate"
+        rc=$?
+        count=0
+        [ -f "''${TMPDIR:-/tmp}/mysbx-reattach-stub/attach" ] \
+          && count=$(cat "''${TMPDIR:-/tmp}/mysbx-reattach-stub/attach")
+        printf '%s %s' "$rc" "$count"
+      '';
+      # The B7-liveness runner (bd myconfig-7ioq.15): stdin is an
+      # OPEN pipe that never delivers a line, and the alive marker is
+      # killed mid-wait (`kill-after` seconds in), so the gate MUST
+      # end the run on its own — a gate that blocks in `read`
+      # forever hits the `timeout` bound and fails. The elapsed time
+      # is measured from the kill and printed third, so the scenario
+      # can pin the ~2s bound of the acceptance (the poll interval
+      # plus one probe). Prints `<rc> <count> <elapsed>'.
+      killRunner = pkgs.writeShellScript "mysbx-reattach-kill-runner" ''
+        set -u
+        entry="$1"
+        kill_after="$2"
+        export PATH="${tmuxStub}/bin:${pkgs.bashInteractive}/bin:${pkgs.coreutils}/bin:$PATH"
+        rm -rf "''${TMPDIR:-/tmp}/mysbx-reattach-stub"
+        gate="$(sed -n '/^if \[ "''${MYSBX_DETACHABLE:-}" = "1" \]; then$/,/^fi$/p' "$entry")"
+        [ -n "$gate" ] || {
+          echo "cannot extract the gate block" >&2
+          exit 99
+        }
+        prelude="$(sed -n '/^tmux() /p' "$entry")"
+        [ -n "$prelude" ] || {
+          echo "cannot extract the tmux() prelude" >&2
+          exit 98
+        }
+        export session=mysbx-test
+        export socket="''${TMPDIR:-/tmp}/mysbx-reattach-stub/socket"
+        fifo="''${TMPDIR:-/tmp}/mysbx-reattach-stub.fifo"
+        rm -f "$fifo"
+        mkfifo "$fifo"
+        # Hold the write end open forever: `read` gets no line and no
+        # EOF, so the ONLY way the gate can end is the liveness poll.
+        sleep 60 >"$fifo" &
+        holder=$!
+        # The killer records the moment the marker dies, so the
+        # elapsed-time check below can pin the ~2s bound: the gate's
+        # poll must notice within one interval plus one probe.
+        ( sleep "$kill_after"; date +%s >"''${TMPDIR:-/tmp}/mysbx-reattach-stub/kill_time"; rm -f "''${TMPDIR:-/tmp}/mysbx-reattach-stub/alive" ) &
+        killer=$!
+        timeout 10 bash -c "set -o errexit
+        $prelude
+        $gate" <"$fifo"
+        rc=$?
+        end=$(date +%s)
+        kill "$holder" "$killer" 2>/dev/null || true
+        wait "$holder" "$killer" 2>/dev/null || true
+        rm -f "$fifo"
+        count=0
+        [ -f "''${TMPDIR:-/tmp}/mysbx-reattach-stub/attach" ] \
+          && count=$(cat "''${TMPDIR:-/tmp}/mysbx-reattach-stub/attach")
+        elapsed=-1
+        [ -f "''${TMPDIR:-/tmp}/mysbx-reattach-stub/kill_time" ] \
+          && elapsed=$((end - $(cat "''${TMPDIR:-/tmp}/mysbx-reattach-stub/kill_time")))
+        printf '%s %s %s' "$rc" "$count" "$elapsed"
+      '';
+      # The aoe replay runner: extracts aoe's gate AND its own
+      # `aoe_alive()` probe (the entry defines no `tmux()` prelude,
+      # so the sibling runner's extraction does not apply), so the
+      # gate can be replayed against the stub instead of only
+      # asserted statically. `$TMUX_TMPDIR` is pointed at the stub
+      # state dir, so the probe's every-socket glob sees
+      # `$state/aoe-socket`; the stub answers `-S` `ls` from the
+      # alive marker. Prints `<rc> <count>' like the runner above.
+      #
+      # The python heredoc below is the nix string's strip anchor:
+      # its terminator must stay the least-indented line of the
+      # whole `''` body, or the strip width shifts and the rendered
+      # heredoc breaks.
+      aoeRunner = pkgs.writeShellScript "mysbx-reattach-aoe-runner" ''
+        set -u
+        entry="$1"
+        stdin="$2"
+        export PATH="${aoeStub}/bin:${tmuxStub}/bin:${pkgs.coreutils}/bin:${pkgs.python3}/bin:${pkgs.bashInteractive}/bin:$PATH"
+        rm -rf "''${TMPDIR:-/tmp}/mysbx-reattach-stub"
+        mkdir -p "''${TMPDIR:-/tmp}/mysbx-reattach-stub"
+        gate="$(sed -n '/^if \[ "''${MYSBX_DETACHABLE:-}" = "1" \]; then$/,/^fi$/p' "$entry")"
+        [ -n "$gate" ] || {
+          echo "cannot extract the gate block" >&2
+          exit 99
+        }
+        probe="$(sed -n '/^aoe_alive() {$/,/^}$/p' "$entry")"
+        [ -n "$probe" ] || {
+          echo "cannot extract the aoe_alive probe" >&2
+          exit 97
+        }
+        # The probe's alive marker, on a NAMED socket under the
+        # per-user tmux dir (`$TMUX_TMPDIR/tmux-<uid>/`) so only
+        # `tmux -S <socket> ls` (the every-socket probe) finds it —
+        # a plain `tmux ls` asks the DEFAULT socket and is dead. The
+        # socket file is bound for real (python `AF_UNIX`): the
+        # probe's `-S` test must not be satisfied by a regular file.
+        state="''${TMPDIR:-/tmp}/mysbx-reattach-stub"
+        mkdir -p "$state/tmux-$(id -u)"
+        : >"$state/alive"
+        python3 - "$state/tmux-$(id -u)/aoe-socket" <<'PYEOF'
+        import socket, sys
+        s = socket.socket(socket.AF_UNIX)
+        s.bind(sys.argv[1])
+        PYEOF
+        export TMUX_TMPDIR="$state"
+        printf '%s' "$stdin" \
+          | MYSBX_DETACHABLE=''${MYSBX_DETACHABLE:-} bash -c "set -o errexit
+        $probe
         $gate"
         rc=$?
         count=0
@@ -822,7 +976,45 @@ in
           # the attach's code (errexit, cli.md D8).
           MYSBX_STUB_ATTACH_EXIT=42 \
             scenario "$entry" "$name (e) attach fails" "" 1 42 1 no
+          # (f) B7 liveness (bd myconfig-7ioq.15): the last pane
+          # exits WHILE the prompt is shown and stdin stays silent —
+          # an open pipe, no line, no EOF. The gate must end the run
+          # on its own; a gate that blocks in `read` hits the
+          # runner's 10s bound (rc 124), and the elapsed time pins
+          # the acceptance's ~2s: the poll notices the death within
+          # one interval plus one probe, so anything above 3s means
+          # the wait stopped re-probing.
+          result="$(MYSBX_DETACHABLE=1 TMPDIR="$PWD/tmpdir" ${killRunner} "$entry" 2)" \
+            || fail "$name (f) prompt liveness: the kill runner failed"
+          rc="''${result%% *}"; tail="''${result#* }"
+          count="''${tail%% *}"; elapsed="''${tail#* }"
+          [ "$rc" = 0 ] \
+            || fail "$name (f) prompt liveness: rc $rc (124 = the gate blocks in read), want 0"
+          [ "$count" = 1 ] \
+            || fail "$name (f) prompt liveness: attach count $count, want 1"
+          [ "$elapsed" -le 3 ] \
+            || fail "$name (f) prompt liveness: the gate noticed the death ''${elapsed}s after it, want ≤3"
         done
+
+        # The aoe row: its gate is REPLAYED against the stub, not
+        # just asserted statically — the stub answers a plain `ls`
+        # (tmux's DEFAULT socket) DEAD, while `-S <named socket>`
+        # `ls` answers from the marker (bd myconfig-7ioq.15: a
+        # persisted `[tmux] socket_name` moves aoe's server onto a
+        # named socket, and only an every-socket probe sees it).
+        # (g) a named-socket server: the probe must see it — the
+        # prompt appears and `q` ends the run after ONE attach.
+        result="$(MYSBX_DETACHABLE=1 TMPDIR="$PWD/tmpdir" ${aoeRunner} "$aoe_entry" $'q\n')" \
+          || fail "aoe (g) named socket: the aoe runner failed"
+        rc="''${result% *}"; count="''${result#* }"
+        [ "$rc" = 0 ] \
+          || fail "aoe (g) named socket: rc $rc, want 0"
+        [ "$count" = 1 ] \
+          || fail "aoe (g) named socket: attach count $count, want 1"
+        err="$(MYSBX_DETACHABLE=1 TMPDIR="$PWD/tmpdir" ${aoeRunner} "$aoe_entry" $'q\n' 2>&1 >/dev/null)" \
+          || fail "aoe (g) named socket: the aoe runner failed (stderr pass)"
+        printf '%s\n' "$err" | grep -Fq "$prompt" \
+          || fail "aoe (g) named socket: the probe missed the named-socket server (no prompt)"
 
         # The shared-fragment drift guard: the tmux and workmux gate
         # blocks are byte-identical (only the entries around them
@@ -834,15 +1026,27 @@ in
 
         # Static presence of the same fragment in aoe and herdr: the
         # plain-path exec line survives verbatim and the gate names
-        # the entry's own attach and liveness probe. The live
-        # reattach is the bead's manual acceptance.
+        # the entry's own attach and liveness probe. aoe's probe is
+        # the every-socket `aoe_alive()` (bd myconfig-7ioq.15), so it
+        # is pinned by its signature pieces — the probe function
+        # call in the gate, the per-user tmux dir glob, and the
+        # per-socket `ls`. The live reattach is the bead's manual
+        # acceptance.
         grep -qF 'exec aoe "$@"' "$aoe_entry" \
           || fail "the aoe entry lost its plain-path exec line"
-        for s in 'aoe "$@"' 'tmux ls >/dev/null 2>&1' "$prompt"; do
-          sed -n '/^if \[ "''${MYSBX_DETACHABLE:-}" = "1" \]; then$/,/^fi$/p' "$aoe_entry" \
-            | grep -qF "$s" \
-            || fail "the aoe gate does not contain: $s"
+        # The gate names the probe; the probe itself lives in the
+        # entry body (outside the gate block), pinned by its glob and
+        # its per-socket `ls`.
+        sed -n '/^if \[ "''${MYSBX_DETACHABLE:-}" = "1" \]; then$/,/^fi$/p' "$aoe_entry" \
+          | grep -qF 'aoe_alive' \
+          || fail "the aoe gate does not call the aoe_alive probe"
+        for s in 'tmux-$(id -u)' 'tmux -S "$sock" ls'; do
+          grep -qF "$s" "$aoe_entry" \
+            || fail "the aoe entry does not contain: $s"
         done
+        sed -n '/^if \[ "''${MYSBX_DETACHABLE:-}" = "1" \]; then$/,/^fi$/p' "$aoe_entry" \
+          | grep -qF "$prompt" \
+          || fail "the aoe gate does not contain: $prompt"
         grep -qF 'exec herdr "$@"' "$herdr_entry" \
           || fail "the herdr entry lost its plain-path exec line"
         for s in 'herdr "$@"' 'herdr workspace list >/dev/null 2>&1' "$prompt"; do

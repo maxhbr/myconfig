@@ -273,7 +273,11 @@ With the variable set, the entries do not `exec` their client. They
 loop: attach; when the client returns and the server still has a
 session, print one line
 (`session still running — Enter: reattach, q: end the sandbox, ^\: detach mysbx`)
-and wait; exit when the server has no session left or on `q`. The loop
+and wait; exit when the server has no session left or on `q`. The
+wait POLLS — `read -t 1` times out after 1s and each timeout re-runs
+the liveness probe — so a last-pane exit while the prompt is shown
+ends the run within ~1s instead of wedging the registry until someone
+types. The loop
 is one shared fragment in `nix/mux-entry-lib.nix`, parameterized by the
 attach command and the liveness probe. The prompt belongs to the
 payload, not to the mysbx CLI, so the "no interactive prompts"
@@ -282,7 +286,7 @@ non-goal of cli.md still holds.
 | multiplexer | attach | still alive |
 | --- | --- | --- |
 | `tmux`, `workmux` | `tmux -S "$socket" attach-session -t "=$session"` | `tmux -S "$socket" has-session -t "=$session"` |
-| `aoe` | `aoe "$@"` | `tmux ls` on the `TMUX_TMPDIR` default socket has a session |
+| `aoe` | `aoe "$@"` | every tmux socket under `$TMUX_TMPDIR/tmux-<uid>/` answers `ls` (aoe's `[tmux] socket_name` can move its server off the default socket) |
 | `herdr` | `herdr "$@"` | the pre-started `herdr server` answers |
 | `orca` | not applicable: the payload is the server itself, it has no client detach | — |
 | `none` | not applicable: the shell's exit is the end of the run | — |

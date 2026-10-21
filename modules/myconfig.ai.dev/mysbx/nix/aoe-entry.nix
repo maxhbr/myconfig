@@ -94,18 +94,35 @@ writeShellApplication {
             ;;
     esac
 
+    # Liveness for the gate below (detach.md B7): aoe's `[tmux]`
+    # `socket_name` config (and `AOE_TMUX_SOCKET`) can move its server
+    # onto a NAMED socket, so probing only tmux's own `default`
+    # socket would report a running sandbox dead — quitting the aoe
+    # TUI would end it while agents still run. The probe therefore
+    # asks EVERY socket under the per-user tmux dir: tmux keeps its
+    # default socket there too (`tmux-<uid>/default`), so the glob
+    # needs no special case, and a socket file whose server died
+    # answers `ls` with an error, so only a live server counts.
+    aoe_alive() {
+        found=0
+        for sock in "''${TMUX_TMPDIR:-/tmp}/tmux-$(id -u)"/*; do
+            if [ -S "$sock" ] && tmux -S "$sock" ls >/dev/null 2>&1; then
+                found=1
+            fi
+        done
+        [ "$found" = 1 ]
+    }
+
     # In a foreground run the `exec` form applies: `aoe` owns the
     # terminal and its exit code propagates unchanged
     # (../docs/design/cli.md D8). In a detached run
     # (`MYSBX_DETACHABLE=1`, detach.md B7) the gate loops instead, so
     # quitting the aoe TUI does not end the sandbox; aoe is re-run to
-    # reattach. Liveness is `tmux ls` on plain tmux — aoe's server
-    # lives on the `TMUX_TMPDIR` default socket. That a re-run of aoe
-    # reattaches to its server is the bead's manual acceptance
-    # (bd myconfig-7ioq.6).
+    # reattach. That a re-run of aoe reattaches to its server is the
+    # bead's manual acceptance (bd myconfig-7ioq.6).
     ${muxLib.detachableLoop {
       attach = ''aoe "$@"'';
-      alive = "tmux ls >/dev/null 2>&1";
+      alive = "aoe_alive";
       execLine = ''exec aoe "$@"'';
     }}
   '';

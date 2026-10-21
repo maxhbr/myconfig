@@ -114,7 +114,15 @@
   #   * The prompt goes to stderr, the entries' diagnostic channel;
   #     dtach forwards it. `^\` is dtach's client-side key, so the
   #     prompt is informational only — no trap.
-  #   * EOF on `read` (the dtach master died) exits 0, like `q`.
+  #   * The wait POLLS: `read -t 1` times out after 1s, and each
+  #     timeout re-runs `alive` (no `sleep`, no `seq` — `read -t` is
+  #     the timeout primitive), so a last-pane exit while the prompt
+  #     is shown ends the run within ~1s instead of wedging the
+  #     registry until someone types (B7 liveness).
+  #   * EOF on `read` (the dtach master died) exits 0, like `q`. The
+  #     code is captured with `||` — under `if ! read …; then rc=$?`
+  #     the `$?` would be the NEGATION's status (always 0) — and a
+  #     timed-out `read` (>128) is told apart from EOF (1) by it.
   #   * Any non-`q` answer reattaches.
   #   * No SIGWINCH trap: a trapped WINCH interrupts `read` and would
   #     conflate with EOF (ending the sandbox on mysbx attach).
@@ -132,9 +140,20 @@
                   exit 0
               fi
               printf '%s\n' 'session still running — Enter: reattach, q: end the sandbox, ^\: detach mysbx' >&2
-              if ! read -r mux_reply; then
-                  exit 0
-              fi
+              while :; do
+                  rc=0
+                  read -r -t 1 mux_reply || rc=$?
+                  if [ "$rc" -gt 128 ]; then
+                      if ! ${alive}; then
+                          exit 0
+                      fi
+                      continue
+                  fi
+                  if [ "$rc" -ne 0 ]; then
+                      exit 0
+                  fi
+                  break
+              done
               if [ "$mux_reply" = "q" ]; then
                   exit 0
               fi
