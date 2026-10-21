@@ -1172,6 +1172,86 @@ fn podman_checks(
     });
 }
 
+/// The `dtach` pin check (detach.md B9): `MYSBX_DTACH` resolves to an
+/// executable, or `dtach` is on PATH. WARN, not FAIL — only --detach,
+/// --detachable and attach need it.
+fn dtach_check() -> Check {
+    match crate::detach::resolve_dtach() {
+        Some(path) => Check::ok("dtach", path.display().to_string()),
+        None => Check::warn(
+            "dtach",
+            "no usable dtach found (MYSBX_DTACH or PATH)",
+            "the Nix wrapper pins MYSBX_DTACH (pkgs.dtach in default.nix); only --detach, --detachable and attach need it",
+        ),
+    }
+}
+
+/// The runtime-root check (detach.md B9): `$XDG_RUNTIME_DIR` is set,
+/// absolute, owned by the current uid and `0700`. The root ITSELF is
+/// stat'd (the `mysbx/` subdir need not pre-exist). WARN, not FAIL —
+/// a host that never uses --detach may have no runtime root.
+fn runtime_root_check() -> Check {
+    let root = match crate::detach::runtime_root_from_env() {
+        Ok(root) => root,
+        Err(crate::detach::Error::RuntimeDirUnset) => {
+            return Check::warn(
+                "runtime root",
+                "$XDG_RUNTIME_DIR is not set",
+                "the detached-run registry lives in $XDG_RUNTIME_DIR/mysbx; only --detach, --detachable and attach need it (detach.md B3)",
+            );
+        }
+        Err(crate::detach::Error::RuntimeDirRelative(p)) => {
+            return Check::warn(
+                "runtime root",
+                format!("$XDG_RUNTIME_DIR is relative: {}", p.display()),
+                "the runtime root must name the per-user tmpfs, not a relative path (detach.md B3)",
+            );
+        }
+        Err(_) => {
+            return Check::warn(
+                "runtime root",
+                "$XDG_RUNTIME_DIR is not usable",
+                "the detached-run registry lives in $XDG_RUNTIME_DIR/mysbx (detach.md B3)",
+            );
+        }
+    };
+    use std::os::unix::fs::MetadataExt;
+    let md = match std::fs::symlink_metadata(&root) {
+        Ok(md) => md,
+        Err(e) => {
+            return Check::warn(
+                "runtime root",
+                format!("{} does not exist: {e}", root.display()),
+                "a session manager sets $XDG_RUNTIME_DIR; only --detach, --detachable and attach need it",
+            );
+        }
+    };
+    let euid = unsafe { crate::libc_geteuid() };
+    if md.uid() != euid {
+        return Check::warn(
+            "runtime root",
+            format!(
+                "{} is owned by uid {}, not the current user",
+                root.display(),
+                md.uid()
+            ),
+            "the runtime root must be owned by the current user (detach.md B3)",
+        );
+    }
+    if md.mode() & 0o077 != 0 {
+        return Check::warn(
+            "runtime root",
+            format!(
+                "{} is group- or world-accessible (mode {:o})",
+                root.display(),
+                md.mode() & 0o777
+            ),
+            "the runtime root must be private (mode 0700, detach.md B3)",
+        );
+    }
+    Check::ok("runtime root", root.display().to_string())
+}
+
 /// The effective configuration and the check describing where it came
 /// from: the repo the cwd resolves to, or the user layer alone when
 /// there is none. A directory a run refuses (inside a session clone, a
@@ -1300,6 +1380,13 @@ pub fn run(args: &[String]) -> i32 {
             }
         }
     };
+
+    // The detached-run prerequisites (detach.md B9): the dtach pin
+    // and the runtime root. Both are WARN, not FAIL — a host that
+    // never uses --detach may have neither, and only --detach,
+    // --detachable and attach need them.
+    header.push(dtach_check());
+    header.push(runtime_root_check());
 
     let forwarded: Vec<(String, String)> = crate::forwarded_env_vars(&merged)
         .into_iter()

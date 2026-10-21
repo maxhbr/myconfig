@@ -8170,7 +8170,21 @@ fn doctor_fails_on_an_absent_podman_image_and_warns_on_a_stale_one() {
     let base = inv.cwd.parent().unwrap().to_path_buf();
     let record = base.join("podman-args");
     let podman = podman_stub(&base, &record, Err("Error: no such image"));
-    let owned = gvisor_envs(&podman);
+    // The detached-run prerequisites are set OK so the new host
+    // checks (detach.md B9) do not add warnings to this image test.
+    let dtach = doctor_stub(&base.join("bin"), "dtach", "exit 0");
+    let runtime = short_runtime_root("doctor-gvisor-image");
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&runtime, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let mut owned = gvisor_envs(&podman);
+    owned.push((
+        "MYSBX_DTACH".to_string(),
+        dtach.to_string_lossy().into_owned(),
+    ));
+    owned.push((
+        "XDG_RUNTIME_DIR".to_string(),
+        runtime.to_string_lossy().into_owned(),
+    ));
     let (code, stdout, stderr) = run_doctor(&inv, &["doctor"], &env_pairs(&owned));
     assert_eq!(code, 1, "stdout: {stdout}\nstderr: {stderr}");
     assert!(
@@ -8193,7 +8207,15 @@ fn doctor_fails_on_an_absent_podman_image_and_warns_on_a_stale_one() {
     // load-image hint.
     let _ = std::fs::remove_file(&record);
     let podman = podman_stub(&base, &record, Err("Error: database is locked"));
-    let owned = gvisor_envs(&podman);
+    let mut owned = gvisor_envs(&podman);
+    owned.push((
+        "MYSBX_DTACH".to_string(),
+        dtach.to_string_lossy().into_owned(),
+    ));
+    owned.push((
+        "XDG_RUNTIME_DIR".to_string(),
+        runtime.to_string_lossy().into_owned(),
+    ));
     let (code, stdout, stderr) = run_doctor(&inv, &["doctor"], &env_pairs(&owned));
     assert_eq!(code, 1, "stdout: {stdout}\nstderr: {stderr}");
     assert!(
@@ -8206,7 +8228,15 @@ fn doctor_fails_on_an_absent_podman_image_and_warns_on_a_stale_one() {
 
     let _ = std::fs::remove_file(&record);
     let podman = podman_stub(&base, &record, Ok("sha256:ffffffffffffffffffff"));
-    let owned = gvisor_envs(&podman);
+    let mut owned = gvisor_envs(&podman);
+    owned.push((
+        "MYSBX_DTACH".to_string(),
+        dtach.to_string_lossy().into_owned(),
+    ));
+    owned.push((
+        "XDG_RUNTIME_DIR".to_string(),
+        runtime.to_string_lossy().into_owned(),
+    ));
     let (code, stdout, stderr) = run_doctor(&inv, &["doctor"], &env_pairs(&owned));
     assert_eq!(
         code, 0,
@@ -12033,4 +12063,387 @@ fn a_detachable_run_starts_detached_and_attaches_under_one_lock() {
     let rec = wait_for_finished_record(&paths);
     assert_eq!(rec.state, mysbx::detach::State::Exited);
     assert_eq!(rec.exit_code, Some(0));
+}
+
+// ---- `status` detached section (detach.md B9) --------------------------------
+
+/// Write a registry record for a SESSION workspace (the live-workspace
+/// helper `write_registry_record` does not cover sessions), returning
+/// the registry paths.
+fn write_session_registry_record(
+    runtime: &Path,
+    repo: &Path,
+    session: &str,
+    state: mysbx::detach::State,
+) -> mysbx::detach::Paths {
+    let paths = mysbx::detach::paths(
+        runtime,
+        repo,
+        &mysbx::detach::Workspace::Session(session.to_owned()),
+    )
+    .expect("the registry paths build");
+    mysbx::detach::ensure(&paths).unwrap();
+    let r = mysbx::detach::Record {
+        state,
+        repo: repo.to_string_lossy().into_owned(),
+        sidecar: format!("{}.mysbx", repo.to_string_lossy()),
+        session: Some(session.to_owned()),
+        backend: "bubblewrap".to_owned(),
+        multiplexer: "tmux".to_owned(),
+        started_at: 1_700_000_000,
+        finished_at: Some(1_700_000_030),
+        exit_code: None,
+        error: None,
+    };
+    mysbx::detach::write(&paths, &r).unwrap();
+    paths
+}
+
+#[test]
+fn status_detached_section_says_none_when_no_registry() {
+    // B9: with no XDG_RUNTIME_DIR (or an empty registry) the
+    // `detached:` section says `none` — no heading-without-none, exit 0.
+    let (inv, _, _) = fixture_user_backend("status-detached-none", &["status"]);
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stdout.contains("## detached:        none (no detached runs registered)"),
+        "{stdout}"
+    );
+    assert!(
+        !stdout.contains("## detached:\n"),
+        "no heading-without-none: {stdout}"
+    );
+}
+
+#[test]
+fn status_detached_section_lists_a_live_run() {
+    // B9: a Running record with a bound socket lists under `detached:`,
+    // one line with `live`, `running`, the backend, the multiplexer
+    // and the ISO-8601 start time.
+    let (inv, repo, _) = fixture_with_backend("status-detached-live", &["status"]);
+    let runtime = short_runtime_root("status-detached-live");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let paths = write_registry_record(
+        &runtime,
+        &repo.canonicalize().unwrap(),
+        mysbx::detach::State::Running,
+    );
+    let _listener = std::os::unix::net::UnixListener::bind(&paths.sock).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["status"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(stdout.contains("## detached:"), "heading present: {stdout}");
+    let line = stdout
+        .lines()
+        .find(|l| l.contains("live") && l.contains("running"))
+        .unwrap_or_else(|| panic!("no live-running line: {stdout}"));
+    assert!(line.contains("live"), "{line}");
+    assert!(line.contains("running"), "{line}");
+    assert!(line.contains("backend=bubblewrap"), "{line}");
+    assert!(line.contains("multiplexer=tmux"), "{line}");
+    assert!(
+        line.contains("started=2023-11-14T22:13:20Z"),
+        "the ISO-8601 start time: {line}"
+    );
+}
+
+#[test]
+fn status_detached_section_lists_a_finished_run() {
+    // B9: an Exited record (no socket) lists as `exited(0)`.
+    let (inv, repo, _) = fixture_with_backend("status-detached-finished", &["status"]);
+    let runtime = short_runtime_root("status-detached-finished");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let paths = write_registry_record(
+        &runtime,
+        &repo.canonicalize().unwrap(),
+        mysbx::detach::State::Exited,
+    );
+    std::fs::write(
+        &paths.json,
+        std::fs::read_to_string(&paths.json)
+            .unwrap()
+            .replace("\"exitCode\": null", "\"exitCode\": 0"),
+    )
+    .unwrap();
+    let mut cmd = spawn_with_args(&inv, &["status"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let line = stdout
+        .lines()
+        .find(|l| l.contains("live") && l.contains("exited"))
+        .unwrap_or_else(|| panic!("no exited line: {stdout}"));
+    assert!(line.contains("exited(0)"), "{line}");
+}
+
+#[test]
+fn status_detached_section_lists_a_lost_run() {
+    // B9: a Running record without a socket is `lost`.
+    let (inv, repo, _) = fixture_with_backend("status-detached-lost", &["status"]);
+    let runtime = short_runtime_root("status-detached-lost");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let _paths = write_registry_record(
+        &runtime,
+        &repo.canonicalize().unwrap(),
+        mysbx::detach::State::Running,
+    );
+    let mut cmd = spawn_with_args(&inv, &["status"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let line = stdout
+        .lines()
+        .find(|l| l.contains("live") && l.contains("lost"))
+        .unwrap_or_else(|| panic!("no lost line: {stdout}"));
+    assert!(line.contains("lost"), "{line}");
+}
+
+#[test]
+fn status_is_read_only_on_the_registry() {
+    // B9: status never takes a lock, writes or removes anything — the
+    // record survives a status run, and no lock file is created.
+    let (inv, repo, _) = fixture_with_backend("status-detached-readonly", &["status"]);
+    let runtime = short_runtime_root("status-detached-readonly");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let paths = write_registry_record(
+        &runtime,
+        &repo.canonicalize().unwrap(),
+        mysbx::detach::State::Running,
+    );
+    let _listener = std::os::unix::net::UnixListener::bind(&paths.sock).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["status"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(paths.json.exists(), "the record survived the status run");
+    assert!(!paths.lock.exists(), "no lock file was created");
+}
+
+// ---- `doctor` detached-run checks (detach.md B9) -----------------------------
+
+#[test]
+fn doctor_warns_when_dtach_is_missing() {
+    // B9: with bwrap on PATH but no dtach, the host section warns —
+    // not fails — naming the pin and that only --detach/--detachable/
+    // attach need it.
+    let (inv, _, _) = fixture_user_backend("doctor-no-dtach", &[]);
+    let base = inv.cwd.parent().unwrap().to_path_buf();
+    let bwrap = doctor_stub(&base.join("bin"), "bwrap", "exit 0");
+    // A PATH with only the stub dir: no dtach there, so the fallback
+    // resolves to None — the WARN under test.
+    let bin = base.join("bin");
+    let path = bin.to_string_lossy().into_owned();
+    let (code, stdout, stderr) = run_doctor(
+        &inv,
+        &["doctor"],
+        &[
+            ("MYSBX_BWRAP", bwrap.to_str().unwrap()),
+            ("MYSBX_SHELL", "/bin/sh"),
+            ("PATH", &path),
+        ],
+    );
+    assert_eq!(code, 0, "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stdout.contains("WARN dtach: no usable dtach found"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("pkgs.dtach"),
+        "the hint names the Nix pin: {stdout}"
+    );
+    assert!(
+        stdout.contains("only --detach"),
+        "the hint names what needs dtach: {stdout}"
+    );
+}
+
+#[test]
+fn doctor_warns_when_runtime_root_is_unset() {
+    // B9: without $XDG_RUNTIME_DIR the host section warns — not fails
+    // — naming the variable.
+    let (inv, _, _) = fixture_user_backend("doctor-no-rtd", &[]);
+    let base = inv.cwd.parent().unwrap().to_path_buf();
+    let bwrap = doctor_stub(&base.join("bin"), "bwrap", "exit 0");
+    let (code, stdout, stderr) = run_doctor(
+        &inv,
+        &["doctor"],
+        &[
+            ("MYSBX_BWRAP", bwrap.to_str().unwrap()),
+            ("MYSBX_SHELL", "/bin/sh"),
+        ],
+    );
+    // run_doctor does not set XDG_RUNTIME_DIR, and spawn_with_args
+    // removes it; but doctor's resolve path uses the live env, so be
+    // explicit that it is absent.
+    assert_eq!(code, 0, "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stdout.contains("WARN runtime root: $XDG_RUNTIME_DIR is not set"),
+        "{stdout}"
+    );
+}
+
+#[test]
+fn doctor_is_ok_when_dtach_and_runtime_root_are_fine() {
+    // B9: with a pinned dtach and a 0700 runtime root owned by the
+    // current user, both checks are OK.
+    use std::os::unix::fs::PermissionsExt;
+    let (inv, _, _) = fixture_user_backend("doctor-detach-ok", &[]);
+    let base = inv.cwd.parent().unwrap().to_path_buf();
+    let dtach = doctor_stub(&base.join("bin"), "dtach", "exit 0");
+    let bwrap = doctor_stub(&base.join("bin"), "bwrap", "exit 0");
+    let runtime = short_runtime_root("doctor-detach-ok");
+    std::fs::set_permissions(&runtime, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let (code, stdout, stderr) = run_doctor(
+        &inv,
+        &["doctor"],
+        &[
+            ("MYSBX_DTACH", dtach.to_str().unwrap()),
+            ("MYSBX_BWRAP", bwrap.to_str().unwrap()),
+            ("MYSBX_SHELL", "/bin/sh"),
+            ("XDG_RUNTIME_DIR", runtime.to_str().unwrap()),
+        ],
+    );
+    assert_eq!(code, 0, "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stdout.contains(&format!("OK   dtach: {}", dtach.display())),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains(&format!("OK   runtime root: {}", runtime.display())),
+        "{stdout}"
+    );
+}
+
+// ---- `session destroy` live-detached-run guard (detach.md B9) ----------------
+
+#[test]
+fn session_destroy_refuses_a_live_detached_session_even_with_force() {
+    // B9: a live detached run of the session blocks its destroy — the
+    // clone is bound rw into a running sandbox. The guard is NOT
+    // overridable by --force (it is not the unmerged-work refusal).
+    let Some((inv, repo, sidecar)) = session_fixture("destroy-detached-live", &["fix-1"]) else {
+        return;
+    };
+    let fix = sidecar.join("clones").join("fix-1");
+    let runtime = short_runtime_root("dd-live");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let paths = write_session_registry_record(
+        &runtime,
+        &repo.canonicalize().unwrap(),
+        "fix-1",
+        mysbx::detach::State::Running,
+    );
+    let _listener = std::os::unix::net::UnixListener::bind(&paths.sock).unwrap();
+    // With --force: refused.
+    let mut inv_force = inv.clone();
+    inv_force.args = vec!["session", "destroy", "fix-1", "--force"];
+    let mut cmd = spawn_with_args(&inv_force, &inv_force.args);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(70),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        stderr.contains("refusing to destroy session fix-1"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("mysbx attach --session fix-1"), "{stderr}");
+    assert!(fix.join(".git").is_dir(), "the clone was not removed");
+    // Without --force: also refused.
+    let mut inv_plain = inv.clone();
+    inv_plain.args = vec!["session", "destroy", "fix-1"];
+    let mut cmd = spawn_with_args(&inv_plain, &inv_plain.args);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(70),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(fix.join(".git").is_dir(), "the clone was not removed");
+}
+
+#[test]
+fn session_destroy_proceeds_for_a_finished_detached_session() {
+    // B9: a finished detached run (no live socket) does not block the
+    // destroy — the clone is gone.
+    let Some((inv, repo, sidecar)) = session_fixture("destroy-detached-finished", &["fix-1"])
+    else {
+        return;
+    };
+    let fix = sidecar.join("clones").join("fix-1");
+    let runtime = short_runtime_root("dd-fin");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let _paths = write_session_registry_record(
+        &runtime,
+        &repo.canonicalize().unwrap(),
+        "fix-1",
+        mysbx::detach::State::Exited,
+    );
+    let mut inv = inv;
+    inv.args = vec!["session", "destroy", "fix-1", "--force"];
+    let mut cmd = spawn_with_args(&inv, &inv.args);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(!fix.exists(), "the clone is gone");
+}
+
+#[test]
+fn session_destroy_proceeds_when_no_record_exists() {
+    // B9: no registry record (an empty runtime root) means no detached
+    // run — the destroy proceeds normally.
+    let Some((inv, _, sidecar)) = session_fixture("destroy-detached-none", &["fix-1"]) else {
+        return;
+    };
+    let fix = sidecar.join("clones").join("fix-1");
+    let runtime = short_runtime_root("dd-none");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let mut inv = inv;
+    inv.args = vec!["session", "destroy", "fix-1", "--force"];
+    let mut cmd = spawn_with_args(&inv, &inv.args);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(!fix.exists(), "the clone is gone");
 }

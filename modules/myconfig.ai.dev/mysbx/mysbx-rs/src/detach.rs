@@ -136,6 +136,22 @@ impl Workspace {
             Workspace::Session(name) => format!("s.{name}"),
         }
     }
+
+    /// The inverse of [`stem`]: `live` → [`Live`], `s.NAME` →
+    /// [`Session(NAME)`] when NAME is a valid session name, `None`
+    /// for a foreign stem (detach.md B9). Read-only listing uses
+    /// this to recover the workspace from a registry file's stem.
+    pub fn parse_stem(stem: &str) -> Option<Workspace> {
+        if stem == "live" {
+            return Some(Workspace::Live);
+        }
+        let name = stem.strip_prefix("s.")?;
+        if crate::session::valid_name(name) {
+            Some(Workspace::Session(name.to_owned()))
+        } else {
+            None
+        }
+    }
 }
 
 /// One registered detached run, as plain data (detach.md B5) — pure,
@@ -944,6 +960,69 @@ pub fn classify(r: &Record, p: Probe) -> Status {
         return Status::Finished;
     }
     Status::Lost
+}
+
+/// One entry of the read-only listing [`list_records`] returns
+/// (detach.md B9): the workspace, the record and the probed status
+/// — the three facts a `detached:` line of `status` prints.
+#[derive(Debug, Clone)]
+pub struct Listed {
+    /// The workspace the record belongs to.
+    pub workspace: Workspace,
+    /// The state file's contents.
+    pub record: Record,
+    /// Liveness-first classification of the record and its socket.
+    pub status: Status,
+}
+
+/// List the detached runs registered for `repo_root` under
+/// `runtime_root` (detach.md B9): read-only, the `status` verb's
+/// `detached:` section. Reads the per-repo registry directory
+/// `runtime_root/mysbx/<fnv1a10(repo_root)>/`, filters `*.json`,
+/// recovers the workspace from each file's stem and classifies the
+/// record against its socket's probe.
+///
+/// A missing directory is the empty registry (no runs). A corrupt
+/// record is SKIPPED silently: status is read-only and must not
+/// crash on a bad file — `attach` owns cleanup. The entries are
+/// sorted by stem for stable output. Pure except for the
+/// `read_dir`/`read`/`probe` IO; the function takes no lock, writes
+/// nothing and removes nothing.
+pub fn list_records(runtime_root: &Path, repo_root: &Path) -> Vec<Listed> {
+    let dir = runtime_root
+        .join("mysbx")
+        .join(crate::repo::fnv1a10(&repo_root.to_string_lossy()));
+    let rd = match std::fs::read_dir(&dir) {
+        Ok(rd) => rd,
+        Err(_) => return Vec::new(),
+    };
+    let mut stems: Vec<String> = rd
+        .filter_map(|e| e.ok())
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            name.strip_suffix(".json").map(str::to_owned)
+        })
+        .collect();
+    stems.sort();
+    let mut out = Vec::new();
+    for stem in stems {
+        let Some(workspace) = Workspace::parse_stem(&stem) else {
+            continue;
+        };
+        let Ok(paths) = paths(runtime_root, repo_root, &workspace) else {
+            continue;
+        };
+        let Ok(record) = read(&paths) else {
+            continue;
+        };
+        let status = classify(&record, probe(&paths.sock));
+        out.push(Listed {
+            workspace,
+            record,
+            status,
+        });
+    }
+    out
 }
 
 // The flock(2) operation constants from <sys/file.h>.

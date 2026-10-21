@@ -522,6 +522,17 @@ pub fn destroy(args: &[String], dry_run: bool) -> i32 {
         return crate::EXIT_INFRASTRUCTURE;
     }
 
+    // 4b. a live detached run of this session (detach.md B9): the
+    // clone is bound rw into a running sandbox, so destroying it
+    // would corrupt the run. This guard is NOT overridable by
+    // --force (it is not the unmerged-work refusal) and fires before
+    // --dry-run too. An unset runtime root means no detached run
+    // could exist — proceed.
+    if let Some(msg) = live_detached_run_refusal(&repo, &name) {
+        eprintln!("mysbx: {msg}");
+        return crate::EXIT_INFRASTRUCTURE;
+    }
+
     // 5. the unmerged-work refusal. Debris — an entry without `.git`
     // — has no branch and no work, so it passes straight through
     // (D2 names `session destroy` as the verb for it).
@@ -834,6 +845,32 @@ fn parse_destroy(args: &[String]) -> Result<(String, bool), i32> {
             eprintln!("try `mysbx --help`");
             Err(2)
         }
+    }
+}
+
+/// Whether a live detached run of session `name` blocks its destroy
+/// (detach.md B9): the clone is bound rw into a running sandbox, so
+/// removing it would corrupt the run. `Some(msg)` refuses (names
+/// `mysbx attach --session NAME`); `None` lets the destroy proceed
+/// — no runtime root, no record, a finished or lost run. Read-only:
+/// the guard neither locks nor removes the registry record (a stale
+/// record is cleaned by attach's finished/lost path).
+fn live_detached_run_refusal(repo: &Repo, name: &str) -> Option<String> {
+    let root = crate::detach::runtime_root_from_env().ok()?;
+    let workspace = crate::detach::Workspace::Session(name.to_owned());
+    let paths = crate::detach::paths(&root, &repo.root, &workspace).ok()?;
+    if !paths.json.exists() {
+        return None;
+    }
+    let record = crate::detach::read(&paths).ok()?;
+    let status = crate::detach::classify(&record, crate::detach::probe(&paths.sock));
+    match status {
+        crate::detach::Status::Live => Some(format!(
+            "refusing to destroy session {name}: a detached run of this session is live — \
+             the clone is bound rw into a running sandbox; attach to it first with \
+             `mysbx attach --session {name}` (detach.md B9)"
+        )),
+        crate::detach::Status::Finished | crate::detach::Status::Lost => None,
     }
 }
 

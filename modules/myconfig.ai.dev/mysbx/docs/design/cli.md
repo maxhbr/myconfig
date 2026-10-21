@@ -695,7 +695,15 @@ cannot compute, rather than guessing past a broken layer.
 4. **worktrees**: the SAME lines `mysbx worktree list` prints,
    indented under a `worktrees:` heading, or a short `worktrees:
    none` line.
-5. **the gvisor image pin**, when this build carries one
+5. **detached runs** (detach.md B9): the read-only listing of the
+   runtime-root registry — one line per entry with the workspace
+   (`live` or the session name), the state (`running`, `lost`, or
+   the finished state with its exit code — `exited(N)`, `failed(N)`,
+   `cancelled`), the backend, the multiplexer and the start time
+   (ISO-8601 UTC) — or a short `detached: none` line when the
+   registry is unset or empty. The section is **read-only**: status
+   never takes a lock, writes or removes a record.
+6. **the gvisor image pin**, when this build carries one
    (`MYSBX_PODMAN_IMAGE` of the wrapper) — the trivial tail: the
    pin is what a `podman-gvisor` run would consume.
 
@@ -724,6 +732,14 @@ backend (the merged `backend` of the layers of the repo the cwd
 resolves to, or of the user layer alone outside a repo), or each
 BACKEND named on the command line. The positional list lets an
 operator check a backend before configuring it.
+
+**Host section.** Before any backend's checks, the `mysbx doctor`
+header carries two `WARN`-grade checks for the detached-run
+prerequisites (detach.md B9): the `MYSBX_DTACH` pin resolves to an
+executable, and `$XDG_RUNTIME_DIR` is set, absolute, owned by the
+current user and `0700`. Both are `WARN`, not `FAIL` — they disable
+`--detach`, `--detachable` and `attach` alone, not runs; a host that
+never uses detached runs may have neither.
 
 **Checks per backend** (`src/doctor.rs`):
 
