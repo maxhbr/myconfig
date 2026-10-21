@@ -193,7 +193,9 @@ Signals in the inner mysbx: `SIGINT`, `SIGQUIT` and `SIGTSTP` are
 ignored. They come from the pty and belong to the payload, which is in
 the same foreground process group. `SIGHUP` (the dtach master went
 away) and `SIGTERM` are forwarded to the backend and the run is recorded
-as `cancelled`.
+as `cancelled`. The backend is spawned with all five reset to `SIG_DFL`
+— ignored dispositions cross the `exec`, so the ignores above stay in
+the inner mysbx itself and never reach the payload.
 
 The argv the inner builds is the interactive one: the payload always
 has a terminal (the dtach pty), whatever the outer's stdin was. For

@@ -10499,17 +10499,23 @@ unsafe fn libc_close(fd: i32) {
     close(fd);
 }
 
-/// A stub `bwrap`: records its own argv, sleeps until `$BWRAP_LIVE`
-/// appears (the test controls how long the "backend" runs), then
-/// exits with `$BWRAP_EXIT` (default 0).
+/// A stub `bwrap`: records its inherited ignored-signal mask, then
+/// its own argv, sleeps until `$BWRAP_LIVE` appears (the test controls
+/// how long the "backend" runs), then exits with `$BWRAP_EXIT`
+/// (default 0).
 fn bwrap_stub(base: &Path) -> (PathBuf, PathBuf) {
     let record = base.join("bwrap-record.txt");
     let stub = base.join("bwrap-stub");
     std::fs::write(
         &stub,
         format!(
-            "#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\n\
+            "#!/bin/sh\ngrep '^SigIgn:' /proc/self/status > {}.tmp\n\
+             printf '%s\\n' \"$@\" >> {}.tmp\n\
+             mv -f {}.tmp {}\n\
              while [ ! -e \"$BWRAP_LIVE\" ]; do sleep 0.05; done\nexit \"${{BWRAP_EXIT:-0}}\"\n",
+            record.display(),
+            record.display(),
+            record.display(),
             record.display()
         ),
     )
@@ -11086,6 +11092,62 @@ fn the_inner_detached_run_spawns_the_backend_with_the_detachable_mark() {
     assert!(
         mark,
         "the mark reached the backend's environment: {recorded}"
+    );
+    std::fs::write(inv.home.join("bwrap-live"), "").unwrap();
+}
+
+#[test]
+fn the_backend_of_the_detached_inner_inherits_no_ignored_signals() {
+    if !is_ssh_keygen_available() {
+        return; // no usable ssh-keygen (the baseline env's uid-0 quirk)
+    }
+    // B4: the inner ignores the pty's signals, but dispositions cross
+    // `exec` — the backend (and the payload behind it) must start
+    // with `SIG_DFL` for all five of B4's signals, or a Ctrl-C on
+    // the pty would be dead in the payload. Asserted through the stub
+    // bwrap's first record line: its inherited SigIgn mask.
+    let (inv, _, _) = fixture_with_backend("detach-no-ignored-signals", &["--detach"]);
+    let (dtach, _) = dtach_stub(&inv.home, true);
+    let (bwrap, bwrap_record) = bwrap_stub(&inv.home);
+    let runtime = short_runtime_root("no-ignored-signals");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--detach"]);
+    cmd.env("MYSBX_DTACH", &dtach)
+        .env("MYSBX_BWRAP", &bwrap)
+        .env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .env("XDG_RUNTIME_DIR", &runtime)
+        .env("BWRAP_LIVE", inv.home.join("bwrap-live"));
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    // The mask line first: `SigIgn:\t0000000000000000` (hex, no 0x —
+    // parsed tolerantly anyway, the format is not a contract). The stub
+    // assembles the record in a `.tmp` and `mv`s it (atomic rename),
+    // so what `wait_for_file` returns is always the full record.
+    let recorded = wait_for_file(&bwrap_record);
+    let mask_line = recorded
+        .lines()
+        .next()
+        .expect("the stub's SigIgn line comes first");
+    let mask_hex = mask_line
+        .strip_prefix("SigIgn:")
+        .unwrap_or_else(|| panic!("not a SigIgn line: {mask_line}"))
+        .trim()
+        .trim_start_matches("0x");
+    let mask = u64::from_str_radix(mask_hex, 16)
+        .unwrap_or_else(|_| panic!("not a SigIgn hex mask: {mask_line}"));
+    // The kernel's /proc prints the mask LSB-first: bit N-1 is
+    // signal N — SIGHUP=1<<0, SIGINT=1<<1, SIGQUIT=1<<2,
+    // SIGTERM=1<<14, SIGTSTP=1<<19.
+    let b4_signals = (1u64 << 0) | (1u64 << 1) | (1u64 << 2) | (1u64 << 14) | (1u64 << 19);
+    assert_eq!(
+        mask & b4_signals,
+        0,
+        "the backend inherited an ignored B4 signal (mask {mask:#x})"
     );
     std::fs::write(inv.home.join("bwrap-live"), "").unwrap();
 }

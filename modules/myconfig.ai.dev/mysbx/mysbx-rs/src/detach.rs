@@ -1855,6 +1855,19 @@ unsafe fn restore_signals() {
     libc_signal(SIGTERM, SIG_DFL);
 }
 
+/// Reset B4's five signals to `SIG_DFL` in the forked child before
+/// exec: dispositions cross the exec boundary, so the inner's
+/// `SIG_IGN`/handler setup must not reach the backend (and the
+/// payload behind it), or Ctrl-C on the pty would be eaten.
+///
+/// # Safety
+/// Runs in the child between fork and exec (pre_exec): only
+/// async-signal-safe calls are made (the raw `signal(2)`).
+unsafe fn reset_signals_for_child() -> std::io::Result<()> {
+    restore_signals();
+    Ok(())
+}
+
 /// `kill(2)` on one pid — the inner forwards the terminating signal to
 /// the backend itself (the whole process group gets it from the
 /// terminal anyway, but the direct kill is not a guess).
@@ -2259,6 +2272,11 @@ pub(crate) fn inner_spawn_wait(
             eprintln!("mysbx: {e}");
         }
     };
+    // The child gets its own default dispositions (see
+    // `reset_signals_for_child`): the ignores below stay in THIS
+    // process only (B4).
+    use std::os::unix::process::CommandExt;
+    unsafe { cmd.pre_exec(|| reset_signals_for_child()) };
     unsafe {
         ignore_pty_signals();
         catch_terminate_signals();
