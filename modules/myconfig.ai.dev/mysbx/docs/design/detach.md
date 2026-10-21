@@ -249,10 +249,11 @@ dtach session; only its exit code remains. A foreground run or
 
 `<workspace>.lock` is `flock`ed by `--detach`/`--detachable` from the
 liveness probe until the handshake of B4 ends, and by `attach` while it
-removes a finished record. Without it, two concurrent `--detach` runs
-could both find a stale socket, and the second could unlink the first
-one's fresh socket. dtach's own `bind(2)` is the last line of defense:
-it fails on an existing path.
+removes a finished record — and by `session destroy` from its live-run
+re-check through the clone removal. Without it, two concurrent
+`--detach` runs could both find a stale socket, and the second could
+unlink the first one's fresh socket. dtach's own `bind(2)` is the last
+line of defense: it fails on an existing path.
 
 A stale socket (connection refused) is removed under the lock before a
 new run starts.
@@ -318,7 +319,16 @@ repos with other grants. So:
 - **`session destroy` (workspace.md D7)** refuses while the session has
   a live detached run, with or without `--force`: the clone is bound rw
   into a running sandbox. The message names `mysbx attach --session
-  NAME`. `--force` keeps its meaning (unmerged work).
+  NAME`. `--force` keeps its meaning (unmerged work). The guard treats
+  a `starting` record as live; a real destroy takes the same workspace
+  lock (B6) — blocking until a concurrent outer's handshake ends,
+  bounded by that handshake, which a first `--session` run's clone can
+  make long — and re-checks under it, holding the lock through the
+  removal. The lock is taken even when no record exists yet: the
+  outer takes it from before it writes its `starting` record, so
+  the lock — not the record — is what serializes a starting run
+  against the removal. A `--dry-run` runs the lock-free guard
+  only, so it never blocks, and its probe is advisory.
 - **`doctor` (cli.md D20)** checks the `MYSBX_DTACH` pin and the runtime
   root (set, absolute, owned, `0700`) in a host section. Problems there
   are `WARN`, not `FAIL`: they disable detached runs, not runs.

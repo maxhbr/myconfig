@@ -239,9 +239,15 @@ a fourth verb is a decision, not a given.
   the session has a live detached run**, with or without `--force`: the
   clone is bound rw into a running sandbox, and the message names
   `mysbx attach --session NAME` (detach.md B9). `--force` keeps its
-  meaning (unmerged work); the live-run guard is not overridable. The
-  clone is plain `rm -rf`'d — it is standalone, no worktree bookkeeping,
-  the host repo is untouched. A host-local `agent/mysbx/NAME` branch
+  meaning (unmerged work); the live-run guard is not overridable. A
+  starting run counts as live, checked under the workspace lock of
+  detach.md B6 (held through the removal, taken even when no record
+  exists yet — the lock, not the record, is what serializes a
+  starting run), so no run can start while the clone is being
+  deleted; a `--dry-run` runs the lock-free guard only, so it never
+  blocks, and its probe is advisory. The clone is plain `rm -rf`'d —
+  it is standalone, no worktree bookkeeping, the host repo is
+  untouched. A host-local `agent/mysbx/NAME` branch
   left by a `fetch` is **not** deleted: it is the operator's imported
   copy, and deleting it silently would contradict the unmerged-work
   guard this verb exists to enforce.

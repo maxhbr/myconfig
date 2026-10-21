@@ -12677,6 +12677,170 @@ fn session_destroy_refuses_a_live_detached_session_even_with_force() {
 }
 
 #[test]
+fn session_destroy_refuses_a_starting_detached_session_and_never_removes_the_clone() {
+    // B9/B6: a `starting` record — the outer has written it, the
+    // socket is not yet bound — is a run that is COMING UP, not a
+    // corpse. The lock-free guard refuses it (so --dry-run refuses
+    // too, without ever touching the lock), and the real destroy
+    // re-checks under the workspace lock, holding it through the
+    // removal, so a starting run can never lose its clone.
+    let Some((inv, repo, sidecar)) = session_fixture("destroy-detached-starting", &["fix-1"])
+    else {
+        return;
+    };
+    let fix = sidecar.join("clones").join("fix-1");
+    let runtime = short_runtime_root("dd-start");
+    let repo_canon = repo.canonicalize().unwrap();
+    let paths = write_session_registry_record(
+        &runtime,
+        &repo_canon,
+        "fix-1",
+        mysbx::detach::State::Starting,
+    );
+    // No socket: the window between the record write and bind(2).
+
+    // Case A: the guard refuses the starting run, plain and with
+    // --force (it is not the unmerged-work refusal).
+    let mut inv_plain = inv.clone();
+    inv_plain.args = vec!["session", "destroy", "fix-1"];
+    let mut cmd = spawn_with_args(&inv_plain, &inv_plain.args);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(70),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        stderr.contains("refusing to destroy session fix-1"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("mysbx attach --session fix-1"), "{stderr}");
+    assert!(fix.join(".git").is_dir(), "the clone was not removed");
+    let mut inv_force = inv.clone();
+    inv_force.args = vec!["session", "destroy", "fix-1", "--force"];
+    let mut cmd = spawn_with_args(&inv_force, &inv_force.args);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(70),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        stderr.contains("refusing to destroy session fix-1"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("mysbx attach --session fix-1"), "{stderr}");
+    assert!(fix.join(".git").is_dir(), "the clone was not removed");
+
+    // The record pair of the two blocking cases: `starting` — what a
+    // concurrent outer writes under the lock — and `finished`, which
+    // the lock-free guard lets pass.
+    let starting = mysbx::detach::Record {
+        state: mysbx::detach::State::Starting,
+        repo: repo_canon.to_string_lossy().into_owned(),
+        sidecar: format!("{}.mysbx", repo_canon.to_string_lossy()),
+        session: Some("fix-1".to_owned()),
+        backend: "bubblewrap".to_owned(),
+        multiplexer: "tmux".to_owned(),
+        started_at: 1_700_000_000,
+        finished_at: None,
+        exit_code: None,
+        error: None,
+    };
+    let finished = mysbx::detach::Record {
+        state: mysbx::detach::State::Exited,
+        finished_at: Some(1_700_000_030),
+        ..starting.clone()
+    };
+
+    // Case B (the blocking proof): with a record the LOCK-FREE guard
+    // lets pass (`finished`), the destroy must BLOCK on the workspace
+    // lock the test holds — as a concurrent outer does through its
+    // handshake — while the record flips to `starting` under that
+    // lock; once the lock is free, the re-check under it refuses.
+    {
+        mysbx::detach::write(&paths, &finished).unwrap();
+        let guard = mysbx::detach::lock(&paths).expect("the workspace lock is free");
+        let inv_b = inv.clone();
+        let runtime_b = runtime.clone();
+        let handle = std::thread::spawn(move || {
+            let mut inv = inv_b;
+            inv.args = vec!["session", "destroy", "fix-1", "--force"];
+            let mut cmd = spawn_with_args(&inv, &inv.args);
+            cmd.env("XDG_RUNTIME_DIR", &runtime_b);
+            cmd.output().expect("failed to spawn the mysbx binary")
+        });
+        // The lock-free guard sees `finished` and passes; the destroy
+        // blocks on the lock. Give the block time to prove itself
+        // while the record still says `finished`, then flip the
+        // record under the lock, as the starting outer does — the
+        // clone must survive both halves of the wait.
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        assert!(
+            fix.join(".git").is_dir(),
+            "the clone survived while the lock was held"
+        );
+        mysbx::detach::write(&paths, &starting).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        drop(guard);
+        let out = handle.join().expect("the destroy thread panicked");
+        assert_eq!(
+            out.status.code(),
+            Some(70),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+        assert!(
+            stderr.contains("refusing to destroy session fix-1"),
+            "{stderr}"
+        );
+        assert!(stderr.contains("mysbx attach --session fix-1"), "{stderr}");
+        assert!(fix.join(".git").is_dir(), "the clone was not removed");
+    }
+
+    // Case C (detach.md B6): the dry run never blocks — it runs the
+    // LOCK-FREE guard only, so while the workspace lock is held it
+    // still refuses the starting run promptly, never waiting for
+    // the lock. The record is written here so the case stands alone.
+    {
+        mysbx::detach::write(&paths, &starting).unwrap();
+        let _guard = mysbx::detach::lock(&paths).expect("the workspace lock is free");
+        let inv_c = inv.clone();
+        let runtime_c = runtime.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let handle = std::thread::spawn(move || {
+            let mut cmd = spawn_with_args(&inv_c, &["--dry-run", "session", "destroy", "fix-1"]);
+            cmd.env("XDG_RUNTIME_DIR", &runtime_c);
+            let out = cmd.output().expect("failed to spawn the mysbx binary");
+            let _ = tx.send(out);
+        });
+        let out = rx
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("the dry run blocked on the workspace lock");
+        assert_eq!(
+            out.status.code(),
+            Some(70),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+        assert!(
+            stderr.contains("refusing to destroy session fix-1"),
+            "{stderr}"
+        );
+        assert!(fix.join(".git").is_dir(), "nothing was removed");
+        handle.join().expect("the dry-run thread panicked");
+    }
+}
+
+#[test]
 fn session_destroy_proceeds_for_a_finished_detached_session() {
     // B9: a finished detached run (no live socket) does not block the
     // destroy — the clone is gone.
