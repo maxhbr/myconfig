@@ -476,9 +476,14 @@ fn dry_run_argv(repo: &Repo, names: &[String]) -> Vec<Vec<String>> {
 ///    the command line was fine, the world is not what it must be);
 /// 5. the unmerged-work refusal — the session branch holds commits
 ///    the host repo does not have (`70`), unless `--force`;
-/// 6. the removal: plain `rm -rf` of the clone plus the session's
+/// 6. a live detached run of this session (detach.md B9): a live or
+///    `starting` record refuses (`70`), with or without `--force` —
+///    the lock-free probe a `--dry-run` runs too;
+/// 7. the removal: plain `rm -rf` of the clone plus the session's
 ///    result file, the host repo untouched, a host-local session
-///    branch of a `fetch` deliberately kept.
+///    branch of a `fetch` deliberately kept. A real (non-dry-run)
+///    destroy re-checks step 6 UNDER the workspace lock (detach.md
+///    B6) and holds it through this removal.
 ///
 /// `--force` overrides ONLY the unmerged-work refusal: the guards
 /// of step 4 are about what the path is, not about the work, and no
@@ -519,6 +524,17 @@ pub fn destroy(args: &[String], dry_run: bool) -> i32 {
     // resolved path is before anything removes it).
     if let Err(msg) = intrinsic_guards(&repo, &session) {
         eprintln!("mysbx: refusing to destroy session {name}: {msg}");
+        return crate::EXIT_INFRASTRUCTURE;
+    }
+
+    // 5b. a live detached run of this session (detach.md B9): the
+    // clone is bound rw into a running sandbox, so destroying it
+    // would corrupt the run. This guard is NOT overridable by
+    // --force (it is not the unmerged-work refusal) and fires before
+    // --dry-run too. An unset runtime root means no detached run
+    // could exist — proceed.
+    if let Some(msg) = live_detached_run_refusal(&repo, &name) {
+        eprintln!("mysbx: {msg}");
         return crate::EXIT_INFRASTRUCTURE;
     }
 
@@ -577,6 +593,22 @@ pub fn destroy(args: &[String], dry_run: bool) -> i32 {
         print_removal(&removal);
         return 0;
     }
+
+    // 7b. the authoritative re-check UNDER the workspace lock
+    // (detach.md B6): the lock-free guard of 4b probes without it,
+    // so a `--detach` startup whose record is `starting` and whose
+    // socket is not yet bound can race the guard — here the lock
+    // blocks until the concurrent outer's handshake ends, the record
+    // is re-read, and a run that is live or starting refuses. The
+    // guard stays held through the removal below (B6), so no run can
+    // start while the clone is being deleted.
+    let _lock_guard = match live_detached_run_refusal_locked(&repo, &name) {
+        Ok(guard) => guard,
+        Err(msg) => {
+            eprintln!("mysbx: {msg}");
+            return crate::EXIT_INFRASTRUCTURE;
+        }
+    };
 
     // The removal itself. A failure to remove is an infrastructure
     // failure (70), the path named — half a removal must not pass
@@ -833,6 +865,106 @@ fn parse_destroy(args: &[String]) -> Result<(String, bool), i32> {
             eprintln!("mysbx session destroy: a session name is required");
             eprintln!("try `mysbx --help`");
             Err(2)
+        }
+    }
+}
+
+/// Whether a live detached run of session `name` blocks its destroy
+/// (detach.md B9): the clone is bound rw into a running sandbox, so
+/// removing it would corrupt the run. `Some(msg)` refuses (names
+/// `mysbx attach --session NAME`); `None` lets the destroy proceed
+/// — no runtime root, no record, a finished or lost run. A
+/// `starting` record counts as live: the outer holds the workspace
+/// lock from before it writes the record until its handshake ends
+/// (detach.md B6), so the clone it is binding rw is about to be a
+/// live run's. Read-only and LOCK-FREE: the guard neither locks nor
+/// removes the registry record (a stale record is cleaned by
+/// attach's finished/lost path) — `--dry-run` runs it alone, so a
+/// dry run never blocks; a real destroy re-checks under the lock
+/// with [`live_detached_run_refusal_locked`].
+fn live_detached_run_refusal(repo: &Repo, name: &str) -> Option<String> {
+    let root = crate::detach::runtime_root_from_env().ok()?;
+    let workspace = crate::detach::Workspace::Session(name.to_owned());
+    let paths = crate::detach::paths(&root, &repo.root, &workspace).ok()?;
+    if !paths.json.exists() {
+        return None;
+    }
+    let record = crate::detach::read(&paths).ok()?;
+    let status = crate::detach::classify(&record, crate::detach::probe(&paths.sock));
+    match status {
+        crate::detach::Status::Live => Some(live_run_message(name)),
+        crate::detach::Status::Finished | crate::detach::Status::Lost => {
+            // Lost — a `starting`/`running` record without a live
+            // socket — must split on the state: `starting` is a run
+            // that is COMING UP (B5), not a killed master.
+            if record.state == crate::detach::State::Starting {
+                Some(live_run_message(name))
+            } else {
+                None
+            }
+        }
+    }
+}
+
+/// The refusal message both guards share (detach.md B9).
+fn live_run_message(name: &str) -> String {
+    format!(
+        "refusing to destroy session {name}: a detached run of this session is live — \
+         the clone is bound rw into a running sandbox; attach to it first with \
+         `mysbx attach --session {name}` (detach.md B9)"
+    )
+}
+
+/// The authoritative re-check a real (non-dry-run) destroy runs
+/// UNDER the workspace lock (detach.md B6), taking the lock first
+/// (blocking — the wait is bounded by a concurrent outer's
+/// handshake) and holding it through the clone removal, so no run
+/// can start while the clone is being deleted. `Ok(guard)` = the
+/// lock is held, proceed with the removal; `Err(msg)` = refuse
+/// (70). An unset runtime root or an unbuildable registry path —
+/// like the lock-free guard's — means no detached run could exist:
+/// the destroy proceeds. The lock is taken even when no record
+/// exists yet: a concurrent outer takes it from before it writes
+/// its `starting` record, so the lock — not the record — is what
+/// serializes a starting run against the removal. Read under the
+/// lock, the record is exactly what a concurrent outer has written:
+/// a `starting` run is live (the lock-free guard's split rule).
+fn live_detached_run_refusal_locked(
+    repo: &Repo,
+    name: &str,
+) -> Result<Option<crate::detach::WorkspaceLock>, String> {
+    let Some(root) = crate::detach::runtime_root_from_env().ok() else {
+        return Ok(None);
+    };
+    let workspace = crate::detach::Workspace::Session(name.to_owned());
+    let Ok(paths) = crate::detach::paths(&root, &repo.root, &workspace) else {
+        return Ok(None);
+    };
+    // `ensure` first (the same 0700 registry any detached run
+    // creates): the lock file lives inside it, and a session whose
+    // registry was never created gets it now — the lock, not the
+    // record, is what serializes a starting run.
+    crate::detach::ensure(&paths)
+        .map_err(|e| format!("cannot prepare the registry of the detached run: {e}"))?;
+    let guard = crate::detach::lock(&paths)
+        .map_err(|e| format!("cannot take the workspace lock of the detached run: {e}"))?;
+    let Ok(record) = crate::detach::read(&paths) else {
+        // A record the crate cannot parse is the lock-free guard's
+        // "no run" too — refusing here would make a destroy
+        // impossible until a hand-written cleanup, for a state the
+        // guard already let pass.
+        return Ok(Some(guard));
+    };
+    let status = crate::detach::classify(&record, crate::detach::probe(&paths.sock));
+    match status {
+        crate::detach::Status::Live => Err(live_run_message(name)),
+        crate::detach::Status::Finished => Ok(Some(guard)),
+        crate::detach::Status::Lost => {
+            if record.state == crate::detach::State::Starting {
+                Err(live_run_message(name))
+            } else {
+                Ok(Some(guard))
+            }
         }
     }
 }

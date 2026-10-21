@@ -54,6 +54,13 @@
 #                     the payload. Absent for hosts that carry no
 #                     waypipe — a config selecting it is a refused
 #                     run, never a silently headless one.
+#   MYSBX_DTACH      the dtach master of detached runs (../docs/
+#                     design/detach.md B10, `--detach`): the host-side
+#                     process that holds the detached run's pty.
+#                     Absent for hosts that carry no dtach — a
+#                     `--detach` is a refused run naming the
+#                     variable, never a silently undetached one;
+#                     other runs are unaffected.
 #   MYSBX_PODMAN_WAYPIPE
 #                     the waypipe binary INSIDE the podman-gvisor
 #                     image, the server end of the same channel on
@@ -311,6 +318,14 @@
   # the pin is refused — a host that carries no waypipe never starts
   # a silently headless sandbox. `null` pins nothing.
   waypipe ? null,
+  # The dtach master of detached runs (docs/design/detach.md B10,
+  # `--detach`): the wrapper pins it as `MYSBX_DTACH`, the
+  # `MYSBX_BWRAP` idiom — an unpinned, missing or non-executable
+  # dtach makes `--detach` (and, later, `--detachable`/`attach`)
+  # fail with `70` naming the variable; other runs are unaffected.
+  # `null` pins nothing and the crate's bare `dtach` PATH fallback
+  # of an unwrapped build applies.
+  dtach ? null,
   # The waypipe binary INSIDE the podman-gvisor image (D18 on the
   # container backend): the store path of the waypipe binary as it
   # exists inside `podmanImage`, pinned as `MYSBX_PODMAN_WAYPIPE` for
@@ -711,6 +726,12 @@ let
   waypipePins =
     lib.optionalString (waypipe != null) "--set MYSBX_WAYPIPE '${lib.getExe waypipe}' "
     + lib.optionalString (podmanWaypipe != null) "--set MYSBX_PODMAN_WAYPIPE '${podmanWaypipe}'";
+  # The dtach master pin of detached runs (detach.md B10): an
+  # absolute store path like every other closure pin. `--set`, not
+  # `--set-default`: the pin is infrastructure, not an operator
+  # knob — an invocation overriding it could name a dtach that
+  # differs from the one this build validated.
+  dtachPins = lib.optionalString (dtach != null) "--set MYSBX_DTACH '${lib.getExe dtach}'";
   # The nono backend pins of the layered backend (bd
   # myconfig-6di.4.3): the binary (`--set`, an absolute store path
   # like every other closure pin) and the mysbx profile (the
@@ -772,6 +793,7 @@ symlinkJoin {
       ${podmanPins} \
       ${krunPins} \
       ${waypipePins} \
+      ${dtachPins} \
       ${nonoPins} \
       ${nonoEnvPins} \
       ${sshKeygenPins} \

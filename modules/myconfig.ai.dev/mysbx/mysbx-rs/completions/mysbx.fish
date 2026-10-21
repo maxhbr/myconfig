@@ -327,6 +327,7 @@ complete -c mysbx -f -n '__mysbx_no_verb' -a help -d 'Print this help'
 complete -c mysbx -f -n '__mysbx_no_verb' -a session -d 'The session group: list | destroy | hunk'
 complete -c mysbx -f -n '__mysbx_no_verb' -a worktree -d 'The worktree group: list | diff | hunk'
 complete -c mysbx -f -n '__mysbx_no_verb' -a status -d 'The one-command overview: init state, effective config, sessions, worktrees'
+complete -c mysbx -f -n '__mysbx_no_verb' -a attach -d 'Connect this terminal to the detached run of the live repo (or of --session NAME)'
 complete -c mysbx -f -n '__mysbx_no_verb' -a doctor -d 'Host health check of the configured backend (or the named ones)'
 complete -c mysbx -f -n '__mysbx_no_verb' -a ssh-pubkey -d 'Print the sandbox ssh keypair\'s public key (GitHub deploy key / gitolite keydir value)'
 complete -c mysbx -f -n '__mysbx_no_verb' -a podman-load-image -d 'Load the agent container image into Podman (--force, --test, --image <ref>)'
@@ -350,6 +351,8 @@ complete -c mysbx -f -n '__mysbx_expects_worktree_verb' -a hunk -d 'The same ran
 # the verb that is not typed yet, and omitting them would teach less.
 complete -c mysbx -n '__mysbx_no_verb' -l dry-run -d 'Print the exact bwrap invocation and exit; creates nothing'
 complete -c mysbx -n '__mysbx_no_verb' -l verbose -d 'Print the run configuration before running'
+complete -c mysbx -n '__mysbx_no_verb' -l detach -d 'Start the bare form under a dtach master; returns once the run is up (mysbx attach reconnects)'
+complete -c mysbx -n '__mysbx_no_verb' -l detachable -d 'The same as --detach, then attach the current terminal immediately (needs a terminal on stdin)'
 complete -c mysbx -n '__mysbx_no_verb' -l multiplexer -x -a 'tmux workmux herdr aoe orca none' -d 'The multiplexer of THIS interactive run (bare form only)'
 # The `--<mux>` shorthands (bd myconfig-6tt): pure aliases of
 # `--multiplexer <value>`, bare form only like the long form. Written

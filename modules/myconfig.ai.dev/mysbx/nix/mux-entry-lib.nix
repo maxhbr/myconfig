@@ -7,8 +7,8 @@
 #
 # Each of those scripts is the INTERACTIVE payload of a mysbx sandbox
 # with `multiplexer = "<its name>"`: it runs inside the sandbox and
-# starts its multiplexer there. The two things all of them have to get
-# right are the same, so they live here once:
+# starts its multiplexer there. What all of them have to get right
+# lives here once:
 #
 #   * `requireSocketDir` — the private socket directory is mysbx
 #     infrastructure, not a choice of the script: the argv builder
@@ -25,6 +25,9 @@
 #     `<prefix>-<repo-basename>`; session mode uses
 #     `<prefix>-<repo-basename>-<session-name>`. (Their sockets are
 #     already disjoint; the name keeps `tmux ls` readable.)
+#   * `detachableLoop` — the reattach loop a detached run needs so a
+#     multiplexer's own detach does not end the sandbox
+#     (../docs/design/detach.md B7).
 { lib }:
 {
   # Validates `TMUX_TMPDIR` and creates `$socket_dir`. The socket FILE
@@ -94,4 +97,69 @@
     shell=${lib.escapeShellArg shellExe}
     export SHELL="$shell"
   '';
+
+  # The reattach loop of a detached run (../docs/design/detach.md
+  # B7): with `MYSBX_DETACHABLE=1` the entry loops instead of
+  # exec'ing its client, so the multiplexer's own detach does not end
+  # the sandbox. Without the variable the entry behaves exactly as
+  # before — the `else` branch carries the entry's original exec line
+  # verbatim (../docs/design/cli.md D8).
+  #
+  # Decisions:
+  #   * `attach` runs in the foreground WITHOUT exec — the loop must
+  #     regain control when the client detaches — and its nonzero exit
+  #     ends the run with that code (cli.md D8 propagation).
+  #   * `alive` is the liveness probe: probe false (the server has no
+  #     session left) exits 0 — the run is over, not failed.
+  #   * The prompt goes to stderr, the entries' diagnostic channel;
+  #     dtach forwards it. `^\` is dtach's client-side key, so the
+  #     prompt is informational only — no trap.
+  #   * The wait POLLS: `read -t 1` times out after 1s, and each
+  #     timeout re-runs `alive` (no `sleep`, no `seq` — `read -t` is
+  #     the timeout primitive), so a last-pane exit while the prompt
+  #     is shown ends the run within ~1s instead of wedging the
+  #     registry until someone types (B7 liveness).
+  #   * EOF on `read` (the dtach master died) exits 0, like `q`. The
+  #     code is captured with `||` — under `if ! read …; then rc=$?`
+  #     the `$?` would be the NEGATION's status (always 0) — and a
+  #     timed-out `read` (>128) is told apart from EOF (1) by it.
+  #   * Any non-`q` answer reattaches.
+  #   * No SIGWINCH trap: a trapped WINCH interrupts `read` and would
+  #     conflate with EOF (ending the sandbox on mysbx attach).
+  detachableLoop =
+    {
+      attach,
+      alive,
+      execLine,
+    }:
+    ''
+      if [ "''${MYSBX_DETACHABLE:-}" = "1" ]; then
+          while :; do
+              ${attach}
+              if ! ${alive}; then
+                  exit 0
+              fi
+              printf '%s\n' 'session still running — Enter: reattach, q: end the sandbox, ^\: detach mysbx' >&2
+              while :; do
+                  rc=0
+                  read -r -t 1 mux_reply || rc=$?
+                  if [ "$rc" -gt 128 ]; then
+                      if ! ${alive}; then
+                          exit 0
+                      fi
+                      continue
+                  fi
+                  if [ "$rc" -ne 0 ]; then
+                      exit 0
+                  fi
+                  break
+              done
+              if [ "$mux_reply" = "q" ]; then
+                  exit 0
+              fi
+          done
+      else
+          ${execLine}
+      fi
+    '';
 }

@@ -79,6 +79,7 @@ fn params<'a>(
         git_trust: None,
         scratch: None,
         verbose: false,
+        detachable: false,
     }
 }
 
@@ -120,6 +121,47 @@ fn golden_minimal_config() {
         &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
     );
     assert_golden("minimal.txt", &argv);
+}
+
+#[test]
+fn a_detached_krun_run_sets_mysbx_detachable_in_the_guest_env() {
+    // docs/design/detach.md B7 on the direct backend: the guest env
+    // carries `MYSBX_DETACHABLE=1`, set after `[env]`/`TMUX_TMPDIR` in
+    // sandbox_env — and a foreground run's env carries it not (B7's
+    // byte-identity promise).
+    let detached = run(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &Params {
+            detachable: true,
+            ..params("/synth/rootfs", "/synth/shell", None, Workspace::Live)
+        },
+    );
+    let envs: Vec<&str> = detached
+        .windows(2)
+        .filter(|w| w[0] == "--env")
+        .map(|w| w[1].as_str())
+        .collect();
+    assert!(
+        envs.contains(&"MYSBX_DETACHABLE=1"),
+        "the detached mark is set: {envs:?}"
+    );
+    let plain = run(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
+    );
+    let envs: Vec<&str> = plain
+        .windows(2)
+        .filter(|w| w[0] == "--env")
+        .map(|w| w[1].as_str())
+        .collect();
+    assert!(
+        !envs.iter().any(|e| e.starts_with("MYSBX_DETACHABLE=")),
+        "the foreground env carries no mark: {envs:?}"
+    );
 }
 
 #[test]
@@ -788,6 +830,7 @@ fn params_owned<'a>(
         git_trust: None,
         scratch: None,
         verbose: false,
+        detachable: false,
     }
 }
 

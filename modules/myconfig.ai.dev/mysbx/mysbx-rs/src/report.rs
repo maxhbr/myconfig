@@ -667,6 +667,7 @@ mod tests {
             waypipe: None,
             workspace: Workspace::Live,
             inner: None,
+            detachable: false,
         };
         lines(&Report {
             repo: &repo,
@@ -777,6 +778,7 @@ mod tests {
             waypipe: None,
             workspace: Workspace::Live,
             inner: None,
+            detachable: false,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -827,6 +829,7 @@ mod tests {
             waypipe: None,
             workspace: Workspace::Live,
             inner: None,
+            detachable: false,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -878,6 +881,7 @@ mod tests {
             waypipe: None,
             workspace: Workspace::Live,
             inner: None,
+            detachable: false,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -931,6 +935,7 @@ mod tests {
             waypipe: None,
             workspace: Workspace::Live,
             inner: None,
+            detachable: false,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -985,6 +990,7 @@ mod tests {
             waypipe: None,
             workspace: Workspace::Live,
             inner: None,
+            detachable: false,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -1044,6 +1050,7 @@ mod tests {
                 waypipe: None,
                 workspace: Workspace::Live,
                 inner: None,
+                detachable: false,
             };
             let report_of = |payload: &Payload| {
                 lines(&Report {
@@ -1130,6 +1137,7 @@ mod tests {
                 waypipe: None,
                 workspace,
                 inner: None,
+                detachable: false,
             }
         }
         let report_of = |repo: Repo, workspace: Workspace| {
@@ -1221,6 +1229,7 @@ mod tests {
             }),
             workspace: Workspace::Live,
             inner: None,
+            detachable: false,
         };
         let report_of = |payload: &Payload| {
             lines(&Report {
@@ -1365,6 +1374,7 @@ mod tests {
             waypipe: None,
             workspace: Workspace::Live,
             inner: None,
+            detachable: false,
         };
         let payload = Payload::Shell;
         let out = lines(&Report {
@@ -1420,6 +1430,7 @@ mod tests {
             waypipe: None,
             workspace: Workspace::Live,
             inner: None,
+            detachable: false,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -1473,6 +1484,7 @@ mod tests {
             waypipe: None,
             workspace: crate::bwrap::Workspace::Clone { clone: &clone },
             inner: None,
+            detachable: false,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -1558,6 +1570,7 @@ mod tests {
             waypipe: None,
             workspace: Workspace::Live,
             inner: None,
+            detachable: false,
         };
         let joined = lines(&Report {
             repo: &repo,

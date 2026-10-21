@@ -260,7 +260,7 @@ arguments to the agent.
 | model key never inside the sandbox (proxy-only egress) | `microvm` `networkProfile = "proxy-only"` | bd myconfig-mo3.2, bd myconfig-t24. podman side bd myconfig-6di.3 |
 | public egress without the host LAN / private ranges | `microvm` (every profile) | bd myconfig-fvi |
 | any limit on bwrap/nono (the config keys exist, `config.md` D23) | `microvm` `resourceClasses`, `qemu` `vcpu`/`mem` | bd myconfig-cea |
-| unattended / detached runs, attach to a running sandbox | `gvisor` `run --detach` + `shell`, `microvm` `submit` | bd myconfig-dys |
+| ~~unattended / detached runs, attach to a running sandbox~~ (implemented: `--detach`/`--detachable`/`attach`, live validation pending) | `gvisor` `run --detach` + `shell`, `microvm` `submit` | bd myconfig-7ioq (code complete, live matrix in `docs/detach-validation-log.md`) |
 | writable nix store on `podman-gvisor` | `gvisor` `nix.enable` / `--nix` | bd myconfig-9mh |
 | waypipe on `podman-krun` | — (no old tier has a display). Parity with the other mysbx backends | bd myconfig-ef6 |
 | state in clone sessions | `gvisor` per-session home, `microvm` `--persist-agent-state` | bd myconfig-9co |

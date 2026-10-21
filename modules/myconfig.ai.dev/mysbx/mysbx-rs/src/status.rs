@@ -35,6 +35,48 @@ use std::path::Path;
 /// pairing rule usage.txt follows, cli.md D5).
 const USAGE_STATUS: &str = "usage: mysbx status";
 
+/// One `detached:` line of the listing (detach.md B9): the workspace
+/// (`live` or the session name), the state, the backend, the
+/// multiplexer and the start time. The state is liveness-first: a
+/// live socket is `running`, a non-terminal state without one is
+/// `lost`, and a finished state names its outcome with the exit code.
+fn detached_line(l: &crate::detach::Listed) -> String {
+    let workspace = match &l.workspace {
+        crate::detach::Workspace::Live => "live".to_owned(),
+        crate::detach::Workspace::Session(name) => name.clone(),
+    };
+    let state = match l.status {
+        crate::detach::Status::Live => "running".to_owned(),
+        crate::detach::Status::Lost => "lost".to_owned(),
+        crate::detach::Status::Finished => match l.record.state {
+            crate::detach::State::Exited => {
+                format!("exited({})", l.record.exit_code.unwrap_or(0))
+            }
+            // Defensive: a `failed` record with an exit code is
+            // only ever written by an OLDER binary (records persist
+            // in $XDG_RUNTIME_DIR across an upgrade; today every
+            // backend exit is `exited` per B5, and `failed` carries
+            // no exit code), so its code is printed as it was
+            // recorded.
+            crate::detach::State::Failed => match l.record.exit_code {
+                Some(n) => format!("failed({n})"),
+                None => "failed".to_owned(),
+            },
+            crate::detach::State::Cancelled => "cancelled".to_owned(),
+            // classify's probe-first contract means a non-terminal
+            // state with no live socket is Lost, never Finished —
+            // handled defensively here.
+            crate::detach::State::Starting | crate::detach::State::Running => "lost".to_owned(),
+        },
+    };
+    format!(
+        "{workspace}  {state}  backend={}  multiplexer={}  started={}",
+        l.record.backend,
+        l.record.multiplexer,
+        crate::result::iso8601(l.record.started_at)
+    )
+}
+
 /// `mysbx status` (D19): print the `## `-prefixed overview and exit
 /// `0` — a listing of facts, not a verdict; even a not-inited repo
 /// is a successfully reported state, never a failure.
@@ -217,7 +259,24 @@ pub fn run(args: &[String], dry_run: bool) -> i32 {
         p("worktrees:       none (no __worktrees sibling or an empty registry)".to_string());
     }
 
-    // 5. the gvisor image pin, when this build carries one: the
+    // 5. detached runs (detach.md B9): the read-only listing of the
+    // runtime-root registry — one line per entry, or `none` when the
+    // registry is unset or empty. Status never takes a lock, writes
+    // or removes anything (list_records only reads).
+    let detached = match crate::detach::runtime_root_from_env() {
+        Ok(root) => crate::detach::list_records(&root, &repo.root),
+        Err(_) => Vec::new(),
+    };
+    if detached.is_empty() {
+        p("detached:        none (no detached runs registered)".to_string());
+    } else {
+        p("detached:".to_string());
+        for l in &detached {
+            p(format!("  {}", detached_line(l)));
+        }
+    }
+
+    // 6. the gvisor image pin, when this build carries one: the
     // trivial tail of D19 — the wrapper's pin, or its absence, is
     // what a `podman-gvisor` run would consume.
     if let Ok(image) = std::env::var("MYSBX_PODMAN_IMAGE") {

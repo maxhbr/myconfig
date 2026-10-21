@@ -226,6 +226,13 @@ pub struct Params<'a> {
     /// the guest init's timed step trace so the boot gap is
     /// narrated guest-side.
     pub verbose: bool,
+    /// Whether THIS run is (the inner of) a detached run
+    /// (docs/design/detach.md B7): the guest environment then carries
+    /// `MYSBX_DETACHABLE=1`, set after `[env]`/`TMUX_TMPDIR` in
+    /// `sandbox_env` — the krun spelling of
+    /// bwrap::Params::detachable. Foreground runs pass `false` and
+    /// their argv stays byte-identical.
+    pub detachable: bool,
 }
 
 /// The two trust TEXTS of a run's git trust (bd myconfig-dak.8):
@@ -521,7 +528,7 @@ pub fn stage_binds(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Vec<(Strin
         binds.push((
             mount.path.clone(),
             read_only,
-            format!("m-{}", fnv1a10(&sandbox_path)),
+            format!("m-{}", crate::repo::fnv1a10(&sandbox_path)),
         ));
     }
     if matches!(params.workspace, Workspace::Live) {
@@ -933,6 +940,14 @@ fn sandbox_env(
     if mux.starts_a_session() {
         set("TMUX_TMPDIR", crate::bwrap::MUX_SOCKET_DIR.to_owned());
     }
+    // The detached-run mark (docs/design/detach.md B7): the krun
+    // spelling of the bwrap backend's `--setenv`, set after the
+    // layers and the infrastructure block so no configuration layer
+    // can set or unset it — foreground runs pass `detachable: false`
+    // and their argv stays byte-identical.
+    if params.detachable {
+        set("MYSBX_DETACHABLE", "1".to_owned());
+    }
     // PATH LAST of the infrastructure block, like the bwrap
     // backend's own ordering: the tool closure is this wrapper's
     // pin, and no later entry may repoint it.
@@ -1010,26 +1025,12 @@ fn share_of_mount(mount: &crate::config::Mount, workspace: &Workspace) -> Result
     // MYSBX_KRUN_SHARES encoding is `;`-separated) and must be a
     // stable identity of the share across runs — a digest of the
     // sandbox path always satisfies both.
-    let slot = format!("m-{}", fnv1a10(&sandbox_path));
+    let slot = format!("m-{}", crate::repo::fnv1a10(&sandbox_path));
     Ok(Share {
         slot,
         sandbox_path,
         read_only,
     })
-}
-
-/// First 10 hex chars of the FNV-1a 64 hash of `path` — the same
-/// stable digest podman_gvisor.rs uses for container names: a
-/// share's tag must not contain whitespace or `;` (the launcher's
-/// MYSBX_KRUN_SHARES encoding is `;`-separated), and a digest always
-/// satisfies that.
-fn fnv1a10(path: &str) -> String {
-    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    for byte in path.as_bytes() {
-        hash ^= u64::from(*byte);
-        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-    format!("{hash:016x}")[..10].to_owned()
 }
 
 fn krun_limit(key: &'static str) -> impl Fn(crate::podman_gvisor::Error) -> Error {

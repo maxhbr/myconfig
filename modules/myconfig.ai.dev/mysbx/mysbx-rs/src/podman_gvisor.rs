@@ -376,6 +376,13 @@ pub struct Params<'a> {
     /// container mounts nothing from the host `/nix/store`, so no
     /// fallback could exist.
     pub waypipe: Option<Waypipe<'a>>,
+    /// Whether THIS run is (the inner of) a detached run
+    /// (docs/design/detach.md B7): the argv then carries
+    /// `--env MYSBX_DETACHABLE=1` after the `[env]` entries, the
+    /// podman spelling of bwrap::Params::detachable — no
+    /// configuration layer can set or unset it, and foreground runs
+    /// pass `false` with a byte-identical argv.
+    pub detachable: bool,
     /// Which tree this run works in (workspace.md D1): the live repo
     /// (the default, unchanged) or a named session's clone (D3/D4 —
     /// the argv differences are exactly the workspace's). A
@@ -582,7 +589,7 @@ pub fn podman_run_argv(
     // basename apart; the run id keeps parallel runs in ONE checkout
     // apart — with a per-repo name `--replace` would silently kill the
     // running sibling (bd myconfig-cad).
-    let repo_id = fnv1a10(&root);
+    let repo_id = crate::repo::fnv1a10(&root);
     let container_name = format!(
         "mysbx-{}-{}-{}",
         repo.root
@@ -1103,6 +1110,15 @@ pub fn podman_run_argv(
         };
         argv.extend(["--env".into(), format!("TMUX_TMPDIR={dir}")]);
     }
+    // `MYSBX_DETACHABLE` marks (the inner of) a detached run
+    // (detach.md B7) — the podman spelling of the bwrap backend's
+    // `--setenv`, emitted after the layers' `[env]` entries like
+    // every infrastructure variable, so no configuration layer can
+    // set or unset it. Foreground runs pass `detachable: false`
+    // and their argv stays byte-identical.
+    if params.detachable {
+        argv.extend(["--env".into(), "MYSBX_DETACHABLE=1".to_owned()]);
+    }
     // `XDG_RUNTIME_DIR` of a `display = "waypipe"` run (D18):
     // infrastructure like `HOME`, anchoring the guest waypipe
     // server's display socket (a bare `WAYLAND_DISPLAY` name is
@@ -1309,20 +1325,6 @@ pub fn parse_krun_ram_mib(raw: &str) -> Result<u64, Error> {
         });
     }
     Ok(mib)
-}
-
-/// First 10 hex chars of the FNV-1a 64 hash of `path` — a stable,
-/// dependency-free digest for the container-name suffix (the zero-
-/// dependency crate's equivalent of the gvisor tier's `sha256sum`-
-/// exec'ing `repo_id`; colossally unlikely to collide at 40 bits for
-/// the handful of repos one host runs).
-fn fnv1a10(path: &str) -> String {
-    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    for byte in path.as_bytes() {
-        hash ^= u64::from(*byte);
-        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-    format!("{hash:016x}")[..10].to_owned()
 }
 
 /// Add a bind mount to the argv.

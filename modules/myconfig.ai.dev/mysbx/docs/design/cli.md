@@ -76,9 +76,15 @@ host-side keypair verb `ssh-pubkey`
 ([config.md](./config.md) D22 — prints the public half of the sandbox's
 generated ssh keypair, generating it when enabled and missing), the
 global flag `--session <name>` ([workspace.md](./workspace.md) D1-D5 —
-the clone run mode), plus the global flags `--dry-run` (D9),
+the clone run mode), the global flags `--dry-run` (D9),
 `--verbose` (D10), `--result`/`--timeout` (D17), `--multiplexer`
-(D14) and `--backend` (D18). Both enum flags also accept a
+(D14), `--backend` (D18) and `--detach` (D21, the decisions live in
+[detach.md](./detach.md) B1-B10 — the bare form started under a
+host-side `dtach` master; the same decision's `--detachable` — the
+"start working now, detach later" composition that attaches the
+current terminal right after the launch — and `mysbx attach
+[--session NAME]`, the host-side verb that reconnects a terminal to
+that run). Both enum flags also accept a
 `--<value>` shorthand of every value they take (bd myconfig-6tt):
 `--tmux` == `--multiplexer tmux` … `--none` == `--multiplexer none`,
 and `--bubblewrap` == `--backend bubblewrap` … `--krun` == `--backend
@@ -689,7 +695,15 @@ cannot compute, rather than guessing past a broken layer.
 4. **worktrees**: the SAME lines `mysbx worktree list` prints,
    indented under a `worktrees:` heading, or a short `worktrees:
    none` line.
-5. **the gvisor image pin**, when this build carries one
+5. **detached runs** (detach.md B9): the read-only listing of the
+   runtime-root registry — one line per entry with the workspace
+   (`live` or the session name), the state (`running`, `lost`, or
+   the finished state with its exit code — `exited(N)`, `failed(N)`,
+   `cancelled`), the backend, the multiplexer and the start time
+   (ISO-8601 UTC) — or a short `detached: none` line when the
+   registry is unset or empty. The section is **read-only**: status
+   never takes a lock, writes or removes a record.
+6. **the gvisor image pin**, when this build carries one
    (`MYSBX_PODMAN_IMAGE` of the wrapper) — the trivial tail: the
    pin is what a `podman-gvisor` run would consume.
 
@@ -718,6 +732,14 @@ backend (the merged `backend` of the layers of the repo the cwd
 resolves to, or of the user layer alone outside a repo), or each
 BACKEND named on the command line. The positional list lets an
 operator check a backend before configuring it.
+
+**Host section.** Before any backend's checks, the `mysbx doctor`
+header carries two `WARN`-grade checks for the detached-run
+prerequisites (detach.md B9): the `MYSBX_DTACH` pin resolves to an
+executable, and `$XDG_RUNTIME_DIR` is set, absolute, owned by the
+current user and `0700`. Both are `WARN`, not `FAIL` — they disable
+`--detach`, `--detachable` and `attach` alone, not runs; a host that
+never uses detached runs may have neither.
 
 **Checks per backend** (`src/doctor.rs`):
 
@@ -768,17 +790,20 @@ against stubbed `bwrap`/`podman` binaries. The podman runtime
 settings (`podman_runtime`) mirror the ones `sandbox` in `lib.rs`
 computes for a run.
 
-### D21: Detached runs (proposed)
+### D21: Detached runs
 
 `mysbx --detach`, `mysbx --detachable` and `mysbx attach` run the bare
 form in the background under a host-side `dtach` and reattach to it.
-The decisions live in [detach.md](./detach.md) (B1–B10). Until they are
-accepted and implemented, D3, D19, D20 and the non-goals below are
-unchanged; detach.md B9 lists what each of them gains.
+The decisions live in [detach.md](./detach.md) (B1–B10). They are
+accepted and implemented (the `status detached:` section, the
+`session destroy` guard and the `doctor` checks of B9 follow with the
+remaining implementation beads); the changes to D19, D20 and the
+non-goals below land with them (detach.md B9).
 
 ## Non-goals
 
-- No daemon, no background state beyond the sidecar directory
-  (proposed change: detach.md B9).
+- No mysbx daemon — the dtach master is per run and ends with it —
+  and no background state beyond the sidecar and the runtime root
+  (detach.md B9).
 - No interactive prompts; `mysbx` must be usable from scripts and from
   agents.

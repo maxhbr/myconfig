@@ -160,6 +160,21 @@ specific subdirectory instead). Nothing persists — the next `mysbx`
 starts from the configuration alone — and the `--verbose` report
 attributes the grant to the `[command line]`, never to a file.
 
+`mysbx --detach` starts the bare form's sandbox under a host-side
+`dtach` master and returns once the run is up: the terminal can close,
+the sandbox keeps running, and `mysbx attach` (or `mysbx attach
+--session NAME` for a session run) reconnects another terminal to it —
+pressing `^\` inside an attached terminal detaches again, the run
+keeps going
+([`docs/design/detach.md`](./docs/design/detach.md)). `mysbx
+--detachable` is the "start working now, detach later" form: the
+same run started and the current terminal attached to it immediately.
+One detached run per repo (or session) — a second start is refused
+and names `mysbx attach`. The podman backends do not yet support
+`--detach` (per-run container names, `myconfig-cad`); the live
+per-backend validation matrix is in
+[`docs/detach-validation-log.md`](./docs/detach-validation-log.md).
+
 `mysbx edit` opens the repo's sidecar `config.toml` in `$EDITOR` (or
 `$VISUAL`), creating the commented template first when it is missing
 (the second, equally explicit way to initialize a repo) —
@@ -407,6 +422,16 @@ multiplexer's socket can ever be shared with a host tmux server or with
 another sandbox of the same repository — no mount may land on it, no
 `state-dirs` entry may persist it, and `TMUX_TMPDIR` is set after
 `[env]` like `HOME` and `PATH` (`docs/design/config.md` D16/D17).
+
+In a detached run (`mysbx --detach`/`--detachable`,
+[`docs/design/detach.md`](docs/design/detach.md)) the entry does not
+end with its client: detaching the inner multiplexer (`prefix d` in
+tmux and workmux, quitting the aoe TUI, leaving the herdr client)
+prints `session still running — Enter: reattach, q: end the sandbox,
+^\: detach mysbx` and the run keeps going. Enter reattaches, `q`
+ends the sandbox, and the run also ends once the multiplexer has no
+session left. Foreground runs are unchanged: the entry execs its
+client and its exit code is the run's (detach.md B7).
 
 On myconfig hosts the host-wide default is
 `myconfig.ai.mysbx.config.multiplexer`; which multiplexers are

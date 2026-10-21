@@ -1,13 +1,14 @@
 mysbx - my sandboxing tool
 
 Usage:
-  mysbx [--dry-run] [--verbose] [--multiplexer <mux>] [--backend <name>] [--session <name>] [--ro <path>]... [--rw <path>]...
+  mysbx [--detach] [--dry-run] [--verbose] [--multiplexer <mux>] [--backend <name>] [--session <name>] [--ro <path>]... [--rw <path>]...
   mysbx run [--dry-run] [--verbose] [--result] [--timeout <seconds>] [--backend <name>] [--session <name>] [--ro <path>]... [--rw <path>]... -- COMMAND...
   mysbx gui [ARG...]
   mysbx fetch | merge | push | diff NAME [verb-arguments...]
   mysbx session list | session destroy NAME [--force] | session hunk NAME
   mysbx worktree list | worktree diff NAME | worktree hunk NAME
   mysbx status
+  mysbx attach [--session <name>]
   mysbx doctor [BACKEND...]
   mysbx ssh-pubkey
   mysbx [COMMAND]
@@ -172,6 +173,21 @@ Commands:
                 --verbose is refused (no run to report on) and
                 --dry-run is accepted as a plain print (the verb has
                 no side effects)
+  attach [--session NAME]
+                connect this terminal to the detached run of the
+                live repo, or of the session NAME — a host-side verb
+                like `status`: the repo comes from the cwd, no
+                sandbox is started. It ends in an exec of
+                `dtach -a <socket> -r winch -z`, so dtach owns the
+                terminal and its exit code propagates; the detach
+                key is dtach's default `^\`. A live socket means a
+                live run whatever the record says. A finished record
+                is printed once, removed, exit 70 — the same code a
+                lost run (its dtach master is gone) and no
+                registered run give. Refused without a terminal on
+                stdin (70). Takes only --session and --dry-run;
+                --dry-run prints the dtach attach argv and touches
+                the registry not at all
   doctor [BACKEND...]
                 host health check of the configured backend, or of
                 each BACKEND named (bubblewrap, podman-gvisor, nono,
@@ -207,6 +223,30 @@ Commands:
   help          print this help
 
 Options:
+  --detach     start the bare form's sandbox under a host-side dtach
+                master and return once the run is up: the terminal can
+                close, the sandbox keeps running (docs/design/
+                detach.md). It works without a terminal on stdin, so
+                scripts and agents can start one. One detached run per
+                workspace — a second --detach for the live repo or a
+                session is refused and names `mysbx attach`, the
+                command that reconnects later. Bare form only: every
+                verb rejects the flag, and inside a detached run it is
+                refused too. Needs $XDG_RUNTIME_DIR (the registry of
+                detached runs lives there) and a usable dtach
+                (MYSBX_DTACH); with --dry-run the dtach launcher argv
+                is printed, a blank line, then the backend argv the
+                detached run would spawn — nothing is created.
+                podman-gvisor and podman-krun refuse it until their
+                container names are per run (bd myconfig-cad)
+  --detachable the same as --detach, then attaches the current
+                terminal immediately — the "start working now,
+                detach later" form, the exact composition
+                `mysbx --detach && mysbx attach` under one lock. It
+                needs a terminal on stdin (70 otherwise, --dry-run
+                exempt: it prints what --detach --dry-run prints).
+                Bare form only, like --detach; one detached run per
+                workspace
   --dry-run     print the exact bwrap invocation — the executable
                 (argv[0]) first, then the sandbox argv, one argument
                 per line — and exit; must precede the command, creates

@@ -171,7 +171,9 @@ first connect races the server's `bind()`; herdr retries ENOENT but
 treats EPERM as fatal. The herdr entry therefore pre-starts the
 server itself (`herdr server`, gated on the socket file — herdr 0.9.1's
 `status server` exits 0 even when nothing runs) and polls the API for
-a real answer before `exec herdr` (./nix/herdr-entry.nix). tmux does
+a real answer before the client runs — `exec herdr` in a foreground
+run, the reattach loop of detach.md B7 in a detached one
+(./nix/herdr-entry.nix). tmux does
 NOT need the same treatment: its client falls into `server_start`,
 forks the server through `proc_fork_and_daemon` and connects on the
 fd the server hands back after binding (tmux 3.7c `client.c` /

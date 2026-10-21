@@ -5,7 +5,7 @@ SPDX-License-Identifier: MIT
 
 # Design: detached runs — a sandbox that keeps running without a terminal
 
-Status: proposed (bd myconfig-7ioq; acceptance: myconfig-7ioq.1).
+Status: agreed (bd myconfig-7ioq; acceptance: myconfig-7ioq.1).
 This is the decision record for running a mysbx sandbox in the
 background and attaching a terminal to it later — the workflow aoe and
 workmux give on the host, where the tmux server lives outside any
@@ -29,8 +29,8 @@ Vocabulary, on top of [`../../CONTEXT.md`](../../CONTEXT.md):
 
 Today the sandbox lives exactly as long as the foreground process:
 
-- `lib.rs` ends a run in `exec` of the backend (bubblewrap with
-  `--die-with-parent`, `podman run --rm`, the krun launcher).
+- `lib.rs` ends a run in `exec` of the backend (bubblewrap,
+  `podman run --rm`, the krun launcher).
 - The multiplexer entries (`nix/*-entry.nix`) end in
   `exec tmux attach` / `exec herdr` / `exec aoe`.
 - So a multiplexer detach ends the client, the payload, the sandbox and
@@ -186,14 +186,23 @@ The inner mysbx **waits** for the backend instead of `exec`'ing it (the
 - the per-run host state it owns (git trust file, krun stage and GC
   roots, waypipe client) is cleaned up after the run, which an exec
   cannot do;
-- bubblewrap's `--die-with-parent` and the waypipe `PDEATHSIG` keep a
-  parent that lives as long as the run.
+- the inner mysbx IS the parent that lives as long as the run, and
+  the sandbox is tied to it: the backend argv of a detached-inner
+  run carries `--die-with-parent` (the pid-namespace payload dies
+  with the bwrap supervisor; the foreground argv stays
+  byte-identical), and the waypipe client is tied by `PDEATHSIG`.
 
 Signals in the inner mysbx: `SIGINT`, `SIGQUIT` and `SIGTSTP` are
 ignored. They come from the pty and belong to the payload, which is in
 the same foreground process group. `SIGHUP` (the dtach master went
-away) and `SIGTERM` are forwarded to the backend and the run is recorded
-as `cancelled`.
+away) and `SIGTERM` are forwarded to the backend's whole process
+group — the inner mysbx itself survives, it catches the two — and the
+run is recorded as `cancelled` once the backend is reaped; the
+pid-namespace processes die with the bwrap supervisor
+(`--die-with-parent`). The backend is spawned with all five reset
+to `SIG_DFL`
+— ignored dispositions cross the `exec`, so the ignores above stay in
+the inner mysbx itself and never reach the payload.
 
 The argv the inner builds is the interactive one: the payload always
 has a terminal (the dtach pty), whatever the outer's stdin was. For
@@ -215,8 +224,8 @@ limitation as tmux.
 | `repo`, `sidecar`, `session` | the resolved repo, its sidecar, the session `NAME` or `null` |
 | `backend`, `multiplexer` | the merged values the run uses |
 | `startedAt`, `finishedAt` | ISO-8601 UTC, as in cli.md D17 |
-| `exitCode` | the backend's exit code, for `exited` |
-| `error` | the `mysbx: ` message of a `failed` startup |
+| `exitCode` | the backend's exit code, for `exited` (any value) |
+| `error` | the `mysbx: ` message of a `failed` startup (or a death by signal) |
 
 Field names follow cli.md D17 where they mean the same thing.
 
@@ -240,10 +249,11 @@ dtach session; only its exit code remains. A foreground run or
 
 `<workspace>.lock` is `flock`ed by `--detach`/`--detachable` from the
 liveness probe until the handshake of B4 ends, and by `attach` while it
-removes a finished record. Without it, two concurrent `--detach` runs
-could both find a stale socket, and the second could unlink the first
-one's fresh socket. dtach's own `bind(2)` is the last line of defense:
-it fails on an existing path.
+removes a finished record — and by `session destroy` from its live-run
+re-check through the clone removal. Without it, two concurrent
+`--detach` runs could both find a stale socket, and the second could
+unlink the first one's fresh socket. dtach's own `bind(2)` is the last
+line of defense: it fails on an existing path.
 
 A stale socket (connection refused) is removed under the lock before a
 new run starts.
@@ -263,7 +273,11 @@ With the variable set, the entries do not `exec` their client. They
 loop: attach; when the client returns and the server still has a
 session, print one line
 (`session still running — Enter: reattach, q: end the sandbox, ^\: detach mysbx`)
-and wait; exit when the server has no session left or on `q`. The loop
+and wait; exit when the server has no session left or on `q`. The
+wait POLLS — `read -t 1` times out after 1s and each timeout re-runs
+the liveness probe — so a last-pane exit while the prompt is shown
+ends the run within ~1s instead of wedging the registry until someone
+types. The loop
 is one shared fragment in `nix/mux-entry-lib.nix`, parameterized by the
 attach command and the liveness probe. The prompt belongs to the
 payload, not to the mysbx CLI, so the "no interactive prompts"
@@ -272,7 +286,7 @@ non-goal of cli.md still holds.
 | multiplexer | attach | still alive |
 | --- | --- | --- |
 | `tmux`, `workmux` | `tmux -S "$socket" attach-session -t "=$session"` | `tmux -S "$socket" has-session -t "=$session"` |
-| `aoe` | `aoe "$@"` | `tmux ls` on the `TMUX_TMPDIR` default socket has a session |
+| `aoe` | `aoe "$@"` | every tmux socket under `$TMUX_TMPDIR/tmux-<uid>/` answers `ls` (aoe's `[tmux] socket_name` can move its server off the default socket) |
 | `herdr` | `herdr "$@"` | the pre-started `herdr server` answers |
 | `orca` | not applicable: the payload is the server itself, it has no client detach | — |
 | `none` | not applicable: the shell's exit is the end of the run | — |
@@ -286,12 +300,29 @@ repos with other grants. So:
 
 - No base mount exposes it. Backends already pin `XDG_RUNTIME_DIR` to
   the sandbox home (`bwrap.rs`, `podman_gvisor.rs`).
-- A configured mount, `--ro` or `--rw` whose source is the runtime
-  root, below it or above it (`$XDG_RUNTIME_DIR`, `/run/user`, `/run`,
-  `/`) is refused (`70`) for every run, detached or not: a foreground
-  run could reach detached ones just the same. The refusal names the
-  runtime root and this decision. The waypipe socket bind is a sibling
-  (`$XDG_RUNTIME_DIR/<display>`), not covered.
+- Every effective bind source — not only the configured mounts — is
+  checked the same way, in one place, before the backend dispatch
+  and before the `--dry-run` early return:
+  - A configured mount, `--ro` or `--rw` whose source is the runtime
+    root, below it or above it (`$XDG_RUNTIME_DIR`, `/run/user`, `/run`,
+    `/`) is refused (`70`) for every run, detached or not: a
+    foreground run could reach detached ones just the same.
+  - The implicit binds are checked too: the workspace bind (the repo
+    in a live run, the session's clone in a clone run), the approved
+    git-dirs, the `__worktrees` sibling, the state-dir backings under
+    `<sidecar>/state/` and the waypipe socket dir
+    `<sidecar>/waypipe/<pid>` — a runtime root below or above any of
+    them is refused with the same message and the same `70`, because
+    each is an rw bind the payload could walk to the registry from.
+  - Fixed infrastructure binds — the store share, the pinned
+    `/bin/sh`, `nix.conf`, the CA bundle, the tools `bin` — are not
+    per-run sources and stay outside the check: the store is
+    read-only, so no registry can exist under them (B3's creation
+    refuses a runtime root there), and there is nothing to expose.
+- The refusal names the runtime root and this decision. The
+  in-sandbox waypipe display socket
+  (`$XDG_RUNTIME_DIR/<display>`, created in-sandbox, never bound
+  from the host) is a sibling of the runtime root — not covered.
 - `MYSBX_DETACHED` is not forwarded into the sandbox.
 
 ### B9: Interactions with existing decisions
@@ -309,7 +340,16 @@ repos with other grants. So:
 - **`session destroy` (workspace.md D7)** refuses while the session has
   a live detached run, with or without `--force`: the clone is bound rw
   into a running sandbox. The message names `mysbx attach --session
-  NAME`. `--force` keeps its meaning (unmerged work).
+  NAME`. `--force` keeps its meaning (unmerged work). The guard treats
+  a `starting` record as live; a real destroy takes the same workspace
+  lock (B6) — blocking until a concurrent outer's handshake ends,
+  bounded by that handshake, which a first `--session` run's clone can
+  make long — and re-checks under it, holding the lock through the
+  removal. The lock is taken even when no record exists yet: the
+  outer takes it from before it writes its `starting` record, so
+  the lock — not the record — is what serializes a starting run
+  against the removal. A `--dry-run` runs the lock-free guard
+  only, so it never blocks, and its probe is advisory.
 - **`doctor` (cli.md D20)** checks the `MYSBX_DTACH` pin and the runtime
   root (set, absolute, owned, `0700`) in a host section. Problems there
   are `WARN`, not `FAIL`: they disable detached runs, not runs.

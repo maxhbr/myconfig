@@ -250,7 +250,9 @@ no mount `dest` may overwrite a protected sandbox path (`/`,
 resolve through writable content, and the repo root itself may not be
 `$HOME`, a directory CONTAINING `$HOME` (review-4 item 2 — the repo is
 bound `rw`, so a marker above the home would expose the whole home) or
-`/` (`repo.rs`).
+`/` (`repo.rs`), and no mount source may be — or lie below or above —
+the runtime root `$XDG_RUNTIME_DIR/mysbx`, the registry of detached
+runs (detach.md B8).
 
 ### D8: Paths are resolved eagerly, to absolute paths
 
@@ -955,7 +957,9 @@ of `programs.herdr.nix` accepted.
 **`run -- CMD` is unaffected** (cli.md D11): a one-shot command is
 never wrapped in a session, so its argv is byte-identical to a
 `multiplexer = "none"` one — no payload swap, no `TMUX_TMPDIR`, none of
-the socket guards.
+the socket guards. In a detached run
+([detach.md](./detach.md) B7) the entry loops instead of exec'ing its
+client, so the multiplexer's own detach does not end the sandbox.
 
 **`mysbx init` writes the key.** The template records the value the
 *user layer* currently names (`none` when it names none), with the
