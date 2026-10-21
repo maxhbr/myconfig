@@ -4009,14 +4009,18 @@ fn a_waypipe_run_with_a_runtime_dir_still_starts() {
 fn a_mount_of_a_sibling_of_the_runtime_root_is_allowed() {
     // detach.md B8: the anchor is the `mysbx` child, not the runtime
     // dir itself — a sibling like the waypipe socket path
-    // (`$XDG_RUNTIME_DIR/<display>`) is a legitimate mount.
+    // (`$XDG_RUNTIME_DIR/<display>`) is a legitimate mount. The dest
+    // is explicit — a source under the host temp dir defaults to a
+    // dest under `/tmp`, a protected path (bwrap.rs
+    // `PROTECTED_DESTS`), which would make the test TMPDIR-dependent
+    // instead of exercising the runtime-root logic.
     let runtime = tmpdir("expose-sibling-cli");
     let socket = runtime.join("wayland-0");
     std::fs::write(&socket, "").unwrap();
     let (inv, _, _, _) = fixture_runtime_root(
         "expose-sibling",
         &format!(
-            "\n[[mounts]]\npath = {:?}\nmode = \"ro\"\n",
+            "\n[[mounts]]\npath = {:?}\ndest = \"/wayland\"\nmode = \"ro\"\n",
             socket.canonicalize().unwrap()
         ),
     );
@@ -4036,14 +4040,17 @@ fn a_mount_without_a_runtime_dir_is_allowed() {
     // Without `$XDG_RUNTIME_DIR` there is no runtime root to expose:
     // the check passes, and a foreground run in an environment
     // without the variable does not break (the no-fallback rule of
-    // B3 governs detached runs, not this refusal).
+    // B3 governs detached runs, not this refusal). The dest is
+    // explicit so the test exercises the runtime-root logic
+    // regardless of TMPDIR — a source under the host temp dir
+    // defaults to a protected dest under `/tmp`.
     let (inv, _, _, _) = fixture_runtime_root("expose-no-runtime-dir", "");
     let granted = inv.cwd.parent().unwrap().join("granted");
     std::fs::create_dir_all(&granted).unwrap();
     std::fs::write(
         inv.xdg.join("mysbx").join("config.toml"),
         format!(
-            "backend = \"bubblewrap\"\n\n[[mounts]]\npath = {:?}\nmode = \"ro\"\n",
+            "backend = \"bubblewrap\"\n\n[[mounts]]\npath = {:?}\ndest = \"/granted\"\nmode = \"ro\"\n",
             granted.canonicalize().unwrap()
         ),
     )
