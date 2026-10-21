@@ -94,9 +94,20 @@ writeShellApplication {
             ;;
     esac
 
-    # `exec`: `aoe` owns the terminal and its exit code propagates
-    # unchanged (../docs/design/cli.md D8).
-    exec aoe "$@"
+    # In a foreground run the `exec` form applies: `aoe` owns the
+    # terminal and its exit code propagates unchanged
+    # (../docs/design/cli.md D8). In a detached run
+    # (`MYSBX_DETACHABLE=1`, detach.md B7) the gate loops instead, so
+    # quitting the aoe TUI does not end the sandbox; aoe is re-run to
+    # reattach. Liveness is `tmux ls` on plain tmux — aoe's server
+    # lives on the `TMUX_TMPDIR` default socket. That a re-run of aoe
+    # reattaches to its server is the bead's manual acceptance
+    # (bd myconfig-7ioq.6).
+    ${muxLib.detachableLoop {
+      attach = ''aoe "$@"'';
+      alive = "tmux ls >/dev/null 2>&1";
+      execLine = ''exec aoe "$@"'';
+    }}
   '';
 
   meta = {

@@ -59,11 +59,20 @@ writeShellApplication {
         new-session -d -s "$session"
     fi
 
-    # NOTE: `exec` bypasses shell functions, so the `tmux()` wrapper does
-    # not apply here and `-S "$socket"` must be repeated — otherwise this
-    # would attach to tmux's DEFAULT socket. A fresh sandbox is never
-    # already inside tmux, so this always attaches, never switches.
-    exec tmux -S "$socket" attach-session -t "=$session"
+    # In a detached run (`MYSBX_DETACHABLE=1`, detach.md B7) the gate
+    # loops instead of exec'ing the client, so a `prefix d` inside the
+    # session does not end the sandbox. The attach form is SHORT
+    # (`tmux attach-session`): without `exec` it resolves through the
+    # `tmux()` wrapper above, so the private socket is pinned. The
+    # `else` branch still `exec`s, which bypasses shell functions, so
+    # `-S "$socket"` is repeated there — otherwise it would attach to
+    # tmux's DEFAULT socket. A fresh sandbox is never already inside
+    # tmux, so it always attaches, never switches.
+    ${muxLib.detachableLoop {
+      attach = ''tmux attach-session -t "=$session"'';
+      alive = ''tmux has-session -t "=$session"'';
+      execLine = ''exec tmux -S "$socket" attach-session -t "=$session"'';
+    }}
   '';
 
   meta = {

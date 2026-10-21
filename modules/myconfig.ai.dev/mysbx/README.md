@@ -420,6 +420,16 @@ another sandbox of the same repository — no mount may land on it, no
 `state-dirs` entry may persist it, and `TMUX_TMPDIR` is set after
 `[env]` like `HOME` and `PATH` (`docs/design/config.md` D16/D17).
 
+In a detached run (`mysbx --detach`/`--detachable`,
+[`docs/design/detach.md`](docs/design/detach.md)) the entry does not
+end with its client: detaching the inner multiplexer (`prefix d` in
+tmux and workmux, quitting the aoe TUI, leaving the herdr client)
+prints `session still running — Enter: reattach, q: end the sandbox,
+^\: detach mysbx` and the run keeps going. Enter reattaches, `q`
+ends the sandbox, and the run also ends once the multiplexer has no
+session left. Foreground runs are unchanged: the entry execs its
+client and its exit code is the run's (detach.md B7).
+
 On myconfig hosts the host-wide default is
 `myconfig.ai.mysbx.config.multiplexer`; which multiplexers are
 *available* follows from the packages the host carries

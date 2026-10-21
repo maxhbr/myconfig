@@ -957,7 +957,9 @@ of `programs.herdr.nix` accepted.
 **`run -- CMD` is unaffected** (cli.md D11): a one-shot command is
 never wrapped in a session, so its argv is byte-identical to a
 `multiplexer = "none"` one — no payload swap, no `TMUX_TMPDIR`, none of
-the socket guards.
+the socket guards. In a detached run
+([detach.md](./detach.md) B7) the entry loops instead of exec'ing its
+client, so the multiplexer's own detach does not end the sandbox.
 
 **`mysbx init` writes the key.** The template records the value the
 *user layer* currently names (`none` when it names none), with the

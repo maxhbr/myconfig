@@ -249,7 +249,19 @@ writeShellApplication {
         done
     ) >/dev/null 2>&1 &
 
-    exec herdr "$@"
+    # In a foreground run the `exec` form applies: `herdr` owns the
+    # terminal and its exit code propagates unchanged
+    # (../docs/design/cli.md D8). In a detached run
+    # (`MYSBX_DETACHABLE=1`, ../docs/design/detach.md B7) the gate
+    # loops instead, so leaving the herdr client does not end the
+    # sandbox. Liveness is the same API probe the readiness poll above
+    # uses (`herdr workspace list`); `herdr status server` exits 0
+    # even when the server is down, so it cannot probe anything.
+    ${muxLib.detachableLoop {
+      attach = ''herdr "$@"'';
+      alive = "herdr workspace list >/dev/null 2>&1";
+      execLine = ''exec herdr "$@"'';
+    }}
   '';
 
   meta = {

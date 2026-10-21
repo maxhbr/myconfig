@@ -51,6 +51,19 @@
 #                 and it must never create the sibling — mysbx's D13
 #                 guard. Bash-syntax checked with `bash -n`.
 #
+#   mysbx-reattach-loop-test
+#                 the detach.md B7 reattach loop (bd
+#                 myconfig-7ioq.6): with `MYSBX_DETACHABLE=1` the
+#                 multiplexer entries loop instead of exec'ing their
+#                 client, so an inner detach prints the prompt and
+#                 Enter reattaches, q ends the run, and a dead server
+#                 ends it too. Replayed against a stateful tmux STUB
+#                 (a real `attach-session` needs a pty the build
+#                 sandbox lacks); aoe and herdr are covered by the
+#                 same fragment, asserted statically — the live
+#                 reattach of aoe/herdr is the bead's manual
+#                 acceptance.
+#
 # Wired into `nix flake check` for `x86_64-linux` in `flake.nix`.
 #
 # Deliberately NOT a check here (mvp-6, "Explicitly not in this item"):
@@ -609,6 +622,234 @@ in
         [ "$server_pids_before" = "$server_pids_after" ] \
           || fail "the second pre-start run spawned a second server"
         HOME="$htmp" herdr server stop >/dev/null 2>&1 || true
+
+        mkdir "$out"
+      '';
+
+  # The detach.md B7 reattach loop (bd myconfig-7ioq.6): with
+  # `MYSBX_DETACHABLE=1` the multiplexer entries loop instead of
+  # exec'ing their client, so a detach of the INNER multiplexer does
+  # not end the sandbox. The loop is one shared fragment
+  # (./mux-entry-lib.nix `detachableLoop`), so the check extracts the
+  # gate block from the tmux and workmux entries and replays it
+  # against a stateful tmux STUB — a real `attach-session` needs a
+  # pty the build sandbox lacks. The stub kills the alive marker on
+  # the SECOND attach, which replays the last-pane-exit scenario
+  # (server has no session → the run ends). aoe and herdr use the
+  # same fragment with their own attach/probe; they are asserted
+  # statically because the live reattach of aoe/herdr is the bead's
+  # MANUAL acceptance, not a build-time one.
+  mysbx-reattach-loop-test =
+    let
+      lib = inputs.nixpkgs.lib;
+      cfg = self.nixosConfigurations.test-f13.config.myconfig.ai.dev.mysbx;
+      tmuxEntry = pkgs.callPackage ./tmux-entry.nix {
+        tmux = cfg.tmux.package;
+      };
+      # A stub workmux (test-f13 carries none — and the gate must
+      # not care: the loop is the same text either way).
+      workmuxStub = pkgs.writeShellScriptBin "workmux" ''
+        exit 0
+      '';
+      workmuxEntry = pkgs.callPackage ./workmux-entry.nix {
+        workmux = workmuxStub;
+        tmux = cfg.tmux.package;
+      };
+      aoeStub = pkgs.writeShellScriptBin "aoe" ''
+        exit 0
+      '';
+      aoeEntry = pkgs.callPackage ./aoe-entry.nix {
+        aoe = aoeStub;
+        tmux = cfg.tmux.package;
+      };
+      # A stub herdr — the entry is asserted statically here; the
+      # real package's own check is mysbx-herdr-entry-test.
+      herdrStub = pkgs.writeShellScriptBin "herdr" ''
+        exit 0
+      '';
+      herdrEntry = pkgs.callPackage ./herdr-entry.nix {
+        herdr = herdrStub;
+        tmux = cfg.tmux.package;
+      };
+      # A stateful tmux stub: `attach-session` increments a counter,
+      # creates the alive marker on the FIRST attach (a fresh server
+      # has a session) and kills it on the SECOND (the last-pane-exit
+      # replay), `has-session` stats the marker, and anything else
+      # passes through with exit 0. The attach exit code is
+      # overridable via `MYSBX_STUB_ATTACH_EXIT` for the plain-path
+      # scenario (d). Matches on the whole argv so the entries' SHORT
+      # `tmux attach-session` (the fragment) and the `exec`-form
+      # `tmux -S … attach-session` (the plain path) land in the same
+      # arm.
+      tmuxStub = pkgs.writeShellScriptBin "tmux" ''
+        state="''${TMPDIR:-/tmp}/mysbx-reattach-stub"
+        case " $* " in
+          *" attach-session "*)
+              count_file="$state/attach"
+              alive_file="$state/alive"
+              mkdir -p "$state"
+              count=0
+              [ -f "$count_file" ] && count=$(cat "$count_file")
+              count=$((count + 1))
+              printf '%s' "$count" >"$count_file"
+              if [ "$count" -ge 2 ]; then
+                  rm -f "$alive_file"
+              else
+                  : >"$alive_file"
+              fi
+              exit "''${MYSBX_STUB_ATTACH_EXIT:-0}"
+              ;;
+          *" has-session "*)
+              [ -e "''${TMPDIR:-/tmp}/mysbx-reattach-stub/alive" ]
+              ;;
+          *)
+              exit 0
+              ;;
+        esac
+      '';
+      # The runner replays one entry's extracted gate block against
+      # the stub with a given stdin and environment, and prints
+      # `<rc> <count>' for the scenario assertions below.
+      runner = pkgs.writeShellScript "mysbx-reattach-runner" ''
+        set -u
+        entry="$1"
+        stdin="$2"
+        export PATH="${tmuxStub}/bin:${pkgs.bashInteractive}/bin:$PATH"
+        rm -rf "''${TMPDIR:-/tmp}/mysbx-reattach-stub"
+        gate="$(sed -n '/^if \[ "''${MYSBX_DETACHABLE:-}" = "1" \]; then$/,/^fi$/p' "$entry")"
+        [ -n "$gate" ] || {
+          echo "cannot extract the gate block" >&2
+          exit 99
+        }
+        # The `tmux()` socket-pinning function, exactly as the entry
+        # defines it, plus the vars the gate references. Both are
+        # exported so the `bash -c` below sees them.
+        prelude="$(sed -n '/^tmux() /p' "$entry")"
+        [ -n "$prelude" ] || {
+          echo "cannot extract the tmux() prelude" >&2
+          exit 98
+        }
+        export session=mysbx-test
+        export socket="''${TMPDIR:-/tmp}/mysbx-reattach-stub/socket"
+        # The gate's stderr (the prompt) passes through to the
+        # runner's stderr, its stdout is empty by construction.
+        # The entries run under writeShellApplication's strict mode;
+        # errexit is the D8 propagation under test in scenario (e).
+        printf '%s' "$stdin" \
+          | MYSBX_DETACHABLE=''${MYSBX_DETACHABLE:-} bash -c "set -o errexit
+        $prelude
+        $gate"
+        rc=$?
+        count=0
+        [ -f "''${TMPDIR:-/tmp}/mysbx-reattach-stub/attach" ] \
+          && count=$(cat "''${TMPDIR:-/tmp}/mysbx-reattach-stub/attach")
+        printf '%s %s' "$rc" "$count"
+      '';
+    in
+    pkgs.runCommand "mysbx-reattach-loop-test"
+      {
+        nativeBuildInputs = with pkgs; [
+          bashInteractive
+          gnugrep
+          gnused
+        ];
+      }
+      ''
+        fail() {
+          echo "mysbx-reattach-loop-test: $*" >&2
+          exit 1
+        }
+
+        tmux_entry='${lib.getExe tmuxEntry}'
+        workmux_entry='${lib.getExe workmuxEntry}'
+        aoe_entry='${lib.getExe aoeEntry}'
+        herdr_entry='${lib.getExe herdrEntry}'
+        for e in "$tmux_entry" "$workmux_entry" "$aoe_entry" "$herdr_entry"; do
+          test -x "$e" || fail "entry not executable: $e"
+          bash -n "$e" || fail "bash -n rejects $e"
+        done
+
+        prompt='session still running — Enter: reattach, q: end the sandbox, ^\: detach mysbx'
+
+        # Scenario runner: detach (Enter), q, EOF, unset. Each scenario
+        # starts from a fresh stub state.
+        scenario() { # entry, label, stdin, MYSBX_DETACHABLE, want_rc, want_count, want_prompt
+          entry="$1"; label="$2"; input="$3"; flag="$4"; want_rc="$5"; want_count="$6"; want_prompt="$7"
+          # `export`, not an assignment prefix: prefix assignments do
+          # not reach a binary inside a command substitution.
+          export MYSBX_DETACHABLE TMPDIR="$PWD/tmpdir"
+          if [ -n "$flag" ]; then
+            MYSBX_DETACHABLE="$flag"
+          else
+            unset MYSBX_DETACHABLE
+          fi
+          result="$(${runner} "$entry" "$input")" \
+            || fail "$label: the runner failed"
+          rc="''${result% *}"
+          count="''${result#* }"
+          [ "$rc" = "$want_rc" ] \
+            || fail "$label: rc $rc, want $want_rc"
+          [ "$count" = "$want_count" ] \
+            || fail "$label: attach count $count, want $want_count"
+          err="$(${runner} "$entry" "$input" 2>&1 >/dev/null)" \
+            || fail "$label: the runner failed (stderr pass)"
+          if [ "$want_prompt" = yes ]; then
+            printf '%s\n' "$err" | grep -Fq "$prompt" \
+              || fail "$label: the prompt is missing or wrong"
+          else
+            if printf '%s\n' "$err" | grep -Fq "$prompt"; then
+              fail "$label: the plain path must not print the prompt"
+            fi
+          fi
+        }
+
+        mkdir -p "$PWD/tmpdir"
+        for entry in "$tmux_entry" "$workmux_entry"; do
+          name="$(basename "$entry")"
+          # (a) detach → prompt → Enter reattaches; the second attach
+          # kills the alive marker (last pane exit) → the run ends.
+          scenario "$entry" "$name (a) reattach" $'\n' 1 0 2 yes
+          # (b) q ends the run — a terminated line, so `read`
+          # returns 0 and the q branch (not EOF) is taken.
+          scenario "$entry" "$name (b) q" $'q\n' 1 0 1 yes
+          # (c) EOF (the dtach master died) ends the run like q.
+          scenario "$entry" "$name (c) EOF" "" 1 0 1 yes
+          # (d) without the variable the gate execs the client; the
+          # stub's exit code must propagate (cli.md D8).
+          MYSBX_STUB_ATTACH_EXIT=42 \
+            scenario "$entry" "$name (d) unset" "" "" 42 1 no
+          # (e) a failing attach under the variable ends the run with
+          # the attach's code (errexit, cli.md D8).
+          MYSBX_STUB_ATTACH_EXIT=42 \
+            scenario "$entry" "$name (e) attach fails" "" 1 42 1 no
+        done
+
+        # The shared-fragment drift guard: the tmux and workmux gate
+        # blocks are byte-identical (only the entries around them
+        # differ — the attach/probe happen to match for both).
+        sed -n '/^if \[ "''${MYSBX_DETACHABLE:-}" = "1" \]; then$/,/^fi$/p' "$tmux_entry" >"$PWD/gate-tmux"
+        sed -n '/^if \[ "''${MYSBX_DETACHABLE:-}" = "1" \]; then$/,/^fi$/p' "$workmux_entry" >"$PWD/gate-workmux"
+        cmp "$PWD/gate-tmux" "$PWD/gate-workmux" \
+          || fail "the tmux and workmux gate blocks drifted apart"
+
+        # Static presence of the same fragment in aoe and herdr: the
+        # plain-path exec line survives verbatim and the gate names
+        # the entry's own attach and liveness probe. The live
+        # reattach is the bead's manual acceptance.
+        grep -qF 'exec aoe "$@"' "$aoe_entry" \
+          || fail "the aoe entry lost its plain-path exec line"
+        for s in 'aoe "$@"' 'tmux ls >/dev/null 2>&1' "$prompt"; do
+          sed -n '/^if \[ "''${MYSBX_DETACHABLE:-}" = "1" \]; then$/,/^fi$/p' "$aoe_entry" \
+            | grep -qF "$s" \
+            || fail "the aoe gate does not contain: $s"
+        done
+        grep -qF 'exec herdr "$@"' "$herdr_entry" \
+          || fail "the herdr entry lost its plain-path exec line"
+        for s in 'herdr "$@"' 'herdr workspace list >/dev/null 2>&1' "$prompt"; do
+          sed -n '/^if \[ "''${MYSBX_DETACHABLE:-}" = "1" \]; then$/,/^fi$/p' "$herdr_entry" \
+            | grep -qF "$s" \
+            || fail "the herdr gate does not contain: $s"
+        done
 
         mkdir "$out"
       '';
