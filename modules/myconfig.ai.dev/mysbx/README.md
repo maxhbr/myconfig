@@ -170,7 +170,10 @@ keeps going
 --detachable` is the "start working now, detach later" form: the
 same run started and the current terminal attached to it immediately.
 One detached run per repo (or session) — a second start is refused
-and names `mysbx attach`.
+and names `mysbx attach`. The podman backends do not yet support
+`--detach` (per-run container names, `myconfig-cad`); the live
+per-backend validation matrix is in
+[`docs/detach-validation-log.md`](./docs/detach-validation-log.md).
 
 `mysbx edit` opens the repo's sidecar `config.toml` in `$EDITOR` (or
 `$VISUAL`), creating the commented template first when it is missing
