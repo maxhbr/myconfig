@@ -11038,14 +11038,16 @@ fn a_detached_run_whose_backend_exits_nonzero_records_the_exit_code() {
     if !is_ssh_keygen_available() {
         return; // no usable ssh-keygen (the baseline env's uid-0 quirk)
     }
-    // B5: the terminal record of a failed payload run carries the
-    // backend's own exit code. The backend is held alive until the
-    // outer has RETURNED (the live marker is created only after the
-    // outer's exit): the outer reports the handshake of a `running`
-    // run and exits 0 — a detached run that STARTED succeeded, its
-    // payload's fate is the record's to tell — and only then does the
-    // test let the backend exit 42, so the finished record cannot
-    // race the outer's handshake poll.
+    // B5: EVERY backend exit is `exited` — `exitCode` carries the
+    // backend's own exit code, nonzero or not; `failed` is a startup
+    // diagnosis or a death by signal, neither of which has an exit
+    // code. The backend is held alive until the outer has RETURNED
+    // (the live marker is created only after the outer's exit): the
+    // outer reports the handshake of a `running` run and exits 0 —
+    // a detached run that STARTED succeeded, its payload's fate is
+    // the record's to tell — and only then does the test let the
+    // backend exit 42, so the finished record cannot race the
+    // outer's handshake poll.
     let (inv, repo, _) = fixture_with_backend("detach-exit-code", &["--detach"]);
     let (dtach, _) = dtach_stub(&inv.home, true);
     let (bwrap, _) = bwrap_stub(&inv.home);
@@ -11070,9 +11072,29 @@ fn a_detached_run_whose_backend_exits_nonzero_records_the_exit_code() {
     // cannot race the terminal record.
     std::fs::write(inv.home.join("bwrap-live"), "").unwrap();
     let rec = wait_for_finished_record(&paths);
-    assert_eq!(rec.state, mysbx::detach::State::Failed);
+    assert_eq!(rec.state, mysbx::detach::State::Exited);
     assert_eq!(rec.exit_code, Some(42));
+    assert!(rec.error.is_none(), "an exit carries no diagnosis: {rec:?}");
     assert!(rec.finished_at.is_some());
+    // The attach half of B5: the finished record is printed once
+    // with the backend's own exit code, removed under the lock, and
+    // attach reports 70. No terminal is needed (the tty check is
+    // Live-only).
+    let mut attach = spawn_with_args(&inv, &["attach"]);
+    attach
+        .env("MYSBX_DTACH", &dtach)
+        .env("XDG_RUNTIME_DIR", &runtime);
+    let out = attach.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(mysbx::EXIT_INFRASTRUCTURE));
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        stderr.contains("mysbx: the detached run exited with 42 at"),
+        "{stderr}"
+    );
+    assert!(
+        !paths.json.exists(),
+        "the printed record is removed under the lock"
+    );
 }
 
 #[test]
@@ -12412,6 +12434,43 @@ fn status_detached_section_lists_a_finished_run() {
         .find(|l| l.contains("live") && l.contains("exited"))
         .unwrap_or_else(|| panic!("no exited line: {stdout}"));
     assert!(line.contains("exited(0)"), "{line}");
+}
+
+#[test]
+fn status_detached_section_lists_an_exited_run_with_its_code() {
+    // B9/B5: an Exited record with a NONZERO exit code lists with
+    // its code — every backend exit is `exited`, the code in
+    // `exitCode` is the backend's own, nonzero or not.
+    let (inv, repo, _) = fixture_with_backend("status-detached-exited-42", &["status"]);
+    let runtime = short_runtime_root("status-detached-exited-42");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let paths = write_registry_record(
+        &runtime,
+        &repo.canonicalize().unwrap(),
+        mysbx::detach::State::Exited,
+    );
+    std::fs::write(
+        &paths.json,
+        std::fs::read_to_string(&paths.json)
+            .unwrap()
+            .replace("\"exitCode\": null", "\"exitCode\": 42"),
+    )
+    .unwrap();
+    let mut cmd = spawn_with_args(&inv, &["status"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let line = stdout
+        .lines()
+        .find(|l| l.contains("live") && l.contains("exited"))
+        .unwrap_or_else(|| panic!("no exited line: {stdout}"));
+    assert!(line.contains("exited(42)"), "{line}");
 }
 
 #[test]

@@ -75,9 +75,12 @@ pub enum State {
     Starting,
     /// The inner mysbx has spawned the backend.
     Running,
-    /// The backend exited `0`.
+    /// The backend exited — `exitCode` carries its code, any
+    /// value (B5: every backend exit is `exited`, nonzero or not).
     Exited,
-    /// The backend exited non-zero, or the startup failed.
+    /// A startup failure (diagnosis in `error`, no `exitCode`) or a
+    /// death by signal (B5) — never a plain exit, which is
+    /// [`State::Exited`] with its code however nonzero.
     Failed,
     /// `SIGHUP`/`SIGTERM` ended the run.
     Cancelled,
@@ -1486,6 +1489,20 @@ fn attach_classified(paths: &Paths, record: &Record, p: Probe, repo_root: &Path)
     }
 }
 
+/// The one-line handshake of an already-exited run: the backend's
+/// exit code (B5: every exit is `exited`, the code in `exitCode`,
+/// nonzero or not) plus where the outcome is read again — the record
+/// is left in place (B5's lifecycle: a finished record stays until
+/// `attach` removes it), so a silent `0` would leave the operator
+/// without a follow-up.
+fn exited_handshake_line(r: &Record) -> String {
+    format!(
+        "mysbx: the detached run already exited (exit code {}) — \
+         its outcome is in the registry record, `mysbx attach` prints it",
+        r.exit_code.unwrap_or(0)
+    )
+}
+
 /// The one-line outcome of a finished record (detach.md B5's
 /// lifecycle: `attach` prints it once and removes the record).
 fn print_finished(r: &Record) {
@@ -1756,15 +1773,7 @@ fn report_handshake(
             0
         }
         State::Exited => {
-            // The record is left in place (B5's lifecycle: a finished
-            // record stays until `attach` removes it), so the message
-            // names where the outcome is read again — a silent `0`
-            // would leave the operator without a follow-up.
-            eprintln!(
-                "mysbx: the detached run already exited (exit code {}) — \
-                 its outcome is in the registry record, `mysbx attach` prints it",
-                r.exit_code.unwrap_or(0)
-            );
+            eprintln!("{}", exited_handshake_line(r));
             0
         }
         State::Failed => {
@@ -2357,11 +2366,11 @@ pub(crate) fn inner_spawn_wait(
         use std::os::unix::process::ExitStatusExt;
         if let Some(code) = status.code() {
             let mut r = base();
-            r.state = if code == 0 {
-                State::Exited
-            } else {
-                State::Failed
-            };
+            // B5: `exitCode` is the backend's exit code — every exit
+            // is `exited`, nonzero or not; `failed` is a startup
+            // diagnosis or a death by signal, neither of which has an
+            // exit code.
+            r.state = State::Exited;
             // B5's `exitCode` is "the backend's exit code" — a
             // code-0 exit is recorded as `Some(0)`, not left null.
             r.exit_code = Some(code);
@@ -3213,5 +3222,42 @@ mod tests {
                     .expect("fd numbers")
             })
             .collect()
+    }
+
+    #[test]
+    fn report_handshake_names_the_exit_code_of_an_exited_run() {
+        // B5: the outer's handshake of an already-finished run names
+        // the backend's exit code, nonzero or not. The wording is
+        // pinned through the pure [`exited_handshake_line`] the
+        // handshake prints — the harness's stderr capture stands
+        // between an assert and the `eprintln!` on fd 2.
+        let mut r = sample_record();
+        r.state = State::Exited;
+        r.exit_code = Some(42);
+        r.finished_at = Some(r.started_at + 30);
+        let line = exited_handshake_line(&r);
+        assert_eq!(
+            line,
+            "mysbx: the detached run already exited (exit code 42) — \
+             its outcome is in the registry record, `mysbx attach` prints it"
+        );
+        assert!(
+            !line.contains("failed"),
+            "a plain exit is not a startup failure: {line}"
+        );
+        // The handshake's Exited arm reports 0 — the run's own code
+        // went out with the record, the launch itself succeeded.
+        let root = tmpdir("report-exited");
+        let paths = registry(&root);
+        assert_eq!(
+            report_handshake(
+                &r,
+                None,
+                false,
+                &paths,
+                Path::new("/nix/store/aaaa-dtach/bin/dtach"),
+            ),
+            0
+        );
     }
 }

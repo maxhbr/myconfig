@@ -52,6 +52,12 @@ fn detached_line(l: &crate::detach::Listed) -> String {
             crate::detach::State::Exited => {
                 format!("exited({})", l.record.exit_code.unwrap_or(0))
             }
+            // Defensive: a `failed` record with an exit code is
+            // only ever written by an OLDER binary (records persist
+            // in $XDG_RUNTIME_DIR across an upgrade; today every
+            // backend exit is `exited` per B5, and `failed` carries
+            // no exit code), so its code is printed as it was
+            // recorded.
             crate::detach::State::Failed => match l.record.exit_code {
                 Some(n) => format!("failed({n})"),
                 None => "failed".to_owned(),

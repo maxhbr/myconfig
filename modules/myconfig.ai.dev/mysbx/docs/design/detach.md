@@ -224,8 +224,8 @@ limitation as tmux.
 | `repo`, `sidecar`, `session` | the resolved repo, its sidecar, the session `NAME` or `null` |
 | `backend`, `multiplexer` | the merged values the run uses |
 | `startedAt`, `finishedAt` | ISO-8601 UTC, as in cli.md D17 |
-| `exitCode` | the backend's exit code, for `exited` |
-| `error` | the `mysbx: ` message of a `failed` startup |
+| `exitCode` | the backend's exit code, for `exited` (any value) |
+| `error` | the `mysbx: ` message of a `failed` startup (or a death by signal) |
 
 Field names follow cli.md D17 where they mean the same thing.
 
