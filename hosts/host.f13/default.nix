@@ -366,7 +366,7 @@ in
         imagework.enable = true; # https://github.com/NixOS/nixpkgs/issues/425306
         imagework.myphoto.enable = true;
         # cad.enable = true;
-        # joplin-desktop.enable = true;
+        joplin-desktop.enable = true;
         # logseq.enable = true; # disabled: pulls in insecure electron-39.8.10
       };
       v4l2.enable = true;
