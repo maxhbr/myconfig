@@ -115,7 +115,10 @@ in
       # The podman backends run the image's own `/bin`, so the launcher has
       # to be baked in rather than added to the sandbox PATH.
       podman = {
-        imagePackages = [ hermesSandboxed ];
+        # `mkOptionDefault` merges with the option's default list
+        # (the mux entries, waypipe, …) instead of replacing it — the
+        # same spelling dev.core uses for its `sandboxCliTools`.
+        imagePackages = lib.mkOptionDefault [ hermesSandboxed ];
         env = lib.mkIf osconfig.myconfig.ai.dev.litellm-forwarder.enable {
           CUSTOM_BASE_URL = osconfig.myconfig.ai.dev.litellm-forwarder.endpoint;
         };
