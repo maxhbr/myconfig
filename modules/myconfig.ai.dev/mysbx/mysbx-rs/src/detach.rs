@@ -182,6 +182,11 @@ pub struct Record {
     pub finished_at: Option<u64>,
     /// The backend's exit code, for `exited`.
     pub exit_code: Option<i32>,
+    /// The signal the backend died by, as `SIG…` — a death by
+    /// signal is `failed` with this field set and no `error`: the
+    /// run started fine, its fate is the signal (cli.md D17's
+    /// `payloadSignal` precedent).
+    pub signal: Option<String>,
     /// The `mysbx: ` diagnosis of a `failed` startup.
     pub error: Option<String>,
 }
@@ -659,6 +664,13 @@ pub fn render(r: &Record) -> String {
             .unwrap_or_else(|| "null".to_owned())
     ));
     s(format!(
+        "  \"signal\": {}",
+        r.signal
+            .as_deref()
+            .map(crate::result::quote)
+            .unwrap_or_else(|| "null".to_owned())
+    ));
+    s(format!(
         "  \"error\": {}",
         r.error
             .as_deref()
@@ -695,7 +707,14 @@ fn field_start(text: &str, key: &str) -> Result<usize, Error> {
 /// out of the ISO text, the same round trip `result.json` readers do
 /// by hand.
 fn optional_field(text: &str, key: &str, kind: FieldKind) -> Result<Option<String>, Error> {
-    let start = field_start(text, key)?;
+    // A key the writer omits is null: records persist in
+    // $XDG_RUNTIME_DIR across an upgrade, and a binary older than
+    // the field wrote state files without it at all.
+    let needle = format!("\"{key}\": ");
+    let Some(start) = text.find(&needle) else {
+        return Ok(None);
+    };
+    let start = start + needle.len();
     let rest = &text[start..];
     if rest.starts_with("null") {
         return Ok(None);
@@ -813,6 +832,7 @@ fn parse(text: &str) -> Result<Record, Error> {
             .map_err(|_| Error::Unparsable {
                 why: "exitCode is not an i32".to_owned(),
             })?,
+        signal: optional_field(text, "signal", FieldKind::String)?,
         error: optional_field(text, "error", FieldKind::String)?,
     })
 }
@@ -1522,6 +1542,24 @@ fn exited_handshake_line(r: &Record) -> String {
     )
 }
 
+/// The one-line outcome of a `failed` record (B5): a death by
+/// signal is the run's fate — the run started fine, so the wording
+/// never says `during startup` — while a startup refusal carries
+/// its diagnosis. Shared by `attach`'s finished print and the
+/// outer's handshake report, so the two cannot drift.
+fn failed_record_line(r: &Record) -> String {
+    if let Some(signal) = r.signal.as_deref() {
+        format!("mysbx: the detached run died by signal {signal}")
+    } else {
+        match r.error.as_deref() {
+            Some(error) if !error.is_empty() => {
+                format!("mysbx: the detached run failed during startup: {error}")
+            }
+            _ => "mysbx: the detached run failed during startup".to_owned(),
+        }
+    }
+}
+
 /// The one-line outcome of a finished record (detach.md B5's
 /// lifecycle: `attach` prints it once and removes the record).
 fn print_finished(r: &Record) {
@@ -1531,12 +1569,7 @@ fn print_finished(r: &Record) {
             r.exit_code.unwrap_or(0),
             crate::result::iso8601(r.finished_at.unwrap_or(r.started_at))
         ),
-        State::Failed => match r.error.as_deref() {
-            Some(error) if !error.is_empty() => {
-                eprintln!("mysbx: the detached run failed during startup: {error}")
-            }
-            _ => eprintln!("mysbx: the detached run failed during startup"),
-        },
+        State::Failed => eprintln!("{}", failed_record_line(r)),
         State::Cancelled => eprintln!("mysbx: the detached run was cancelled"),
         // The caller classified the record first; a non-terminal
         // state without a live socket is `lost`, never finished.
@@ -1679,6 +1712,7 @@ pub fn launch_outer(l: &Launch, attach_after: bool) -> i32 {
         started_at,
         finished_at: None,
         exit_code: None,
+        signal: None,
         error: None,
     };
     if let Err(e) = write(&paths, &record) {
@@ -1796,12 +1830,7 @@ fn report_handshake(
             0
         }
         State::Failed => {
-            match r.error.as_deref() {
-                Some(error) if !error.is_empty() => {
-                    eprintln!("mysbx: the detached run failed during startup: {error}")
-                }
-                _ => eprintln!("mysbx: the detached run failed during startup"),
-            }
+            eprintln!("{}", failed_record_line(r));
             crate::EXIT_INFRASTRUCTURE
         }
         State::Cancelled => {
@@ -2220,6 +2249,7 @@ pub(crate) fn drive_inner(flags: crate::Flags) -> i32 {
             started_at: crate::result::epoch_secs(std::time::SystemTime::now()),
             finished_at: Some(crate::result::epoch_secs(std::time::SystemTime::now())),
             exit_code: None,
+            signal: None,
             error: Some(error.clone()),
         };
         // Best-effort: the eprintln below is the diagnosis, the
@@ -2255,6 +2285,7 @@ pub(crate) fn drive_inner(flags: crate::Flags) -> i32 {
             started_at: crate::result::epoch_secs(std::time::SystemTime::now()),
             finished_at: Some(crate::result::epoch_secs(std::time::SystemTime::now())),
             exit_code: None,
+            signal: None,
             error: Some(error),
         };
         let _ = write(&paths, &record);
@@ -2295,6 +2326,7 @@ pub(crate) fn inner_spawn_wait(
         started_at,
         finished_at: None,
         exit_code: None,
+        signal: None,
         error: None,
     };
     // The record of a terminal state: `finished_at` always, the rest
@@ -2398,14 +2430,13 @@ pub(crate) fn inner_spawn_wait(
         } else {
             // A backend killed by its own crash: no exit code exists
             // to record (B4 records the EXIT code, a signal has
-            // none), so the state is `failed` with the signal named
-            // and the exit code is mysbx's infrastructure `70`.
+            // none), so the state is `failed` with the signal in
+            // `signal` (cli.md D17's payloadSignal precedent) and no
+            // diagnosis — the run started fine, the printers word
+            // it as a death by signal, not a startup failure.
             let mut r = base();
             r.state = State::Failed;
-            r.error = Some(format!(
-                "the backend died by signal {}",
-                crate::result::signal_name(status.signal().unwrap_or(0))
-            ));
+            r.signal = Some(crate::result::signal_name(status.signal().unwrap_or(0)));
             finalize(r);
             crate::EXIT_INFRASTRUCTURE
         }
@@ -2448,6 +2479,7 @@ mod tests {
             started_at: 1_700_000_000,
             finished_at: None,
             exit_code: None,
+            signal: None,
             error: None,
         }
     }
@@ -2815,6 +2847,31 @@ mod tests {
     // ---- state round-trip (detach.md B5) -----------------------------
 
     #[test]
+    fn a_record_without_the_signal_field_parses_like_an_old_binary_wrote_it() {
+        // bd myconfig-7ioq.18: records persist in $XDG_RUNTIME_DIR
+        // across an upgrade, and a binary before the `signal` field
+        // wrote state files without the key at all — parsing must
+        // read those as `signal: None`, not refuse them.
+        let text = r#"{
+  "version": 1,
+  "state": "failed",
+  "repo": "/src/repo",
+  "sidecar": "/src/repo.mysbx",
+  "session": null,
+  "backend": "podman",
+  "multiplexer": "tmux",
+  "startedAt": "2023-11-14T22:13:20Z",
+  "finishedAt": "2023-11-14T22:13:50Z",
+  "exitCode": null,
+  "error": "cannot exec the backend"
+}"#;
+        let r = parse(text).expect("a pre-signal record parses");
+        assert_eq!(r.state, State::Failed);
+        assert_eq!(r.signal, None);
+        assert_eq!(r.error.as_deref(), Some("cannot exec the backend"));
+    }
+
+    #[test]
     fn a_record_round_trips_through_the_state_file() {
         let root = tmpdir("roundtrip");
         let p = registry(&root);
@@ -2828,6 +2885,7 @@ mod tests {
             started_at: 1_700_000_000,
             finished_at: Some(1_700_000_030),
             exit_code: Some(3),
+            signal: Some("SIGTERM".to_owned()),
             error: None,
         };
         write(&p, &r).unwrap();
@@ -2848,6 +2906,7 @@ mod tests {
             started_at: 1_700_000_000,
             finished_at: None,
             exit_code: None,
+            signal: None,
             error: Some("a \"quoted\" \\ diagnosis\nwith a newline".to_owned()),
         };
         write(&p, &r).unwrap();
@@ -3353,6 +3412,51 @@ mod tests {
                 Path::new("/nix/store/aaaa-dtach/bin/dtach"),
             ),
             0
+        );
+    }
+
+    #[test]
+    fn a_signal_death_prints_without_the_startup_wording() {
+        // bd myconfig-7ioq.18 (B5): a backend killed by a signal is
+        // `failed` with `signal` set and no `error` — the run
+        // started fine, so the wording never says `during startup`.
+        // Pinned through the pure [`failed_record_line`] both
+        // printers share (the harness's stderr capture stands
+        // between an assert and the `eprintln!`s on fd 2).
+        let mut r = sample_record();
+        r.state = State::Failed;
+        r.signal = Some("SIGKILL".to_owned());
+        r.finished_at = Some(r.started_at + 30);
+        assert_eq!(
+            failed_record_line(&r),
+            "mysbx: the detached run died by signal SIGKILL"
+        );
+        // A startup refusal keeps its diagnosis wording.
+        r.signal = None;
+        r.error = Some("cannot exec the backend".to_owned());
+        assert_eq!(
+            failed_record_line(&r),
+            "mysbx: the detached run failed during startup: cannot exec the backend"
+        );
+        r.error = None;
+        assert_eq!(
+            failed_record_line(&r),
+            "mysbx: the detached run failed during startup"
+        );
+        // The handshake of a signal death reports the infrastructure
+        // code, like every failed record.
+        r.signal = Some("SIGKILL".to_owned());
+        let root = tmpdir("report-signal");
+        let paths = registry(&root);
+        assert_eq!(
+            report_handshake(
+                &r,
+                None,
+                false,
+                &paths,
+                Path::new("/nix/store/aaaa-dtach/bin/dtach"),
+            ),
+            crate::EXIT_INFRASTRUCTURE
         );
     }
 }

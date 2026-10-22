@@ -225,7 +225,8 @@ limitation as tmux.
 | `backend`, `multiplexer` | the merged values the run uses |
 | `startedAt`, `finishedAt` | ISO-8601 UTC, as in cli.md D17 |
 | `exitCode` | the backend's exit code, for `exited` (any value) |
-| `error` | the `mysbx: ` message of a `failed` startup (or a death by signal) |
+| `signal` | the signal the backend died by, as `SIG…`, for a death by signal (a `failed` record with no `error` — cli.md D17's `payloadSignal` precedent) |
+| `error` | the `mysbx: ` message of a `failed` startup (never a death by signal — that carries `signal`) |
 
 Field names follow cli.md D17 where they mean the same thing.
 

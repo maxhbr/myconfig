@@ -11029,7 +11029,9 @@ fn bwrap_stub(base: &Path) -> (PathBuf, PathBuf) {
                mv -f \"$BWRAP_TREE_FILE.tmp\" \"$BWRAP_TREE_FILE\"\n\
              fi\n\
              mv -f {r}.tmp {rec}\n\
-             while [ ! -e \"$BWRAP_LIVE\" ]; do sleep 0.05; done\nexit \"${{BWRAP_EXIT:-0}}\"\n",
+             while [ ! -e \"$BWRAP_LIVE\" ]; do sleep 0.05; done\n\
+             if [ -n \"$BWRAP_SIGNAL\" ]; then kill -\"${{BWRAP_SIGNAL#SIG}}\" $$; fi\n\
+             exit \"${{BWRAP_EXIT:-0}}\"\n",
             r = record.display(),
             rec = record.display()
         ),
@@ -11535,6 +11537,63 @@ fn a_detached_run_whose_backend_exits_nonzero_records_the_exit_code() {
     assert!(
         !paths.json.exists(),
         "the printed record is removed under the lock"
+    );
+}
+
+#[test]
+fn a_detached_run_whose_backend_dies_by_signal_records_the_signal() {
+    if !is_ssh_keygen_available() {
+        return; // no usable ssh-keygen (the baseline env's uid-0 quirk)
+    }
+    // bd myconfig-7ioq.18 (B5): a backend killed by a signal has no
+    // exit code — the record carries the signal in `signal` (the
+    // cli.md D17 payloadSignal precedent) and the printers word it
+    // as a death by signal, never as a startup failure: the run
+    // started fine, the payload's fate is what the signal names.
+    let (inv, repo, _) = fixture_with_backend("detach-signal-death", &["--detach"]);
+    let (dtach, _) = dtach_stub(&inv.home, true);
+    let (bwrap, _) = bwrap_stub(&inv.home);
+    let runtime = short_runtime_root("signal-death");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let paths = detach_paths_live(&runtime, &repo.canonicalize().unwrap());
+    let mut cmd = spawn_with_args(&inv, &["--detach"]);
+    cmd.env("MYSBX_DTACH", &dtach)
+        .env("MYSBX_BWRAP", &bwrap)
+        .env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .env("XDG_RUNTIME_DIR", &runtime)
+        .env("BWRAP_LIVE", inv.home.join("bwrap-live"))
+        .env("BWRAP_SIGNAL", "SIGKILL");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "a run that started reports its handshake: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    std::fs::write(inv.home.join("bwrap-live"), "").unwrap();
+    let rec = wait_for_finished_record(&paths);
+    assert_eq!(rec.state, mysbx::detach::State::Failed);
+    assert_eq!(rec.signal.as_deref(), Some("SIGKILL"));
+    assert!(
+        rec.error.is_none(),
+        "a signal death carries no diagnosis: {rec:?}"
+    );
+    // The attach half prints the signal death without `during
+    // startup`, and exits 70.
+    let mut attach = spawn_with_args(&inv, &["attach"]);
+    attach
+        .env("MYSBX_DTACH", &dtach)
+        .env("XDG_RUNTIME_DIR", &runtime);
+    let out = attach.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(mysbx::EXIT_INFRASTRUCTURE));
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        stderr.contains("mysbx: the detached run died by signal SIGKILL"),
+        "{stderr}"
+    );
+    assert!(
+        !stderr.contains("during startup"),
+        "a signal death is not a startup failure: {stderr}"
     );
 }
 
@@ -12063,6 +12122,7 @@ fn write_registry_record(
         started_at: 1_700_000_000,
         finished_at: Some(1_700_000_030),
         exit_code: None,
+        signal: None,
         error: None,
     };
     mysbx::detach::write(&paths, &r).unwrap();
@@ -12407,6 +12467,7 @@ fn attach_routes_the_session_workspace_and_its_socket() {
         started_at: 1_700_000_000,
         finished_at: None,
         exit_code: None,
+        signal: None,
         error: None,
     };
     mysbx::detach::write(&paths, &r).unwrap();
@@ -12780,6 +12841,7 @@ fn write_session_registry_record(
         started_at: 1_700_000_000,
         finished_at: Some(1_700_000_030),
         exit_code: None,
+        signal: None,
         error: None,
     };
     mysbx::detach::write(&paths, &r).unwrap();
@@ -12940,6 +13002,51 @@ fn status_detached_section_lists_a_lost_run() {
         .find(|l| l.contains("live") && l.contains("lost"))
         .unwrap_or_else(|| panic!("no lost line: {stdout}"));
     assert!(line.contains("lost"), "{line}");
+}
+
+#[test]
+fn status_detached_section_lists_a_signal_death_with_its_signal() {
+    // bd myconfig-7ioq.18 (B5): a `failed` record with a `signal` is
+    // a death by signal — the status row names the signal, so the
+    // fate of a crashed backend reads from the listing alone.
+    let (inv, repo, _) = fixture_with_backend("status-detached-signal", &["status"]);
+    let runtime = short_runtime_root("status-detached-signal");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let repo_canon = repo.canonicalize().unwrap();
+    let paths = detach_paths_live(&runtime, &repo_canon);
+    mysbx::detach::ensure(&paths).unwrap();
+    mysbx::detach::write(
+        &paths,
+        &mysbx::detach::Record {
+            state: mysbx::detach::State::Failed,
+            signal: Some("SIGKILL".to_owned()),
+            repo: repo_canon.to_string_lossy().into_owned(),
+            sidecar: format!("{}.mysbx", repo_canon.to_string_lossy()),
+            session: None,
+            backend: "bubblewrap".to_owned(),
+            multiplexer: "tmux".to_owned(),
+            started_at: 1_700_000_000,
+            finished_at: Some(1_700_000_030),
+            exit_code: None,
+            error: None,
+        },
+    )
+    .unwrap();
+    let mut cmd = spawn_with_args(&inv, &["status"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let line = stdout
+        .lines()
+        .find(|l| l.contains("live") && l.contains("failed"))
+        .unwrap_or_else(|| panic!("no failed line: {stdout}"));
+    assert!(line.contains("failed(signal SIGKILL)"), "{line}");
 }
 
 #[test]
@@ -13194,6 +13301,7 @@ fn session_destroy_decides_a_starting_record_on_the_socket_liveness() {
         started_at: 1_700_000_000,
         finished_at: None,
         exit_code: None,
+        signal: None,
         error: None,
     };
     let finished = mysbx::detach::Record {
