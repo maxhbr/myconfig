@@ -292,7 +292,7 @@ non-goal of cli.md still holds.
 | multiplexer | attach | still alive |
 | --- | --- | --- |
 | `tmux`, `workmux` | `tmux -S "$socket" attach-session -t "=$session"` | `tmux -S "$socket" has-session -t "=$session"` |
-| `aoe` | `aoe "$@"` | every tmux socket under `$TMUX_TMPDIR/tmux-<uid>/` answers `ls` (aoe's `[tmux] socket_name` can move its server off the default socket) |
+| `aoe` | `aoe "$@"` | every tmux socket under `$TMUX_TMPDIR/tmux-<uid>/` — including dot-prefixed names, a bare `[tmux] socket_name` may start with a dot — answers `ls` (aoe's `[tmux] socket_name` can move its server off the default socket) |
 | `herdr` | `herdr "$@"` | the pre-started `herdr server` answers |
 | `orca` | not applicable: the payload is the server itself, it has no client detach | — |
 | `none` | not applicable: the shell's exit is the end of the run | — |
