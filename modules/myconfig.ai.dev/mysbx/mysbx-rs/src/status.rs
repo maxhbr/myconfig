@@ -54,18 +54,12 @@ fn detached_line(l: &crate::detach::Listed) -> String {
             }
             // A `failed` record is a startup refusal (no signal, no
             // exit code) or a death by signal (`signal`, B5 — the
-            // cli.md D17 payloadSignal precedent). The defensive
-            // exit-code arm covers records an OLDER binary wrote
-            // (records persist in $XDG_RUNTIME_DIR across an
-            // upgrade).
+            // cli.md D17 payloadSignal precedent).
             crate::detach::State::Failed => {
                 if let Some(signal) = l.record.signal.as_deref() {
                     format!("failed(signal {signal})")
                 } else {
-                    match l.record.exit_code {
-                        Some(n) => format!("failed({n})"),
-                        None => "failed".to_owned(),
-                    }
+                    "failed".to_owned()
                 }
             }
             crate::detach::State::Cancelled => "cancelled".to_owned(),

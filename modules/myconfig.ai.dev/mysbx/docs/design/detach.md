@@ -172,7 +172,8 @@ $XDG_RUNTIME_DIR/mysbx/<fnv1a10(repo root)>/
    refuses (`70`) otherwise, so the marker cannot redirect state files.
 4. The outer waits until the state file leaves `starting` or the socket
    disappears, then reports: `running` → `0` and the attach hint (or,
-   for `--detachable`, `exec dtach -a`); `failed` → the recorded error
+   for `--detachable`, `exec dtach -a`); `exited` → `0`, the exit code
+   named on stderr; `failed` → the recorded error
    on stderr and `70`; socket gone while `starting` → "the detached run
    died during startup" and `70`. There is no timeout: a first
    `--session` run may clone a large repo, and a dead inner removes the
