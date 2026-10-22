@@ -2293,6 +2293,43 @@ pub(crate) fn drive_inner(flags: crate::Flags) -> i32 {
     code
 }
 
+/// Record a startup refusal of the inner that the backend waiter never
+/// sees and the stderr tee cannot capture (it fires AFTER the tee was
+/// restored — the waypipe channel start): the Failed record carries
+/// the diagnosis directly, and INNER_FINALIZED keeps the fallback in
+/// [`drive_inner`] from overwriting it with the empty capture's
+/// generic message. A record that cannot be written leaves the flag
+/// unset, so that fallback still records the generic message.
+pub(crate) fn record_inner_refusal(
+    repo: &crate::repo::Repo,
+    session: Option<&str>,
+    backend: &str,
+    multiplexer: &str,
+    error: &str,
+) {
+    let Ok(paths) = inner_paths(&repo.root, session) else {
+        return;
+    };
+    let now = crate::result::epoch_secs(std::time::SystemTime::now());
+    let record = Record {
+        state: State::Failed,
+        repo: repo.root.to_string_lossy().into_owned(),
+        sidecar: repo.sidecar.to_string_lossy().into_owned(),
+        session: session.map(str::to_owned),
+        backend: backend.to_owned(),
+        multiplexer: multiplexer.to_owned(),
+        started_at: now,
+        finished_at: Some(now),
+        exit_code: None,
+        signal: None,
+        error: Some(error.to_owned()),
+    };
+    if write(&paths, &record).is_err() {
+        return;
+    }
+    INNER_FINALIZED.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
 /// Spawn the backend of the inner run and wait for it, recording the
 /// outcome in the registry state file (detach.md B4/B5): `running`
 /// after the spawn, `exited`/`failed` with the backend's exit code,

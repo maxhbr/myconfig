@@ -2513,6 +2513,115 @@ fn a_waypipe_display_dry_run_wraps_the_payload_and_creates_nothing() {
 }
 
 #[test]
+fn a_waypipe_display_detach_without_the_client_pin_is_refused_by_the_outer() {
+    // bd myconfig-7ioq.19 (D18/detach.md B4): the waypipe pin check is
+    // a pure, config-level refusal, so the OUTER's pre-flight runs it
+    // too — a `--detach` with `display = "waypipe"` and no pin exits
+    // 70 with the pin message before anything is spawned or
+    // registered.
+    let (inv, _, sidecar) = fixture_display("display-unpinned-detach", &["--detach"]);
+    let (dtach, _) = dtach_stub(&inv.home, true);
+    let runtime = short_runtime_root("display-unpinned-detach");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--detach"]);
+    // MYSBX_BWRAP points nowhere on purpose: the refusal fires in the
+    // argv build, before the backend pin is ever used — a spawn here
+    // would fail loudly on the missing backend.
+    cmd.env_remove("MYSBX_WAYPIPE")
+        .env("MYSBX_DTACH", &dtach)
+        .env("MYSBX_BWRAP", inv.home.join("no-such-bwrap"))
+        .env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(stderr.contains("display"), "{stderr}");
+    assert!(stderr.contains("MYSBX_WAYPIPE"), "{stderr}");
+    // Nothing was spawned or registered: no record, no waypipe
+    // token dir, no dtach invocation.
+    let paths = detach_paths_live(&runtime, &inv.cwd.canonicalize().unwrap());
+    assert!(!paths.json.exists(), "nothing was registered: {stderr}");
+    assert!(!sidecar.join("waypipe").exists());
+    assert!(
+        !inv.home.join("dtach-record.txt").exists(),
+        "no dtach spawn"
+    );
+}
+
+#[test]
+fn a_detached_waypipe_run_records_the_channel_failure() {
+    // bd myconfig-7ioq.19 (detach.md B4/B5): a waypipe client the
+    // inner cannot start fails AFTER the stderr tee was restored,
+    // so the generic startup capture is empty — the Failed record
+    // the inner writes must carry the channel's own diagnosis, not
+    // the generic "failed during startup". The stub waypipe is a
+    // binary that exits 1 immediately. A pre-existing keypair
+    // keeps the inner off ssh-keygen, which the degraded uid-0
+    // environment cannot run.
+    let (inv, repo, sidecar) = fixture_display("detach-waypipe-fail", &["--detach"]);
+    std::fs::create_dir_all(sidecar.join("state").join(".ssh")).unwrap();
+    std::fs::write(
+        sidecar.join("state").join(".ssh").join("id_ed25519"),
+        "-----BEGIN OPENSSH PRIVATE KEY-----\nx\n-----END OPENSSH PRIVATE KEY-----\n",
+    )
+    .unwrap();
+    std::fs::write(
+        sidecar.join("state").join(".ssh").join("id_ed25519.pub"),
+        "ssh-ed25519 AAAATESTTESTTESTTESTTESTTESTTESTTESTTESTTESTTEST mysbx-tests\n",
+    )
+    .unwrap();
+    let (dtach, _) = dtach_stub(&inv.home, true);
+    let (bwrap, _) = bwrap_stub(&inv.home);
+    let runtime = short_runtime_root("detach-waypipe-fail");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let failing_waypipe = inv.home.join("failing-waypipe");
+    std::fs::write(
+        &failing_waypipe,
+        "#!/bin/sh\necho 'waypipe: no compositor socket' >&2\nexit 1\n",
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&failing_waypipe, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let paths = detach_paths_live(&runtime, &repo.canonicalize().unwrap());
+    let mut cmd = spawn_with_args(&inv, &["--detach"]);
+    cmd.env("MYSBX_DTACH", &dtach)
+        .env("MYSBX_BWRAP", &bwrap)
+        .env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .env("MYSBX_WAYPIPE", &failing_waypipe)
+        .env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    // The startup refused, so the outer's handshake fails with the
+    // diagnosis, not a `running` report (B4 step 4).
+    assert_eq!(
+        out.status.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("waypipe client exited before creating"),
+        "the handshake reports the channel failure: {stderr}"
+    );
+    let rec = wait_for_finished_record(&paths);
+    assert_eq!(rec.state, mysbx::detach::State::Failed);
+    let error = rec.error.unwrap_or_default();
+    assert!(
+        error.contains("waypipe client exited before creating"),
+        "the record carries the channel's own diagnosis: {error}"
+    );
+    assert!(
+        !error.contains("failed during startup"),
+        "the diagnosis is the channel failure, not the generic fallback: {error}"
+    );
+}
+
+#[test]
 fn a_waypipe_display_run_reports_the_channel() {
     // cli.md D10: the `--verbose` report carries the display line —
     // the host-side socket path, the guest display name and the guest

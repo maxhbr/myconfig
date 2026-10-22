@@ -3826,9 +3826,27 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                     start_waypipe_channel(&repo, &waypipe_socket_dir, &mut waypipe_child)
                 {
                     eprintln!("mysbx: {msg}");
+                    if matches!(mode, RunMode::DetachedInner) {
+                        // The channel start runs after the stderr tee
+                        // was restored, so drive_inner's capture is
+                        // empty — the record must carry the diagnosis
+                        // itself (detach.md B4/B5).
+                        detach::record_inner_refusal(
+                            &repo,
+                            flags.session.as_deref(),
+                            backend,
+                            merged.multiplexer.name(),
+                            &format!("mysbx: {msg}"),
+                        );
+                    }
                     return EXIT_INFRASTRUCTURE;
                 }
             }
+            // Unreachable in every mode the argv builders guard
+            // (Error::DisplayUnavailable refuses before the spawn,
+            // including the inner of a detached run): a waypipe
+            // display without its pin never gets here. Kept as the
+            // second line of defense for a backend without the check.
             None => {
                 eprintln!(
                     "mysbx: display = \"waypipe\" but this build pinned no waypipe {}",

@@ -242,6 +242,11 @@ finished record stays until `attach` (which prints it once, e.g.
 `70`) or the next `--detach` for the same workspace replaces it.
 `status` only reads.
 
+A startup refusal that fires after the inner restored its stderr tee
+(the waypipe channel start) is recorded by the refusing site itself:
+the capture that backs the `error` field ends at the restore, so the
+site writes the Failed record with its own message directly.
+
 The output of a payload that fails right after start is lost with the
 dtach session; only its exit code remains. A foreground run or
 `--detachable` shows it. This is the `gui` precedent (cli.md D15).
