@@ -2169,6 +2169,22 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // dir is the BIND source under the sidecar, not the in-sandbox
     // `$XDG_RUNTIME_DIR/<display>` sibling, which is never a bind and
     // stays allowed.
+    //
+    // The implicit sources are lexical joins — but bwrap resolves a
+    // bind source through symlinks, so what the check must compare is
+    // the RESOLVED source: a symlinked state-dir backing or a symlinked
+    // session clone pointing into the runtime root would rw-bind it
+    // although the stored lexical path is outside. The configured
+    // mounts are already canonical (merge.rs D8), the git-dirs are
+    // canonical from repo resolution, and the `__worktrees` sibling
+    // is a plain directory by construction (resolution and
+    // `ensure_worktrees` refuse a symlink or stray file), so those
+    // pass through unchanged; a source that cannot be canonicalized
+    // (missing at preflight time, before the run creates it) is
+    // checked as stored.
+    let canon_bind_source = |p: &std::path::Path| -> std::path::PathBuf {
+        std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf())
+    };
     let mut exposure_sources: Vec<std::path::PathBuf> = merged
         .mounts
         .iter()
@@ -2176,17 +2192,17 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         .collect();
     match &session {
         Some(s) => {
-            exposure_sources.push(s.clone.clone());
-            exposure_sources.push(s.worktrees.clone());
+            exposure_sources.push(canon_bind_source(&s.clone));
+            exposure_sources.push(canon_bind_source(&s.worktrees));
         }
         None => {
             exposure_sources.push(repo.root.clone());
             exposure_sources.extend(repo.git_dirs.iter().cloned());
             if let Some(worktrees) = &repo.worktrees {
-                exposure_sources.push(worktrees.clone());
+                exposure_sources.push(canon_bind_source(worktrees));
             }
             for entry in merged.effective_state_dirs() {
-                exposure_sources.push(repo.sidecar.join("state").join(entry));
+                exposure_sources.push(canon_bind_source(&repo.sidecar.join("state").join(entry)));
             }
         }
     }

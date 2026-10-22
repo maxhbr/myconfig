@@ -4183,6 +4183,94 @@ fn a_runtime_dir_under_the_worktrees_sibling_is_refused() {
 }
 
 #[test]
+fn a_symlinked_state_dir_backing_exposing_the_runtime_root_is_refused() {
+    // bd myconfig-7ioq.23: the state-dir backings
+    // (`<sidecar>/state/<entry>`) are lexical joins too — a symlinked
+    // backing pointing into `$XDG_RUNTIME_DIR` must be refused the
+    // same way, not pass because the stored path is outside.
+    let (inv, _, sidecar) = fixture_with_backend("expose-state-link", &["--dry-run"]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nstate-dirs = [\"work\"]\n",
+    )
+    .unwrap();
+    let runtime = sidecar.parent().unwrap().join("runtime");
+    std::fs::create_dir_all(runtime.join("mysbx")).unwrap();
+    std::fs::create_dir_all(sidecar.join("state")).unwrap();
+    std::os::unix::fs::symlink(&runtime, sidecar.join("state").join("work")).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        out.status.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "stdout: {stdout}\nstderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("runtime root") && stderr.contains("detach.md B8"),
+        "unexpected stderr: {stderr}"
+    );
+}
+
+#[test]
+fn a_symlinked_session_clone_exposing_the_runtime_root_is_refused() {
+    // bd myconfig-7ioq.23: the session clone
+    // (`<sidecar>/clones/NAME`) is the workspace bind of a clone run
+    // — a symlinked clone pointing at `$XDG_RUNTIME_DIR` must be
+    // refused although the stored lexical path is under the sidecar.
+    let (inv, repo, sidecar) = fixture("expose-clone-link", &[]);
+    let runtime = repo.parent().unwrap().join("runtime");
+    std::fs::create_dir_all(runtime.join("mysbx")).unwrap();
+    std::fs::create_dir_all(sidecar.join("clones")).unwrap();
+    std::os::unix::fs::symlink(&runtime, sidecar.join("clones").join("link")).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--session", "link", "--dry-run"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        out.status.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "stdout: {stdout}\nstderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("runtime root") && stderr.contains("detach.md B8"),
+        "unexpected stderr: {stderr}"
+    );
+}
+
+#[test]
+fn a_real_worktrees_sibling_outside_the_runtime_root_still_passes() {
+    // bd myconfig-7ioq.23: a legitimate (non-symlinked) worktrees
+    // sibling outside the runtime root stays a valid run — the
+    // canonicalization must not refuse the ordinary layout.
+    let (inv, repo, _sidecar) = fixture_with_backend("expose-worktrees-real", &["--dry-run"]);
+    let worktrees = repo.parent().unwrap().join(format!(
+        "{}__worktrees",
+        repo.file_name().unwrap().to_string_lossy()
+    ));
+    std::fs::create_dir_all(worktrees.join("wt")).unwrap();
+    let runtime = repo.parent().unwrap().join("runtime");
+    std::fs::create_dir_all(runtime.join("mysbx")).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "a real worktrees sibling must not be refused: {stderr}"
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains(worktrees.to_string_lossy().as_ref()),
+        "the worktrees sibling stays bound: {stdout}"
+    );
+}
+
+#[test]
 fn a_runtime_dir_under_a_state_dir_backing_is_refused() {
     // detach.md B8 for the state-dir backings: every entry of
     // `state-dirs` is an implicit rw bind whose host source lives
