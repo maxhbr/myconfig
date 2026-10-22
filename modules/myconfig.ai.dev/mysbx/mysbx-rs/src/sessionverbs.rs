@@ -545,10 +545,18 @@ pub fn destroy(args: &[String], dry_run: bool) -> i32 {
     // would corrupt the run. This guard is NOT overridable by
     // --force (it is not the unmerged-work refusal) and fires before
     // --dry-run too. An unset runtime root means no detached run
-    // could exist — proceed.
-    if let Some(msg) = live_detached_run_refusal(&repo, &name) {
-        eprintln!("mysbx: {msg}");
-        return crate::EXIT_INFRASTRUCTURE;
+    // could exist — proceed. A `starting` record splits: the dry
+    // run refuses with the advisory starting-or-stale wording (it
+    // cannot take the workspace lock to prove staleness), a real
+    // destroy skips this advisory refusal and decides under the
+    // lock at 7b — the outer holds the lock through its handshake,
+    // so a `starting` record with a dead socket seen under the lock
+    // is provably stale, not a blocked destroy.
+    if let Some((kind, msg)) = live_detached_run_refusal(&repo, &name) {
+        if dry_run || kind == Refusal::Live {
+            eprintln!("mysbx: {msg}");
+            return crate::EXIT_INFRASTRUCTURE;
+        }
     }
 
     // 5. the unmerged-work refusal. Debris — an entry without `.git`
@@ -612,7 +620,9 @@ pub fn destroy(args: &[String], dry_run: bool) -> i32 {
     // so a `--detach` startup whose record is `starting` and whose
     // socket is not yet bound can race the guard — here the lock
     // blocks until the concurrent outer's handshake ends, the record
-    // is re-read, and a run that is live or starting refuses. The
+    // is re-read, and a run that is live refuses; a `starting`
+    // record with a dead socket is stale (no outer is mid-startup
+    // under the lock) and is removed with the clone. The
     // guard stays held through the removal below (B6), so no run can
     // start while the clone is being deleted.
     let _lock_guard = match live_detached_run_refusal_locked(&repo, &name) {
@@ -882,20 +892,32 @@ fn parse_destroy(args: &[String]) -> Result<(String, bool), i32> {
     }
 }
 
+/// Which detached-run refusal blocks a destroy (detach.md B9): a
+/// live run is refused everywhere; a `starting` record without a
+/// live socket is refused only by the advisory, lock-free guard,
+/// which cannot prove it stale — a real destroy decides under the
+/// workspace lock instead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Refusal {
+    Live,
+    StartingOrStale,
+}
+
 /// Whether a live detached run of session `name` blocks its destroy
 /// (detach.md B9): the clone is bound rw into a running sandbox, so
-/// removing it would corrupt the run. `Some(msg)` refuses (names
-/// `mysbx attach --session NAME`); `None` lets the destroy proceed
-/// — no runtime root, no record, a finished or lost run. A
-/// `starting` record counts as live: the outer holds the workspace
-/// lock from before it writes the record until its handshake ends
-/// (detach.md B6), so the clone it is binding rw is about to be a
-/// live run's. Read-only and LOCK-FREE: the guard neither locks nor
-/// removes the registry record (a stale record is cleaned by
-/// attach's finished/lost path) — `--dry-run` runs it alone, so a
-/// dry run never blocks; a real destroy re-checks under the lock
-/// with [`live_detached_run_refusal_locked`].
-fn live_detached_run_refusal(repo: &Repo, name: &str) -> Option<String> {
+/// removing it would corrupt the run. `Some((kind, msg))` refuses;
+/// `None` lets the destroy proceed — no runtime root, no record, a
+/// finished or lost run. A `starting` record counts as possibly-live:
+/// this guard is read-only and LOCK-FREE, so it cannot prove a
+/// `starting` record stale (the proof is the workspace lock, which
+/// only the real destroy takes — a concurrent outer holds it from
+/// before it writes the record until its handshake ends, detach.md
+/// B6); it refuses with wording that names both possibilities, and
+/// the record is cleaned by attach's finished/lost path. `--dry-run`
+/// runs it alone, so a dry run never blocks; a real destroy
+/// re-checks under the lock with
+/// [`live_detached_run_refusal_locked`].
+fn live_detached_run_refusal(repo: &Repo, name: &str) -> Option<(Refusal, String)> {
     let root = crate::detach::runtime_root_from_env().ok()?;
     let workspace = crate::detach::Workspace::Session(name.to_owned());
     let paths = crate::detach::paths(&root, &repo.root, &workspace).ok()?;
@@ -905,13 +927,18 @@ fn live_detached_run_refusal(repo: &Repo, name: &str) -> Option<String> {
     let record = crate::detach::read(&paths).ok()?;
     let status = crate::detach::classify(&record, crate::detach::probe(&paths.sock));
     match status {
-        crate::detach::Status::Live => Some(live_run_message(name)),
-        crate::detach::Status::Finished | crate::detach::Status::Lost => {
+        crate::detach::Status::Live => Some((Refusal::Live, live_run_message(name))),
+        crate::detach::Status::Finished => None,
+        crate::detach::Status::Lost => {
             // Lost — a `starting`/`running` record without a live
-            // socket — must split on the state: `starting` is a run
-            // that is COMING UP (B5), not a killed master.
+            // socket — splits on the state: `running` is a killed
+            // master (finished, the record stays for attach);
+            // `starting` is either a run that is COMING UP (B5) or
+            // the stale corpse of a crashed outer — only the lock
+            // can tell the two apart, so the advisory refusal says
+            // so instead of claiming a running sandbox.
             if record.state == crate::detach::State::Starting {
-                Some(live_run_message(name))
+                Some((Refusal::StartingOrStale, starting_or_stale_message(name)))
             } else {
                 None
             }
@@ -928,6 +955,19 @@ fn live_run_message(name: &str) -> String {
     )
 }
 
+/// The advisory refusal for a `starting` record (detach.md B9):
+/// without the workspace lock the record is either a run that is
+/// coming up or a stale corpse, and only the real destroy — which
+/// takes the lock — can tell the two apart.
+fn starting_or_stale_message(name: &str) -> String {
+    format!(
+        "refusing to destroy session {name}: a detached run of this session \
+         is starting or stale — the clone is bound rw into a sandbox while it \
+         comes up; a stale record is cleared by `mysbx attach --session {name}` \
+         (detach.md B9)"
+    )
+}
+
 /// The authoritative re-check a real (non-dry-run) destroy runs
 /// UNDER the workspace lock (detach.md B6), taking the lock first
 /// (blocking — the wait is bounded by a concurrent outer's
@@ -940,8 +980,10 @@ fn live_run_message(name: &str) -> String {
 /// exists yet: a concurrent outer takes it from before it writes
 /// its `starting` record, so the lock — not the record — is what
 /// serializes a starting run against the removal. Read under the
-/// lock, the record is exactly what a concurrent outer has written:
-/// a `starting` run is live (the lock-free guard's split rule).
+/// lock, a `starting` record with a live socket is a run coming up
+/// (refused); with a dead socket it is provably stale — no outer is
+/// mid-startup while the lock is held — so the stale record is
+/// removed and the destroy proceeds.
 fn live_detached_run_refusal_locked(
     repo: &Repo,
     name: &str,
@@ -973,11 +1015,27 @@ fn live_detached_run_refusal_locked(
         crate::detach::Status::Live => Err(live_run_message(name)),
         crate::detach::Status::Finished => Ok(Some(guard)),
         crate::detach::Status::Lost => {
+            // `starting` seen UNDER the lock with a dead socket is
+            // provably stale (detach.md B6): the outer holds this
+            // lock from before it writes the record until its
+            // handshake ends, so no outer can be mid-startup while
+            // the lock is held here — the record is the corpse of a
+            // crashed outer or of an inner that died during startup.
+            // The stale record is removed under the lock (the same
+            // cleanup attach's lost path does; a failed removal is
+            // reported but does not block — attach's lost path
+            // cleans it), and the destroy proceeds.
             if record.state == crate::detach::State::Starting {
-                Err(live_run_message(name))
-            } else {
-                Ok(Some(guard))
+                if let Err(e) = std::fs::remove_file(&paths.json) {
+                    if e.kind() != std::io::ErrorKind::NotFound {
+                        eprintln!(
+                            "mysbx: cannot remove the stale record {}: {e}",
+                            paths.json.display()
+                        );
+                    }
+                }
             }
+            Ok(Some(guard))
         }
     }
 }

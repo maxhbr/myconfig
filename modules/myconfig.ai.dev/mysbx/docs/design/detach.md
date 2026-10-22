@@ -340,16 +340,25 @@ repos with other grants. So:
 - **`session destroy` (workspace.md D7)** refuses while the session has
   a live detached run, with or without `--force`: the clone is bound rw
   into a running sandbox. The message names `mysbx attach --session
-  NAME`. `--force` keeps its meaning (unmerged work). The guard treats
-  a `starting` record as live; a real destroy takes the same workspace
+  NAME`. `--force` keeps its meaning (unmerged work). A `starting`
+  record is refused by the lock-free ADVISORY guard (the `--dry-run`
+  path — it cannot take the lock to prove the record stale, so its
+  message says "starting or stale" and names the attach command that
+  clears a stale record); a real destroy takes the same workspace
   lock (B6) — blocking until a concurrent outer's handshake ends,
   bounded by that handshake, which a first `--session` run's clone can
   make long — and re-checks under it, holding the lock through the
-  removal. The lock is taken even when no record exists yet: the
-  outer takes it from before it writes its `starting` record, so
-  the lock — not the record — is what serializes a starting run
-  against the removal. A `--dry-run` runs the lock-free guard
-  only, so it never blocks, and its probe is advisory.
+  removal. Under the lock a `starting` record with a dead socket is
+  provably stale — the outer holds the lock from before it writes
+  the record until its handshake ends, so no outer can be
+  mid-startup while the lock is held — and the stale record is
+  removed with the clone. A `starting` record with a live socket
+  stays a live run. The lock is taken even when no record exists
+  yet: the outer takes it from before it writes its `starting`
+  record, so the lock — not the record — is what serializes a
+  starting run against the removal. A `--dry-run` runs the
+  lock-free guard only, so it never blocks, and its probe is
+  advisory.
 - **`doctor` (cli.md D20)** checks the `MYSBX_DTACH` pin and the runtime
   root (set, absolute, owned, `0700`) in a host section. Problems there
   are `WARN`, not `FAIL`: they disable detached runs, not runs.
