@@ -302,6 +302,11 @@ in
     #     options = [ "nofail" ];
     #   };
     # }
+    {
+      myconfig.persistence.directories = [
+        "mybrain"
+      ];
+    }
   ];
 
   config = {
