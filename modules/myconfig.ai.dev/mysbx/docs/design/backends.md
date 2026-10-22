@@ -784,15 +784,23 @@ What the guest may read is decided entirely by the SPEC's shares:
   first-cut's sidecar-file route and its sweep are now
   PODMAN-KRUN's only shape (bd myconfig-6xl hoisted the sweep so
   that arm's debris is reclaimed too).
-- **Share destinations are constrained to the rootfs's baked
-  share roots** (`/etc`, `/home`, `/srv`, `/mnt`, `/media`, `/opt`,
-  `/data`, plus the tmpfs/home/store special cases `/tmp`,
-  `/mysbx-home`, `/nix`): the guest init places a share below a
-  first path component by mounting a tmpfs OVER it, which needs
-  the mountpoint to exist on the read-only root — a dest below
-  anything else is a builder refusal (`UnknownShareRoot`), never
-  a run-time ENOENT the init cannot diagnose. The repo itself
-  runs under the same first-component check.
+- **Share destinations are constrained to the rootfs's placeable
+  share roots** — the baked mountpoints (`/etc`, `/home`, `/srv`,
+  `/mnt`, `/media`, `/opt`, `/data`) plus the surfaces that are already
+  tmpfs (`/tmp`, `/mysbx-home`): the guest init places a share below a
+  first path component by mounting a tmpfs OVER it, which needs the
+  mountpoint to exist on the read-only root — a dest below anything else
+  is a builder refusal (`UnknownShareRoot`), never a run-time ENOENT the
+  init cannot diagnose. `/nix` is refused separately (`NixShareRoot`: a
+  tmpfs there would hide the baked `/nix/store` link), and the
+  guest-native multiplexer socket dir (`/dev/shm/mysbx-tmux`) is refused
+  with its own diagnosis (`KrunMuxSocketDest`) BEFORE the placement rule
+  — a share over it would hand the payload a dead socket, so "move it
+  below a baked root" would be the wrong advice. The repo itself runs
+  under the same first-component check, which is why a checkout below a
+  root the guest cannot place under (a Nix sandbox's `/build`, say) is a
+  refused run. `krun::placeable_share_root` is the predicate form of the
+  rule, for callers that CHOOSE a path.
 
 The KrunSpec builder (dak.3) turns the merged config into exactly
 this: cpus, ram, the rootfs pin, one ro store share, one rw

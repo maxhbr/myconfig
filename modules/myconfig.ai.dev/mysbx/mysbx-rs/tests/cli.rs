@@ -24,6 +24,50 @@ fn tmpdir(name: &str) -> PathBuf {
     dir
 }
 
+/// lib.rs's `kvm_available()` (private, and it must stay the SAME probe:
+/// readable AND writable is what the doctor check and the run gate test).
+fn kvm_available() -> bool {
+    std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("/dev/kvm")
+        .is_ok()
+}
+
+/// Whether the krun backends can place a share at `path` — asked of the
+/// backend itself ([`mysbx::krun::placeable_share_root`]), never re-derived
+/// here, so the fixture and the builder cannot disagree about the rule.
+fn krun_placeable(path: &Path) -> bool {
+    mysbx::krun::placeable_share_root(&path.to_string_lossy()).is_some()
+}
+
+/// A temp dir a krun backend can bind, under the first placeable root of
+/// [`mysbx::krun::SHARE_ROOTS`] that accepts a create, or `None` when the
+/// environment offers none (the caller skips, like `git_repo` and
+/// `is_ssh_keygen_available` do — a skip that names why).
+///
+/// `std::env::temp_dir()` is NOT enough on its own: under the Nix build
+/// sandbox it is `/build`, which `krun::check_share_root` refuses (no baked
+/// mountpoint, and no tmpfs surface either) — the whole krun test group
+/// failed there for a fixture path, not for anything the tests assert.
+/// Measured in that sandbox, the baked roots (`/etc`, `/home`, `/srv`, …) are
+/// mkdir-denied and only `/tmp` and `/build` are writable, so `/tmp` is the
+/// root that actually carries the fixtures.
+fn krun_tmpdir(name: &str) -> Option<PathBuf> {
+    for root in ["/tmp", "/var/tmp"] {
+        if !krun_placeable(Path::new(root)) {
+            continue;
+        }
+        let base = Path::new(root).join(format!("mysbx-cli-krun-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        if std::fs::create_dir_all(&base).is_err() {
+            continue;
+        }
+        return Some(base);
+    }
+    None
+}
+
 /// One binary invocation: fixed arguments, a working directory and a fully
 /// controlled environment (only the variables set here survive).
 struct Invocation {
@@ -188,7 +232,13 @@ fn fixture(name: &str, args: &[&'static str]) -> (Invocation, PathBuf, PathBuf) 
 /// [`fixture`] without the sidecar `config.toml`: the sidecar DIRECTORY
 /// exists, the repo is not initialized.
 fn fixture_uninited(name: &str, args: &[&'static str]) -> (Invocation, PathBuf, PathBuf) {
-    let base = tmpdir(name);
+    fixture_at(tmpdir(name), args)
+}
+
+/// [`fixture_uninited`] on a caller-chosen base — the shape the krun tests
+/// need, because their repo path must be one the guest can place a share
+/// under ([`krun_tmpdir`]).
+fn fixture_at(base: PathBuf, args: &[&'static str]) -> (Invocation, PathBuf, PathBuf) {
     let (repo, sidecar) = make_repo(&base, "repo");
     std::fs::create_dir_all(base.join("home")).unwrap();
     std::fs::create_dir_all(base.join("xdg")).unwrap();
@@ -199,6 +249,16 @@ fn fixture_uninited(name: &str, args: &[&'static str]) -> (Invocation, PathBuf, 
         xdg: base.join("xdg"),
     };
     (inv, repo, sidecar)
+}
+
+/// [`fixture`] whose repo lives where a KRUN backend can bind it, or `None`
+/// when the environment offers no such root (see [`krun_tmpdir`]; the caller
+/// returns early, the same honest skip as `git_repo`).
+fn krun_fixture(name: &str, args: &[&'static str]) -> Option<(Invocation, PathBuf, PathBuf)> {
+    let base = krun_tmpdir(name)?;
+    let (inv, repo, sidecar) = fixture_at(base, args);
+    init_sidecar(&sidecar);
+    Some((inv, repo, sidecar))
 }
 
 /// [`fixture`] with `backend = "bubblewrap"` in the *user* config, so the
@@ -8479,7 +8539,9 @@ fn doctor_routes_the_krun_backend_away_from_the_podman_checks() {
     // image) would be wrong answers for a backend that runs no
     // podman at all. A stub launcher prints the launcher's own
     // unknown-argument wording so the probe passes.
-    let (inv, _, sidecar) = fixture("doctor-krun-routing", &[]);
+    let Some((inv, _, sidecar)) = krun_fixture("doctor-krun-routing", &[]) else {
+        return; // no placeable krun fixture root here
+    };
     std::fs::write(sidecar.join("config.toml"), "backend = \"krun\"\n").unwrap();
     let base = inv.cwd.parent().unwrap().to_path_buf();
     // The stub reproduces the launcher's unknown-argument wording
@@ -8501,13 +8563,26 @@ fn doctor_routes_the_krun_backend_away_from_the_podman_checks() {
             ("MYSBX_KRUN_ROOTFS", rootfs.to_str().unwrap()),
         ],
     );
-    // The exit is NOT asserted 0: this host has no /dev/kvm, and
-    // doctor correctly FAILS that check — the test pins the ROUTING
-    // and the krun checks' shape, not the host's KVM.
-    assert_ne!(
-        code, 0,
-        "the /dev/kvm failure must make doctor report: {stdout}"
-    );
+    // The exit follows the HOST's /dev/kvm, which the test must not
+    // assume: doctor reports a failed check where kvm is absent or not
+    // rw (the CI runner and the agent sandbox), and 0 where it is
+    // readable+writable (a Nix builder with /dev/kvm passed through).
+    // The earlier form asserted "not 0" on the reasoning that "this host
+    // has no /dev/kvm" — true where it was written, false on such a
+    // builder, which is exactly the kind of host fact a test may not
+    // hard-code. What it tests is the ROUTING and the krun checks' shape,
+    // so the exit is asserted against the same probe the code uses.
+    if kvm_available() {
+        assert_eq!(
+            code, 0,
+            "with rw /dev/kvm doctor must pass its krun checks: {stdout}"
+        );
+    } else {
+        assert_ne!(
+            code, 0,
+            "the /dev/kvm failure must make doctor report: {stdout}"
+        );
+    }
     assert!(stdout.contains("== krun =="), "{stdout}");
     assert!(
         stdout.contains("OK   launcher probe: the launcher runs and reaches argument parsing"),
@@ -9090,7 +9165,20 @@ fn podman_backends_refuse_the_old_gvisor_pin_names() {
 
 /// Dry run of `config` (the sidecar) with extra env; (code, stdout, stderr).
 fn dry_run_with(name: &str, config: &str, env: &[(&str, &str)]) -> (i32, String, String) {
-    let (inv, _repo, sidecar) = fixture(name, &[]);
+    // A `podman-krun` config needs a repo the guest can place a share
+    // under (see [`krun_tmpdir`], and do NOT use `expect` here: the
+    // helper is the shared one, and an environment without a placeable
+    // root must not turn these non-krun assertions into a panic).
+    let krun = config.contains("podman-krun") || config.contains("\"krun\"");
+    let fixture_root = if krun {
+        match krun_fixture(name, &[]) {
+            Some(f) => f,
+            None => return (-1, String::new(), "skipped: no placeable krun root".into()),
+        }
+    } else {
+        fixture(name, &[])
+    };
+    let (inv, _repo, sidecar) = fixture_root;
     std::fs::write(sidecar.join("config.toml"), config).unwrap();
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
     for (k, v) in env {
@@ -9641,7 +9729,9 @@ fn allowlist_on_podman_krun_is_refused() {
     // the pasta netns, backends.md D2): an allowlist is refused on
     // `podman-krun` exactly like on `podman-gvisor` — never
     // accepted-and-ignored.
-    let (inv, _, sidecar) = fixture("nono-allowlist-podman-krun", &[]);
+    let Some((inv, _, sidecar)) = krun_fixture("nono-allowlist-podman-krun", &[]) else {
+        return; // no placeable krun fixture root here
+    };
     std::fs::write(
         sidecar.join("config.toml"),
         "backend = \"podman-krun\"\nlisten-ports = [8080]\n",
@@ -9664,7 +9754,9 @@ fn podman_krun_network_false_is_enforced_like_gvisor() {
     // resolver, nothing past the netns. The dry run must carry the
     // same `--network none` line, and the same nix-daemon mount
     // contradiction the gvisor tier refuses must refuse here too.
-    let (inv, _, sidecar) = fixture("podman-krun-network-false", &[]);
+    let Some((inv, _, sidecar)) = krun_fixture("podman-krun-network-false", &[]) else {
+        return; // no placeable krun fixture root here
+    };
     std::fs::write(
         sidecar.join("config.toml"),
         "backend = \"podman-krun\"\nnetwork = false\n",
@@ -9692,7 +9784,9 @@ fn podman_krun_allowlist_refusal_names_tsi() {
     // backend's ACTUAL egress mechanism — TSI is an unfiltered
     // proxy (any connect() the guest makes, the VMM dials from the
     // container netns) — never a vague "not supported".
-    let (inv, _, sidecar) = fixture("podman-krun-allowlist-tsi", &[]);
+    let Some((inv, _, sidecar)) = krun_fixture("podman-krun-allowlist-tsi", &[]) else {
+        return; // no placeable krun fixture root here
+    };
     std::fs::write(
         sidecar.join("config.toml"),
         "backend = \"podman-krun\"\nallow-domains = [\"example.org\"]\n",
@@ -9717,7 +9811,9 @@ fn podman_krun_dry_run_swaps_the_runtime_keeps_the_layout() {
     // by its own test — and the dropped guest-unenforceable hardening
     // flags). The same image pin (MYSBX_PODMAN_IMAGE) serves both
     // variants.
-    let (inv, _, sidecar) = fixture("podman-krun-dry-run", &[]);
+    let Some((inv, _, sidecar)) = krun_fixture("podman-krun-dry-run", &[]) else {
+        return; // no placeable krun fixture root here
+    };
     std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
     cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest").env(
@@ -9770,7 +9866,12 @@ fn podman_multiplexer_runs_the_in_image_entry_on_both_backends() {
             "/dev/shm/mysbx-tmux",
         ),
     ] {
-        let (inv, _, sidecar) = fixture(&format!("podman-mux-{backend}"), &[]);
+        // The krun variant needs a repo the guest can place a share
+        // under (see [`krun_tmpdir`]); the gvisor one does not care, but
+        // one root for both keeps the assertions comparable.
+        let Some((inv, _, sidecar)) = krun_fixture(&format!("podman-mux-{backend}"), &[]) else {
+            return; // no placeable krun fixture root here
+        };
         std::fs::write(
             sidecar.join("config.toml"),
             format!("backend = \"{backend}\"\nmultiplexer = \"{mux}\"\n"),
@@ -9817,7 +9918,10 @@ fn podman_multiplexer_without_in_image_entry_is_refused() {
     // is still a refused run naming the missing podman pin, and the
     // pin of ANOTHER multiplexer does not start this one.
     for backend in ["podman-gvisor", "podman-krun"] {
-        let (inv, _, sidecar) = fixture(&format!("podman-mux-unpinned-{backend}"), &[]);
+        let Some((inv, _, sidecar)) = krun_fixture(&format!("podman-mux-unpinned-{backend}"), &[])
+        else {
+            return; // no placeable krun fixture root here
+        };
         std::fs::write(
             sidecar.join("config.toml"),
             format!("backend = \"{backend}\"\nmultiplexer = \"workmux\"\n"),
@@ -9851,7 +9955,9 @@ fn the_direct_krun_backend_writes_no_sidecar_trust_files() {
     // a real run. (The podman-krun arm keeps its per-run files: the
     // hoisted sweep's coverage there is
     // the_hoisted_sweep_cleans_both_krun_backends_debris.)
-    let (inv, _, sidecar) = fixture("krun-no-trust-files", &[]);
+    let Some((inv, _, sidecar)) = krun_fixture("krun-no-trust-files", &[]) else {
+        return; // no placeable krun fixture root here
+    };
     std::fs::write(sidecar.join("config.toml"), "backend = \"krun\"\n").unwrap();
     // The pins the run needs to reach the dry-run audit: launcher
     // + rootfs (the arm refuses a missing pin).
@@ -9885,7 +9991,9 @@ fn verbose_reaches_the_krun_launcher_argv() {
     // the flag to the mysbx-krun launcher (its phase timings and
     // setup logs), a plain run does not. The dry-run argv audits
     // exactly this — the `--verbose` line is there or it is not.
-    let (inv, _, sidecar) = fixture("krun-verbose-argv", &[]);
+    let Some((inv, _, sidecar)) = krun_fixture("krun-verbose-argv", &[]) else {
+        return; // no placeable krun fixture root here
+    };
     std::fs::write(sidecar.join("config.toml"), "backend = \"krun\"\n").unwrap();
     let rootfs = sidecar.join("rootfs-stub");
     std::fs::create_dir_all(rootfs.join("bin")).unwrap();
@@ -9919,7 +10027,9 @@ fn a_detached_krun_wrap_carries_die_with_parent() {
     // wrap of the launcher — and with it the in-process microVM —
     // dies with the supervisor, so an abruptly dead inner orphans no
     // live VM. The foreground argv stays byte-identical.
-    let (inv, _, sidecar) = fixture("krun-detach-die-with-parent", &[]);
+    let Some((inv, _, sidecar)) = krun_fixture("krun-detach-die-with-parent", &[]) else {
+        return; // no placeable krun fixture root here
+    };
     // The krun backend mirrors the repo's host path into the guest
     // and refuses a share below a first component the rootfs bakes
     // no mountpoint for (krun.rs's check_share_root) — a repo under
@@ -9986,7 +10096,21 @@ fn the_hoisted_sweep_cleans_both_krun_backends_debris() {
     // sandbox has no /dev/kvm, the podman-krun arm's first real-run
     // refusal). A LIVE pid's dir is never touched; a non-pid name is
     // untouched; a dry run sweeps nothing.
-    let (inv, _, sidecar) = fixture("krun-sweep-hoisted", &[]);
+    //
+    // The real run has to get PAST the earlier pipeline steps for the
+    // sweep to be reached at all: it generates the sandbox keypair
+    // first, and ssh-keygen refuses a uid without a passwd entry ("No
+    // user exists for uid …") — the norm inside this repo's own sandbox
+    // and never on a host or the CI runner. The same SMOKE-TESTED guard
+    // the keypair tests use ([`is_ssh_keygen_available`]), so the test
+    // skips where the pipeline legitimately stops earlier instead of
+    // asserting a sweep that never had a chance to run.
+    if !is_ssh_keygen_available() {
+        return; // the real run cannot reach the sweep without a usable ssh-keygen
+    }
+    let Some((inv, _, sidecar)) = krun_fixture("krun-sweep-hoisted", &[]) else {
+        return; // no placeable krun fixture root here
+    };
     std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
     let gittrust = sidecar.join("gittrust");
     let dead_dir = gittrust.join("2147483647"); // > i32::MAX: pid_gone is true
@@ -10034,7 +10158,9 @@ fn podman_krun_refuses_a_mount_over_the_guest_mux_socket_dir() {
     // The krun socket dir must stay guest-native: a mount at, above
     // or below /dev/shm/mysbx-tmux would put it on virtio-fs.
     for dest in ["/dev/shm", "/dev/shm/mysbx-tmux/x"] {
-        let (inv, _, sidecar) = fixture("podman-krun-mux-socket-mount", &[]);
+        let Some((inv, _, sidecar)) = krun_fixture("podman-krun-mux-socket-mount", &[]) else {
+            return; // no placeable krun fixture root here
+        };
         let host = sidecar.join("host-dir");
         std::fs::create_dir_all(&host).unwrap();
         std::fs::write(
@@ -10070,7 +10196,9 @@ fn podman_krun_scratch_pin_binds_the_per_run_file_and_exports_the_path() {
     // only way to find the disk. WITHOUT the pin neither appears,
     // and NOTHING is created (the dry run is side-effect-free; the
     // sweep/create live in the real-run path only).
-    let (inv, _, sidecar) = fixture("podman-krun-scratch-pin", &[]);
+    let Some((inv, _, sidecar)) = krun_fixture("podman-krun-scratch-pin", &[]) else {
+        return; // no placeable krun fixture root here
+    };
     std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
     let scratch_dir = sidecar.join("scratch");
     std::fs::create_dir_all(&scratch_dir).unwrap();
@@ -10151,7 +10279,9 @@ fn podman_krun_refused_run_leaves_the_scratch_dir_untouched() {
     // run, and a refused run starts nothing). The test host has no
     // rw /dev/kvm (the CI and agent sandboxes alike), so the gate
     // is exactly what the test drives.
-    let (inv, _, sidecar) = fixture("podman-krun-scratch-refused", &[]);
+    let Some((inv, _, sidecar)) = krun_fixture("podman-krun-scratch-refused", &[]) else {
+        return; // no placeable krun fixture root here
+    };
     std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
     let scratch_dir = sidecar.join("scratch");
     std::fs::create_dir_all(&scratch_dir).unwrap();
@@ -10194,7 +10324,9 @@ fn podman_krun_without_image_pin_is_refused() {
     // The krun variant runs the SAME image as podman-gvisor — without
     // the image pin it is a refused run naming the backend, never a
     // run against an invented reference.
-    let (inv, _, sidecar) = fixture("podman-krun-unpinned", &[]);
+    let Some((inv, _, sidecar)) = krun_fixture("podman-krun-unpinned", &[]) else {
+        return; // no placeable krun fixture root here
+    };
     std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
     let (code, _, stderr) = run_binary_with(&inv, &["--dry-run"]);
     assert_eq!(code, 70);
@@ -10212,7 +10344,9 @@ fn podman_krun_waypipe_display_is_refused_first_cut() {
     // verified (bd myconfig-6di.5.4) — never accepted-and-ignored.
     // Refused BEFORE the image pin check and before the dry-run argv
     // (a broken configuration audits too).
-    let (inv, _, sidecar) = fixture("podman-krun-waypipe", &[]);
+    let Some((inv, _, sidecar)) = krun_fixture("podman-krun-waypipe", &[]) else {
+        return; // no placeable krun fixture root here
+    };
     std::fs::write(
         sidecar.join("config.toml"),
         "backend = \"podman-krun\"\ndisplay = \"waypipe\"\n",
@@ -10236,7 +10370,9 @@ fn podman_krun_dry_run_needs_no_kvm() {
     // (the pin check is upstream of the kvm gate), so this test pins a
     // synthetic image and only asserts the exit is 0 — never a kvm
     // refusal — which is exactly the contract.
-    let (inv, _, sidecar) = fixture("podman-krun-dry-no-kvm", &[]);
+    let Some((inv, _, sidecar)) = krun_fixture("podman-krun-dry-no-kvm", &[]) else {
+        return; // no placeable krun fixture root here
+    };
     std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
     cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest");
@@ -10258,7 +10394,9 @@ fn podman_krun_limits_become_vm_annotations() {
     // host, both podman variants consume them) map onto krun VM
     // annotations on the dry-run argv: no cgroup flags, and a
     // pids-limit pin is a REFUSED run naming the gap.
-    let (inv, _, sidecar) = fixture("podman-krun-limits", &[]);
+    let Some((inv, _, sidecar)) = krun_fixture("podman-krun-limits", &[]) else {
+        return; // no placeable krun fixture root here
+    };
     std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
     cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest")
@@ -10285,7 +10423,9 @@ fn podman_krun_limits_become_vm_annotations() {
 
     // The pids-limit pin on the krun variant is a refused run — no
     // pids controller is wired for a whole-VM "container".
-    let (inv, _, sidecar) = fixture("podman-krun-pids", &[]);
+    let Some((inv, _, sidecar)) = krun_fixture("podman-krun-pids", &[]) else {
+        return; // no placeable krun fixture root here
+    };
     std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
     cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest")
@@ -10315,7 +10455,9 @@ fn podman_krun_dry_run_carries_the_handler_annotation() {
     // absent (the payload is guest root by design; advertising a
     // cap-drop that nothing enforces would be a lie on the audit
     // surface).
-    let (inv, _, sidecar) = fixture("podman-krun-annotation", &[]);
+    let Some((inv, _, sidecar)) = krun_fixture("podman-krun-annotation", &[]) else {
+        return; // no placeable krun fixture root here
+    };
     std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
     cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest");
@@ -10923,7 +11065,9 @@ fn podman_krun_git_trust_names_exactly_the_bound_workspace_paths() {
     // the workspace root (exact + the `/*` form), the approved
     // git-dirs (exact) and, when it exists, the worktrees sibling.
     // Never a bare `*`.
-    let (inv, repo, sidecar) = fixture("podman-krun-git-trust", &[]);
+    let Some((inv, repo, sidecar)) = krun_fixture("podman-krun-git-trust", &[]) else {
+        return; // no placeable krun fixture root here
+    };
     std::fs::write(sidecar.join("config.toml"), "backend = \"podman-krun\"\n").unwrap();
     let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
     cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest");

@@ -402,9 +402,22 @@ in
         #    crun runs the libkrun VM handler ONLY for
         #    run.oci.handler=krun (custom-handler.c), without it the
         #    run would silently be a plain container, no VM.
-        repo="$TMPDIR/repo"
-        mkdir -p "$repo" "$TMPDIR/repo.mysbx"
-        printf 'backend = "podman-krun"\n' > "$TMPDIR/repo.mysbx/config.toml"
+        # The repo must sit below a share root the krun guest can PLACE a
+        # share under (mysbx-rs/src/krun.rs::check_share_root): the baked
+        # roots plus /tmp and /mysbx-home. $TMPDIR is NOT usable here —
+        # runCommand sets it to /build, which is neither, and the dry run
+        # then fails with UnknownShareRoot for a reason that has nothing
+        # to do with what this check asserts. /tmp is the one placeable
+        # root the build sandbox lets us create (measured: the baked roots
+        # are all mkdir-denied there).
+        if ! mkdir -p /tmp/mysbx-krun-wrapper-test-$$ 2>/dev/null; then
+          fail "cannot create a fixture root under /tmp (the one placeable share root)"
+        fi
+        work=/tmp/mysbx-krun-wrapper-test-$$
+        trap 'rm -rf "$work"' EXIT
+        repo="$work/repo"
+        mkdir -p "$repo" "$work/repo.mysbx"
+        printf 'backend = "podman-krun"\n' > "$work/repo.mysbx/config.toml"
         git -C "$repo" init -q
         git -C "$repo" config user.email t@invalid
         git -C "$repo" config user.name t
@@ -413,8 +426,8 @@ in
         export MYSBX_PODMAN_IMAGE=localhost/test:latest
         # The canonicalization needs a HOME that exists (the check
         # sandbox has none — runCommand's user is /homeless-shelter).
-        mkdir -p "$TMPDIR/home"
-        argv=$( cd "$repo" && HOME="$TMPDIR/home" "${pkgKrun}/bin/mysbx" --dry-run ) \
+        mkdir -p "$work/home"
+        argv=$( cd "$repo" && HOME="$work/home" "${pkgKrun}/bin/mysbx" --dry-run ) \
           || fail "the dry run failed"
         first=$(echo "$argv" | sed -n '2p')
         [ "$first" = "--runtime=$crun" ] \

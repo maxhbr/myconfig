@@ -992,6 +992,108 @@ fn git_trust_registers_two_overlay_files_and_the_env_pin() {
 }
 
 #[test]
+fn tmp_is_a_placeable_share_root() {
+    // The guest's /tmp is its OWN tmpfs (the base table's row), so a share
+    // below it needs no baked mountpoint — the init places it on a surface
+    // that already exists. This is what makes /tmp a usable fixture root
+    // for the krun tests (and for a user whose repo lives there), so it is
+    // pinned rather than left to the refusal below.
+    for path in ["/tmp/repo", "/tmp/mysbx-cli-krun-1-repo"] {
+        assert_eq!(
+            mysbx::krun::placeable_share_root(path),
+            Some("/tmp"),
+            "{path}"
+        );
+    }
+    // The sandbox home is the other tmpfs surface, the baked roots follow,
+    // and everything else is refused — including /nix (its own refusal)
+    // and the build sandbox's /build.
+    assert_eq!(
+        mysbx::krun::placeable_share_root("/mysbx-home/.cache"),
+        Some("/mysbx-home")
+    );
+    assert_eq!(mysbx::krun::placeable_share_root("/srv/data"), Some("/srv"));
+    for path in ["/nix/store/x", "/build/repo", "/var/lib/data", "/"] {
+        assert_eq!(mysbx::krun::placeable_share_root(path), None, "{path}");
+    }
+    // The placeable list covers the tmpfs roots and the rootfs's baked
+    // mountpoints, nothing else: a root the rootfs bakes but this list
+    // forgot would be refused at run time with no test catching it.
+    for baked in ["/etc", "/home", "/srv", "/mnt", "/media", "/opt", "/data"] {
+        assert_eq!(
+            mysbx::krun::placeable_share_root(&format!("{baked}/x")),
+            Some(baked),
+            "{baked}"
+        );
+    }
+    assert_eq!(
+        mysbx::krun::SHARE_ROOTS.len(),
+        9,
+        "{:?}",
+        mysbx::krun::SHARE_ROOTS
+    );
+    // ...and the refusal agrees with the predicate for the same paths.
+    for path in ["/build/repo", "/var/lib/data"] {
+        let mut cfg = base(true);
+        cfg.mounts
+            .push(make_mount("/synth/data", Some(path), Mode::Ro));
+        let err = krun_argv(
+            &cfg,
+            &synth_repo(),
+            &Payload::Shell,
+            &BTreeMap::new(),
+            &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, mysbx::krun::Error::UnknownShareRoot { .. }),
+            "{path}: {err}"
+        );
+    }
+}
+
+#[test]
+fn a_mount_over_the_guest_mux_socket_dir_is_refused_by_the_specific_hazard() {
+    // docs/design/config.md D17: the multiplexer socket lives on the
+    // guest's own /dev/shm tmpfs, and a share at, below or above it hands
+    // the payload a dead socket. That is the DIAGNOSIS the operator needs —
+    // not "move it below a baked root", which the generic first-component
+    // rule would say for /dev/**. Both spellings of the hazard (at the
+    // socket dir, and an ancestor of it) are pinned, for a run WITH and
+    // WITHOUT a multiplexer: the share is wrong in both cases, and the
+    // message must not depend on which backend spelling built the argv.
+    for dest in [
+        "/dev/shm/mysbx-tmux",
+        "/dev/shm/mysbx-tmux/x",
+        "/dev/shm",
+        "/dev",
+    ] {
+        for mux in [Multiplexer::None, Multiplexer::Tmux] {
+            let mut cfg = base(true);
+            cfg.multiplexer = mux;
+            cfg.mounts
+                .push(make_mount("/synth/data", Some(dest), Mode::Ro));
+            // The entry is a PARAM (the caller pins it), not an env read:
+            // a session-starting multiplexer without one would be refused
+            // for the missing pin before the share is even looked at.
+            let entry = (mux != Multiplexer::None).then_some("/nix/store/aaaa-entry");
+            let err = krun_argv(
+                &cfg,
+                &synth_repo(),
+                &Payload::Shell,
+                &BTreeMap::new(),
+                &params("/synth/rootfs", "/synth/shell", entry, Workspace::Live),
+            )
+            .unwrap_err();
+            assert!(
+                matches!(&err, mysbx::krun::Error::KrunMuxSocketDest { dest: d } if d == dest),
+                "{dest} with {mux:?}: {err}"
+            );
+        }
+    }
+}
+
+#[test]
 fn a_dest_below_an_unbaked_share_root_is_refused() {
     let mut cfg = base(true);
     cfg.mounts

@@ -305,6 +305,16 @@ pub enum Error {
     /// bwrap/podman (`HiddenMount`) — implicit shares are placed
     /// first, so the mount would cover them.
     HiddenMount { dest: String, hidden: String },
+    /// A configured mount's dest is at, below or above the guest-native
+    /// multiplexer socket directory (docs/design/config.md D17,
+    /// [`crate::podman_gvisor::KRUN_MUX_SOCKET_DIR`]): the socket must
+    /// stay on the guest's own `/dev/shm` tmpfs, because a socket on
+    /// virtiofs is a dead inode to the guest (backends.md D2) and tmux
+    /// refuses a dir it does not own. This refusal comes BEFORE the
+    /// first-component placement rule ([`Error::UnknownShareRoot`]): the
+    /// specific hazard is the diagnosis, not "move it below a baked
+    /// root" — moving it would hand the payload a socket it cannot use.
+    KrunMuxSocketDest { dest: String },
 }
 
 impl std::fmt::Display for Error {
@@ -336,6 +346,11 @@ impl std::fmt::Display for Error {
             Error::HiddenMount { dest, hidden } => write!(
                 f,
                 "mount {dest} would hide {hidden} — implicit binds are not configuration and always come first, so a dest may not cover them"
+            ),
+            Error::KrunMuxSocketDest { dest } => write!(
+                f,
+                "the mount dest `{dest}` is at, below or above the multiplexer socket directory {} — the socket has to stay on the guest's own /dev/shm tmpfs (a virtiofs file is a dead inode to the guest, and tmux refuses a socket dir it does not own), so no share may land there",
+                crate::podman_gvisor::KRUN_MUX_SOCKET_DIR
             ),
             Error::UnknownShareRoot { dest, root } => write!(
                 f,
@@ -388,6 +403,52 @@ const GIT_TRUST_GLOBAL_DEST: &str = "/etc/mysbx/gitconfig";
 /// myconfig-jn0).
 const GIT_TRUST_SYSTEM_DEST: &str = "/etc/gitconfig";
 
+/// Whether the guest can place a share at `sandbox_path`, as a plain
+/// predicate — the same rule [`check_share_dest`] enforces, exposed so
+/// callers that CHOOSE a path (the test harness picks a fixture root)
+/// ask the backend instead of re-deriving the table. The roots the
+/// guest can place under are the baked ones plus `/tmp` and
+/// `/mysbx-home`, whose surfaces are already tmpfs (see
+/// [`check_share_root`]); `None` means "below no placeable root".
+pub fn placeable_share_root(sandbox_path: &str) -> Option<&'static str> {
+    let path = std::path::Path::new(sandbox_path);
+    let first = path
+        .strip_prefix("/")
+        .ok()?
+        .components()
+        .next()?
+        .as_os_str()
+        .to_str()?;
+    let literal = format!("/{first}");
+    if literal == "/nix" {
+        return None;
+    }
+    SHARE_ROOTS.iter().copied().find(|root| *root == literal)
+}
+
+/// Every first path component the guest can place a share under:
+///
+/// - `/tmp` and `/mysbx-home`, whose surfaces are already tmpfs, so the
+///   init needs no baked mountpoint there (`/tmp` is the base table's own
+///   tmpfs, `/mysbx-home` the baked link to `/tmp/mysbx-home`),
+/// - plus the roots the rootfs bakes a mountpoint for
+///   ([`BAKED_SHARE_ROOTS`]) — the init mounts a tmpfs OVER the first
+///   component, which needs that mountpoint on the ro root.
+///
+/// The test below pins that this list covers the baked table exactly, so
+/// the predicate, the refusal and the rootfs cannot drift apart.
+pub const SHARE_ROOTS: [&str; 9] = [
+    "/tmp",
+    "/mysbx-home",
+    "/etc",
+    "/home",
+    "/srv",
+    "/mnt",
+    "/media",
+    "/opt",
+    "/data",
+];
+
 /// Whether the guest can place a share at `sandbox_path`: it must
 /// have a parent (the link lives on the parent's surface — the
 /// tmpfs the init mounts at the first component), it must not
@@ -396,11 +457,27 @@ const GIT_TRUST_SYSTEM_DEST: &str = "/etc/gitconfig";
 /// first-component needs the mountpoint on the ro root). The
 /// WORKSPACE share runs only the first-component half (the repo
 /// path is config-independent: the merge refused a repo at a baked
-/// path long ago, and a repo below /tmp would be refused at
-/// discovery); the full check is for CONFIGURED mounts, whose dests
-/// are free-form.
+/// path long ago, and a repo below /tmp is placeable — the guest's
+/// /tmp is its own tmpfs); the full check is for CONFIGURED mounts,
+/// whose dests are free-form.
 fn check_share_dest(sandbox_path: &str) -> Result<(), Error> {
     let path = std::path::Path::new(sandbox_path);
+    // The multiplexer socket's hazard is the SPECIFIC one (D17): a share
+    // over it hands the payload a dead socket, and the general
+    // first-component refusal below would only say "move it below a
+    // baked root". Same rule — and same message — as the podman
+    // backends' `check_mux_socket`, applied here for every krun run so
+    // the diagnosis does not depend on which backend spelling built the
+    // argv, nor on whether a multiplexer was selected.
+    let normalized = crate::bwrap::normalize(sandbox_path);
+    let socket_dir = std::path::Path::new(crate::podman_gvisor::KRUN_MUX_SOCKET_DIR);
+    if normalized.starts_with(socket_dir)
+        || (socket_dir.starts_with(&normalized) && normalized != std::path::Path::new("/"))
+    {
+        return Err(Error::KrunMuxSocketDest {
+            dest: sandbox_path.to_owned(),
+        });
+    }
     let parent = path.parent().and_then(|p| p.to_str()).unwrap_or("");
     if parent.is_empty() || parent == "/" {
         return Err(Error::RootLevelDest {
@@ -442,8 +519,7 @@ fn check_share_root(sandbox_path: &str) -> Result<(), Error> {
                 dest: sandbox_path.to_owned(),
             });
         }
-        if first != "/tmp" && first != "/mysbx-home" && !BAKED_SHARE_ROOTS.contains(&first.as_str())
-        {
+        if !SHARE_ROOTS.contains(&first.as_str()) {
             return Err(Error::UnknownShareRoot {
                 dest: sandbox_path.to_owned(),
                 root: first,
