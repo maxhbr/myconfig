@@ -336,7 +336,7 @@ window-rule {
 
     default-column-width { }
     open-floating true
-    default-floating-position x=32 y=32 relative-to="bottom-left"
+    default-floating-position x=50 y=200 relative-to="bottom-left"
     block-out-from "screen-capture"
 }
 
