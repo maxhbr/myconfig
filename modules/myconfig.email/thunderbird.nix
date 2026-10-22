@@ -27,6 +27,16 @@ let
           };
         };
         myconfig.desktop.wayland.launcherCommands = [ "thunderbird" ];
+        # Picking Thunderbird in the launcher focuses the running window
+        # instead of starting a second instance (niri sessions only).
+        myconfig.desktop.wayland.launcherRunOrRaise = [ "thunderbird" ];
+        # Mod+B ("Brief") focuses the running Thunderbird or spawns it;
+        # pressing it again cycles through Thunderbird's windows if it has
+        # several. Wired as a niri bind, so it only takes effect on niri
+        # sessions.
+        myconfig.desktop.wayland.niri.extraBinds = ''
+          Mod+B hotkey-overlay-title="Thunderbird (run or raise)" { spawn "niri-run-or-raise" "thunderbird"; }
+        '';
         myconfig.persistence.directories = [
           ".thunderbird/default"
         ];

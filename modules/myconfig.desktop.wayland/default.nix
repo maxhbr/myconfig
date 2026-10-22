@@ -31,6 +31,35 @@ in
           List of commands to be shown in the launcher.
         '';
       };
+      launcherRunOrRaise = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        example = literalExpression ''
+          [
+            "firefox"
+            "thunderbird"
+          ]
+        '';
+        description = lib.mdDoc ''
+          Commands from `launcherCommands` that should be run-or-raised: when
+          picked in the launcher, an already running window of that
+          application is focused instead of a second instance being started.
+
+          Entries that are not in `launcherCommands` are ignored; an entry
+          with extra arguments (e.g. `"thunderbird --profile work"`) only
+          matches the launcher entry with exactly the same command line.
+        '';
+      };
+      launcherRunOrRaiseCommand = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = lib.mdDoc ''
+          Helper the launcher uses for `launcherRunOrRaise` entries, invoked as
+          `<command> <app-id> [args...]`: focus a running instance of the app
+          or spawn it. Set by the session module (niri provides
+          `niri-run-or-raise`); when null, `launcherRunOrRaise` has no effect.
+        '';
+      };
       autostartCommands = mkOption {
         type = types.lines;
         default = with pkgs; ''
@@ -126,6 +155,25 @@ in
           { config, lib, ... }:
           let
             launcherCommands = config.myconfig.desktop.wayland.launcherCommands;
+            runOrRaise = config.myconfig.desktop.wayland.launcherRunOrRaise;
+            runOrRaiseCommand = config.myconfig.desktop.wayland.launcherRunOrRaiseCommand;
+
+            # Launcher entries that should focus an existing window instead of
+            # spawning a second instance. Ignored while no session provides a
+            # run-or-raise helper.
+            runOrRaiseBranches =
+              let
+                commands =
+                  if runOrRaiseCommand == null then
+                    [ ]
+                  else
+                    lib.filter (command: builtins.elem command launcherCommands) runOrRaise;
+              in
+              lib.concatMapStrings (command: ''
+                ${lib.escapeShellArg command})
+                  ${runOrRaiseCommand} ${lib.escapeShellArgs (lib.splitString " " command)} &> /dev/null &
+                  ;;
+              '') commands;
             myWofi = pkgs.writeShellScriptBin "my-wofi" ''
               choice="$(printf '%s\n' "${lib.escapeShellArgs launcherCommands}" |
                         tr ' ' '\n' |
@@ -135,7 +183,10 @@ in
                              --cache-file /dev/null)"
 
               [ -z "$choice" ] && exit 0
-              ${pkgs.util-linux}/bin/setsid $choice >/dev/null 2>&1 &
+              case "$choice" in
+                ${runOrRaiseBranches}
+                *) ${pkgs.util-linux}/bin/setsid $choice >/dev/null 2>&1 & ;;
+              esac
             '';
           in
           {
@@ -154,10 +205,29 @@ in
                     List of commands to be shown in the launcher.
                   '';
                 };
+                launcherRunOrRaise = mkOption {
+                  type = types.listOf types.str;
+                  default = [ ];
+                  description = lib.mdDoc ''
+                    `launcherCommands` entries that run-or-raise instead of
+                    spawning a second instance.
+                  '';
+                };
+                launcherRunOrRaiseCommand = mkOption {
+                  type = types.nullOr types.str;
+                  default = null;
+                  description = lib.mdDoc ''
+                    Run-or-raise helper provided by the session module.
+                  '';
+                };
               };
             };
             config = {
               myconfig.desktop.wayland.launcherCommands = nixosConfig.myconfig.desktop.wayland.launcherCommands;
+              myconfig.desktop.wayland.launcherRunOrRaise =
+                nixosConfig.myconfig.desktop.wayland.launcherRunOrRaise;
+              myconfig.desktop.wayland.launcherRunOrRaiseCommand =
+                nixosConfig.myconfig.desktop.wayland.launcherRunOrRaiseCommand;
               home.packages = [ myWofi ];
             };
           }

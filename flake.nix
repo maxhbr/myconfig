@@ -653,6 +653,10 @@
                   # script executed by a human on the host of a wedged
                   # guest.
                   "modules/myconfig.ai.dev/mysbx/nix/krun-inspect-and-collect.sh"
+                  # Standalone script embedded into a writeShellApplication
+                  # wrapper (`niri-run-or-raise`); shfmt is not covered by
+                  # writeShellApplication's own shellcheck pass.
+                  "modules/myconfig.desktop.wayland.niri/bin/niri-run-or-raise.sh"
                 ];
               in
               pkgs.stdenv.mkDerivation {

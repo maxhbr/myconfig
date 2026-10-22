@@ -22,6 +22,14 @@ let
       fi
     '';
   });
+  niriRunOrRaise = pkgs.writeShellApplication {
+    name = "niri-run-or-raise";
+    runtimeInputs = [
+      niri
+      pkgs.jq
+    ];
+    text = builtins.readFile ./bin/niri-run-or-raise.sh;
+  };
   headless = cfg.headless.enable;
   headlessWindowRules = lib.optionalString headless ''
     // headless (myconfig.headless.enable): the initial foot terminal hosts
@@ -55,12 +63,13 @@ in
       home-manager.sharedModules = [
         {
           options.myconfig.desktop.wayland.niri.extraBinds = lib.mkOption {
-            type = lib.types.str;
+            type = lib.types.lines;
             default = "";
             description = ''
               Extra niri keybind lines (KDL, without the surrounding `binds { }`
               block) injected into the generated niri config. Intended for
-              home-manager modules that want to register compositor binds.
+              home-manager modules that want to register compositor binds;
+              `types.lines` lets several modules contribute binds.
             '';
           };
         }
@@ -77,6 +86,10 @@ in
         )
       )
       {
+        # Launcher entries listed in `launcherRunOrRaise` are dispatched to
+        # `niri-run-or-raise`, so picking such an application focuses its
+        # running window instead of starting a second instance.
+        myconfig.desktop.wayland.launcherRunOrRaiseCommand = "${niriRunOrRaise}/bin/niri-run-or-raise";
         services.keyd = lib.mkIf config.services.keyd.enable {
           keyboards.default = {
             ids = [ "*" ];
@@ -207,6 +220,7 @@ in
               home.packages = [
                 niri-xwayland-satellite
                 niri-toggle-dpi-scale
+                niriRunOrRaise
               ];
               programs.waybar.settings.mainBar = {
                 "niri/workspaces" = {
