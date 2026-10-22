@@ -172,7 +172,8 @@ $XDG_RUNTIME_DIR/mysbx/<fnv1a10(repo root)>/
    refuses (`70`) otherwise, so the marker cannot redirect state files.
 4. The outer waits until the state file leaves `starting` or the socket
    disappears, then reports: `running` → `0` and the attach hint (or,
-   for `--detachable`, `exec dtach -a`); `failed` → the recorded error
+   for `--detachable`, `exec dtach -a`); `exited` → `0`, the exit code
+   named on stderr; `failed` → the recorded error
    on stderr and `70`; socket gone while `starting` → "the detached run
    died during startup" and `70`. There is no timeout: a first
    `--session` run may clone a large repo, and a dead inner removes the
@@ -225,7 +226,8 @@ limitation as tmux.
 | `backend`, `multiplexer` | the merged values the run uses |
 | `startedAt`, `finishedAt` | ISO-8601 UTC, as in cli.md D17 |
 | `exitCode` | the backend's exit code, for `exited` (any value) |
-| `error` | the `mysbx: ` message of a `failed` startup (or a death by signal) |
+| `signal` | the signal the backend died by, as `SIG…`, for a death by signal (a `failed` record with no `error` — cli.md D17's `payloadSignal` precedent) |
+| `error` | the `mysbx: ` message of a `failed` startup (never a death by signal — that carries `signal`) |
 
 Field names follow cli.md D17 where they mean the same thing.
 
@@ -240,6 +242,11 @@ finished record stays until `attach` (which prints it once, e.g.
 `mysbx: the detached run exited with 1 at <time>`, removes it and exits
 `70`) or the next `--detach` for the same workspace replaces it.
 `status` only reads.
+
+A startup refusal that fires after the inner restored its stderr tee
+(the waypipe channel start) is recorded by the refusing site itself:
+the capture that backs the `error` field ends at the restore, so the
+site writes the Failed record with its own message directly.
 
 The output of a payload that fails right after start is lost with the
 dtach session; only its exit code remains. A foreground run or
@@ -286,7 +293,7 @@ non-goal of cli.md still holds.
 | multiplexer | attach | still alive |
 | --- | --- | --- |
 | `tmux`, `workmux` | `tmux -S "$socket" attach-session -t "=$session"` | `tmux -S "$socket" has-session -t "=$session"` |
-| `aoe` | `aoe "$@"` | every tmux socket under `$TMUX_TMPDIR/tmux-<uid>/` answers `ls` (aoe's `[tmux] socket_name` can move its server off the default socket) |
+| `aoe` | `aoe "$@"` | every tmux socket under `$TMUX_TMPDIR/tmux-<uid>/` — including dot-prefixed names, a bare `[tmux] socket_name` may start with a dot — answers `ls` (aoe's `[tmux] socket_name` can move its server off the default socket) |
 | `herdr` | `herdr "$@"` | the pre-started `herdr server` answers |
 | `orca` | not applicable: the payload is the server itself, it has no client detach | — |
 | `none` | not applicable: the shell's exit is the end of the run | — |
@@ -340,16 +347,25 @@ repos with other grants. So:
 - **`session destroy` (workspace.md D7)** refuses while the session has
   a live detached run, with or without `--force`: the clone is bound rw
   into a running sandbox. The message names `mysbx attach --session
-  NAME`. `--force` keeps its meaning (unmerged work). The guard treats
-  a `starting` record as live; a real destroy takes the same workspace
+  NAME`. `--force` keeps its meaning (unmerged work). A `starting`
+  record is refused by the lock-free ADVISORY guard (the `--dry-run`
+  path — it cannot take the lock to prove the record stale, so its
+  message says "starting or stale" and names the attach command that
+  clears a stale record); a real destroy takes the same workspace
   lock (B6) — blocking until a concurrent outer's handshake ends,
   bounded by that handshake, which a first `--session` run's clone can
   make long — and re-checks under it, holding the lock through the
-  removal. The lock is taken even when no record exists yet: the
-  outer takes it from before it writes its `starting` record, so
-  the lock — not the record — is what serializes a starting run
-  against the removal. A `--dry-run` runs the lock-free guard
-  only, so it never blocks, and its probe is advisory.
+  removal. Under the lock a `starting` record with a dead socket is
+  provably stale — the outer holds the lock from before it writes
+  the record until its handshake ends, so no outer can be
+  mid-startup while the lock is held — and the stale record is
+  removed with the clone. A `starting` record with a live socket
+  stays a live run. The lock is taken even when no record exists
+  yet: the outer takes it from before it writes its `starting`
+  record, so the lock — not the record — is what serializes a
+  starting run against the removal. A `--dry-run` runs the
+  lock-free guard only, so it never blocks, and its probe is
+  advisory.
 - **`doctor` (cli.md D20)** checks the `MYSBX_DTACH` pin and the runtime
   root (set, absolute, owned, `0700`) in a host section. Problems there
   are `WARN`, not `FAIL`: they disable detached runs, not runs.

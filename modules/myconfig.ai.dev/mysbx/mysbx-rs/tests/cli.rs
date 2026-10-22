@@ -2513,6 +2513,115 @@ fn a_waypipe_display_dry_run_wraps_the_payload_and_creates_nothing() {
 }
 
 #[test]
+fn a_waypipe_display_detach_without_the_client_pin_is_refused_by_the_outer() {
+    // bd myconfig-7ioq.19 (D18/detach.md B4): the waypipe pin check is
+    // a pure, config-level refusal, so the OUTER's pre-flight runs it
+    // too — a `--detach` with `display = "waypipe"` and no pin exits
+    // 70 with the pin message before anything is spawned or
+    // registered.
+    let (inv, _, sidecar) = fixture_display("display-unpinned-detach", &["--detach"]);
+    let (dtach, _) = dtach_stub(&inv.home, true);
+    let runtime = short_runtime_root("display-unpinned-detach");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--detach"]);
+    // MYSBX_BWRAP points nowhere on purpose: the refusal fires in the
+    // argv build, before the backend pin is ever used — a spawn here
+    // would fail loudly on the missing backend.
+    cmd.env_remove("MYSBX_WAYPIPE")
+        .env("MYSBX_DTACH", &dtach)
+        .env("MYSBX_BWRAP", inv.home.join("no-such-bwrap"))
+        .env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(stderr.contains("display"), "{stderr}");
+    assert!(stderr.contains("MYSBX_WAYPIPE"), "{stderr}");
+    // Nothing was spawned or registered: no record, no waypipe
+    // token dir, no dtach invocation.
+    let paths = detach_paths_live(&runtime, &inv.cwd.canonicalize().unwrap());
+    assert!(!paths.json.exists(), "nothing was registered: {stderr}");
+    assert!(!sidecar.join("waypipe").exists());
+    assert!(
+        !inv.home.join("dtach-record.txt").exists(),
+        "no dtach spawn"
+    );
+}
+
+#[test]
+fn a_detached_waypipe_run_records_the_channel_failure() {
+    // bd myconfig-7ioq.19 (detach.md B4/B5): a waypipe client the
+    // inner cannot start fails AFTER the stderr tee was restored,
+    // so the generic startup capture is empty — the Failed record
+    // the inner writes must carry the channel's own diagnosis, not
+    // the generic "failed during startup". The stub waypipe is a
+    // binary that exits 1 immediately. A pre-existing keypair
+    // keeps the inner off ssh-keygen, which the degraded uid-0
+    // environment cannot run.
+    let (inv, repo, sidecar) = fixture_display("detach-waypipe-fail", &["--detach"]);
+    std::fs::create_dir_all(sidecar.join("state").join(".ssh")).unwrap();
+    std::fs::write(
+        sidecar.join("state").join(".ssh").join("id_ed25519"),
+        "-----BEGIN OPENSSH PRIVATE KEY-----\nx\n-----END OPENSSH PRIVATE KEY-----\n",
+    )
+    .unwrap();
+    std::fs::write(
+        sidecar.join("state").join(".ssh").join("id_ed25519.pub"),
+        "ssh-ed25519 AAAATESTTESTTESTTESTTESTTESTTESTTESTTESTTESTTEST mysbx-tests\n",
+    )
+    .unwrap();
+    let (dtach, _) = dtach_stub(&inv.home, true);
+    let (bwrap, _) = bwrap_stub(&inv.home);
+    let runtime = short_runtime_root("detach-waypipe-fail");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let failing_waypipe = inv.home.join("failing-waypipe");
+    std::fs::write(
+        &failing_waypipe,
+        "#!/bin/sh\necho 'waypipe: no compositor socket' >&2\nexit 1\n",
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&failing_waypipe, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let paths = detach_paths_live(&runtime, &repo.canonicalize().unwrap());
+    let mut cmd = spawn_with_args(&inv, &["--detach"]);
+    cmd.env("MYSBX_DTACH", &dtach)
+        .env("MYSBX_BWRAP", &bwrap)
+        .env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .env("MYSBX_WAYPIPE", &failing_waypipe)
+        .env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    // The startup refused, so the outer's handshake fails with the
+    // diagnosis, not a `running` report (B4 step 4).
+    assert_eq!(
+        out.status.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("waypipe client exited before creating"),
+        "the handshake reports the channel failure: {stderr}"
+    );
+    let rec = wait_for_finished_record(&paths);
+    assert_eq!(rec.state, mysbx::detach::State::Failed);
+    let error = rec.error.unwrap_or_default();
+    assert!(
+        error.contains("waypipe client exited before creating"),
+        "the record carries the channel's own diagnosis: {error}"
+    );
+    assert!(
+        !error.contains("failed during startup"),
+        "the diagnosis is the channel failure, not the generic fallback: {error}"
+    );
+}
+
+#[test]
 fn a_waypipe_display_run_reports_the_channel() {
     // cli.md D10: the `--verbose` report carries the display line —
     // the host-side socket path, the guest display name and the guest
@@ -4179,6 +4288,94 @@ fn a_runtime_dir_under_the_worktrees_sibling_is_refused() {
     assert!(
         stderr.contains(worktrees.to_string_lossy().as_ref()),
         "the refusal must name the worktrees bind: {stderr}"
+    );
+}
+
+#[test]
+fn a_symlinked_state_dir_backing_exposing_the_runtime_root_is_refused() {
+    // bd myconfig-7ioq.23: the state-dir backings
+    // (`<sidecar>/state/<entry>`) are lexical joins too — a symlinked
+    // backing pointing into `$XDG_RUNTIME_DIR` must be refused the
+    // same way, not pass because the stored path is outside.
+    let (inv, _, sidecar) = fixture_with_backend("expose-state-link", &["--dry-run"]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nstate-dirs = [\"work\"]\n",
+    )
+    .unwrap();
+    let runtime = sidecar.parent().unwrap().join("runtime");
+    std::fs::create_dir_all(runtime.join("mysbx")).unwrap();
+    std::fs::create_dir_all(sidecar.join("state")).unwrap();
+    std::os::unix::fs::symlink(&runtime, sidecar.join("state").join("work")).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        out.status.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "stdout: {stdout}\nstderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("runtime root") && stderr.contains("detach.md B8"),
+        "unexpected stderr: {stderr}"
+    );
+}
+
+#[test]
+fn a_symlinked_session_clone_exposing_the_runtime_root_is_refused() {
+    // bd myconfig-7ioq.23: the session clone
+    // (`<sidecar>/clones/NAME`) is the workspace bind of a clone run
+    // — a symlinked clone pointing at `$XDG_RUNTIME_DIR` must be
+    // refused although the stored lexical path is under the sidecar.
+    let (inv, repo, sidecar) = fixture("expose-clone-link", &[]);
+    let runtime = repo.parent().unwrap().join("runtime");
+    std::fs::create_dir_all(runtime.join("mysbx")).unwrap();
+    std::fs::create_dir_all(sidecar.join("clones")).unwrap();
+    std::os::unix::fs::symlink(&runtime, sidecar.join("clones").join("link")).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--session", "link", "--dry-run"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        out.status.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "stdout: {stdout}\nstderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("runtime root") && stderr.contains("detach.md B8"),
+        "unexpected stderr: {stderr}"
+    );
+}
+
+#[test]
+fn a_real_worktrees_sibling_outside_the_runtime_root_still_passes() {
+    // bd myconfig-7ioq.23: a legitimate (non-symlinked) worktrees
+    // sibling outside the runtime root stays a valid run — the
+    // canonicalization must not refuse the ordinary layout.
+    let (inv, repo, _sidecar) = fixture_with_backend("expose-worktrees-real", &["--dry-run"]);
+    let worktrees = repo.parent().unwrap().join(format!(
+        "{}__worktrees",
+        repo.file_name().unwrap().to_string_lossy()
+    ));
+    std::fs::create_dir_all(worktrees.join("wt")).unwrap();
+    let runtime = repo.parent().unwrap().join("runtime");
+    std::fs::create_dir_all(runtime.join("mysbx")).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "a real worktrees sibling must not be refused: {stderr}"
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains(worktrees.to_string_lossy().as_ref()),
+        "the worktrees sibling stays bound: {stdout}"
     );
 }
 
@@ -10941,7 +11138,9 @@ fn bwrap_stub(base: &Path) -> (PathBuf, PathBuf) {
                mv -f \"$BWRAP_TREE_FILE.tmp\" \"$BWRAP_TREE_FILE\"\n\
              fi\n\
              mv -f {r}.tmp {rec}\n\
-             while [ ! -e \"$BWRAP_LIVE\" ]; do sleep 0.05; done\nexit \"${{BWRAP_EXIT:-0}}\"\n",
+             while [ ! -e \"$BWRAP_LIVE\" ]; do sleep 0.05; done\n\
+             if [ -n \"$BWRAP_SIGNAL\" ]; then kill -\"${{BWRAP_SIGNAL#SIG}}\" $$; fi\n\
+             exit \"${{BWRAP_EXIT:-0}}\"\n",
             r = record.display(),
             rec = record.display()
         ),
@@ -11447,6 +11646,63 @@ fn a_detached_run_whose_backend_exits_nonzero_records_the_exit_code() {
     assert!(
         !paths.json.exists(),
         "the printed record is removed under the lock"
+    );
+}
+
+#[test]
+fn a_detached_run_whose_backend_dies_by_signal_records_the_signal() {
+    if !is_ssh_keygen_available() {
+        return; // no usable ssh-keygen (the baseline env's uid-0 quirk)
+    }
+    // bd myconfig-7ioq.18 (B5): a backend killed by a signal has no
+    // exit code — the record carries the signal in `signal` (the
+    // cli.md D17 payloadSignal precedent) and the printers word it
+    // as a death by signal, never as a startup failure: the run
+    // started fine, the payload's fate is what the signal names.
+    let (inv, repo, _) = fixture_with_backend("detach-signal-death", &["--detach"]);
+    let (dtach, _) = dtach_stub(&inv.home, true);
+    let (bwrap, _) = bwrap_stub(&inv.home);
+    let runtime = short_runtime_root("signal-death");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let paths = detach_paths_live(&runtime, &repo.canonicalize().unwrap());
+    let mut cmd = spawn_with_args(&inv, &["--detach"]);
+    cmd.env("MYSBX_DTACH", &dtach)
+        .env("MYSBX_BWRAP", &bwrap)
+        .env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .env("XDG_RUNTIME_DIR", &runtime)
+        .env("BWRAP_LIVE", inv.home.join("bwrap-live"))
+        .env("BWRAP_SIGNAL", "SIGKILL");
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "a run that started reports its handshake: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    std::fs::write(inv.home.join("bwrap-live"), "").unwrap();
+    let rec = wait_for_finished_record(&paths);
+    assert_eq!(rec.state, mysbx::detach::State::Failed);
+    assert_eq!(rec.signal.as_deref(), Some("SIGKILL"));
+    assert!(
+        rec.error.is_none(),
+        "a signal death carries no diagnosis: {rec:?}"
+    );
+    // The attach half prints the signal death without `during
+    // startup`, and exits 70.
+    let mut attach = spawn_with_args(&inv, &["attach"]);
+    attach
+        .env("MYSBX_DTACH", &dtach)
+        .env("XDG_RUNTIME_DIR", &runtime);
+    let out = attach.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(out.status.code(), Some(mysbx::EXIT_INFRASTRUCTURE));
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        stderr.contains("mysbx: the detached run died by signal SIGKILL"),
+        "{stderr}"
+    );
+    assert!(
+        !stderr.contains("during startup"),
+        "a signal death is not a startup failure: {stderr}"
     );
 }
 
@@ -11975,6 +12231,7 @@ fn write_registry_record(
         started_at: 1_700_000_000,
         finished_at: Some(1_700_000_030),
         exit_code: None,
+        signal: None,
         error: None,
     };
     mysbx::detach::write(&paths, &r).unwrap();
@@ -12319,6 +12576,7 @@ fn attach_routes_the_session_workspace_and_its_socket() {
         started_at: 1_700_000_000,
         finished_at: None,
         exit_code: None,
+        signal: None,
         error: None,
     };
     mysbx::detach::write(&paths, &r).unwrap();
@@ -12692,6 +12950,7 @@ fn write_session_registry_record(
         started_at: 1_700_000_000,
         finished_at: Some(1_700_000_030),
         exit_code: None,
+        signal: None,
         error: None,
     };
     mysbx::detach::write(&paths, &r).unwrap();
@@ -12852,6 +13111,51 @@ fn status_detached_section_lists_a_lost_run() {
         .find(|l| l.contains("live") && l.contains("lost"))
         .unwrap_or_else(|| panic!("no lost line: {stdout}"));
     assert!(line.contains("lost"), "{line}");
+}
+
+#[test]
+fn status_detached_section_lists_a_signal_death_with_its_signal() {
+    // bd myconfig-7ioq.18 (B5): a `failed` record with a `signal` is
+    // a death by signal — the status row names the signal, so the
+    // fate of a crashed backend reads from the listing alone.
+    let (inv, repo, _) = fixture_with_backend("status-detached-signal", &["status"]);
+    let runtime = short_runtime_root("status-detached-signal");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let repo_canon = repo.canonicalize().unwrap();
+    let paths = detach_paths_live(&runtime, &repo_canon);
+    mysbx::detach::ensure(&paths).unwrap();
+    mysbx::detach::write(
+        &paths,
+        &mysbx::detach::Record {
+            state: mysbx::detach::State::Failed,
+            signal: Some("SIGKILL".to_owned()),
+            repo: repo_canon.to_string_lossy().into_owned(),
+            sidecar: format!("{}.mysbx", repo_canon.to_string_lossy()),
+            session: None,
+            backend: "bubblewrap".to_owned(),
+            multiplexer: "tmux".to_owned(),
+            started_at: 1_700_000_000,
+            finished_at: Some(1_700_000_030),
+            exit_code: None,
+            error: None,
+        },
+    )
+    .unwrap();
+    let mut cmd = spawn_with_args(&inv, &["status"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let line = stdout
+        .lines()
+        .find(|l| l.contains("live") && l.contains("failed"))
+        .unwrap_or_else(|| panic!("no failed line: {stdout}"));
+    assert!(line.contains("failed(signal SIGKILL)"), "{line}");
 }
 
 #[test]
@@ -13030,13 +13334,15 @@ fn session_destroy_refuses_a_live_detached_session_even_with_force() {
 }
 
 #[test]
-fn session_destroy_refuses_a_starting_detached_session_and_never_removes_the_clone() {
-    // B9/B6: a `starting` record — the outer has written it, the
-    // socket is not yet bound — is a run that is COMING UP, not a
-    // corpse. The lock-free guard refuses it (so --dry-run refuses
-    // too, without ever touching the lock), and the real destroy
-    // re-checks under the workspace lock, holding it through the
-    // removal, so a starting run can never lose its clone.
+fn session_destroy_decides_a_starting_record_on_the_socket_liveness() {
+    // B9/B6 (bd myconfig-7ioq.17): a `starting` record whose socket
+    // is LIVE is a run that is coming up — the clone is being bound
+    // rw, the destroy refuses. A `starting` record whose socket is
+    // gone is refused only by the lock-free ADVISORY guard (the dry
+    // run); under the workspace lock it is provably stale — the
+    // outer holds the lock through its handshake — so a real
+    // destroy proceeds (that case is
+    // session_destroy_proceeds_for_a_stale_starting_record).
     let Some((inv, repo, sidecar)) = session_fixture("destroy-detached-starting", &["fix-1"])
     else {
         return;
@@ -13050,46 +13356,46 @@ fn session_destroy_refuses_a_starting_detached_session_and_never_removes_the_clo
         "fix-1",
         mysbx::detach::State::Starting,
     );
-    // No socket: the window between the record write and bind(2).
 
-    // Case A: the guard refuses the starting run, plain and with
-    // --force (it is not the unmerged-work refusal).
-    let mut inv_plain = inv.clone();
-    inv_plain.args = vec!["session", "destroy", "fix-1"];
-    let mut cmd = spawn_with_args(&inv_plain, &inv_plain.args);
-    cmd.env("XDG_RUNTIME_DIR", &runtime);
-    let out = cmd.output().expect("failed to spawn the mysbx binary");
-    assert_eq!(
-        out.status.code(),
-        Some(70),
-        "{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
-    assert!(
-        stderr.contains("refusing to destroy session fix-1"),
-        "{stderr}"
-    );
-    assert!(stderr.contains("mysbx attach --session fix-1"), "{stderr}");
-    assert!(fix.join(".git").is_dir(), "the clone was not removed");
-    let mut inv_force = inv.clone();
-    inv_force.args = vec!["session", "destroy", "fix-1", "--force"];
-    let mut cmd = spawn_with_args(&inv_force, &inv_force.args);
-    cmd.env("XDG_RUNTIME_DIR", &runtime);
-    let out = cmd.output().expect("failed to spawn the mysbx binary");
-    assert_eq!(
-        out.status.code(),
-        Some(70),
-        "{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
-    assert!(
-        stderr.contains("refusing to destroy session fix-1"),
-        "{stderr}"
-    );
-    assert!(stderr.contains("mysbx attach --session fix-1"), "{stderr}");
-    assert!(fix.join(".git").is_dir(), "the clone was not removed");
+    // Case A (the coming-up run): the record says `starting` and the
+    // dtach socket accepts connections — the run is live whatever
+    // the state file says (B5), plain and with --force (the guard is
+    // not the unmerged-work refusal).
+    let _listener = std::os::unix::net::UnixListener::bind(&paths.sock).unwrap();
+    {
+        let mut inv_plain = inv.clone();
+        inv_plain.args = vec!["session", "destroy", "fix-1"];
+        let mut cmd = spawn_with_args(&inv_plain, &inv_plain.args);
+        cmd.env("XDG_RUNTIME_DIR", &runtime);
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        assert_eq!(
+            out.status.code(),
+            Some(70),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+        assert!(
+            stderr.contains("refusing to destroy session fix-1"),
+            "{stderr}"
+        );
+        assert!(stderr.contains("mysbx attach --session fix-1"), "{stderr}");
+        assert!(fix.join(".git").is_dir(), "the clone was not removed");
+        let mut inv_force = inv.clone();
+        inv_force.args = vec!["session", "destroy", "fix-1", "--force"];
+        let mut cmd = spawn_with_args(&inv_force, &inv_force.args);
+        cmd.env("XDG_RUNTIME_DIR", &runtime);
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        assert_eq!(
+            out.status.code(),
+            Some(70),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(fix.join(".git").is_dir(), "the clone was not removed");
+    }
+    drop(_listener);
+    let _ = std::fs::remove_file(&paths.sock);
 
     // The record pair of the two blocking cases: `starting` — what a
     // concurrent outer writes under the lock — and `finished`, which
@@ -13104,6 +13410,7 @@ fn session_destroy_refuses_a_starting_detached_session_and_never_removes_the_clo
         started_at: 1_700_000_000,
         finished_at: None,
         exit_code: None,
+        signal: None,
         error: None,
     };
     let finished = mysbx::detach::Record {
@@ -13112,11 +13419,49 @@ fn session_destroy_refuses_a_starting_detached_session_and_never_removes_the_clo
         ..starting.clone()
     };
 
+    // Case C (detach.md B6): the dry run never blocks — it runs the
+    // LOCK-FREE guard only, so while the workspace lock is held it
+    // still refuses the starting run promptly, never waiting for
+    // the lock. Runs before Case B, which removes the clone.
+    {
+        mysbx::detach::write(&paths, &starting).unwrap();
+        let _guard = mysbx::detach::lock(&paths).expect("the workspace lock is free");
+        let inv_c = inv.clone();
+        let runtime_c = runtime.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let handle = std::thread::spawn(move || {
+            let mut cmd = spawn_with_args(&inv_c, &["--dry-run", "session", "destroy", "fix-1"]);
+            cmd.env("XDG_RUNTIME_DIR", &runtime_c);
+            let out = cmd.output().expect("failed to spawn the mysbx binary");
+            let _ = tx.send(out);
+        });
+        let out = rx
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("the dry run blocked on the workspace lock");
+        assert_eq!(
+            out.status.code(),
+            Some(70),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+        assert!(
+            stderr.contains("refusing to destroy session fix-1"),
+            "{stderr}"
+        );
+        assert!(stderr.contains("starting or stale"), "{stderr}");
+        assert!(fix.join(".git").is_dir(), "nothing was removed");
+        handle.join().expect("the dry-run thread panicked");
+    }
+
     // Case B (the blocking proof): with a record the LOCK-FREE guard
     // lets pass (`finished`), the destroy must BLOCK on the workspace
     // lock the test holds — as a concurrent outer does through its
     // handshake — while the record flips to `starting` under that
-    // lock; once the lock is free, the re-check under it refuses.
+    // lock; the clone survives both halves of the wait. Once the
+    // lock is released with a dead socket the flipped record is
+    // provably stale (the outer crashed mid-handshake), and the
+    // re-check under the lock removes it with the clone.
     {
         mysbx::detach::write(&paths, &finished).unwrap();
         let guard = mysbx::detach::lock(&paths).expect("the workspace lock is free");
@@ -13145,51 +13490,12 @@ fn session_destroy_refuses_a_starting_detached_session_and_never_removes_the_clo
         let out = handle.join().expect("the destroy thread panicked");
         assert_eq!(
             out.status.code(),
-            Some(70),
-            "{}",
+            Some(0),
+            "the released record is stale, the destroy proceeds: {}",
             String::from_utf8_lossy(&out.stderr)
         );
-        let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
-        assert!(
-            stderr.contains("refusing to destroy session fix-1"),
-            "{stderr}"
-        );
-        assert!(stderr.contains("mysbx attach --session fix-1"), "{stderr}");
-        assert!(fix.join(".git").is_dir(), "the clone was not removed");
-    }
-
-    // Case C (detach.md B6): the dry run never blocks — it runs the
-    // LOCK-FREE guard only, so while the workspace lock is held it
-    // still refuses the starting run promptly, never waiting for
-    // the lock. The record is written here so the case stands alone.
-    {
-        mysbx::detach::write(&paths, &starting).unwrap();
-        let _guard = mysbx::detach::lock(&paths).expect("the workspace lock is free");
-        let inv_c = inv.clone();
-        let runtime_c = runtime.clone();
-        let (tx, rx) = std::sync::mpsc::channel();
-        let handle = std::thread::spawn(move || {
-            let mut cmd = spawn_with_args(&inv_c, &["--dry-run", "session", "destroy", "fix-1"]);
-            cmd.env("XDG_RUNTIME_DIR", &runtime_c);
-            let out = cmd.output().expect("failed to spawn the mysbx binary");
-            let _ = tx.send(out);
-        });
-        let out = rx
-            .recv_timeout(std::time::Duration::from_secs(5))
-            .expect("the dry run blocked on the workspace lock");
-        assert_eq!(
-            out.status.code(),
-            Some(70),
-            "{}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
-        assert!(
-            stderr.contains("refusing to destroy session fix-1"),
-            "{stderr}"
-        );
-        assert!(fix.join(".git").is_dir(), "nothing was removed");
-        handle.join().expect("the dry-run thread panicked");
+        assert!(!fix.exists(), "the stale-started clone is removed");
+        assert!(!paths.json.exists(), "the stale record is removed");
     }
 }
 
@@ -13246,4 +13552,169 @@ fn session_destroy_proceeds_when_no_record_exists() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(!fix.exists(), "the clone is gone");
+}
+
+#[test]
+fn session_destroy_proceeds_for_a_stale_starting_record() {
+    // bd myconfig-7ioq.17 (B9/B6): a `starting` record whose socket
+    // is gone, seen UNDER the workspace lock, is provably stale — the
+    // outer holds the lock from before it writes the record until
+    // its handshake ends, so with the lock taken and no live socket
+    // no outer is mid-startup; the outer crashed or the inner died
+    // during startup. The destroy proceeds — with and without
+    // --force (the stale-starting refusal is not the unmerged-work
+    // guard) — and removes the clone; the lock-free advisory guard
+    // still refuses (that is the dry-run path's wording, tested
+    // below). A `starting` record with a LIVE socket seen under the
+    // lock is a run coming up: the destroy refuses and the clone
+    // survives.
+    let Some((inv, repo, sidecar)) = session_fixture("destroy-detached-stale", &["fix-1"]) else {
+        return;
+    };
+    let fix = sidecar.join("clones").join("fix-1");
+    let runtime = short_runtime_root("dd-stale");
+    let repo_canon = repo.canonicalize().unwrap();
+    // Case 1 (first, non-destructive): `starting` with a LIVE socket
+    // under the lock — a run that is coming up, whatever the state
+    // file says (B5): the locked re-check refuses, the clone survives.
+    let paths = write_session_registry_record(
+        &runtime,
+        &repo_canon,
+        "fix-1",
+        mysbx::detach::State::Starting,
+    );
+    let _listener = std::os::unix::net::UnixListener::bind(&paths.sock).unwrap();
+    {
+        let mut inv1 = inv.clone();
+        inv1.args = vec!["session", "destroy", "fix-1"];
+        let mut cmd = spawn_with_args(&inv1, &inv1.args);
+        cmd.env("XDG_RUNTIME_DIR", &runtime);
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+        assert_eq!(
+            out.status.code(),
+            Some(70),
+            "stdout: {}\nstderr: {stderr}",
+            String::from_utf8_lossy(&out.stdout)
+        );
+        assert!(
+            stderr.contains("refusing to destroy session fix-1"),
+            "{stderr}"
+        );
+        assert!(
+            stderr.contains("is live"),
+            "the locked refusal of a coming-up run says live: {stderr}"
+        );
+        assert!(fix.join(".git").is_dir(), "the clone was not removed");
+    }
+    drop(_listener);
+    let _ = std::fs::remove_file(&paths.sock);
+
+    // Case 2: stale — no socket, no lock held — without --force: the
+    // stale corpse of a crashed outer, proven under the lock.
+    let paths = write_session_registry_record(
+        &runtime,
+        &repo_canon,
+        "fix-1",
+        mysbx::detach::State::Starting,
+    );
+    {
+        let mut inv2 = inv.clone();
+        inv2.args = vec!["session", "destroy", "fix-1"];
+        let mut cmd = spawn_with_args(&inv2, &inv2.args);
+        cmd.env("XDG_RUNTIME_DIR", &runtime);
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "stdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(!fix.exists(), "the clone is gone");
+        assert!(!paths.json.exists(), "the stale starting record is removed");
+    }
+
+    // Case 3: stale with --force — the same stale-proceed (the
+    // stale-starting refusal is not the unmerged-work guard); the
+    // session clone must exist again for the destroy to reach the
+    // guards, so it is recreated here.
+    assert!(git_in(
+        &repo,
+        &[
+            "clone",
+            "--origin",
+            "origin",
+            "--no-hardlinks",
+            &repo.to_string_lossy(),
+            &fix.to_string_lossy(),
+        ],
+    ));
+    let paths = write_session_registry_record(
+        &runtime,
+        &repo_canon,
+        "fix-1",
+        mysbx::detach::State::Starting,
+    );
+    {
+        let mut inv3 = inv.clone();
+        inv3.args = vec!["session", "destroy", "fix-1", "--force"];
+        let mut cmd = spawn_with_args(&inv3, &inv3.args);
+        cmd.env("XDG_RUNTIME_DIR", &runtime);
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "stdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(!fix.exists(), "the clone is gone");
+        assert!(!paths.json.exists(), "the stale starting record is removed");
+    }
+}
+
+#[test]
+fn session_destroy_dry_run_words_a_starting_record_as_starting_or_stale() {
+    // bd myconfig-7ioq.17 (B9): the lock-free advisory guard may
+    // still refuse a `starting` record (it cannot take the lock to
+    // prove staleness); its wording names both possibilities —
+    // starting or stale — and the attach command that clears a
+    // stale record, without claiming a running sandbox.
+    let Some((inv, repo, _sidecar)) = session_fixture("destroy-detached-stale-dry", &["fix-1"])
+    else {
+        return;
+    };
+    let runtime = short_runtime_root("dd-stale-dry");
+    let _paths = write_session_registry_record(
+        &runtime,
+        &repo.canonicalize().unwrap(),
+        "fix-1",
+        mysbx::detach::State::Starting,
+    );
+    let mut inv = inv;
+    inv.args = vec!["--dry-run", "session", "destroy", "fix-1"];
+    let mut cmd = spawn_with_args(&inv, &inv.args);
+    cmd.env("XDG_RUNTIME_DIR", &runtime);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(70),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        stderr.contains("refusing to destroy session fix-1"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("starting or stale"),
+        "the dry-run refusal names the two possibilities: {stderr}"
+    );
+    assert!(
+        !stderr.contains("running sandbox"),
+        "the advisory wording never claims a running sandbox: {stderr}"
+    );
+    assert!(stderr.contains("mysbx attach --session fix-1"), "{stderr}");
 }

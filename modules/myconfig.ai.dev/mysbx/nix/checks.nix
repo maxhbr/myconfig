@@ -679,6 +679,8 @@ in
         printf '%s' "$count" >"$count_file"
         if [ "$count" -ge 2 ]; then
           rm -f "$alive_file"
+        elif [ -n "''${MYSBX_STUB_NO_ALIVE:-}" ]; then
+          : # the replay pins a server that never had a session
         else
           : >"$alive_file"
         fi
@@ -862,6 +864,11 @@ in
         set -u
         entry="$1"
         stdin="$2"
+        # Optional third argument: the socket NAME the stub server
+        # binds under the per-user tmux dir (default `aoe-socket`).
+        # A name starting with a dot (bd myconfig-7ioq.22) replays
+        # the glob-skips-dotfiles situation.
+        sock_name="''${3:-aoe-socket}"
         export PATH="${aoeStub}/bin:${tmuxStub}/bin:${pkgs.coreutils}/bin:${pkgs.python3}/bin:${pkgs.bashInteractive}/bin:$PATH"
         rm -rf "''${TMPDIR:-/tmp}/mysbx-reattach-stub"
         mkdir -p "''${TMPDIR:-/tmp}/mysbx-reattach-stub"
@@ -870,7 +877,7 @@ in
           echo "cannot extract the gate block" >&2
           exit 99
         }
-        probe="$(sed -n '/^aoe_alive() {$/,/^}$/p' "$entry")"
+        probe="$(sed -n '/^aoe_alive() ($/,/^)$/p' "$entry")"
         [ -n "$probe" ] || {
           echo "cannot extract the aoe_alive probe" >&2
           exit 97
@@ -883,12 +890,21 @@ in
         # probe's `-S` test must not be satisfied by a regular file.
         state="''${TMPDIR:-/tmp}/mysbx-reattach-stub"
         mkdir -p "$state/tmux-$(id -u)"
-        : >"$state/alive"
-        python3 - "$state/tmux-$(id -u)/aoe-socket" <<'PYEOF'
+        if [ -z "''${MYSBX_STUB_NO_ALIVE:-}" ]; then
+          : >"$state/alive"
+        fi
+        python3 - "$state/tmux-$(id -u)/$sock_name" <<'PYEOF'
         import socket, sys
         s = socket.socket(socket.AF_UNIX)
         s.bind(sys.argv[1])
         PYEOF
+        # The bind above must hold, so every scenario provably runs
+        # against a real socket file (a failed bind would leave the
+        # glob empty and the scenarios would pass vacuously).
+        [ -S "$state/tmux-$(id -u)/$sock_name" ] || {
+          echo "cannot bind the stub socket" >&2
+          exit 96
+        }
         export TMUX_TMPDIR="$state"
         printf '%s' "$stdin" \
           | MYSBX_DETACHABLE=''${MYSBX_DETACHABLE:-} bash -c "set -o errexit
@@ -1016,6 +1032,45 @@ in
           || fail "aoe (g) named socket: the aoe runner failed (stderr pass)"
         printf '%s\n' "$err" | grep -Fq "$prompt" \
           || fail "aoe (g) named socket: the probe missed the named-socket server (no prompt)"
+
+        # (h) a DOT-PREFIXED socket name (bd myconfig-7ioq.22): a
+        # bare `[tmux] socket_name` may start with a dot, so the
+        # server's socket is a dotfile under tmux-<uid>/ — default
+        # bash globbing skips it, and a probe without dotglob would
+        # report the run dead and end the sandbox on `q` without a
+        # prompt. The probe must see the dotted server: the prompt
+        # appears and `q` ends after ONE attach; scenario (i) below
+        # pins the stale counterpart.
+        result="$(MYSBX_DETACHABLE=1 TMPDIR="$PWD/tmpdir" ${aoeRunner} "$aoe_entry" $'q\n' .aoe-socket)" \
+          || fail "aoe (h) dotted socket: the aoe runner failed"
+        rc="''${result% *}"; count="''${result#* }"
+        [ "$rc" = 0 ] \
+          || fail "aoe (h) dotted socket: rc $rc, want 0"
+        [ "$count" = 1 ] \
+          || fail "aoe (h) dotted socket: attach count $count, want 1"
+        err="$(MYSBX_DETACHABLE=1 TMPDIR="$PWD/tmpdir" ${aoeRunner} "$aoe_entry" $'q\n' .aoe-socket 2>&1 >/dev/null)" \
+          || fail "aoe (h) dotted socket: the aoe runner failed (stderr pass)"
+        printf '%s\n' "$err" | grep -Fq "$prompt" \
+          || fail "aoe (h) dotted socket: the probe missed the dotted server (no prompt)"
+
+        # (i) a stale dotted socket (the file exists, no server
+        # answers) counts as NOT alive: the stub never arms the
+        # alive marker (`MYSBX_STUB_NO_ALIVE`), so the probe's
+        # `ls -S` fails although the socket FILE is there — the gate
+        # must end the run right after the FIRST attach, printing NO
+        # prompt (no reattach is offered against a dead server).
+        result="$(MYSBX_DETACHABLE=1 TMPDIR="$PWD/tmpdir" MYSBX_STUB_NO_ALIVE=1 ${aoeRunner} "$aoe_entry" ''' .aoe-socket)" \
+          || fail "aoe (i) stale dotted socket: the aoe runner failed"
+        rc="''${result% *}"; count="''${result#* }"
+        [ "$rc" = 0 ] \
+          || fail "aoe (i) stale dotted socket: rc $rc, want 0"
+        [ "$count" = 1 ] \
+          || fail "aoe (i) stale dotted socket: attach count $count, want 1"
+        err="$(MYSBX_DETACHABLE=1 TMPDIR="$PWD/tmpdir" MYSBX_STUB_NO_ALIVE=1 ${aoeRunner} "$aoe_entry" ''' .aoe-socket 2>&1 >/dev/null)" \
+          || fail "aoe (i) stale dotted socket: the aoe runner failed (stderr pass)"
+        if printf '%s\n' "$err" | grep -Fq "$prompt"; then
+          fail "aoe (i) stale dotted socket: a dead server must not offer the prompt"
+        fi
 
         # The shared-fragment drift guard: the tmux and workmux gate
         # blocks are byte-identical (only the entries around them

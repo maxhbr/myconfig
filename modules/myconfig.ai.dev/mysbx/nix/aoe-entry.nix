@@ -100,10 +100,15 @@ writeShellApplication {
     # socket would report a running sandbox dead — quitting the aoe
     # TUI would end it while agents still run. The probe therefore
     # asks EVERY socket under the per-user tmux dir: tmux keeps its
-    # default socket there too (`tmux-<uid>/default`), so the glob
-    # needs no special case, and a socket file whose server died
-    # answers `ls` with an error, so only a live server counts.
-    aoe_alive() {
+    # default socket there too (`tmux-<uid>/default`), and a socket
+    # file whose server died answers `ls` with an error, so only a
+    # live server counts. The glob includes dot-prefixed names — a
+    # bare `socket_name` may start with a dot (aoe rejects only
+    # path separators), and default globbing would skip it — so it
+    # runs with `dotglob` (and `nullglob`, an empty dir matches
+    # nothing), both scoped to the probe by the subshell.
+    aoe_alive() (
+        shopt -s dotglob nullglob
         found=0
         for sock in "''${TMUX_TMPDIR:-/tmp}/tmux-$(id -u)"/*; do
             if [ -S "$sock" ] && tmux -S "$sock" ls >/dev/null 2>&1; then
@@ -111,7 +116,7 @@ writeShellApplication {
             fi
         done
         [ "$found" = 1 ]
-    }
+    )
 
     # In a foreground run the `exec` form applies: `aoe` owns the
     # terminal and its exit code propagates unchanged

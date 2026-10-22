@@ -273,10 +273,16 @@ a fourth verb is a decision, not a given.
   clone is bound rw into a running sandbox, and the message names
   `mysbx attach --session NAME` (detach.md B9). `--force` keeps its
   meaning (unmerged work); the live-run guard is not overridable. A
-  starting run counts as live, checked under the workspace lock of
-  detach.md B6 (held through the removal, taken even when no record
-  exists yet — the lock, not the record, is what serializes a
-  starting run), so no run can start while the clone is being
+  starting run counts as live only where liveness cannot be
+  disproved: the lock-free advisory guard (`--dry-run`) refuses a
+  `starting` record with "starting or stale" wording, and a real
+  destroy decides under the workspace lock of detach.md B6 (held
+  through the removal, taken even when no record exists yet — the
+  lock, not the record, is what serializes a starting run): under
+  the lock a `starting` record with a dead socket is provably stale
+  (no outer is mid-startup while the lock is held) and is removed
+  with the clone, while a `starting` record with a live socket
+  refuses, so no run can start while the clone is being
   deleted; a `--dry-run` runs the lock-free guard only, so it never
   blocks, and its probe is advisory. The clone is plain `rm -rf`'d —
   it is standalone, no worktree bookkeeping, the host repo is
