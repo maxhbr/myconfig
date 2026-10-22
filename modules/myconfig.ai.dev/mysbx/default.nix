@@ -884,8 +884,11 @@ in
           # when the host opts in, a gvisor-only host pays no podman
           # closure.
           ++ lib.optionals cfg.krun.nestedPodman.enable cfg.krun.nestedPodman.packages
-          ++ lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages;
-        defaultText = literalExpression "the selected multiplexer's tools, the `podman.muxEntries` scripts, plus waypipe, see `display.package`; plus `krun.nestedPodman.packages` / `krun.nix.packages` when `krun.nestedPodman.enable` / `krun.nix.enable`";
+          ++ lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages
+          # Image processing on the container `PATH` — the same payload
+          # the bwrap backend gets via `extraTools`.
+          ++ [ pkgs.imagemagick ];
+        defaultText = literalExpression "the selected multiplexer's tools, the `podman.muxEntries` scripts, plus waypipe, see `display.package`; plus `krun.nestedPodman.packages` / `krun.nix.packages` when `krun.nestedPodman.enable` / `krun.nix.enable`; plus imagemagick";
         description = ''
           Packages baked into the container image (`podman.image`, see
           ./podman.nix) next to the enabled agents, the fish world and
@@ -1734,6 +1737,9 @@ in
       selectedMuxTools
       ++ shellRuntimeTools
       ++ config.myconfig.ai.dev.sandboxTools.extraPackages
+      # Image processing for payloads (screenshot inspection, resizing
+      # before handing images to vision-capable models).
+      ++ [ pkgs.imagemagick ]
       ++ lib.optional cfg.browser.enable browserPackage
       # The waypipe binary of the display channel (D18): the argv
       # already pins it for the guest server wrap, but putting it on
