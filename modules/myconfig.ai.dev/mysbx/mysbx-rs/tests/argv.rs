@@ -378,6 +378,7 @@ fn the_ssh_key_in_a_clone_run_binds_nothing() {
     let mut p = params();
     p.workspace = Workspace::Clone {
         clone: Path::new("/synth/repo.mysbx/clones/s1"),
+        worktrees: Path::new("/synth/repo.mysbx/clones/s1__worktrees"),
     };
     let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &p).unwrap();
     assert!(
@@ -3447,6 +3448,9 @@ fn a_read_only_mount_of_a_policy_pathname_stays_allowed() {
 /// The session clone of the synthetic repo, the path `--session fix-1`
 /// would derive: `<sidecar>/clones/fix-1`.
 const SYNTH_CLONE: &str = "/synth/repo.mysbx/clones/fix-1";
+/// The session's own worktrees directory beside [`SYNTH_CLONE`]
+/// (workspace.md D3).
+const SYNTH_CLONE_WORKTREES: &str = "/synth/repo.mysbx/clones/fix-1__worktrees";
 
 /// `Params` with the workspace switched to the clone of the synthetic
 /// repo — the argv a `--session fix-1` run builds.
@@ -3462,6 +3466,7 @@ fn clone_params() -> Params<'static> {
         waypipe: None,
         workspace: Workspace::Clone {
             clone: Path::new(SYNTH_CLONE),
+            worktrees: Path::new(SYNTH_CLONE_WORKTREES),
         },
         inner: None,
         detachable: false,
@@ -4234,6 +4239,7 @@ fn podman_golden_clone_session() {
     let mut params = podman_params();
     params.workspace = Workspace::Clone {
         clone: Path::new("/synth/repo.mysbx/clones/test"),
+        worktrees: Path::new("/synth/repo.mysbx/clones/test__worktrees"),
     };
     let argv = podman_run_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params).unwrap();
     assert_golden("podman-clone-session.txt", &argv);
@@ -4787,6 +4793,7 @@ fn podman_state_parent_tmpfses_dedupe_entries_sharing_a_parent() {
     let mut params = podman_params();
     params.workspace = Workspace::Clone {
         clone: Path::new("/synth/repo.mysbx/clones/test"),
+        worktrees: Path::new("/synth/repo.mysbx/clones/test__worktrees"),
     };
     let argv = podman_run_argv(
         &cfg,
@@ -6142,6 +6149,7 @@ fn nono_clone_downgrade_grants_stay_read_only() {
     let params = NonoParams {
         workspace: Workspace::Clone {
             clone: Path::new(SYNTH_CLONE),
+            worktrees: Path::new(SYNTH_CLONE_WORKTREES),
         },
         ..nono_params()
     };
@@ -6174,6 +6182,7 @@ fn nono_clone_downgrade_grants_stay_read_only() {
     let params = NonoParams {
         workspace: Workspace::Clone {
             clone: Path::new(SYNTH_CLONE),
+            worktrees: Path::new(SYNTH_CLONE_WORKTREES),
         },
         ..nono_params()
     };
@@ -6436,6 +6445,7 @@ fn nono_golden_clone_run() {
     let params = NonoParams {
         workspace: Workspace::Clone {
             clone: Path::new(SYNTH_CLONE),
+            worktrees: Path::new(SYNTH_CLONE_WORKTREES),
         },
         ..nono_params()
     };

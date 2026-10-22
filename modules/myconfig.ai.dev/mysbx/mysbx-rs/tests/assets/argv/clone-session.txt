@@ -44,6 +44,9 @@
 --bind
 /synth/repo.mysbx/clones/fix-1
 /synth/repo
+--bind
+/synth/repo.mysbx/clones/fix-1__worktrees
+/synth/repo__worktrees
 --ro-bind
 /synth/data/refs
 /synth/data/refs

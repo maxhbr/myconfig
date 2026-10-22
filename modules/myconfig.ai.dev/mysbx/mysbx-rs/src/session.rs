@@ -37,17 +37,33 @@ pub const CLONES_DIR: &str = "clones";
 /// namespace as a ref-directory conflict — is refused up front.
 pub const BRANCH_PREFIX: &str = "agent/mysbx/";
 
+/// The suffix of a session's worktrees directory inside `clones/`
+/// (`<sidecar>/clones/NAME__worktrees`, workspace.md D3): the workmux
+/// sibling spelling, applied to the session instead of the repo. A
+/// clone run binds it rw at the host's own `<repo>__worktrees` path.
+pub const WORKTREES_SUFFIX: &str = "__worktrees";
+
 /// Validate a session NAME (workspace.md D2):
 /// `[A-Za-z0-9][A-Za-z0-9._-]{0,63}` — no slashes, no leading dot, no
 /// empty string. Anything else is a usage error at parse time
 /// (cli.md D8), like every schema edge. Public so the parser's tests
 /// assert against the same grammar the pipeline checks.
+///
+/// The [`WORKTREES_SUFFIX`] spelling is reserved (D3): `<sidecar>/clones`
+/// holds the sessions AND, beside each one, its worktrees directory —
+/// a NAME ending in `__worktrees` would be indistinguishable from one
+/// of those in the registry, so every verb that resolves a NAME would
+/// have to disambiguate it again. Refused once, here, like the
+/// reserved `agent/mysbx/` branch prefix of D2.
 pub fn valid_name(name: &str) -> bool {
     let mut chars = name.chars();
     let Some(first) = chars.next() else {
         return false;
     };
     if !first.is_ascii_alphanumeric() {
+        return false;
+    }
+    if name.ends_with(WORKTREES_SUFFIX) {
         return false;
     }
     name.len() <= 64 && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
@@ -63,6 +79,13 @@ pub struct Session {
     /// standalone git repository, bound rw at the repo's own path in
     /// a clone run (D3).
     pub clone: PathBuf,
+    /// The session's worktrees directory,
+    /// `<sidecar>/clones/NAME__worktrees` (D3): the clone run's
+    /// counterpart of the host's `<repo>__worktrees` sibling, bound
+    /// rw at THAT host path — path identity, like the clone at
+    /// `<repo>`. It lives under `clones/` so [`crate::sessionverbs`]
+    /// and `session destroy` cover it with the clone.
+    pub worktrees: PathBuf,
     /// The session branch, `agent/mysbx/NAME` (D2): the branch a
     /// session commits to, fetched/merged/pushed by the handoff verbs
     /// of D6.
@@ -78,11 +101,13 @@ impl Session {
     /// caller has validated the name ([`valid_name`]); an invalid one
     /// here would be a programming error, not operator input.
     pub fn new(repo: &Repo, name: &str) -> Self {
+        let clones = repo.sidecar.join(CLONES_DIR);
         Self {
             name: name.to_string(),
-            clone: repo.sidecar.join(CLONES_DIR).join(name),
+            clone: clones.join(name),
+            worktrees: clones.join(format!("{name}{WORKTREES_SUFFIX}")),
             branch: format!("{BRANCH_PREFIX}{name}"),
-            result: repo.sidecar.join(CLONES_DIR).join(format!("{name}.json")),
+            result: clones.join(format!("{name}.json")),
         }
     }
 
@@ -93,6 +118,15 @@ impl Session {
     /// whether the creation is needed.
     pub fn clone_exists(&self) -> bool {
         self.clone.is_dir()
+    }
+
+    /// The in-sandbox path of the session's worktrees directory: the
+    /// host repo's own `<repo>__worktrees` sibling, where a clone run
+    /// binds [`Session::worktrees`] (D3 — path identity, like the
+    /// clone at the repo's own path). `None` in the hand-made layout
+    /// where the repo root has no parent or no basename.
+    pub fn worktrees_dest(repo: &Repo) -> Option<PathBuf> {
+        crate::repo::sibling_worktrees(&repo.root)
     }
 }
 
@@ -126,6 +160,11 @@ pub struct CloneSteps {
     /// remote-tracking ref spelled out) or creating the branch at
     /// HEAD.
     pub checkout: Vec<String>,
+    /// The session's worktrees directory,
+    /// `<sidecar>/clones/NAME__worktrees` (D3), created after the
+    /// checkout: it is a plain directory, not a git invocation, so it
+    /// is carried beside the argv vectors instead of inside one.
+    pub worktrees: PathBuf,
 }
 
 /// The outcome of the creation decision (workspace.md D2): nothing to
@@ -204,6 +243,7 @@ impl Session {
                 clone.clone(),
             ],
             checkout,
+            worktrees: self.worktrees.clone(),
         })
     }
 }
@@ -289,6 +329,11 @@ pub fn print_steps(steps: &CloneSteps) {
             println!("{arg}");
         }
     }
+    // The worktrees directory is created, not run (D3) — printed
+    // anyway, so a dry run of a first session still shows every path
+    // it would leave behind.
+    println!("mkdir");
+    println!("{}", steps.worktrees.display());
 }
 
 /// Execute the creation commands of a [`Plan::Create`] and report
@@ -330,6 +375,12 @@ pub fn execute(session: &Session, steps: &CloneSteps) -> Result<(), String> {
     };
     run(&steps.clone)?;
     run(&steps.checkout)?;
+    // The session's worktrees directory (D3): created, not cloned — it
+    // starts empty, where workmux/git place their checkouts. An
+    // existing one is kept as it is (an interrupted creation must not
+    // lose a checkout already inside it), a symlink is refused for the
+    // same reason `ensure_plain_dir` refuses one in the state tree.
+    crate::ensure_plain_dir(&steps.worktrees)?;
     println!("## created: {}", session.clone.display());
     Ok(())
 }
@@ -432,6 +483,19 @@ mod tests {
     }
 
     #[test]
+    fn the_worktrees_suffix_is_reserved() {
+        // workspace.md D3: `clones/` holds the sessions and, beside
+        // each one, its worktrees directory — so the suffix spelling
+        // is never a session NAME, and no verb can confuse the two.
+        for name in ["fix-1__worktrees", "a__worktrees", "__worktrees"] {
+            assert!(!valid_name(name), "`{name}` should be invalid");
+        }
+        // A `__worktrees` elsewhere in the name is ordinary.
+        assert!(valid_name("a__worktrees2"));
+        assert!(valid_name("a__worktrees-b"));
+    }
+
+    #[test]
     fn a_64_char_name_is_the_longest_valid_one() {
         assert!(valid_name(&"a".repeat(64)));
         assert!(!valid_name(&"a".repeat(65)));
@@ -446,6 +510,40 @@ mod tests {
             s.result,
             PathBuf::from("/synth/repo.mysbx/clones/fix-1.json")
         );
+    }
+
+    #[test]
+    fn the_session_worktrees_dir_is_the_sibling_of_the_clone() {
+        // workspace.md D3: the session's own worktrees directory lives
+        // under `clones/` beside the clone (so `session destroy` and
+        // the registry cover it), and it is BOUND at the host's
+        // `<repo>__worktrees` path — path identity, like the clone at
+        // `<repo>`.
+        let repo = synth_repo();
+        let s = Session::new(&repo, "fix-1");
+        assert_eq!(
+            s.worktrees,
+            PathBuf::from("/synth/repo.mysbx/clones/fix-1__worktrees")
+        );
+        assert_eq!(
+            Session::worktrees_dest(&repo),
+            Some(PathBuf::from("/synth/repo__worktrees"))
+        );
+    }
+
+    #[test]
+    fn the_creation_commands_create_the_session_worktrees_dir() {
+        // The directory has no git invocation of its own, so it rides
+        // beside the argv vectors — and the dry run prints it, so a
+        // first session's dry run still shows every path it leaves
+        // behind.
+        let base = tmpdir("plan-worktrees");
+        let (repo, _) = real_repo(&base, "repo");
+        let session = Session::new(&repo, "fix-1");
+        match session.plan(&repo) {
+            Plan::Create(steps) => assert_eq!(steps.worktrees, session.worktrees),
+            other => panic!("expected Create, got {other:?}"),
+        }
     }
 
     // ---- the creation decision (workspace.md D2) --------------------------

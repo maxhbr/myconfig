@@ -223,6 +223,13 @@ fn golden_state_dirs() {
     assert_golden("state-dirs.txt", &argv);
 }
 
+/// The index of `needle` in `argv`, or a panic naming it.
+fn pos_of(argv: &[String], needle: &str) -> usize {
+    argv.iter()
+        .position(|a| a == needle)
+        .unwrap_or_else(|| panic!("{needle} missing"))
+}
+
 #[test]
 fn the_worktrees_sibling_is_an_implicit_rw_share_of_a_live_run() {
     // The workmux `<repo>__worktrees` sibling: shared rw at its real
@@ -263,24 +270,37 @@ fn the_worktrees_sibling_is_an_implicit_rw_share_of_a_live_run() {
         "{err}"
     );
 
-    // no sibling in a clone run (workspace.md D4), and none without one
+    // A CLONE run shares the SESSION's own worktrees directory at the
+    // same sandbox path (workspace.md D3) — never the host's. Fresh
+    // config: the mount added above would (rightly) be refused again.
+    let cfg = base(true);
     let clone = params(
         "/synth/rootfs",
         "/synth/shell",
         None,
         Workspace::Clone {
             clone: Path::new("/synth/repo.mysbx/clones/s1"),
+            worktrees: Path::new("/synth/repo.mysbx/clones/s1__worktrees"),
         },
     );
-    for (repo, p) in [(&repo, &clone), (&synth_repo(), &p)] {
-        let cfg = base(true);
-        assert!(!run(&cfg, repo, &Payload::Shell, p)
-            .iter()
-            .any(|a| a.contains("worktrees")));
-        assert!(!mysbx::krun::stage_binds(&cfg, repo, p)
-            .iter()
-            .any(|(_, _, slot)| slot == "worktrees"));
-    }
+    let argv = run(&cfg, &repo, &Payload::Shell, &clone);
+    let wt = pos_of(&argv, "stage-rw:worktrees@/home/synth/repo__worktrees rw");
+    assert_eq!(argv[wt - 1], "--rw-share");
+    assert!(pos_of(&argv, "stage-rw:workspace@/home/synth/repo rw") < wt);
+    assert!(mysbx::krun::stage_binds(&cfg, &repo, &clone).contains(&(
+        "/synth/repo.mysbx/clones/s1__worktrees".to_owned(),
+        false,
+        "worktrees".to_owned()
+    )));
+
+    // Without a sibling there is nothing to share.
+    let cfg = base(true);
+    assert!(!run(&cfg, &synth_repo(), &Payload::Shell, &p)
+        .iter()
+        .any(|a| a.contains("worktrees")));
+    assert!(!mysbx::krun::stage_binds(&cfg, &synth_repo(), &p)
+        .iter()
+        .any(|(_, _, slot)| slot == "worktrees"));
 }
 
 #[test]
@@ -357,6 +377,7 @@ fn golden_clone_session() {
             None,
             Workspace::Clone {
                 clone: Path::new("/synth/repo.mysbx/clones/s1"),
+                worktrees: Path::new("/synth/repo.mysbx/clones/s1__worktrees"),
             },
         ),
     );
@@ -574,7 +595,10 @@ fn clone_run_forces_configured_rw_mounts_read_only() {
         "/synth/rootfs",
         "/synth/shell",
         None,
-        Workspace::Clone { clone: clone_path },
+        Workspace::Clone {
+            clone: clone_path,
+            worktrees: Path::new("/synth/repo.mysbx/clones/s1__worktrees"),
+        },
     );
     let argv = run(&cfg, &synth_repo(), &Payload::Shell, &p);
     // The share rides the RO staging device, marked ro:

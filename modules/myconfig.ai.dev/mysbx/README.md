@@ -448,12 +448,15 @@ configuration (with the *plain* agent binaries: the sandbox is already
 the sandbox).
 
 `workmux add` creates its worktree in the `<repo>__worktrees` sibling.
-When that directory exists next to the repo, mysbx binds it rw
-implicitly (discovered per run, like the repo and git metadata binds —
-never created by a run); a checkout without it keeps the narrow
-sandbox, and `workmux add` inside it fails with a filesystem error
-naming the path. A sidecar `[[mounts]]` entry is therefore only
-needed to bind a worktrees directory that lives somewhere else.
+An interactive `mysbx` run creates that directory when it is missing
+(reporting `## created:`) and binds it rw implicitly, discovered per run
+like the repo and git metadata binds; `run -- CMD` and `--dry-run`
+create nothing, so they keep the narrow sandbox. A symlink or a stray
+file at that path is a refused run. A `--session NAME` run creates its
+OWN worktrees directory instead (`<sidecar>/clones/NAME__worktrees`) and
+binds it at the same `<repo>__worktrees` path, so a session never
+reaches the host's worktrees. A sidecar `[[mounts]]` entry is therefore
+only needed to bind a worktrees directory that lives somewhere else.
 
 ## The sandbox identity variables (`MYSBX_BACKEND`, `MYSBX_MULTIPLEXER`)
 

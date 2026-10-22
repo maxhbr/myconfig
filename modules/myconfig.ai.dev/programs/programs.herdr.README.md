@@ -67,8 +67,9 @@ The mysbx tier (`multiplexer = "herdr"`,
 [`../mysbx/nix/herdr-entry.nix`](../mysbx/nix/herdr-entry.nix)) closes
 the same gap with the same one-repository argument: its entry script
 writes a session config whose `[worktrees] directory` points at the
-sibling when mysbx bound it (mysbx binds the sibling rw only when it
-exists on the host and never creates it), and leaves the key unset —
+sibling when mysbx bound it (an interactive mysbx run creates the sibling
+when it is missing and binds it rw; a `--session NAME` run binds the
+session's own directory at that same path), and leaves the key unset —
 falling back to herdr's default inside the ephemeral tmpfs home — when
 it did not. Checkouts therefore land in
 `<parent-of-repo>/<repo>__worktrees/<repo>/<branch-slug>`, the same

@@ -20,6 +20,7 @@
 use crate::config::{Mode, Mount, Multiplexer};
 use crate::merge::Merged;
 use crate::repo::Repo;
+use crate::session::Session;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Component, Path, PathBuf};
@@ -35,11 +36,15 @@ use std::path::{Component, Path, PathBuf};
 ///   config.md D13.
 /// - [`Clone`] is selected by `--session NAME`: the session's clone
 ///   at `<repo>.mysbx/clones/NAME` is bound rw AT THE REPO'S OWN
-///   PATH (D3 — path identity is preserved), while the host repo,
-///   the `__worktrees` sibling, the git metadata directories and the
+///   PATH (D3 — path identity is preserved), together with the
+///   session's OWN worktrees directory
+///   (`<repo>.mysbx/clones/NAME__worktrees`) at the host's
+///   `<repo>__worktrees` path — the session never reaches the host's
+///   worktrees. The host repo, the git metadata directories and the
 ///   `state-dirs` binds are NOT mounted at all, and every configured
-///   mount is downgraded to read-only (D4) — the clone is the only
-///   writable bind of a clone run.
+///   mount is downgraded to read-only (D4): the clone and the
+///   session's worktrees directory are the only writable binds of a
+///   clone run.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum Workspace<'a> {
     /// The default: the repo itself, always rw (config.md D13).
@@ -52,6 +57,10 @@ pub enum Workspace<'a> {
     Clone {
         /// The session's clone, `<repo>.mysbx/clones/NAME`.
         clone: &'a Path,
+        /// The session's own worktrees directory,
+        /// `<repo>.mysbx/clones/NAME__worktrees`, bound rw at the
+        /// host's `<repo>__worktrees` path (D3).
+        worktrees: &'a Path,
     },
 }
 
@@ -701,12 +710,12 @@ pub fn bwrap_argv(
                 // path — implicit infrastructure like the repo bind
                 // (D13), discovered per run and therefore inexpressible
                 // in configuration, exactly like the git metadata above.
-                // Bound ONLY when it exists (see [`Repo::worktrees`]): a
-                // run never creates it, so existence is the operator's
-                // trust decision; an absent sibling keeps the sandbox
-                // narrow, and `workmux add` inside it fails with a
-                // filesystem error naming the path — the honest outcome
-                // for a directory no layer declared.
+                // An interactive run creates it before the argv is built
+                // (lib.rs, [`crate::repo::ensure_worktrees`]); a
+                // `run -- CMD` and a `--dry-run` create nothing, so an
+                // absent sibling keeps THEIR sandbox narrow and
+                // `workmux add` inside it fails with a filesystem error
+                // naming the path.
                 if let Some(worktrees) = &repo.worktrees {
                     bind(&mut argv, false, &worktrees.to_string_lossy(), None);
                 }
@@ -728,23 +737,35 @@ pub fn bwrap_argv(
                         .collect(),
                 )
             }
-            Workspace::Clone { clone } => {
+            Workspace::Clone { clone, worktrees } => {
                 bind(&mut argv, false, &clone.to_string_lossy(), Some(&root));
-                // The clone is the ONLY writable bind of a clone run
-                // (D4) — the one HOST source the writable-set analyses
-                // start from, and the one rw source the policy-file
-                // refusal checks. It sits in the sidecar, but the bind
-                // is exactly the clone directory: it covers neither
-                // `config.toml` nor `state/` (D3, "policy-file
-                // adjacency"). The in-sandbox path of the writable tree
-                // stays the REPO's own path (D3: path identity is
-                // preserved) — source and dest differ in a clone run,
-                // which the live run's conflation of the two never
-                // showed.
+                // The clone and the session's worktrees directory are
+                // the ONLY writable binds of a clone run (D4, amended
+                // for the session sibling by D3) — the HOST sources the
+                // writable-set analyses start from, and the rw sources
+                // the policy-file refusal checks. Both sit in the
+                // sidecar, but each bind is exactly its directory: it
+                // covers neither `config.toml` nor `state/` (D3,
+                // "policy-file adjacency"). The in-sandbox paths stay
+                // the REPO's own (D3: path identity is preserved) — the
+                // clone at `<repo>`, the session's worktrees dir at
+                // `<repo>__worktrees` — so source and dest differ in a
+                // clone run, which the live run's conflation of the two
+                // never showed.
+                let dest = Session::worktrees_dest(repo).unwrap_or_else(|| repo.root.clone());
+                bind(
+                    &mut argv,
+                    false,
+                    &worktrees.to_string_lossy(),
+                    Some(&dest.to_string_lossy()),
+                );
                 (
                     clone.to_string_lossy().into_owned(),
                     root.clone(),
-                    vec![normalize(&clone.to_string_lossy())],
+                    vec![
+                        normalize(&clone.to_string_lossy()),
+                        normalize(&worktrees.to_string_lossy()),
+                    ],
                 )
             }
         };
@@ -966,12 +987,21 @@ pub fn bwrap_argv(
     // workspace bind (the repo in a live run, the clone at the
     // repo's path in a clone run — the DEST is the repo path either
     // way, D3) plus the git dirs, the worktrees sibling and the
-    // state binds of a LIVE run; a clone run binds none of the
-    // latter three (D3/D4).
+    // state binds of a LIVE run. A clone run binds no git dirs and no
+    // state dirs (D3/D4), but it does bind ITS OWN worktrees
+    // directory, at the same `<repo>__worktrees` dest — so the guard
+    // sees that path in both modes and a configured mount may never
+    // cover it.
+    let clone_worktrees_dest: Option<PathBuf> = match params.workspace {
+        Workspace::Live => None,
+        Workspace::Clone { worktrees, .. } => {
+            Some(Session::worktrees_dest(repo).unwrap_or_else(|| worktrees.to_path_buf()))
+        }
+    };
     let (implicit_git_dirs, implicit_worktrees): (&[PathBuf], Option<&Path>) =
         match params.workspace {
             Workspace::Live => (&repo.git_dirs, repo.worktrees.as_deref()),
-            Workspace::Clone { .. } => (&[], None),
+            Workspace::Clone { .. } => (&[], clone_worktrees_dest.as_deref()),
         };
     check_hidden_mounts(
         &cfg.mounts,
@@ -1121,7 +1151,7 @@ pub fn bwrap_argv(
             // naming. In window mode (Live workspace) no session name is
             // set; in session mode (Clone workspace) extract the name from
             // the clone path `<repo>.mysbx/clones/NAME`.
-            if let Workspace::Clone { clone } = params.workspace {
+            if let Workspace::Clone { clone, .. } = params.workspace {
                 if let Some(session_name) = clone.file_name().and_then(|n| n.to_str()) {
                     argv.push("--setenv".into());
                     argv.push("MYSBX_SESSION_NAME".into());
@@ -1229,7 +1259,7 @@ pub fn bwrap_argv(
         // environments"). The mux SESSION name rides the same way.
         if mux.starts_a_session() {
             argv.push(format!("TMUX_TMPDIR={MUX_SOCKET_DIR}"));
-            if let Workspace::Clone { clone } = params.workspace {
+            if let Workspace::Clone { clone, .. } = params.workspace {
                 if let Some(session_name) = clone.file_name().and_then(|n| n.to_str()) {
                     argv.push(format!("MYSBX_SESSION_NAME={session_name}"));
                 }

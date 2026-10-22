@@ -27,6 +27,8 @@ type=tmpfs,dst=/mysbx-home/.local/state
 type=tmpfs,dst=/mysbx-home/.config/herdr
 --mount
 type=bind,src=/synth/repo.mysbx/clones/test,dst=/synth/repo,rw
+--mount
+type=bind,src=/synth/repo.mysbx/clones/test__worktrees,dst=/synth/repo__worktrees,rw
 --env
 HOME=/mysbx-home
 --env

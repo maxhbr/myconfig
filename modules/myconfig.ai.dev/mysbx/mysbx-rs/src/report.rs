@@ -27,6 +27,7 @@ use crate::bwrap::{
 use crate::config::{Display, Mode, Multiplexer};
 use crate::merge::Merged;
 use crate::repo::Repo;
+use crate::session::Session;
 use std::path::Path;
 
 /// Everything the report shows. Borrowed, so building it costs nothing
@@ -168,7 +169,7 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         Workspace::Live => {
             p("workspace:      live — the repo itself, bound rw (the default)".to_string())
         }
-        Workspace::Clone { clone } => p(format!(
+        Workspace::Clone { clone, .. } => p(format!(
             "workspace:      clone run — {} bound rw at {} (the host repo is not mounted)",
             clone.display(),
             r.repo.root.display(),
@@ -189,7 +190,7 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         r.merged.mounts.len()
             + 1
             + if clone_run {
-                0
+                1
             } else {
                 r.repo.worktrees.iter().count()
             }
@@ -200,18 +201,34 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
             r.repo.root.display(),
             r.repo.root.display()
         )),
-        Workspace::Clone { clone } => p(format!(
+        Workspace::Clone { clone, .. } => p(format!(
             "  rw {} -> {}  [session clone, implicit]",
             clone.display(),
             r.repo.root.display()
         )),
     }
-    if let (false, Some(worktrees)) = (clone_run, &r.repo.worktrees) {
-        p(format!(
-            "  rw {} -> {}  [worktrees, implicit]",
-            worktrees.display(),
-            worktrees.display()
-        ));
+    match r.params.workspace {
+        // A live run binds the host's sibling — created by this run when
+        // it was an interactive one (config.md D13).
+        Workspace::Live => {
+            if let Some(worktrees) = &r.repo.worktrees {
+                p(format!(
+                    "  rw {} -> {}  [worktrees, implicit]",
+                    worktrees.display(),
+                    worktrees.display()
+                ));
+            }
+        }
+        // A clone run binds the SESSION's own worktrees directory at the
+        // host's sibling path (workspace.md D3) — never the host's.
+        Workspace::Clone { worktrees, .. } => {
+            let dest = Session::worktrees_dest(r.repo).unwrap_or_else(|| worktrees.to_path_buf());
+            p(format!(
+                "  rw {} -> {}  [session worktrees, implicit]",
+                worktrees.display(),
+                dest.display()
+            ));
+        }
     }
     for (i, m) in r.merged.mounts.iter().enumerate() {
         let layer = if i < r.user_mount_count {
@@ -1196,6 +1213,7 @@ mod tests {
             repo,
             Workspace::Clone {
                 clone: Path::new("/synth/repo.mysbx/clones/fix-1"),
+                worktrees: Path::new("/synth/repo.mysbx/clones/fix-1__worktrees"),
             },
         );
         assert!(
@@ -1473,6 +1491,7 @@ mod tests {
         let (repo, mut merged, host) = fixture_report();
         merged.state_dirs.push(".local/share/opencode".to_string());
         let clone = PathBuf::from("/synth/repo.mysbx/clones/fix-1");
+        let clone_worktrees = PathBuf::from("/synth/repo.mysbx/clones/fix-1__worktrees");
         let params = Params {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
@@ -1482,7 +1501,10 @@ mod tests {
             policy_paths: &[],
             mux_entry: None,
             waypipe: None,
-            workspace: crate::bwrap::Workspace::Clone { clone: &clone },
+            workspace: crate::bwrap::Workspace::Clone {
+                clone: &clone,
+                worktrees: &clone_worktrees,
+            },
             inner: None,
             detachable: false,
         };

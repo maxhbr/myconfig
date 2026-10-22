@@ -85,7 +85,9 @@ use crate::config::Multiplexer;
 use crate::merge::Merged;
 use crate::podman_gvisor::{parse_krun_cpus, parse_krun_ram_mib};
 use crate::repo::Repo;
+use crate::session::Session;
 use std::borrow::Cow;
+use std::path::Path;
 
 pub type HostEnv = std::collections::BTreeMap<String, String>;
 
@@ -503,14 +505,21 @@ pub fn stage_binds(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Vec<(Strin
     binds.push(("/nix/store".to_owned(), true, "store".to_owned()));
     let workspace_dir = match &params.workspace {
         Workspace::Live => repo.root.clone(),
-        Workspace::Clone { clone } => clone.to_path_buf(),
+        Workspace::Clone { clone, .. } => clone.to_path_buf(),
     };
     binds.push((
         workspace_dir.to_string_lossy().into_owned(),
         false,
         "workspace".to_owned(),
     ));
-    if let (Workspace::Live, Some(worktrees)) = (&params.workspace, &repo.worktrees) {
+    // The worktrees slot's HOST source: the host sibling in a live run,
+    // the session's own worktrees directory in a clone run (its
+    // sandbox path is the `<repo>__worktrees` sibling either way).
+    let worktrees_source: Option<&Path> = match &params.workspace {
+        Workspace::Live => repo.worktrees.as_deref(),
+        Workspace::Clone { worktrees, .. } => Some(worktrees),
+    };
+    if let Some(worktrees) = worktrees_source {
         binds.push((
             worktrees.to_string_lossy().into_owned(),
             false,
@@ -583,12 +592,23 @@ fn krun_shares(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Result<Vec<Sha
         sandbox_path: repo.root.to_string_lossy().into_owned(),
         read_only: false,
     });
-    // The workmux `<repo>__worktrees` sibling, rw at its real host
-    // path — implicit like the workspace and bound only in a live run
-    // and only when it exists ([`Repo::worktrees`]), the same rule as
-    // the bwrap/podman binds.
-    if let (Workspace::Live, Some(worktrees)) = (&params.workspace, &repo.worktrees) {
-        let sandbox_path = worktrees.to_string_lossy().into_owned();
+    // The worktrees slot, rw, at the `<repo>__worktrees` path — the
+    // same rule as the bwrap/podman binds: in a LIVE run the host's
+    // sibling (present when the run created it, config.md D13), in a
+    // CLONE run the session's own worktrees directory bound there
+    // (workspace.md D3).
+    let worktrees_source: Option<&Path> = match &params.workspace {
+        Workspace::Live => repo.worktrees.as_deref(),
+        Workspace::Clone { worktrees, .. } => Some(worktrees),
+    };
+    if let Some(worktrees) = worktrees_source {
+        let sandbox_path = match &params.workspace {
+            Workspace::Live => worktrees.to_string_lossy().into_owned(),
+            Workspace::Clone { .. } => Session::worktrees_dest(repo)
+                .unwrap_or_else(|| repo.root.clone())
+                .to_string_lossy()
+                .into_owned(),
+        };
         check_share_root(&sandbox_path)?;
         shares.push(Share {
             slot: WORKTREES_SLOT.to_owned(),

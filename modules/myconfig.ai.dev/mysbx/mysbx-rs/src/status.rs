@@ -257,6 +257,10 @@ pub fn run(args: &[String], dry_run: bool) -> i32 {
         }
     } else {
         p("worktrees:       none (no __worktrees sibling or an empty registry)".to_string());
+        p(
+            "  the sibling appears on the first interactive `mysbx` run (config.md D13)"
+                .to_string(),
+        );
     }
 
     // 5. detached runs (detach.md B9): the read-only listing of the

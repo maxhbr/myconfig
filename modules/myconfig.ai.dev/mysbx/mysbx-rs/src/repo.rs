@@ -25,10 +25,10 @@
 //!
 //! [`Repo::worktrees`]: the workmux `<repo>__worktrees` sibling is
 //! recorded — and bound rw by the argv builder — only WHEN IT EXISTS.
-//! A run never creates it, so its existence is operator state, the same
-//! trust decision as the sidecar's (docs/design/config.md D2); a
-//! checkout without it stays narrow (a run then cannot create it,
-//! which is the honest outcome for a path no layer declared).
+//! Resolution probes, it never writes: an interactive run creates the
+//! sibling before the argv is built (docs/design/config.md D13), a
+//! `run -- CMD` and a `--dry-run` create nothing and keep the narrow
+//! sandbox of a checkout without it.
 //!
 //! The resolution is a pure function over the starting path and the home
 //! directory, so the tests run against a temporary directory tree without
@@ -59,11 +59,11 @@ pub struct Repo {
     /// ONLY when it exists at resolution time, hence `Option`. The
     /// workmux payload (docs/design/config.md D16) creates git
     /// worktrees there; without the bind `workmux add` fails with a
-    /// filesystem error naming the path. Binding it when present
-    /// spares every repo that already follows the convention a
-    /// sidecar `[[mounts]]` entry, while a run never creates it:
-    /// existence is the operator's trust decision, exactly like the
-    /// sidecar's (D2) — an absent sibling never widens a run.
+    /// filesystem error naming the path. An interactive run creates
+    /// the sibling before the argv is built (D13), so the bind exists
+    /// for every session start; a `run -- CMD` and a `--dry-run`
+    /// create nothing, and a checkout they start in without a sibling
+    /// stays narrow.
     pub worktrees: Option<PathBuf>,
 }
 
@@ -119,6 +119,13 @@ pub enum Error {
         /// The session whose clone the run started in.
         session: String,
     },
+    /// The worktrees sibling exists but is not a plain directory (a
+    /// stray FILE, or a symlink): an interactive run creates the
+    /// sibling and binds it rw, so a link there would hand the payload
+    /// whatever it points at, and a file cannot be bound as a
+    /// directory. Refused instead of replaced — the path is operator
+    /// state beside the repo (docs/design/config.md D13).
+    WorktreesNotDirectory(PathBuf),
 }
 
 impl fmt::Display for Error {
@@ -159,6 +166,13 @@ impl fmt::Display for Error {
                  (workspace.md D9)",
                 sidecar = sidecar.display(),
                 repo = repo.display(),
+            ),
+            Error::WorktreesNotDirectory(p) => write!(
+                f,
+                "refusing to bind the worktrees sibling {}: it is not a plain directory \
+                 — an interactive run creates it (docs/design/config.md D13) and binds \
+                 it read-write, so a file or a symlink there is refused; remove it",
+                p.display()
             ),
         }
     }
@@ -311,11 +325,7 @@ fn repo_at(dir: &Path, sidecar: PathBuf) -> Result<Repo, Error> {
         root: dir.to_owned(),
         sidecar,
         git_dirs,
-        // The workmux worktrees sibling, when the operator already
-        // created it — see [`Repo::worktrees`]. `is_dir`, not `exists`:
-        // a stray FILE of that name is not a worktrees directory, and
-        // binding a file where a directory belongs fails the bind.
-        worktrees: sibling_worktrees(dir).filter(|p| p.is_dir()),
+        worktrees: existing_worktrees(dir),
     })
 }
 
@@ -409,12 +419,76 @@ pub fn fnv1a10(path: &str) -> String {
 /// (see [`Repo::worktrees`]): the same sibling spelling workmux itself
 /// uses (`dirname(top)/<basename>__worktrees`), so the path the
 /// sandbox binds is the path `workmux add` computes inside it.
-fn sibling_worktrees(dir: &Path) -> Option<PathBuf> {
+pub fn sibling_worktrees(dir: &Path) -> Option<PathBuf> {
     let name = dir.file_name()?;
     let parent = dir.parent()?;
     let mut sibling = name.to_owned();
     sibling.push("__worktrees");
     Some(parent.join(sibling))
+}
+
+/// The worktrees sibling of `dir`, when it already exists as a plain
+/// DIRECTORY. A stray FILE of that name is not a worktrees directory
+/// (binding a file where a directory belongs fails the bind), and a
+/// SYMLINK is refused too: the sibling is bound rw at its own path, so
+/// a link would hand the payload whatever it points at. Both are
+/// reported by [`ensure_worktrees`], which an interactive run calls.
+fn existing_worktrees(dir: &Path) -> Option<PathBuf> {
+    let sibling = sibling_worktrees(dir)?;
+    match std::fs::symlink_metadata(&sibling) {
+        Ok(md) if md.is_dir() => Some(sibling),
+        _ => None,
+    }
+}
+
+/// The workmux worktrees sibling of `repo`, created when it does not
+/// exist yet (docs/design/config.md D13): an interactive run binds the
+/// sibling rw so `workmux add` and `git worktree add` land there
+/// instead of failing on an unbound path, and a session start is
+/// exactly the run the operator declared that intent by. A `run --
+/// CMD` and a `--dry-run` create nothing — they keep whatever the
+/// resolution found.
+///
+/// Failure modes, all named so the run stops instead of binding
+/// nothing silently: a path that is not a directory (a stray FILE of
+/// that name, or a symlink to one) is refused rather than replaced, a
+/// symlink is refused outright — the sibling is bound rw, so a link
+/// would hand the payload whatever it points at — and a create that
+/// the filesystem refuses is reported with its own error.
+/// Returns the path when it CREATED the directory (the caller reports
+/// it), `None` when there was nothing to do. A sibling that already
+/// exists is recorded on the repo either way, so the argv builder binds
+/// it.
+pub fn ensure_worktrees(repo: &mut Repo) -> Result<Option<PathBuf>, Error> {
+    if repo.worktrees.is_some() {
+        return Ok(None);
+    }
+    let Some(sibling) = sibling_worktrees(&repo.root) else {
+        return Ok(None);
+    };
+    match std::fs::symlink_metadata(&sibling) {
+        Ok(md) if md.file_type().is_symlink() => return Err(Error::WorktreesNotDirectory(sibling)),
+        Ok(md) if md.is_dir() => {
+            repo.worktrees = Some(sibling);
+            return Ok(None);
+        }
+        Ok(_) => return Err(Error::WorktreesNotDirectory(sibling)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            return Err(Error::Io(format!(
+                "cannot inspect {}: {e}",
+                sibling.display()
+            )))
+        }
+    }
+    std::fs::create_dir(&sibling).map_err(|e| {
+        Error::Io(format!(
+            "cannot create the worktrees sibling {}: {e}",
+            sibling.display()
+        ))
+    })?;
+    repo.worktrees = Some(sibling.clone());
+    Ok(Some(sibling))
 }
 
 /// The guard: never operate on `$HOME`, on a directory CONTAINING
@@ -1051,10 +1125,11 @@ mod tests {
     }
 
     #[test]
-    fn an_absent_worktrees_sibling_stays_none() {
-        // A run never creates the sibling: absence is the honest
-        // narrow sandbox, and `workmux add` inside it gives the
-        // authoritative error.
+    fn an_absent_worktrees_sibling_resolves_to_none() {
+        // Resolution itself never writes: an absent sibling is `None`,
+        // which is what a `run -- CMD` and a `--dry-run` keep (the
+        // narrow sandbox), and what an interactive run then creates
+        // with [`ensure_worktrees`].
         let base = tmpdir("worktrees-absent");
         let repo = base.join("repo");
         touch_dir(&repo.join(".git"));
@@ -1062,6 +1137,60 @@ mod tests {
 
         let r = resolve(&repo.join("sub"), Some(&fake_home(&base))).unwrap();
         assert_eq!(r.worktrees, None);
+    }
+
+    #[test]
+    fn ensure_worktrees_creates_the_absent_sibling_once() {
+        // config.md D13: an interactive run creates the sibling, so the
+        // bind it makes has a source. The creation is idempotent —
+        // the second call has nothing to do — and the resolved value
+        // follows, so the argv builder binds the new directory.
+        let base = tmpdir("worktrees-create");
+        let repo = base.join("repo");
+        touch_dir(&repo.join(".git"));
+        let sibling = base.join("repo__worktrees");
+        let mut r = resolve(&repo, Some(&fake_home(&base))).unwrap();
+        assert_eq!(r.worktrees, None);
+        assert_eq!(ensure_worktrees(&mut r).unwrap(), Some(sibling.clone()));
+        assert!(sibling.is_dir());
+        assert_eq!(r.worktrees, Some(sibling));
+        // Idempotent: a second call creates nothing and reports nothing.
+        assert_eq!(ensure_worktrees(&mut r).unwrap(), None);
+    }
+
+    #[test]
+    fn ensure_worktrees_refuses_a_symlink() {
+        // The sibling is bound rw, so a symlink there would hand the
+        // payload whatever it points at; it is refused, not followed
+        // and not replaced.
+        let base = tmpdir("worktrees-symlink");
+        let repo = base.join("repo");
+        touch_dir(&repo.join(".git"));
+        let elsewhere = base.join("elsewhere");
+        touch_dir(&elsewhere);
+        std::os::unix::fs::symlink(&elsewhere, base.join("repo__worktrees")).unwrap();
+        let mut r = resolve(&repo, Some(&fake_home(&base))).unwrap();
+        let e = ensure_worktrees(&mut r).unwrap_err();
+        assert!(matches!(e, Error::WorktreesNotDirectory(_)), "{e}");
+        assert_eq!(r.worktrees, None);
+    }
+
+    #[test]
+    fn ensure_worktrees_refuses_a_stray_file() {
+        // `is_dir`, not `exists`: a FILE of that name cannot be bound as
+        // a directory, and replacing it would destroy operator data.
+        let base = tmpdir("worktrees-stray-file");
+        let repo = base.join("repo");
+        touch_dir(&repo.join(".git"));
+        std::fs::write(base.join("repo__worktrees"), "not a directory\n").unwrap();
+        let mut r = resolve(&repo, Some(&fake_home(&base))).unwrap();
+        let e = ensure_worktrees(&mut r).unwrap_err();
+        assert!(matches!(e, Error::WorktreesNotDirectory(_)), "{e}");
+        // The file is untouched.
+        assert_eq!(
+            std::fs::read_to_string(base.join("repo__worktrees")).unwrap(),
+            "not a directory\n"
+        );
     }
 
     #[test]

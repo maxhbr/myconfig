@@ -117,12 +117,23 @@ path is `session destroy` (D7).
 - The clone is bound **rw at the original host repo path**. Path identity
   is preserved: tools, configs and prompts keyed to the repo path work
   unchanged, and the payload cannot tell the bind from the real checkout.
-- The host repo itself is **not mounted at all**. The `<repo>__worktrees`
-  sibling is **not bound** in clone runs: it is operator state of the
-  live checkout (config.md D13), and a session must not reach host
-  worktrees. `git-dirs` approvals do not apply either: the clone carries
-  its own `.git` *directory*, not a pointer, so there is nothing external
-  to approve.
+  The session's worktrees directory (D3a) is bound rw at
+  `<repo>__worktrees` by the same rule.
+- The host repo itself is **not mounted at all**, and neither is the
+  host's `<repo>__worktrees` sibling: it is operator state of the live
+  checkout (config.md D13), and a session must not reach host worktrees.
+  `git-dirs` approvals do not apply either: the clone carries its own
+  `.git` *directory*, not a pointer, so there is nothing external to
+  approve.
+- **The session gets its own worktrees directory**, created with the
+  clone on the first run: `<sidecar>/clones/NAME__worktrees`, bound rw
+  **at the host's `<repo>__worktrees` path** — path identity, exactly as
+  the clone is bound at `<repo>`. `workmux add` and `git worktree add`
+  inside a session therefore land in a directory the session owns, while
+  the in-sandbox sibling path stays the one tools expect. It sits under
+  `clones/` with the clone, so `session list` skips it (the
+  `__worktrees` suffix is a reserved NAME spelling) and `session
+  destroy` removes it with the clone.
 - **The clone's `origin` self-resolves inside the sandbox.** Its URL is
   the host repo's absolute path, and inside the sandbox that path IS the
   clone bind. `git fetch origin` / `git push origin` inside the sandbox
@@ -135,6 +146,22 @@ path is `session destroy` (D7).
   guards keep the rest of the sidecar out: the policy-file refusal
   (config.md D7) rejects any rw source covering `config.toml`, and no
   mount may bind the sidecar root or `clones/` itself.
+
+### D3a: The session's worktrees directory — created with the clone
+
+`<sidecar>/clones/NAME__worktrees` is created by the first `--session
+NAME` run, after the clone and the session-branch checkout, and by
+nothing else: an interrupted creation that left it behind is kept as it
+is (its checkouts must not be lost), and a symlink at that path is
+refused rather than followed — it is bound rw, so a link would hand the
+payload whatever it points at. The live run's counterpart, the host's
+`<repo>__worktrees`, is created by an interactive run the same way
+(config.md D13); a clone run never touches it.
+
+The entry is NOT placed in the host's sibling (no
+`<repo>__worktrees/NAME`): the host's registry must not gain one entry
+per session, and a session's checkouts belong to the session's own
+disposable state (D2), not to the host checkout.
 
 ### D4: In a clone run every mount is `ro`; `--rw` is refused; `state-dirs` are off
 
@@ -228,14 +255,20 @@ a fourth verb is a decision, not a given.
   entry with the name, the session branch, and the ahead-count (commits
   in the session branch that the host repo does not have). An entry
   without `.git` is debris (an interrupted creation) and is marked as
-  such, per the gvisor incomplete-inventory precedent.
+  such, per the gvisor incomplete-inventory precedent. A session's own
+  worktrees directory (`NAME__worktrees`, D3a) is a directory in the
+  same place but not a session, so the listing skips the suffix — and
+  the NAME grammar reserves it, which is what makes the two
+  unambiguous to every verb that takes a NAME.
 - **`mysbx session destroy NAME [--force]`** — guarded removal, per the
   microvm precedent (intrinsic properties, not location trust): the
   resolved path must be strictly inside `<repo>.mysbx/clones/`, its
   basename must equal `NAME`, and it must contain `.git`; never the
   sidecar root, never `/`. It **refuses while the session branch holds
   commits the host repo does not have** (unmerged work, checked without
-  mutating anything) unless `--force` is given. It **also refuses while
+  mutating anything) unless `--force` is given. The removal covers the
+  session's worktrees directory (D3a) as well as the clone: it lives
+  under `clones/` with the clone. It **also refuses while
   the session has a live detached run**, with or without `--force`: the
   clone is bound rw into a running sandbox, and the message names
   `mysbx attach --session NAME` (detach.md B9). `--force` keeps its
@@ -280,8 +313,9 @@ implemented by this decision.
   would be a sandbox with no defined workspace.
 - **Workmux dashboards do not cover mysbx sessions.** They watch
   `<repo>__worktrees`; the clones live in the sidecar and are invisible
-  to them. Accepted — the session verbs of D6/D7 are the interface.
-  Nothing to build.
+  to them — and so are the sessions' own worktrees directories (D3a),
+  which only exist inside a session's bind. Accepted — the session verbs
+  of D6/D7 are the interface. Nothing to build.
 
 ## Open follow-ups
 

@@ -367,6 +367,19 @@ not a policy; running with an empty layer instead would hide the fact
 that nothing was configured. `lib.rs::require_initialized_sidecar` is
 the single gate of both run forms.
 
+**The one thing an interactive run does create is the worktrees
+sibling.** A bare `mysbx` (the interactive form — not `run -- CMD`,
+which is a one-shot, and not `--dry-run`, which is side-effect-free)
+creates `<repo>__worktrees` when it is missing, before the argv is
+built, so the rw bind for `workmux add` has a source (config.md D13).
+It is the same class of exception as the session clone (workspace.md
+D2): an interactive run is where the operator declared that they want to
+work in this repo, and it creates exactly one directory, at a derived
+path, reported as `## created:`. A clone run creates its own directory
+in the sidecar instead (workspace.md D3a) and never touches the host's;
+a symlink or a stray file at the sibling path is a refused run naming
+the path.
+
 **Ordering.** The repo guard (mvp-2: `$HOME`, a directory containing
 `$HOME`, `/`) runs *before* this check, so a run inside the home
 directory is still diagnosed as the home exposure it is and never

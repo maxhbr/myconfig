@@ -53,6 +53,9 @@
 --bind
 /synth/repo.mysbx/clones/fix-1
 /synth/repo
+--bind
+/synth/repo.mysbx/clones/fix-1__worktrees
+/synth/repo__worktrees
 --ro-bind
 /synth/data/cache
 /synth/data/cache
@@ -84,6 +87,10 @@ default
 --allow
 /synth/repo
 --allow-cwd
+--allow
+/synth/repo__worktrees
+--allow
+/synth/repo.mysbx/clones/fix-1__worktrees
 --allow
 /mysbx-home
 --read

@@ -45,12 +45,13 @@
 # tier (`herdr-jail-entry`) uses. The root points at the
 # `<repo>__worktrees` sibling, which the argv builder binds rw at its
 # real host path when it EXISTS (`repo.rs::Repo::worktrees`): the `-d`
-# test below is therefore the bind test, and mysbx's guard ("a run
-# never creates the sibling") is preserved — the script only ever
-# CONFIGURES an existing, bound directory. Without the sibling the key
-# stays unset and herdr falls back to its own default, which lives in
-# the tmpfs `HOME` and is therefore ephemeral — the honest outcome for
-# a path no layer declared. herdr still appends
+# test below is therefore the bind test — an interactive run created the
+# sibling before the argv was built (config.md D13), and a clone run
+# bound the session's own directory at that path (workspace.md D3), so
+# the script only ever CONFIGURES an existing, bound directory. Without
+# the sibling the key stays unset and herdr falls back to its own
+# default, which lives in the tmpfs `HOME` and is therefore ephemeral.
+# herdr still appends
 # `<repo-name>/<branch-slug>` to its root, so checkouts land one level
 # deeper than workmux puts them, inside the same sibling.
 #

@@ -1661,10 +1661,21 @@ fn podman_trusted_git_paths(
                 push(&mut paths, worktrees);
             }
         }
-        bwrap::Workspace::Clone { .. } => {
+        bwrap::Workspace::Clone { worktrees, .. } => {
             // The clone is bound AT the repo's own path (bd
-            // myconfig-6di.5.4) — one workspace surface.
+            // myconfig-6di.5.4) — one workspace surface — and the
+            // session's own worktrees directory at the host's
+            // `<repo>__worktrees` path (workspace.md D3). Both are
+            // workspace trees, so both get the `/*` walk form.
             push(&mut paths, &repo.root);
+            if let Some(dest) = crate::session::Session::worktrees_dest(repo) {
+                if dest != repo.root {
+                    push(&mut paths, &dest);
+                }
+            }
+            // The sidecar SOURCE of that bind is a workspace surface
+            // too: a `git worktree add` inside the sandbox writes it.
+            push(&mut paths, worktrees);
         }
     }
     Ok(paths)
@@ -1696,13 +1707,30 @@ fn krun_trusted_with_backing(paths: &[String], backing: &[(String, String)]) -> 
 /// covered.
 fn libgit2_trusted_paths(repo: &repo::Repo, workspace: bwrap::Workspace<'_>) -> Vec<String> {
     let mut paths = vec![repo.root.to_string_lossy().into_owned()];
-    if let (bwrap::Workspace::Live, Some(worktrees)) = (workspace, &repo.worktrees) {
+    // The sibling whose checkouts are trusted: the host's in a live run,
+    // the session's own in a clone run — bound at the host path there, so
+    // its checkouts are seen at `<repo>__worktrees>/<handle>` (workspace.md
+    // D3). Only existing checkouts are named, by exact path.
+    let (sibling, prefix) = match workspace {
+        bwrap::Workspace::Live => (repo.worktrees.as_deref(), None),
+        bwrap::Workspace::Clone { worktrees, .. } => (
+            Some(worktrees),
+            crate::session::Session::worktrees_dest(repo),
+        ),
+    };
+    if let Some(worktrees) = sibling {
         let mut checkouts: Vec<String> = std::fs::read_dir(worktrees)
             .into_iter()
             .flatten()
             .flatten()
             .map(|e| e.path())
             .filter(|p| p.is_dir() && p.join(".git").exists())
+            .map(|p| match &prefix {
+                // A clone run sees the session's checkouts under the
+                // HOST path they are bound at, not their sidecar path.
+                Some(dest) => dest.join(p.file_name().unwrap_or_default()),
+                None => p,
+            })
             .map(|p| p.to_string_lossy().into_owned())
             .filter(|s| !paths.contains(s))
             .collect();
@@ -1945,7 +1973,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // 1. repo resolution and guards (docs/TODOs/mvp-2-repo-discovery.md).
     // The guard runs BEFORE anything is created, so a `$HOME`-resolved run
     // never even creates a sidecar on disk.
-    let repo = match repo::resolve_cwd() {
+    let mut repo = match repo::resolve_cwd() {
         Ok(r) => r,
         Err(e) => {
             eprintln!("mysbx: {e}");
@@ -2136,17 +2164,21 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // — for a waypipe run — the per-run socket dir
     // `<sidecar>/waypipe/<pid>`; in a clone run (workspace.md D3)
     // the workspace bind is the session's clone instead, and the
-    // git-dirs, worktrees and state backings are NOT bound. The
-    // waypipe socket dir is the BIND source under the sidecar, not
-    // the in-sandbox `$XDG_RUNTIME_DIR/<display>` sibling, which
-    // is never a bind and stays allowed.
+    // git-dirs and state backings are NOT bound — the session's
+    // worktrees directory IS, beside the clone. The waypipe socket
+    // dir is the BIND source under the sidecar, not the in-sandbox
+    // `$XDG_RUNTIME_DIR/<display>` sibling, which is never a bind and
+    // stays allowed.
     let mut exposure_sources: Vec<std::path::PathBuf> = merged
         .mounts
         .iter()
         .map(|m| std::path::PathBuf::from(&m.path))
         .collect();
     match &session {
-        Some(s) => exposure_sources.push(s.clone.clone()),
+        Some(s) => {
+            exposure_sources.push(s.clone.clone());
+            exposure_sources.push(s.worktrees.clone());
+        }
         None => {
             exposure_sources.push(repo.root.clone());
             exposure_sources.extend(repo.git_dirs.iter().cloned());
@@ -2496,6 +2528,39 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         }
     }
 
+    // 4a-bis. the worktrees sibling of a run that STARTS A SESSION
+    // (config.md D13, workspace.md D3). Two shapes, one rule — the
+    // directory is created when it is missing, so it can be bound:
+    //
+    //   * a LIVE run: `<repo>__worktrees` beside the repo, the
+    //     workmux convention. The bind is what lets `workmux add` and
+    //     `git worktree add` work inside the sandbox at all.
+    //   * a CLONE run: the SESSION's own
+    //     `<sidecar>/clones/NAME__worktrees`, created with the clone
+    //     (4a) and bound at the same `<repo>__worktrees` host path.
+    //     The host's own sibling is never reached from a session.
+    //
+    // Only a run that starts an INTERACTIVE session creates: `run --
+    // CMD` is a one-shot (cli.md D11, D13) and `--dry-run` is
+    // side-effect-free (D9) — both keep whatever the resolution found,
+    // so a checkout without a sibling still gives them the narrow
+    // sandbox. `--detach` writes through the INNER run, so the outer's
+    // `preflight_only` never creates here. Checked after the merge
+    // and the backend refusals, like the session clone, so a broken
+    // configuration creates nothing.
+    if !preflight_only && session.is_none() && matches!(payload, bwrap::Payload::Shell) {
+        match repo::ensure_worktrees(&mut repo) {
+            Ok(Some(worktrees)) => {
+                println!("## created: {} (worktrees sibling)", worktrees.display())
+            }
+            Ok(None) => {}
+            Err(e) => {
+                eprintln!("mysbx: {e}");
+                return EXIT_INFRASTRUCTURE;
+            }
+        }
+    }
+
     // 4g. the krun backends' per-run dir sweep (bd myconfig-6xl):
     // BOTH krun variants write pid-named per-run dirs under the
     // sidecar — `gittrust/<pid>/` on podman-krun AND the direct
@@ -2626,7 +2691,10 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // Build argv based on backend
     // Also determine workspace for the report
     let workspace = match &session {
-        Some(s) => bwrap::Workspace::Clone { clone: &s.clone },
+        Some(s) => bwrap::Workspace::Clone {
+            clone: &s.clone,
+            worktrees: &s.worktrees,
+        },
         None => bwrap::Workspace::Live,
     };
     // The report renders the common run parameters (shell, tool PATH,
@@ -3141,7 +3209,10 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 mux_entry: podman_mux_entry.as_deref(),
                 waypipe: waypipe_params.clone(),
                 workspace: match &session {
-                    Some(s) => crate::bwrap::Workspace::Clone { clone: &s.clone },
+                    Some(s) => crate::bwrap::Workspace::Clone {
+                        clone: &s.clone,
+                        worktrees: &s.worktrees,
+                    },
                     None => crate::bwrap::Workspace::Live,
                 },
                 // Stdio wiring (bd myconfig-jho): the backend is exec'd
@@ -5697,14 +5768,32 @@ mod tests {
     }
 
     #[test]
-    fn git_trust_paths_of_a_clone_run_name_only_the_repo_path() {
-        // The clone is bound AT the repo's own path; the git-dirs and
-        // the worktrees sibling are not bound, so they are not trusted.
+    fn git_trust_paths_of_a_clone_run_name_the_clone_and_the_session_worktrees() {
+        // The clone is bound AT the repo's own path and the session's
+        // worktrees directory at the host's `<repo>__worktrees` path
+        // (workspace.md D3) — both are workspace trees, so both get the
+        // `/*` walk form, and the sidecar source is named too. The
+        // git-dirs and the HOST's sibling stay out: neither is bound.
         let clone = std::path::Path::new("/synth/repo.mysbx/clones/s");
-        let paths =
-            podman_trusted_git_paths(&synth_git_trust_repo(), bwrap::Workspace::Clone { clone })
-                .expect("the clone trust set");
-        assert_eq!(paths, ["/synth/repo", "/synth/repo/*"]);
+        let paths = podman_trusted_git_paths(
+            &synth_git_trust_repo(),
+            bwrap::Workspace::Clone {
+                clone,
+                worktrees: std::path::Path::new("/synth/repo.mysbx/clones/s__worktrees"),
+            },
+        )
+        .expect("the clone trust set");
+        assert_eq!(
+            paths,
+            [
+                "/synth/repo",
+                "/synth/repo/*",
+                "/synth/repo__worktrees",
+                "/synth/repo__worktrees/*",
+                "/synth/repo.mysbx/clones/s__worktrees",
+                "/synth/repo.mysbx/clones/s__worktrees/*",
+            ]
+        );
     }
 
     #[test]
@@ -5792,9 +5881,28 @@ mod tests {
             ]
         );
         let clone = std::path::Path::new("/synth/repo.mysbx/clones/s");
+        // A clone run trusts the clone (at the repo path) plus the
+        // checkouts in the SESSION's own worktrees directory — named
+        // under the host path they are bound at (workspace.md D3), so a
+        // `git` inside the session does not reject them as dubious.
+        let session_worktrees = base.join("session-worktrees");
+        std::fs::create_dir_all(session_worktrees.join("c")).unwrap();
+        std::fs::write(session_worktrees.join("c/.git"), "gitdir: x\n").unwrap();
         assert_eq!(
-            libgit2_trusted_paths(&repo, bwrap::Workspace::Clone { clone }),
-            ["/synth/repo"]
+            libgit2_trusted_paths(
+                &repo,
+                bwrap::Workspace::Clone {
+                    clone,
+                    worktrees: &session_worktrees,
+                }
+            ),
+            [
+                // The synth repo's root has no parent spelling of its
+                // own, so the session's checkouts appear under the
+                // host dest the fixture declares.
+                "/synth/repo".to_owned(),
+                "/synth/repo__worktrees/c".to_owned(),
+            ]
         );
         // An absent sibling contributes nothing.
         let _ = std::fs::remove_dir_all(&base);

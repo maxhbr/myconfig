@@ -74,15 +74,20 @@
 
   # Sets `repo_root` and `worktrees` — the workmux-convention
   # `<repo>__worktrees` sibling — and warns when the sibling is absent.
-  # The argv builder binds the sibling rw at its real host path only
-  # when it exists (`repo.rs::Repo::worktrees`), so `-d` is the bind
-  # test; a run never creates it (../docs/design/config.md D13).
+  # The argv builder binds the sibling rw at its real host path when it
+  # exists (`repo.rs::Repo::worktrees`); an interactive run creates it
+  # before the argv is built (../docs/design/config.md D13), and a clone
+  # run creates the session's OWN directory and binds it at this same
+  # path (workspace.md D3). So `-d` is the bind test, and reaching this
+  # warning means the run did not create it — a `run -- CMD`, a
+  # `--dry-run` (which never reaches the payload), or a backend whose
+  # sibling is not bound.
   # `$PWD` is the repo root: mysbx `--chdir`s there.
   worktreesSibling = self: ''
     repo_root="$PWD"
     worktrees="$(dirname "$repo_root")/$(basename "$repo_root")__worktrees"
     if [ ! -d "$worktrees" ]; then
-        echo "${self}: no $worktrees — it is not created here (mysbx config.md D13);" >&2
+        echo "${self}: no $worktrees — this run did not create it (mysbx config.md D13);" >&2
         echo "${self}: worktrees cannot land there until the sibling exists on the host" >&2
     fi
   '';

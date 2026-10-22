@@ -107,9 +107,15 @@ pub fn entries(repo: &Repo) -> Vec<Entry> {
         Ok(rd) => rd
             .filter_map(|e| e.ok())
             // Only directories are registry entries; anything else
-            // in the sibling (a stray file) is not a worktree.
+            // in the sibling (a stray file) is not a worktree. The
+            // `<handle>__worktrees` spelling is reserved: a SESSION's
+            // own worktrees directory lives in the sidecar
+            // (workspace.md D3) and is bound at the `<repo>__worktrees`
+            // dest, so an entry of that name here is not a worktree of
+            // the host repo.
             .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
             .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|name| !name.ends_with(crate::session::WORKTREES_SUFFIX))
             .collect(),
         Err(_) => Vec::new(),
     };

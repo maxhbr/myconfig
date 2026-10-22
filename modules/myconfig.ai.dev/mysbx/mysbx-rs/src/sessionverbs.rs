@@ -116,8 +116,13 @@ pub fn entries(repo: &Repo) -> Vec<Entry> {
             // Only directories are registry entries; the per-session
             // result files (D5) and anything else that is not a
             // session live in the same directory and are skipped.
+            // A session's OWN worktrees directory
+            // (`NAME__worktrees`, workspace.md D3) is a directory
+            // too — it belongs to the session one level up, not to a
+            // session of its own.
             .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
             .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|name| !name.ends_with(crate::session::WORKTREES_SUFFIX))
             .collect(),
         Err(_) => Vec::new(),
     };
@@ -322,6 +327,14 @@ pub fn remove_argv(session: &Session) -> Vec<Vec<String>> {
         vec![
             "-f".to_string(),
             session.result.to_string_lossy().into_owned(),
+        ],
+        // The session's own worktrees directory (workspace.md D3):
+        // it lives under `clones/` with the clone, so destroying a
+        // session destroys the checkouts it holds too — the same
+        // work-discarding the unmerged-work guard above is about.
+        vec![
+            "-rf".to_string(),
+            session.worktrees.to_string_lossy().into_owned(),
         ],
     ]
 }
@@ -1130,9 +1143,11 @@ mod tests {
     }
 
     #[test]
-    fn the_removal_is_plain_rm_of_clone_and_result_file() {
+    fn the_removal_is_plain_rm_of_clone_result_file_and_session_worktrees() {
         // D7: "The clone is plain rm -rf'd" — plus the session's own
-        // result file (D5). Two argvs, no git anywhere.
+        // result file (D5) and its own worktrees directory (workspace.md
+        // D3), which lives under `clones/` beside the clone. Three
+        // argvs, no git anywhere.
         assert_eq!(
             remove_argv(&synth_session()),
             vec![
@@ -1143,6 +1158,10 @@ mod tests {
                 vec![
                     "-f".to_string(),
                     "/synth/repo.mysbx/clones/fix-1.json".to_string(),
+                ],
+                vec![
+                    "-rf".to_string(),
+                    "/synth/repo.mysbx/clones/fix-1__worktrees".to_string(),
                 ],
             ]
         );

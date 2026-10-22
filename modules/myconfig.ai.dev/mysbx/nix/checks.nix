@@ -439,7 +439,8 @@ in
   # the entry must point herdr's `[worktrees] directory` at the
   # workmux `<repo>__worktrees` sibling — the same registry
   # `Repo::worktrees` binds — and must do so ONLY for an existing
-  # (i.e. bound) directory, never create it. The check extracts the
+  # (i.e. bound) directory, never create it (mysbx itself created it
+  # before the argv, config.md D13; the entry only configures). The check extracts the
   # entry's own placement code (the shared sibling discovery and the
   # `[worktrees]` block), runs it against both a present and an absent sibling, and
   # validates the generated session config with herdr's own
@@ -449,7 +450,7 @@ in
   # run against the REAL herdr binary, which must spawn its headless
   # server and make the socket API answer. Static guards pin the rest of
   # the contract: `bash -n` on the whole script, and no `mkdir` on
-  # the sibling (config.md D13: a run never creates it).
+  # the sibling (the entry configures, mysbx created it: config.md D13).
   mysbx-herdr-entry-test =
     let
       lib = inputs.nixpkgs.lib;

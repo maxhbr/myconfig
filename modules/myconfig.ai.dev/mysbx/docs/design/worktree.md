@@ -60,16 +60,21 @@ the repo is the one the cwd resolves to (cli.md D1), `--dry-run`
 prints the exact git commands (D9) and `--verbose` is refused — there
 is no run to report on.
 
-### W2: The worktrees directory is the registry — discovered, never created
+### W2: The worktrees directory is the registry — created by a session start, never by a verb
 
 `<repo>__worktrees` is operator state beside the repo, the same trust
-decision as the sidecar's (config.md D13): a run never creates it, and
-neither does this verb group. The resolution reuses
-[`Repo::worktrees`](../../mysbx-rs/src/repo.rs) — the sibling spelling
-`<parent>/<basename>__worktrees`, recorded when it exists. An absent
-sibling is the empty registry: `worktree list` prints nothing and exits
-`0` (a listing, not a verdict), the same as `session list` with an
-empty `clones/`.
+decision as the sidecar's (config.md D13). An interactive `mysbx` run
+creates it when it is missing (so its own rw bind has a source); this
+verb group never creates it, and no verb of it writes at all (W5). In a
+clone run the directory a session sees at that path is the session's OWN
+(`<sidecar>/clones/NAME__worktrees`, workspace.md D3a) — these verbs
+always resolve the HOST's sibling, from the host side.
+
+The resolution reuses [`Repo::worktrees`](../../mysbx-rs/src/repo.rs) —
+the sibling spelling `<parent>/<basename>__worktrees`, recorded when it
+exists. An absent sibling is the empty registry: `worktree list` prints
+nothing and exits `0` (a listing, not a verdict), the same as
+`session list` with an empty `clones/`.
 
 The per-worktree facts come from the layout, not from a directory
 listing alone: a handle directory must contain a `.git` FILE (a linked

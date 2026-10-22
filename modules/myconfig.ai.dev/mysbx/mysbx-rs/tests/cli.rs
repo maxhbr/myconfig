@@ -623,14 +623,55 @@ fn an_existing_worktrees_sibling_is_bound_implicitly() {
 
 #[test]
 fn an_absent_worktrees_sibling_adds_no_bind() {
-    // The counterpart: without the sibling the argv is byte-identical
-    // to the minimal golden — a run never creates the directory, so
-    // absence keeps the sandbox narrow.
+    // The counterpart: a `--dry-run` creates nothing (cli.md D9), so
+    // without the sibling the argv is byte-identical to the minimal
+    // golden — absence keeps the sandbox narrow.
     let (inv, repo, _) = fixture_with_backend("worktrees-absent", &["--dry-run"]);
     let (code, stdout, stderr) = run_binary(&inv);
     assert_eq!(code, 0, "stderr: {stderr}");
     assert_eq!(argv_block(&stdout), expected_minimal_argv(&repo));
     assert!(!stdout.contains("__worktrees"), "{stdout}");
+}
+
+#[test]
+fn a_dry_run_does_not_create_the_worktrees_sibling() {
+    // cli.md D9: a dry run is side-effect-free, so it keeps the narrow
+    // sandbox of a checkout without a sibling — the argv stays
+    // byte-identical to the minimal golden.
+    let (inv, repo, _) = fixture_with_backend("worktrees-dry-run", &["--dry-run"]);
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert_eq!(argv_block(&stdout), expected_minimal_argv(&repo));
+    let sibling = repo.parent().unwrap().join(format!(
+        "{}__worktrees",
+        repo.file_name().unwrap().to_string_lossy()
+    ));
+    assert!(
+        !sibling.exists(),
+        "the dry run created {}",
+        sibling.display()
+    );
+}
+
+#[test]
+fn a_run_command_does_not_create_the_worktrees_sibling() {
+    // cli.md D11/D13: `run -- CMD` is a one-shot, not a session start —
+    // it creates nothing, so no sibling appears next to the repo.
+    let (inv, repo, _) = fixture_user_backend(
+        "worktrees-run-cmd",
+        &["run", "--dry-run", "--", "echo", "hi"],
+    );
+    let (code, _, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let sibling = repo.parent().unwrap().join(format!(
+        "{}__worktrees",
+        repo.file_name().unwrap().to_string_lossy()
+    ));
+    assert!(
+        !sibling.exists(),
+        "the one-shot created {}",
+        sibling.display()
+    );
 }
 
 #[test]
@@ -6150,6 +6191,75 @@ fn git_session_fixture(
 }
 
 #[test]
+fn a_session_creates_its_own_worktrees_dir_beside_the_clone() {
+    // workspace.md D3: a session start creates the session's own
+    // worktrees directory `<sidecar>/clones/NAME__worktrees` with the
+    // clone. It lives under `clones/` (so `session destroy` and the
+    // registry cover it) and is bound rw at the host's
+    // `<repo>__worktrees` path. The HOST's sibling is not touched:
+    // a session must never reach the host worktrees.
+    let Some((inv, repo, sidecar)) =
+        git_session_fixture("session-worktrees-create", &["--session", "fix-1"])
+    else {
+        return; // no git on PATH: skip, like the other session tests
+    };
+    let (code, stdout, stderr) = run_binary(&inv);
+    // 0 with a real bwrap, 70 when the backend cannot start here — the
+    // creation happens BEFORE the backend, so both are fine.
+    assert!(code == 0 || code == 70, "code {code}: {stderr}\n{stdout}");
+    let clone = sidecar.join("clones").join("fix-1");
+    assert!(clone.join(".git").is_dir(), "the clone exists: {stdout}");
+    let session_worktrees = sidecar.join("clones").join("fix-1__worktrees");
+    assert!(
+        session_worktrees.is_dir(),
+        "the session worktrees dir exists: {stdout}"
+    );
+    assert!(
+        stdout.contains(&format!("## created: {}", clone.display())),
+        "{stdout}"
+    );
+    // The host's own sibling is NOT created by a clone run.
+    let host_sibling = repo.parent().unwrap().join(format!(
+        "{}__worktrees",
+        repo.file_name().unwrap().to_string_lossy()
+    ));
+    assert!(
+        !host_sibling.exists(),
+        "a session must not create the host sibling: {}",
+        host_sibling.display()
+    );
+}
+
+#[test]
+fn a_session_run_binds_its_worktrees_dir_at_the_repo_sibling_path() {
+    // The clone-run counterpart of the live sibling bind (D3): the
+    // session's directory is bound at `<repo>__worktrees`, the SAME
+    // in-sandbox path the live run uses — path identity, like the
+    // clone at `<repo>`.
+    let Some((inv, repo, sidecar)) = git_session_fixture(
+        "session-worktrees-bind",
+        &["--session", "fix-1", "--dry-run"],
+    ) else {
+        return; // no git on PATH: skip
+    };
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let session_worktrees = sidecar.join("clones").join("fix-1__worktrees");
+    let host_sibling = repo.parent().unwrap().join(format!(
+        "{}__worktrees",
+        repo.file_name().unwrap().to_string_lossy()
+    ));
+    assert!(
+        stdout.contains(&format!(
+            "--bind\n{}\n{}\n",
+            session_worktrees.display(),
+            host_sibling.display()
+        )),
+        "the session worktrees bind is missing:\n{stdout}"
+    );
+}
+
+#[test]
 fn a_session_dry_run_prints_the_clone_commands_and_creates_nothing() {
     // cli.md D9 + workspace.md D2: the dry run of a FIRST session
     // prints the exact `git` commands in the argv format (one
@@ -7250,6 +7360,29 @@ fn session_destroy_removes_debris() {
 }
 
 #[test]
+fn session_destroy_removes_the_sessions_worktrees_dir_too() {
+    // workspace.md D3: the session's own worktrees directory lives
+    // under `clones/` beside the clone, so destroying the session
+    // destroys it as well — a leftover checkouts directory would be
+    // debris the registry never names again.
+    let Some((mut inv, _, sidecar)) = session_fixture("session-destroy-worktrees", &["fix-1"])
+    else {
+        return;
+    };
+    let session_worktrees = sidecar.join("clones").join("fix-1__worktrees");
+    std::fs::create_dir_all(&session_worktrees).unwrap();
+    std::fs::write(session_worktrees.join("a-checkout"), "x").unwrap();
+    inv.args = vec!["session", "destroy", "fix-1"];
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(!sidecar.join("clones").join("fix-1").exists(), "{stdout}");
+    assert!(
+        !session_worktrees.exists(),
+        "the session worktrees dir is gone: {stdout}"
+    );
+}
+
+#[test]
 fn session_destroy_refuses_unknown_sessions_and_usage_errors() {
     // The registry of D2 (a missing clone is the unknown-session
     // refusal, 70, the same words the handoff verbs use) and the
@@ -7538,6 +7671,35 @@ fn session_hunk_execs_hunk_over_the_fetched_range() {
         "the fetched ref is the session tip"
     );
     assert!(!stdout.contains("## "), "no report lines: {stdout}");
+}
+
+#[test]
+fn the_session_worktrees_dir_is_not_a_session_of_its_own() {
+    // workspace.md D3: `<sidecar>/clones/NAME__worktrees` lives in the
+    // SAME directory as the sessions, so the registries must not read
+    // it as one: `session list` skips the suffix, and `session
+    // destroy` (whose registry check would otherwise accept it) does
+    // too — the directory belongs to the session one level up.
+    let Some((inv, _, sidecar)) = session_fixture("session-worktrees-registry", &["fix-1"]) else {
+        return;
+    };
+    std::fs::create_dir_all(sidecar.join("clones").join("fix-1__worktrees")).unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["session", "list"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let names: Vec<&str> = stdout
+        .lines()
+        .skip(1)
+        .map(|l| l.split_whitespace().next().unwrap_or(""))
+        .collect();
+    assert_eq!(names, vec!["fix-1"], "stdout: {stdout}");
+    // `destroy fix-1__worktrees` is not a session name at all: the
+    // grammar of workspace.md D2 reserves the suffix, so the verb
+    // refuses it as a usage error (exit `2`) before the registry is
+    // read — otherwise the directory would look like a debris session
+    // and be removed.
+    let (code, _, stderr) = run_binary_with(&inv, &["session", "destroy", "fix-1__worktrees"]);
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(stderr.contains("invalid session name"), "{stderr}");
 }
 
 #[test]
@@ -10047,10 +10209,37 @@ fn nono_session_clone_is_bound_at_the_repo_path() {
             .any(|(a, b)| a == "--allow" && b == &inv.cwd.to_string_lossy().to_string()),
         "the repo-root grant covers the clone: {stdout}"
     );
+    // The clone itself needs no separate grant (the repo-root grant
+    // covers it) — matched per LINE: the session's worktrees
+    // directory `<clone>__worktrees` IS granted separately
+    // (workspace.md D3), so a substring test would match it.
+    let clone_line = clone.to_string_lossy().into_owned();
     assert!(
-        !stdout.contains(&format!("--allow\n{}", clone.to_string_lossy())),
+        !stdout
+            .lines()
+            .zip(stdout.lines().skip(1))
+            .any(|(a, b)| a == "--allow" && b == clone_line),
         "no separate clone grant: {stdout}"
     );
+    // The session's own worktrees directory, bound at the host's
+    // `<repo>__worktrees` path: one grant for the sandbox path, one
+    // for the sidecar source.
+    let sandbox_worktrees = inv.cwd.parent().unwrap().join(format!(
+        "{}__worktrees",
+        inv.cwd.file_name().unwrap().to_string_lossy()
+    ));
+    for granted in [
+        sandbox_worktrees.to_string_lossy().into_owned(),
+        format!("{clone_line}__worktrees"),
+    ] {
+        assert!(
+            stdout
+                .lines()
+                .zip(stdout.lines().skip(1))
+                .any(|(a, b)| a == "--allow" && b == granted),
+            "the session worktrees dir {granted} is granted: {stdout}"
+        );
+    }
     assert!(
         !clone.exists(),
         "the dry run creates nothing: {}",
@@ -10073,6 +10262,12 @@ fn nono_session_clone_is_bound_at_the_repo_path() {
     assert!(code == 0 || code == 70, "code {code}: {stderr}\n{stdout}");
     let clone = sidecar.join("clones").join("s1");
     assert!(clone.join(".git").is_dir(), "the clone exists: {stdout}");
+    // The session's worktrees directory is created with the clone
+    // (workspace.md D3), so the rw bind has a source.
+    assert!(
+        sidecar.join("clones").join("s1__worktrees").is_dir(),
+        "the session worktrees dir exists: {stdout}"
+    );
 }
 
 #[test]

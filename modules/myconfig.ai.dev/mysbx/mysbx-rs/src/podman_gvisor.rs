@@ -116,6 +116,7 @@ use crate::bwrap::{Payload, PolicyPath, Waypipe, Workspace, HERDR_SOCKET_DIR};
 use crate::config::{Mode, Mount, Multiplexer};
 use crate::merge::Merged;
 use crate::repo::Repo;
+use crate::session::Session;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
@@ -820,14 +821,30 @@ pub fn podman_run_argv(
                         .collect(),
                 )
             }
-            Workspace::Clone { clone } => {
+            Workspace::Clone { clone, worktrees } => {
                 // Clone mode: session's clone at repo's path
                 bind_mount(&mut argv, &clone.to_string_lossy(), &root, true);
-                // Clone is the ONLY writable bind (D4)
+                // The session's OWN worktrees directory, rw, at the
+                // host's `<repo>__worktrees` path (workspace.md D3:
+                // path identity, like the clone at the repo path) —
+                // the session never reaches the host's worktrees.
+                let worktrees_dest =
+                    Session::worktrees_dest(repo).unwrap_or_else(|| repo.root.clone());
+                bind_mount(
+                    &mut argv,
+                    &worktrees.to_string_lossy(),
+                    &worktrees_dest.to_string_lossy(),
+                    true,
+                );
+                // The clone and that directory are the ONLY writable
+                // binds (D4, D3's session sibling).
                 (
                     clone.to_string_lossy().into_owned(),
                     root.clone(),
-                    vec![normalize(&clone.to_string_lossy())],
+                    vec![
+                        normalize(&clone.to_string_lossy()),
+                        normalize(&worktrees.to_string_lossy()),
+                    ],
                 )
             }
         };
@@ -942,10 +959,20 @@ pub fn podman_run_argv(
         }
     }
     // Hidden mounts check
+    // A clone run binds no git dirs and no state dirs (workspace.md
+    // D3/D4), but it does bind ITS OWN worktrees directory, at the
+    // same `<repo>__worktrees` dest the live run uses — so the guards
+    // below see that path in both modes.
+    let clone_worktrees_dest: Option<PathBuf> = match params.workspace {
+        Workspace::Live => None,
+        Workspace::Clone { worktrees, .. } => {
+            Some(Session::worktrees_dest(repo).unwrap_or_else(|| worktrees.to_path_buf()))
+        }
+    };
     let (implicit_git_dirs, implicit_worktrees): (&[PathBuf], Option<&Path>) =
         match params.workspace {
             Workspace::Live => (&repo.git_dirs, repo.worktrees.as_deref()),
-            Workspace::Clone { .. } => (&[], None),
+            Workspace::Clone { .. } => (&[], clone_worktrees_dest.as_deref()),
         };
     check_hidden_mounts(
         &cfg.mounts,

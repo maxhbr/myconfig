@@ -432,18 +432,42 @@ discovered with the repo, listed in the report, and are inexpressible
 in configuration: a mount that would cover them is refused like one
 that covers the repo root.
 
-The workmux `<repo>__worktrees` sibling is bound rw the same way —
-when it exists. Like the sidecar (D2), it is operator state beside the
-repo: a run never creates it, so its existence is the operator's
-declaration (a host-side `workmux add`, `git worktree add`, or any of
-the other sandboxing tiers, which all use the same convention). An
-absent sibling keeps the sandbox narrow; `workmux add` inside it fails
-with a filesystem error naming the path. The bind is guarded exactly
-like the repo's: a mount covering it is refused, a dest below it is
-refused, and a sibling that contains the home directory is refused at
-resolution. With the sibling bound, the herdr entry points herdr's
-worktree root at it too (D17), so every multiplexer that can create
-worktrees uses the same registry.
+The workmux `<repo>__worktrees` sibling is bound rw the same way — and
+a run that starts an **interactive session** creates it when it is
+missing, so the bind it makes has a source. The creation is the second
+deliberate exception to "a run creates nothing" (cli.md D13), and it is
+narrow on purpose:
+
+- it happens before the argv is built, so the sibling is bound like the
+  repo and `workmux add` / `git worktree add` work inside the sandbox
+  instead of failing on an unbound path,
+- it happens only for a run that starts a session — the bare
+  interactive form. `run -- CMD` is a one-shot (cli.md D11) and
+  `--dry-run` is side-effect-free (cli.md D9): both create nothing and
+  keep the narrow sandbox of a checkout without a sibling,
+- it never replaces what it finds: a symlink or a stray file at that
+  path is a refused run naming the path (the sibling is bound rw, so a
+  link would hand the payload whatever it points at),
+- a **clone run** creates no such directory next to the host repo at
+  all: it gets its own, `<sidecar>/clones/NAME__worktrees`, bound at
+  the same `<repo>__worktrees` path (workspace.md D3).
+
+A sibling the run did not create — a `run -- CMD`, a `--dry-run`, or an
+operator's own directory — keeps its pre-existing meaning: its content
+is whatever the operator put there. The bind is guarded exactly like the
+repo's: a mount covering it is refused, a dest below it is refused, and
+a sibling that contains the home directory is refused at resolution.
+With the sibling bound, the herdr entry points herdr's worktree root at
+it too (D17), so every multiplexer that can create worktrees uses the
+same registry.
+
+**The session's own sibling.** A `--session NAME` run binds
+`<sidecar>/clones/NAME__worktrees` rw at the host's
+`<repo>__worktrees` path — path identity, exactly as the clone is bound
+at `<repo>` — so a session's worktrees look like the repo's own to the
+tools inside, and the host's worktrees stay unreachable from a session
+(workspace.md D3). It is created with the clone on the first session run
+and removed with it by `session destroy`.
 
 **The pointer itself grants nothing (review-2 item 1).** The `.git`
 file lives *inside* the repo, so it is content the sandbox can rewrite
@@ -818,12 +842,11 @@ not of this key: `workmux add` creates a git worktree in the
 `<repo>__worktrees` sibling, which is **outside** the repo bind (D13).
 When that sibling EXISTS, `repo::resolve` records it and the argv
 builder binds it rw implicitly, like the repo itself and the git
-metadata directories — implicit infrastructure, discovered per run,
-never created by a run: its existence is operator state, the same
-trust decision as the sidecar's (D2). A checkout WITHOUT it stays
-narrow: the dashboard, the sidebar and every pane still work, and
-`workmux add` fails with a filesystem error naming the path — the
-honest outcome, since no layer declared it. A sidecar `[[mounts]]`
+metadata directories — implicit infrastructure, discovered per run. A
+run that starts an interactive session creates it first (D13), so the
+bind is there for every session start; `run -- CMD` and `--dry-run`
+create nothing. The dashboard, the sidebar and every pane work either
+way — only `workmux add` needs the sibling. A sidecar `[[mounts]]`
 entry remains the way to bind a worktrees directory that lives at a
 different path.
 
@@ -945,10 +968,11 @@ command — but a sandbox has exactly ONE repository, so the entry
 start time: it points `[worktrees] directory` at the `<repo>__worktrees`
 sibling WHEN THE SIBLING IS BOUND, i.e. exactly when `Repo::worktrees`
 recorded it (the `-d` test inside the sandbox IS the bind test). An
-absent sibling leaves the key unset and herdr falls back to its own
-default inside the tmpfs home — ephemeral, like a `workmux add` that
-fails on the unbound path: the D13 guard ("a run never creates the
-sibling") is preserved, because the entry only ever CONFIGURES an
+interactive run creates it before the argv is built (D13), and a clone
+run binds the session's own directory there, so the key is set for every
+session start; an absent sibling — a one-shot, or a checkout the run did
+not create it in — leaves the key unset and herdr falls back to its own
+default inside the tmpfs home. The entry only ever CONFIGURES an
 existing, rw-bound directory. herdr appends `<repo>/<branch-slug>` to
 its root, so checkouts land one level deeper than workmux puts them,
 inside the same sibling — the same tradeoff the bubblewrap-jail tier

@@ -249,11 +249,22 @@ pub fn nono_run_argv(
     // pointer is no mount specification, the approval check runs in
     // the bwrap layout too) and the worktrees sibling. Clone: the
     // clone bound AT the repo's own path (workspace.md D3) — the
-    // root grant covers it, and neither the git dirs, nor the
-    // worktrees sibling, nor any state store is bound or granted.
+    // root grant covers it — plus the session's own worktrees
+    // directory at the `<repo>__worktrees` path, while neither the
+    // git dirs, the host's worktrees sibling, nor any state store is
+    // bound or granted.
     argv.extend(["--allow".into(), root.clone()]);
     argv.push("--allow-cwd".into());
-    if !clone_run {
+    if clone_run {
+        if let Workspace::Clone { worktrees, .. } = params.workspace {
+            let dest =
+                crate::session::Session::worktrees_dest(repo).unwrap_or_else(|| repo.root.clone());
+            if dest != repo.root {
+                argv.extend(["--allow".into(), dest.to_string_lossy().into_owned()]);
+            }
+            argv.extend(["--allow".into(), worktrees.to_string_lossy().into_owned()]);
+        }
+    } else {
         for git_dir in &repo.git_dirs {
             argv.extend(["--allow".into(), git_dir.to_string_lossy().into_owned()]);
         }
