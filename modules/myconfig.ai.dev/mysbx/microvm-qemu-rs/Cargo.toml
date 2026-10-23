@@ -1,0 +1,10 @@
+[package]
+name = "mysbx-microvm-qemu"
+version = "0.1.0"
+edition = "2021"
+
+# The launcher is ZERO-DEPENDENCY by design (the krun-rs twin, bd
+# myconfig-kvq8): no libkrun to dlopen, no FFI at all — qemu and
+# virtiofsd are separate PROCESSES invoked by absolute paths, so
+# nothing needs linking beyond std.
+[dependencies]
