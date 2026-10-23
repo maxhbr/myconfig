@@ -31,5 +31,13 @@ in
       "smile"
       "Telegram"
     ];
+    myconfig.desktop.wayland.launcherRunOrRaise = [
+      # Signal's window reports `signal` as its app_id, while the cli
+      # command keeps the `-desktop` suffix.
+      {
+        appId = "signal";
+        command = "signal-desktop";
+      }
+    ];
   };
 }

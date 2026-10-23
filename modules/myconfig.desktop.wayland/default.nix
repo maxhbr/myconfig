@@ -32,12 +32,37 @@ in
         '';
       };
       launcherRunOrRaise = mkOption {
-        type = types.listOf types.str;
+        type = types.listOf (
+          types.submodule {
+            options = {
+              appId = mkOption {
+                # `null` (the default) derives the app-id from the first
+                # command token — the common case where cli command and
+                # app-id match (`thunderbird`, `firefox`).
+                type = types.nullOr types.str;
+                default = null;
+                example = "signal";
+                description = lib.mdDoc ''
+                  The niri/sway window `app_id` to focus. `null` derives it
+                  from the first token of `command`.
+                '';
+              };
+              command = mkOption {
+                type = types.str;
+                example = "signal-desktop";
+                description = lib.mdDoc ''
+                  The full launcher command line, as it also appears in
+                  `launcherCommands`.
+                '';
+              };
+            };
+          }
+        );
         default = [ ];
         example = literalExpression ''
           [
-            "firefox"
-            "thunderbird"
+            { command = "firefox"; }
+            { appId = "signal"; command = "signal-desktop"; }
           ]
         '';
         description = lib.mdDoc ''
@@ -45,9 +70,13 @@ in
           picked in the launcher, an already running window of that
           application is focused instead of a second instance being started.
 
-          Entries that are not in `launcherCommands` are ignored; an entry
-          with extra arguments (e.g. `"thunderbird --profile work"`) only
-          matches the launcher entry with exactly the same command line.
+          Each entry pairs the window `app_id` with the cli command; set
+          `appId` whenever the two differ (Electron apps often report an
+          app_id with a `-desktop` suffix stripped).
+
+          Entries whose `command` is not in `launcherCommands` are ignored;
+          an entry with extra arguments (e.g. `"thunderbird --profile work"`)
+          only matches the launcher entry with exactly the same command line.
         '';
       };
       launcherRunOrRaiseCommand = mkOption {
@@ -55,8 +84,8 @@ in
         default = null;
         description = lib.mdDoc ''
           Helper the launcher uses for `launcherRunOrRaise` entries, invoked as
-          `<command> <app-id> [args...]`: focus a running instance of the app
-          or spawn it. Set by the session module (niri provides
+          `<command> <app-id> <command...>`: focus a running instance of the
+          app or spawn it. Set by the session module (niri provides
           `niri-run-or-raise`); when null, `launcherRunOrRaise` has no effect.
         '';
       };
@@ -163,17 +192,23 @@ in
             # run-or-raise helper.
             runOrRaiseBranches =
               let
-                commands =
+                entries =
                   if runOrRaiseCommand == null then
                     [ ]
                   else
-                    lib.filter (command: builtins.elem command launcherCommands) runOrRaise;
+                    lib.filter (entry: builtins.elem entry.command launcherCommands) runOrRaise;
+                # The app-id to focus: the entry's explicit `appId`, else the
+                # first command token (cli command and window id usually
+                # coincide).
+                appIdOf =
+                  entry:
+                  if entry.appId != null then entry.appId else builtins.head (lib.splitString " " entry.command);
               in
-              lib.concatMapStrings (command: ''
-                ${lib.escapeShellArg command})
-                  ${runOrRaiseCommand} ${lib.escapeShellArgs (lib.splitString " " command)} &> /dev/null &
+              lib.concatMapStrings (entry: ''
+                ${lib.escapeShellArg entry.command})
+                  ${runOrRaiseCommand} ${lib.escapeShellArg (appIdOf entry)} ${lib.escapeShellArgs (lib.splitString " " entry.command)} &> /dev/null &
                   ;;
-              '') commands;
+              '') entries;
             myWofi = pkgs.writeShellScriptBin "my-wofi" ''
               choice="$(printf '%s\n' "${lib.escapeShellArgs launcherCommands}" |
                         tr ' ' '\n' |
@@ -206,7 +241,27 @@ in
                   '';
                 };
                 launcherRunOrRaise = mkOption {
-                  type = types.listOf types.str;
+                  type =
+                    with types;
+                    listOf (submodule {
+                      options = {
+                        appId = mkOption {
+                          type = types.nullOr types.str;
+                          default = null;
+                          description = lib.mdDoc ''
+                            The window `app_id` to focus; `null` derives it from
+                            the first token of `command`.
+                          '';
+                        };
+                        command = mkOption {
+                          type = types.str;
+                          description = lib.mdDoc ''
+                            The full launcher command line, as it also appears
+                            in `launcherCommands`.
+                          '';
+                        };
+                      };
+                    });
                   default = [ ];
                   description = lib.mdDoc ''
                     `launcherCommands` entries that run-or-raise instead of
