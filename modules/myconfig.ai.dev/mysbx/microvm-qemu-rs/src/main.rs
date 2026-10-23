@@ -417,7 +417,13 @@ fn virtiofsd_argv(bin: &Path, socket: &Path, device: &Device) -> Vec<String> {
 /// init + payload argv (the kernel splits at `--`, so the init's
 /// $1.. is exactly libkrun's krun_set_exec contract).
 fn kernel_cmdline(cfg: &Config) -> String {
-    let mut params = String::from("reboot=t panic=-1");
+    // root=/dev/root: the kernel mounts the virtiofs tag FS_ROOT_TAG
+    // ("/dev/root") as the root fs itself — libkrun's own contract,
+    // which the SHARED init relies on (it never mounts the root).
+    // rootwait: the virtiofs device appears with the vhost-user
+    // daemon handshake, which can land after the kernel's device
+    // probe — never fail the boot over a race the wait solves.
+    let mut params = String::from("root=/dev/root rootfstype=virtiofs rootwait reboot=t panic=-1");
     if let Some(manifest) = &cfg.manifest {
         // The pointer's TAG:SLOT spelling matches
         // MYSBX_KRUN_MANIFEST's.
@@ -435,9 +441,16 @@ fn kernel_cmdline(cfg: &Config) -> String {
         params.push_str(" mysbx.trace=1");
     }
     let mut init_and_payload = Vec::new();
-    // The init exec: krun's KRUN_INIT contract — argv[0] is the
-    // init path (here the kernel's init=), the payload follows as
-    // $1...
+    // init= names the guest entry (the baked /bin/mysbx-init — the
+    // SAME init the krun rootfs serves both backends); without a
+    // flag the kernel's default init applies (a debug run against a
+    // plain rootfs).
+    if let Some(init) = &cfg.init {
+        params.push_str(&format!(" init={init}"));
+    }
+    // The krun KRUN_INIT contract: argv[0] is the init path (the
+    // kernel's init=), the payload follows as $1... — the kernel
+    // splits the cmdline at `--`.
     init_and_payload.extend(cfg.payload.iter().cloned());
     format!("{params} -- {}", init_and_payload.join(" "))
 }
@@ -964,12 +977,20 @@ mod tests {
 
     #[test]
     fn the_kernel_cmdline_carries_the_pointer_and_the_payload() {
-        let cfg = test_cfg();
+        let mut cfg = test_cfg();
+        cfg.init = Some("/bin/mysbx-init".to_owned());
         let cmdline = kernel_cmdline(&cfg);
-        assert!(cmdline.starts_with("reboot=t panic=-1"));
+        assert!(
+            cmdline.starts_with("root=/dev/root rootfstype=virtiofs rootwait reboot=t panic=-1")
+        );
+        assert!(cmdline.contains("init=/bin/mysbx-init"));
         assert!(cmdline.contains("mysbx.manifest=stage-ro:manifest"));
         assert!(cmdline.contains("mysbx.exit-channel=mysbx-exit"));
         assert!(cmdline.ends_with(" -- /synth/shell"));
+        // Without an init flag the kernel's default applies — the
+        // debug-run path.
+        cfg.init = None;
+        assert!(!kernel_cmdline(&cfg).contains("init="));
     }
 
     #[test]
