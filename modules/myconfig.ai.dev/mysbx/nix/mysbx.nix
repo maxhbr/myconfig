@@ -361,6 +361,21 @@
   # krun-launcher.nix `libkrun` argument to change it).
   krunLauncher ? null,
   krunRootfs ? null,
+  # The native-qemu backend (docs/design/backends.md D9, bd
+  # myconfig-2l9b): the launcher binary (../microvm-qemu-rs, packaged
+  # by ./microvm-qemu-launcher.nix — zero-dependency Rust, rootless
+  # virtiofsd per device + one qemu microVM per run), the SHARED guest
+  # rootfs (./krun-rootfs.nix consumed as-is — the guest side is not
+  # forked) and the kernel bzImage (./microvm-qemu-kernel.nix — the one
+  # input libkrun bundles and qemu needs handed over; built with the
+  # virtio stack compiled in, the static busybox init loads no
+  # modules). `null` pins nothing and `backend = "microvm-qemu"` runs
+  # are refused with a naming message (the same contract as the krun
+  # pins). Parameters, not `pkgs.` references, so a host pins exactly
+  # the qemu/virtiofsd/kernel builds its runs need.
+  microvmQemuLauncher ? null,
+  microvmQemuRootfs ? null,
+  microvmQemuKernel ? null,
 }:
 
 let
@@ -768,6 +783,21 @@ let
       krunLauncher != null
     ) "--set MYSBX_KRUN_LAUNCHER '${krunLauncher}/bin/mysbx-krun' "
     + lib.optionalString (krunRootfs != null) "--set MYSBX_KRUN_ROOTFS '${krunRootfs}'";
+  # The native-qemu backend's pins (backends.md D9, bd myconfig-2l9b):
+  # the same closure-pin idiom — absolute store paths, no PATH
+  # fallback. A `microvm-qemu` run without them is refused by the
+  # crate (the launcher, rootfs and kernel each name their pin in the
+  # refusal).
+  microvmQemuPins =
+    lib.optionalString (
+      microvmQemuLauncher != null
+    ) "--set MYSBX_MICROVM_QEMU_LAUNCHER '${microvmQemuLauncher}/bin/mysbx-microvm-qemu' "
+    + lib.optionalString (
+      microvmQemuRootfs != null
+    ) "--set MYSBX_MICROVM_QEMU_ROOTFS '${microvmQemuRootfs}' "
+    + lib.optionalString (
+      microvmQemuKernel != null
+    ) "--set MYSBX_MICROVM_QEMU_KERNEL '${microvmQemuKernel}'";
 in
 symlinkJoin {
   # keep the crate's derivation name: build-pkg-for-host.sh matches on
@@ -797,7 +827,8 @@ symlinkJoin {
       ${nonoPins} \
       ${nonoEnvPins} \
       ${sshKeygenPins} \
-      ${krunDirectPins}
+      ${krunDirectPins} \
+      ${microvmQemuPins}
 
     # Hand-written fish tab completion (../mysbx-rs/completions, kept in
     # sync with the CLI surface by the `mysbx-completions` check in
