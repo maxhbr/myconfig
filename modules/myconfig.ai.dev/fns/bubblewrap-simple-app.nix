@@ -20,7 +20,13 @@
 }:
 
 let
-  runtimeInputs = extraRuntimeInputs;
+  # `curl` is the one tool every simple-app payload gets on top of its
+  # `pkg`: the wrapper inherits the host `PATH` (no `--clearenv`), so curl
+  # would resolve from the host profile anyway — but pinning it as a
+  # runtime input keeps it reachable even under a minimal launch
+  # environment, like the explicit devTools lists of ./bubblewrap-app.nix
+  # and ./nono-app.nix carry it.
+  runtimeInputs = [ pkgs.curl ] ++ extraRuntimeInputs;
 
   readOnlyDirsStr = lib.concatMapStringsSep " " (dir: ''"$HOME/${dir}"'') readOnlyConfigDirs;
 
