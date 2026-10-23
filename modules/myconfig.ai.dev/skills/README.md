@@ -52,7 +52,8 @@ namespace also covers skills whose *sources* come from elsewhere and only the
   `herdr --skill` output (a derivation, not a local directory); registered
   in `../programs/programs.herdr.nix` and implicitly enabled by the herdr CLI, so
   there is no glue file under `skills/`;
-- `playwright-cli.nix` — registers a package-provided skill;
+- `playwright-cli.nix` — registers a package-provided skill (the content
+  comes from `pkgs.playwright-driver.passthru.skillDir`);
 - `default.nix` — the module itself: discovers skills from flake-pinned
   sources, syncs everything into the enabled harnesses via home-manager
   (vendored `agent-skills-nix` library).

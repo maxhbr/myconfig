@@ -552,7 +552,11 @@ and pins it as `AGENT_BROWSER_EXECUTABLE_PATH` in the generated
 `[env]`, so the `agent-browser` CLI — which every tier already carries
 through `myconfig.ai.dev.sandboxTools.extraPackages` — drives that
 exact build instead of probing the `PATH` or downloading its own
-Chrome into the tmpfs home on every run.
+Chrome into the tmpfs home on every run. The same build is pinned as
+`PLAYWRIGHT_MCP_EXECUTABLE_PATH`, which is what `playwright-cli`
+([`../skills/playwright-cli.nix`](../skills/playwright-cli.nix)) launches: the
+host value of that variable names a `/nix/store` path the podman backends
+cannot see, so each tier pins its own.
 
 What is installed is the package wrapped by
 [`nix/browser.nix`](./nix/browser.nix): it prepends `--no-sandbox` and
@@ -616,6 +620,14 @@ read-only below `/mysbx-home`. It needs nothing else — no auth, no state,
 no `init` run. Its unconditional companion `tig` is part of the baseline
 dev-tool closure in [`nix/mysbx.nix`](./nix/mysbx.nix) instead, next to
 `git`.
+
+`playwright-cli` ([`../skills/playwright-cli.nix`](../skills/playwright-cli.nix))
+is a tool rather than an agent, and is wired through the shared
+`sandboxTools` hook: the binary lands on every tier's `PATH`, while its
+skill (and that of the harnesses that would use it) is mounted with the
+agent configuration above. Its browser comes from the `[env]` keys of
+"Browser automation" — the host value names a store path that is invisible
+under the podman backends.
 
 # Supported Technologies
 ## Already Implemented:

@@ -89,6 +89,9 @@ in
         hunk.enable = lib.mkDefault true;
         beads.enable = lib.mkDefault true;
         agent-browser.enable = lib.mkDefault true;
+        # The browser-automation skill and its CLI; on by default only here, so a
+        # host without `myconfig.ai.dev` never pulls a browser closure.
+        skills.playwright-cli.enable = lib.mkDefault true;
         ccusage.enable = lib.mkDefault true;
       };
       home-manager.sharedModules = [

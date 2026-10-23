@@ -117,7 +117,7 @@ in
     ./implement-and-review-and-commit.nix
     ./implement-and-review-and-commit-until-done.nix
     ./merge-worktree.nix
-    # ./playwright-cli.nix
+    ./playwright-cli.nix
     ./research.nix
     ./review.nix
     ./simple-english.nix

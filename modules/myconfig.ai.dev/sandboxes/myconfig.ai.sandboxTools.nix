@@ -33,20 +33,21 @@
 #
 # Deliberately EMPTY by default *from the host's side*: the sandbox tiers are
 # minimal by design
-# (headless, no GUI closures), so heavy tooling — a browser behind
-# `playwright-cli`, for example — is opt-in per host:
+# (headless, no GUI closures), so heavy tooling — a browser, for example — is
+# opt-in per host:
 #
 #   myconfig.ai.dev.sandboxTools.extraPackages = with pkgs; [
-#     playwright-cli
 #     chromium
 #   ];
 #   myconfig.ai.dev.sandboxTools.extraEnv.PLAYWRIGHT_MCP_BROWSER = "chromium";
+#   myconfig.ai.dev.sandboxTools.extraEnv.PLAYWRIGHT_MCP_EXECUTABLE_PATH =
+#     "\${pkgs.chromium}/bin/chromium";
 #
 # Feature modules may add to the list too, gated behind their own enable
 # option, when their tool is wanted in every tier and belongs to no single
-# one: ../../programs/programs.hunk and ../../programs/programs.agent-browser
-# append their package this way, so the reviewing tool exists wherever an
-# agent produces a changeset.
+# one: ../../programs/programs.hunk, ../../programs/programs.agent-browser and
+# ../../skills/playwright-cli append their package this way, so the reviewing
+# and browser-automation tools exist wherever an agent produces a changeset.
 { lib, ... }:
 {
   options.myconfig.ai.dev.sandboxTools = with lib; {

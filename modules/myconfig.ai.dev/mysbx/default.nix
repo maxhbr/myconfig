@@ -233,6 +233,11 @@ let
     })
     // (lib.optionalAttrs cfg.browser.enable {
       AGENT_BROWSER_EXECUTABLE_PATH = lib.getExe browserPackage;
+      # The same build for `playwright-cli` (../../skills/playwright-cli.nix),
+      # whose host value names a path the podman backends cannot see. Both keys
+      # carry one executable, so an agent switching between the two CLIs lands
+      # on the same browser.
+      PLAYWRIGHT_MCP_EXECUTABLE_PATH = lib.getExe browserPackage;
     });
 
   # `dest` is optional in the schema and there is no TOML null: a
