@@ -1074,6 +1074,23 @@ cmdline-budget finding) is KEPT even though qemu's `-append` has
 no 2048-byte limit: the argv interface stays byte-stable and
 testable, and the guest init stays backend-agnostic.
 
+The boot protocol is the kernel's own, which libkrun's matches:
+`-append` carries `root=/dev/root rootfstype=virtiofs rootwait`
+(the KERNEL mounts the virtiofs tag `/dev/root` as the root fs —
+the init never mounts it), `init=/bin/mysbx-init` (the baked entry
+the kernel execs as PID 1), the manifest pointer and the exit
+channel as `mysbx.manifest=` / `mysbx.exit-channel=` / `mysbx.trace=`
+params (the init's ENV route is libkrun's envp mechanism, which a
+stock kernel does not carry to init — the cmdline is the qemu
+bridge, consumed by the same init), and the payload argv behind
+` -- ` (the kernel splits the cmdline there and hands the rest to
+init as `$1..`, exactly the krun_set_exec contract). The kernel
+pin (`nix/microvm-qemu-kernel.nix`) is a nixpkgs kernel rebuilt
+with the virtio stack, ext4 and overlayfs BUILT IN — the static
+busybox init loads no modules, and the nixpkgs default config
+builds virtio_fs, virtio_pci, ext4 and overlayfs as modules
+(FUSE too: VIRTIO_FS=y selects it).
+
 **Why qemu, not libkrun — and why NOT the default.** libkrun is
 the default VM backend: it is one fewer process tree, one fewer
 kernel pin and its boot is proven at 282 ms. `microvm-qemu` exists

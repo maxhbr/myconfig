@@ -34,24 +34,27 @@ let
 in
 kernelPackages.kernel.override {
   structuredExtraConfig = with lib.kernel; {
-    # The virtio device stack — the VM's only hardware.
-    VIRTIO = yes;
-    VIRTIO_PCI = yes;
-    VIRTIO_PCI_LIB = yes;
-    VIRTIO_PCI_LIB_LEGACY = yes;
-    VIRTIO_PCI_LEGACY = yes;
+    # The virtio device stack — the VM's only hardware. The *_LIB
+    # options stay at their defaults (VIRTIO_FS selects VIRTIO; an
+    # explicit VIRTIO=yes makes the config generator re-ask — its
+    # repeated-question refusal).
     VIRTIO_FS = yes;
+    # The PCI transport the qemu microVM's devices ride on
+    # (vhost-user-fs-PCI, virtio-blk-PCI) — without it built in, the
+    # static init finds no devices at all. VIRTIO_PCI selects VIRTIO;
+    # do not set VIRTIO itself (the generator's repeated-question
+    # refusal).
+    VIRTIO_PCI = yes;
     VIRTIO_BLK = yes;
     VIRTIO_NET = yes;
     VIRTIO_CONSOLE = yes;
     # The scratch (bd myconfig-dak.7) and the store overlay.
     EXT4_FS = yes;
     OVERLAY_FS = yes;
-    # The exit channel (D9): the virtio-serial port the init reports
-    # the payload's exit code over.
-    VIRTIO_MENU = yes;
-    # Headless: no firmware/ACPI dependency in the boot path beyond
-    # what -M microvm provides (acpi=on in the qemu machine opts).
+    # VIRTIO_FS=y selects FUSE — the default kernel ships it as a
+    # module, and the config generator re-asks VIRTIO_FS when its
+    # dependency stays m (the repeated-question refusal).
+    FUSE_FS = yes;
   };
   # Faster build, smaller bzImage: no modules to sign or strip.
   buildDTBs = false;

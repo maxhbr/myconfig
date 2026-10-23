@@ -128,6 +128,40 @@ let
         exit 125
     }
 
+    # PID-1 boot (the qemu bridge, backends.md D9): the krun guest
+    # runs after libkrun's implicit init mounted proc/sys/dev; the
+    # qemu guest runs this script AS PID 1 (the kernel's init=), so
+    # nothing is mounted yet. The /proc/uptime probe keeps the krun
+    # path unchanged: mounted pseudo-filesystems skip every mount.
+    if [ ! -f /proc/uptime ]; then
+        "$BB" mount -t proc proc /proc \
+            || fail "cannot mount proc as pid 1"
+        "$BB" mount -t sysfs sysfs /sys \
+            || fail "cannot mount sysfs as pid 1"
+        "$BB" mount -t devtmpfs devtmpfs /dev \
+            || fail "cannot mount devtmpfs as pid 1"
+    fi
+
+    # The mysbx.* cmdline params (the qemu bridge): libkrun hands the
+    # guest its settings through envp; qemu has no envp — the kernel
+    # cmdline carries them instead (mysbx.trace=, mysbx.manifest=,
+    # mysbx.exit-channel=). Env stays first-class: every consumer
+    # below falls back to _cval ONLY when its variable is unset, and
+    # the krun cmdline (libkrun's own) carries no mysbx.* params.
+    _cval=""
+    _cmdline_mysbx() {
+        # $1: the param name; sets _cval to the LAST value before
+        # the `--` split (empty when absent). The payload argv
+        # follows `--` and must not be parsed as a param.
+        _cval=""
+        for _cw in $("$BB" cat /proc/cmdline 2>/dev/null); do
+            case "$_cw" in
+                --) break ;;
+                "mysbx.$1="*) _cval="''${_cw#*=}" ;;
+            esac
+        done
+    }
+
     # The trace of last resort (live debugging, bd myconfig-2n8):
     # the guest console carries every step when the wrapper or the
     # user sets MYSBX_KRUN_TRACE=1 — a silent hang otherwise leaves
@@ -149,6 +183,10 @@ let
     # parsing. A read failure (no /proc yet) reports 0 — timing is
     # best-effort, the step names are the point.
     trace="''${MYSBX_KRUN_TRACE:-}"
+    if [ -z "$trace" ]; then
+        _cmdline_mysbx trace
+        if [ "$_cval" = "1" ]; then trace=1; fi
+    fi
     _now_ms() {
         if read _up _ < /proc/uptime 2>/dev/null; then
             _ms=$(( (10${basePrefix}''${_up%%.*} * 100 + 10${basePrefix}''${_up#*.}) * 10 ))
@@ -206,6 +244,17 @@ let
     # at once (the init's OWN steps use none of them; the payload
     # inherits everything through exec).
     manifest="''${MYSBX_KRUN_MANIFEST:-}"
+    if [ -z "$manifest" ]; then
+        _cmdline_mysbx manifest
+        manifest=$_cval
+    fi
+    # The exit channel (the qemu bridge, backends.md D9): the
+    # virtio-serial port the payload's exit code travels back on.
+    # Cmdline-only — the krun guest has no channel and never sets
+    # one.
+    exit_channel=""
+    _cmdline_mysbx exit-channel
+    exit_channel=$_cval
     if [ -n "$manifest" ]; then
         mtag=''${manifest%%':'*}
         mslot=''${manifest#*':'}
@@ -779,6 +828,25 @@ let
     fi
 
     step "exec-ing the payload: $1"
+    if [ -n "$exit_channel" ]; then
+        # The exit channel (the qemu bridge): the payload runs as a
+        # CHILD so this PID 1 can observe its exit code, hand it to
+        # the launcher's reader (one "N\n" line on the virtio-serial
+        # port), and exit — the kernel panics on PID-1 exit and
+        # qemu's -no-reboot turns that panic into a clean exit. A
+        # failed write falls through to the same teardown: the
+        # launcher reports no code rather than hanging the VM.
+        set +e
+        "$@" &
+        _payload_pid=$!
+        wait "$_payload_pid"
+        _exit_code=$?
+        set -e
+        step "the payload exited with $_exit_code"
+        printf '%s\n' "$_exit_code" > "/dev/virtio-ports/$exit_channel" \
+            || echo "mysbx-init: cannot write the exit code to the $exit_channel port" >&2
+        exit 0
+    fi
     exec "$@"
   '';
 in
@@ -858,6 +926,11 @@ runCommand "mysbx-krun-rootfs"
     # diagnosis instead of the live mid-session ENOENT.
     grep -qF 'the store share lost' $out/bin/mysbx-init \
         || { echo "mysbx-krun-rootfs: init lost the store-share degradation probe" >&2; exit 1; }
+    # The qemu exit channel (backends.md D9): the init must report
+    # the payload's exit code on the virtio-serial port the launcher
+    # reads.
+    grep -qF '/dev/virtio-ports' $out/bin/mysbx-init \
+        || { echo "mysbx-krun-rootfs: init lost the exit-channel report" >&2; exit 1; }
     # The shebang guard (the eighth live finding): an indented
     # Nix string strips only the MINIMAL common indent of its
     # lines, so mixed indents leave leading spaces before the
