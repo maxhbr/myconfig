@@ -93,6 +93,11 @@ in
       config = {
         common = {
           default = "wlr";
+          # xdg-desktop-portal-gnome delegates its FileChooser to
+          # Nautilus (org.gnome.Nautilus), which is not part of a niri
+          # session. Route FileChooser to the self-contained gtk
+          # portal instead, which ships its own GTK file dialog.
+          "org.freedesktop.impl.portal.FileChooser" = "gtk";
         };
       };
       wlr.enable = true;
@@ -107,7 +112,11 @@ in
           gnome = config.services.desktopManager.gnome.enable;
           kde = config.services.desktopManager.plasma6.enable;
         in
-        [ pkgs.xdg-desktop-portal-wlr ]
+        [
+          pkgs.xdg-desktop-portal-wlr
+          # provides the FileChooser implementation referenced above
+          pkgs.xdg-desktop-portal-gtk
+        ]
         ++ lib.optional kde pkgs.kdePackages.xdg-desktop-portal-kde
         ++ lib.optional gnome pkgs.xdg-desktop-portal-gtk;
     };
