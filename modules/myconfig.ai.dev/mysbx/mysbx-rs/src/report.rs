@@ -415,9 +415,14 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         // The direct-libkrun backend (backends.md D3): layered like
         // nono — bwrap builds the host-side view, the mysbx-krun
         // launcher inside it starts the VM — so the label names the
-        // chain, exactly like the nono line does.
+        // chain, exactly like the nono line does. The qemu twin (D9)
+        // chains the same way with its own launcher.
         "krun" => p(format!(
             "krun:           {} (layered — bwrap builds the view, mysbx-krun starts the VM)",
+            r.bwrap_bin
+        )),
+        "microvm-qemu" => p(format!(
+            "microvm-qemu:   {} (layered — bwrap builds the view, mysbx-microvm-qemu starts the VM)",
             r.bwrap_bin
         )),
         "nono" => p(format!(

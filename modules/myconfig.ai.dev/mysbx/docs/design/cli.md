@@ -621,15 +621,15 @@ The bare form and `run` accept `--backend <name>`, before the verb and
 after it for `run` — the same one position rule every run-scoped flag
 follows (D10/D14/D16/D17). The value is the same closed set the
 pipeline enforces on the configuration: `bubblewrap` | `podman-gvisor` |
-`nono` | `podman-krun`.
+`nono` | `podman-krun` | `krun` | `microvm-qemu`.
 It wins over the merged `backend` of both layers for THIS invocation
 only, per the precedence of D6 (flags > sidecar > user > defaults,
 with the CLI as the outermost layer of config.md D1) — nothing is
 written, and the next `mysbx` runs the configured backend again.
 
 Every value is also accepted as its own flag (bd myconfig-6tt):
-`--bubblewrap`, `--podman-gvisor`, `--nono`, `--podman-krun` and
-`--krun` are PURE ALIASES of `--backend <that value>` — the same
+`--bubblewrap`, `--podman-gvisor`, `--nono`, `--podman-krun`,
+`--krun` and `--microvm-qemu` are PURE ALIASES of `--backend <that value>` — the same
 positions, the same refusals, the same provenance tag in the D10
 report (`[--backend]`, whichever spelling selected it). One
 invocation selects at most one value across both spellings and both
