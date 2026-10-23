@@ -439,13 +439,26 @@ the `FORGET`s, and the host launcher's fds fall with them.
 
 Knobs through the normal `[env]` config route:
 
-- `MYSBX_KRUN_INODE_WATCHDOG` — the inode threshold; `0` disables;
-  default `20000`, leaving headroom below the launcher's minimum
-  supported host ceiling of `65536` fds for other descriptors and
-  growth between checks.
+- `MYSBX_KRUN_INODE_WATCHDOG` — the allowed inode growth above the
+  post-drop baseline; `0` disables; default `20000`. The baseline is
+  the inode count right after the last drop (`0` before the first),
+  so the in-use set a drop cannot reclaim (about 72k in a long agent
+  session) does not trigger a drop on every check (bd myconfig-jjfy).
 - `MYSBX_KRUN_INODE_WATCHDOG_INTERVAL` — the check interval in
-  seconds; default `60`. Shorter intervals bound the overshoot of
-  fast walks; validation uses `2`.
+  seconds; default `1`. A walk pins fds between two checks, so the
+  interval bounds the overshoot of fast walks.
+
+Every drop appends a line to `/tmp/mysbx-inode-watchdog.log` inside
+the guest (rotated to `.1` past 256 KiB): the inode count before and
+after, and the next trigger. Its first line records the armed
+settings, so the log also shows that the watchdog ran.
+
+The host side adds headroom: on mysbx hosts the hard `RLIMIT_NOFILE`
+of systemd user managers and their units is raised to
+`myconfig.ai.dev.mysbx.krun.direct.userNofileLimit` (default
+`8388608`; `null` keeps systemd's `524288`). Launchers started from
+sessions outside the user manager (a plain tty or ssh login) keep the
+system default.
 
 Validate both ends on a host with writable `/dev/kvm`:
 
@@ -454,6 +467,10 @@ MYSBX=/path/to/rebuilt/mysbx python3 \
   modules/myconfig.ai.dev/mysbx/nix/krun-fd-stress.py \
   --store-scan /path/to/test/repo
 ```
+
+Add `--watchdog-defaults` to arm nothing and validate the init's
+default settings instead of the low-threshold, 2-second validation
+settings.
 
 The store-scan mode walks the SHARED store (the workload of every
 live wedge) through a scratch repo whose `[env]` arms the watchdog,

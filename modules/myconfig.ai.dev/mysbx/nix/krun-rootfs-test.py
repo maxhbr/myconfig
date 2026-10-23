@@ -248,6 +248,7 @@ class InitTests(unittest.TestCase):
         # sentinel echo must observe the drop AFTER it happened.
         payload = payload.replace('/proc/sys/fs/inode-state', '"$IW_PROC"/fs/inode-state')
         payload = payload.replace('/proc/sys/vm/drop_caches', '"$IW_PROC"/vm/drop_caches')
+        payload = payload.replace('/tmp/mysbx-inode-watchdog.log', '"$IW_PROC"/iw.log')
         payload = payload.replace('"$BB" sleep "$_iw_interval"', 'break')
         payload = payload.replace(
             'echo "mysbx-test: drops=$("$BB" cat /tmp/iw-drop)"',
@@ -315,6 +316,92 @@ class InitTests(unittest.TestCase):
         result = run("banana", 30000, interval="banana")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("mysbx-test: drops=2", result.stdout)
+
+    def watchdog_ticks(self, start, observed, post_drop, env=None, log_bytes=0):
+        # Run the REAL watchdog block over several ticks. The sleep
+        # becomes `iw_tick || break` (feeds the next observed inode
+        # count), and the drop_caches write becomes `iw_drop` (counts
+        # the drop and sets the post-drop count the block re-reads).
+        start_at = INIT.index('if [ "${MYSBX_KRUN_INODE_WATCHDOG:-')
+        end = INIT.index('step "exec-ing the payload: $1"', start_at)
+        block = INIT[start_at:end]
+        drop = "echo 2 > /proc/sys/vm/drop_caches 2>/dev/null || :"
+        sleep = '"$BB" sleep "$_iw_interval"'
+        for literal in (drop, sleep, "/proc/sys/fs/inode-state", "/tmp/mysbx-inode-watchdog.log"):
+            self.assertIn(literal, block)
+        block = block.replace(drop, "iw_drop")
+        block = block.replace(sleep, "iw_tick || break")
+        block = block.replace("/proc/sys/fs/inode-state", '"$IW"/inode-state')
+        block = block.replace("/tmp/mysbx-inode-watchdog.log", '"$IW"/iw.log')
+        base = self.base / "iw-ticks"
+        base.mkdir(exist_ok=True)
+        (base / "inode-state").write_text(f"{start}\t0\t0\t0\t0\t0\t0\n")
+        (base / "observed").write_text("".join(f"{n}\n" for n in observed))
+        (base / "post").write_text("".join(f"{n}\n" for n in post_drop))
+        (base / "drops").write_text("")
+        if log_bytes:
+            (base / "iw.log").write_text("x" * log_bytes)
+        script = (
+            "set -eu\n"
+            "BB=%s\n"
+            "IW=%s\n"
+            "step() { :; }\n"
+            "unset MYSBX_KRUN_INODE_WATCHDOG_INTERVAL\n"
+            % (shlex.quote(str(ROOTFS / "bin/busybox")), shlex.quote(str(base)))
+            + (
+                "unset MYSBX_KRUN_INODE_WATCHDOG\n" if env is None
+                else "MYSBX_KRUN_INODE_WATCHDOG=%s\n" % shlex.quote(env)
+            )
+            + 'iw_pop() { _v=$("$BB" head -n 1 "$IW/$1"); "$BB" sed -i 1d "$IW/$1"; }\n'
+            + 'iw_tick() { iw_pop observed; [ -n "$_v" ] || return 1; echo "$_v" > "$IW"/inode-state; }\n'
+            + 'iw_drop() { echo drop >> "$IW"/drops; iw_pop post; echo "$_v" > "$IW"/inode-state; }\n'
+            + block
+            + "wait\n"
+        )
+        result = subprocess.run(
+            [str(ROOTFS / "bin/busybox"), "sh", "-c", script],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            env={"PATH": ""},
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stderr, "")
+        drops = (base / "drops").read_text().count("drop")
+        return drops, (base / "iw.log").read_text(), base
+
+    def test_inode_watchdog_tracks_the_post_drop_baseline(self):
+        # bd myconfig-jjfy: about 72k inodes stay in use after a drop.
+        # A fixed threshold below that drops on every tick; the
+        # baseline-relative trigger drops only after 20000 new inodes.
+        drops, log, _ = self.watchdog_ticks(
+            100000, [80000, 91000, 95000, 90000], [72000, 73000]
+        )
+        self.assertEqual(drops, 2, log)
+        self.assertEqual(
+            log.splitlines()[0], "armed: growth 20000, interval 1s", log
+        )
+        self.assertIn("drop: inodes 100000 -> 72000, next drop above 92000", log)
+        self.assertIn("drop: inodes 95000 -> 73000, next drop above 93000", log)
+        self.assertEqual(log.count("drop:"), 2, log)
+        # A custom growth is relative to the baseline too.
+        drops, log, _ = self.watchdog_ticks(
+            6000, [9000, 12000], [1000, 9000], env="5000"
+        )
+        self.assertEqual(drops, 2, log)
+        self.assertIn("drop: inodes 6000 -> 1000, next drop above 6000", log)
+        self.assertIn("drop: inodes 9000 -> 9000, next drop above 14000", log)
+
+    def test_inode_watchdog_log_rotates(self):
+        drops, log, base = self.watchdog_ticks(
+            100000, [], [72000], log_bytes=300000
+        )
+        self.assertEqual(drops, 1)
+        rotated = (base / "iw.log.1").read_text()
+        self.assertTrue(rotated.startswith("x" * 1000))
+        self.assertIn("armed: growth 20000", rotated)
+        self.assertEqual(log.count("\n"), 1, log)
+        self.assertIn("drop: inodes 100000 -> 72000", log)
 
     def test_prunes_missing_and_both_symlinks_with_incoming_refs(self):
         (self.store / "directory").mkdir()

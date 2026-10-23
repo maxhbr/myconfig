@@ -1004,6 +1004,22 @@ in
             into the wrapper as MYSBX_KRUN_ROOTFS.
           '';
         };
+
+        userNofileLimit = mkOption {
+          type = types.nullOr types.ints.positive;
+          default = 8388608;
+          description = ''
+            The hard RLIMIT_NOFILE of systemd user managers and their
+            units (soft stays 1024). The mysbx-krun launcher raises its
+            soft limit to this ceiling, and its virtiofs server holds
+            one host fd per guest-visited inode, so the ceiling is the
+            headroom a fast guest walk has before the sandbox wedges
+            on EMFILE between two inode-watchdog checks (bd
+            myconfig-jjfy). `null` keeps systemd's default (524288).
+            Sessions not started under the user manager (a plain tty
+            or ssh login) keep the system default.
+          '';
+        };
       };
 
       nestedPodman = {
@@ -1687,6 +1703,19 @@ in
     # Baseline mounts; further definitions (from per-agent modules or the
     # host config) are concatenated onto this list.
     myconfig.ai.dev.mysbx.config.mounts = baselineMounts ++ workmuxMounts;
+
+    # The krun launcher's fd ceiling (`krun.direct.userNofileLimit`):
+    # user@.service bounds the user manager itself, user.conf the
+    # units (and so the sessions) it starts.
+    systemd = lib.mkIf (cfg.krun.direct.userNofileLimit != null) (
+      let
+        limit = "1024:${toString cfg.krun.direct.userNofileLimit}";
+      in
+      {
+        services."user@".serviceConfig.LimitNOFILE = limit;
+        user.settings.Manager.DefaultLimitNOFILE = limit;
+      }
+    );
 
     # The host side of model access for the podman-gvisor backend: the
     # shared port-scoped forwarder of

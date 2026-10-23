@@ -26,6 +26,9 @@ NOFILE = 65536
 STORE_ROOTS = ("/nix/store", "/mysbx-krun-stage/ro/store")
 WATCHDOG_ENV = "MYSBX_KRUN_INODE_WATCHDOG"
 WATCHDOG_INTERVAL_ENV = "MYSBX_KRUN_INODE_WATCHDOG_INTERVAL"
+# The init's defaults (nix/krun-rootfs.nix), used by --watchdog-defaults.
+WATCHDOG_DEFAULT_GROWTH = 20000
+WATCHDOG_DEFAULT_INTERVAL = 1
 GUEST = r"""
 import os
 import sys
@@ -252,15 +255,22 @@ def run_store_scan(args, repo):
 def _store_scan_once(args, repo, scratch):
     scratch_config = scratch.with_name(scratch.name + ".mysbx")
     scratch_config.mkdir(exist_ok=True)
-    (scratch_config / "config.toml").write_text(
-        'backend = "krun"\n'
-        "[env]\n"
-        f'{WATCHDOG_ENV} = "{args.watchdog_threshold}"\n'
-        f'{WATCHDOG_INTERVAL_ENV} = "2"\n'
-    )
+    # --watchdog-defaults leaves [env] out, so the init's own defaults
+    # are what gets validated.
+    defaults = getattr(args, "watchdog_defaults", False)
+    interval = WATCHDOG_DEFAULT_INTERVAL if defaults else 2
+    config = 'backend = "krun"\n'
+    if not defaults:
+        config += (
+            "[env]\n"
+            f'{WATCHDOG_ENV} = "{args.watchdog_threshold}"\n'
+            f'{WATCHDOG_INTERVAL_ENV} = "{interval}"\n'
+        )
+    (scratch_config / "config.toml").write_text(config)
     log_fd, log_name = tempfile.mkstemp(prefix="mysbx-krun-watchdog-", suffix=".log")
     print(
         f"Watchdog validation: store scan; threshold={args.watchdog_threshold}, "
+        f"interval={interval}s{' (init defaults)' if defaults else ''}, "
         f"launcher fd budget: {args.fd_budget}",
         flush=True,
     )
@@ -272,7 +282,7 @@ def _store_scan_once(args, repo, scratch):
                 "run",
                 "--",
                 *guest_watchdog_argv(
-                    "/nix/store", args.rounds, args.watchdog_threshold, 2
+                    "/nix/store", args.rounds, args.watchdog_threshold, interval
                 ),
             ],
             cwd=scratch,
@@ -569,6 +579,37 @@ class MonitorTests(unittest.TestCase):
                 popen.assert_called_once()
             self.assertEqual(list(repo.iterdir()), [])
 
+    def test_store_scan_watchdog_defaults_arm_nothing(self):
+        args = argparse.Namespace(
+            mysbx="mysbx", watchdog_threshold=WATCHDOG_DEFAULT_GROWTH,
+            fd_budget=40000, rounds=2, watchdog_defaults=True,
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            repo = Path(temporary) / "repo"
+            repo.mkdir()
+            log_fd, log_name = tempfile.mkstemp(dir=temporary)
+
+            def launch(argv, **kwargs):
+                sidecar = kwargs["cwd"].with_name(kwargs["cwd"].name + ".mysbx")
+                config = tomllib.loads((sidecar / "config.toml").read_text())
+                self.assertEqual(config, {"backend": "krun"})
+                self.assertEqual(
+                    argv[-2:],
+                    [str(WATCHDOG_DEFAULT_GROWTH), str(WATCHDOG_DEFAULT_INTERVAL)],
+                )
+                raise OSError("launch failed")
+
+            with mock.patch("tempfile.mkstemp", return_value=(log_fd, log_name)), \
+                    mock.patch("subprocess.Popen", side_effect=launch):
+                with self.assertRaisesRegex(OSError, "launch failed"):
+                    run_store_scan(args, repo)
+
+    def test_watchdog_defaults_needs_store_scan(self):
+        with mock.patch.object(sys, "argv", ["probe", "--watchdog-defaults"]), \
+                mock.patch("sys.stderr", io.StringIO()):
+            with self.assertRaises(SystemExit):
+                main()
+
     def test_store_scan_success_cleanup(self):
         args = argparse.Namespace(watchdog_threshold=20000, fd_budget=40000)
         with tempfile.TemporaryDirectory() as temporary:
@@ -733,8 +774,18 @@ def main():
         help="the MYSBX_KRUN_INODE_WATCHDOG value the scratch repo arms "
         "(store-scan mode only)",
     )
+    parser.add_argument(
+        "--watchdog-defaults",
+        action="store_true",
+        help="store-scan mode: arm nothing, validate the init's default "
+        "watchdog settings (growth 20000, interval 1s)",
+    )
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
+    if args.watchdog_defaults:
+        if not args.store_scan:
+            parser.error("--watchdog-defaults needs --store-scan")
+        args.watchdog_threshold = WATCHDOG_DEFAULT_GROWTH
     if args.fd_budget is None:
         args.fd_budget = 40000 if args.store_scan else 8192
     if args.self_test:

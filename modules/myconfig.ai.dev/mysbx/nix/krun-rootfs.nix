@@ -721,25 +721,33 @@ let
     # pins 269k inodes, one echo 2 reclaims them all.
     # The loop rides a plain subshell fork of THIS init: it survives
     # the exec below, dies with the VM (PID 1 exit) and needs no
-    # daemon, timer or extra store path. MYSBX_KRUN_INODE_WATCHDOG
-    # overrides the threshold (default 20000 leaves headroom below
-    # the launcher's minimum 65536 fds; =0 disables) and MYSBX_KRUN_INODE_-
-    # WATCHDOG_INTERVAL the check interval in seconds (default 60;
-    # validation runs arm ~2 — a walk pins fds faster than the
-    # interval, so the interval bounds the overshoot) — both ride
-    # the manifest env route, no launcher change needed.
+    # daemon, timer or extra store path. Both knobs ride the manifest
+    # env route:
+    # - MYSBX_KRUN_INODE_WATCHDOG (default 20000, 0 disables): the
+    #   allowed growth above the post-drop baseline. The baseline is
+    #   the inode count right after the last drop (0 before the
+    #   first), so the in-use set that a drop cannot reclaim does not
+    #   retrigger a drop every tick.
+    # - MYSBX_KRUN_INODE_WATCHDOG_INTERVAL (default 1 s): the check
+    #   interval. A walk pins fds between two checks, so the interval
+    #   bounds the overshoot (bd myconfig-jjfy).
+    # Every drop appends a line to /tmp/mysbx-inode-watchdog.log
+    # (rotated to .1 past 256 KiB).
     if [ "''${MYSBX_KRUN_INODE_WATCHDOG:-20000}" != "0" ]; then
-        step "arming the inode watchdog (threshold ''${MYSBX_KRUN_INODE_WATCHDOG:-20000}, interval ''${MYSBX_KRUN_INODE_WATCHDOG_INTERVAL:-60}s)"
+        step "arming the inode watchdog (growth ''${MYSBX_KRUN_INODE_WATCHDOG:-20000} over the post-drop baseline, interval ''${MYSBX_KRUN_INODE_WATCHDOG_INTERVAL:-1}s)"
         (
             _iw_limit="''${MYSBX_KRUN_INODE_WATCHDOG:-20000}"
             case "$_iw_limit" in
                 "" | *[!0-9]*) _iw_limit=20000 ;;
             esac
-            _iw_interval="''${MYSBX_KRUN_INODE_WATCHDOG_INTERVAL:-60}"
+            _iw_interval="''${MYSBX_KRUN_INODE_WATCHDOG_INTERVAL:-1}"
             case "$_iw_interval" in
-                "" | *[!0-9]*) _iw_interval=60 ;;
+                "" | *[!0-9]*) _iw_interval=1 ;;
             esac
-            [ "$_iw_interval" -ge 1 ] 2>/dev/null || _iw_interval=60
+            [ "$_iw_interval" -ge 1 ] 2>/dev/null || _iw_interval=1
+            _iw_log=/tmp/mysbx-inode-watchdog.log
+            _iw_base=0
+            echo "armed: growth $_iw_limit, interval ''${_iw_interval}s" 2>/dev/null >> "$_iw_log" || :
             while :; do
                 # inode-state is TAB-separated; read's default IFS
                 # splits on any whitespace, so the first field alone
@@ -748,9 +756,22 @@ let
                 case "$_iw_inodes" in
                     "" | *[!0-9]*) _iw_inodes=0 ;;
                 esac
-                if [ "$_iw_inodes" -gt "$_iw_limit" ]; then
-                    "$BB" sync
+                if [ "$_iw_inodes" -gt "$((_iw_base + _iw_limit))" ]; then
+                    # `|| :` throughout: the init runs under set -e,
+                    # and a failing command would end this loop.
+                    "$BB" sync || :
                     echo 2 > /proc/sys/vm/drop_caches 2>/dev/null || :
+                    read _iw_base _ < /proc/sys/fs/inode-state 2>/dev/null || _iw_base=0
+                    case "$_iw_base" in
+                        "" | *[!0-9]*) _iw_base=0 ;;
+                    esac
+                    read _iw_up _ < /proc/uptime 2>/dev/null || _iw_up=?
+                    _iw_size=$("$BB" wc -c 2>/dev/null < "$_iw_log" || :)
+                    _iw_size=''${_iw_size##* }
+                    if [ "''${_iw_size:-0}" -gt 262144 ] 2>/dev/null; then
+                        "$BB" mv -f "$_iw_log" "$_iw_log.1" 2>/dev/null || :
+                    fi
+                    echo "[''${_iw_up}s] drop: inodes $_iw_inodes -> $_iw_base, next drop above $((_iw_base + _iw_limit))" 2>/dev/null >> "$_iw_log" || :
                 fi
                 "$BB" sleep "$_iw_interval"
             done
