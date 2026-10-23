@@ -8526,7 +8526,7 @@ fn doctor_without_a_backend_fails_unless_one_is_named() {
         "{stdout}"
     );
     assert!(
-        stdout.contains("OK   not checked: podman-gvisor, nono, podman-krun, krun (check one with"),
+        stdout.contains("OK   not checked: podman-gvisor, nono, podman-krun, krun, microvm-qemu (check one with"),
         "{stdout}"
     );
     assert!(!stdout.contains("not configured"), "{stdout}");
@@ -8625,6 +8625,77 @@ fn doctor_routes_the_krun_backend_away_from_the_podman_checks() {
         "{stdout}"
     );
     std::fs::remove_dir_all(stub_on_path).unwrap();
+}
+
+#[test]
+fn doctor_routes_the_microvm_qemu_backend_to_its_own_checks() {
+    // backends.md D9: the qemu backend's doctor section is its own
+    // — the podman checks would be wrong answers, and its checks
+    // are the krun shape PLUS the kernel pin (the one input
+    // libkrun bundles and qemu needs handed over).
+    let Some((inv, _, sidecar)) = krun_fixture("doctor-microvm-qemu-routing", &[]) else {
+        return; // no placeable fixture root here
+    };
+    std::fs::write(sidecar.join("config.toml"), "backend = \"microvm-qemu\"\n").unwrap();
+    let base = inv.cwd.parent().unwrap().to_path_buf();
+    let launcher = doctor_stub(
+        &base,
+        "mysbx-microvm-qemu-stub",
+        "echo \"mysbx-microvm-qemu: unknown argument '--doctor-probe-invalid'\" >&2\nexit 2",
+    );
+    let rootfs = base.join("microvm-qemu-rootfs-stub");
+    std::fs::create_dir_all(rootfs.join("bin")).unwrap();
+    std::fs::write(rootfs.join("bin/mysbx-init"), "#!/bin/sh\n").unwrap();
+    let kernel = base.join("kernel-stub.bzImage");
+    std::fs::write(&kernel, "not really a bzImage\n").unwrap();
+    let (code, stdout, _stderr) = run_doctor(
+        &inv,
+        &["doctor"],
+        &[
+            ("MYSBX_MICROVM_QEMU_LAUNCHER", launcher.to_str().unwrap()),
+            ("MYSBX_MICROVM_QEMU_ROOTFS", rootfs.to_str().unwrap()),
+            ("MYSBX_MICROVM_QEMU_KERNEL", kernel.to_str().unwrap()),
+        ],
+    );
+    if kvm_available() {
+        assert_eq!(
+            code, 0,
+            "with rw /dev/kvm doctor must pass its microvm-qemu checks: {stdout}"
+        );
+    } else {
+        assert_ne!(
+            code, 0,
+            "the /dev/kvm failure must make doctor report: {stdout}"
+        );
+    }
+    assert!(stdout.contains("== microvm-qemu =="), "{stdout}");
+    assert!(
+        stdout.contains("OK   launcher probe: the launcher runs and reaches argument parsing"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("OK   rootfs: "), "{stdout}");
+    assert!(stdout.contains("OK   kernel: "), "{stdout}");
+    // NOT the podman section's checks:
+    assert!(!stdout.contains("OCI runtime"), "{stdout}");
+    assert!(!stdout.contains("startup probe"), "{stdout}");
+    // The kernel pin has no PATH fallback either — a missing pin
+    // fails even with everything else green.
+    let (code, stdout, _stderr) = run_doctor(
+        &inv,
+        &["doctor"],
+        &[
+            ("MYSBX_MICROVM_QEMU_LAUNCHER", launcher.to_str().unwrap()),
+            ("MYSBX_MICROVM_QEMU_ROOTFS", rootfs.to_str().unwrap()),
+        ],
+    );
+    assert_ne!(
+        code, 0,
+        "no kernel pin: the kernel check must fail: {stdout}"
+    );
+    assert!(
+        stdout.contains("FAIL kernel: no kernel pinned (MYSBX_MICROVM_QEMU_KERNEL)"),
+        "{stdout}"
+    );
 }
 
 #[test]
@@ -10017,6 +10088,126 @@ fn verbose_reaches_the_krun_launcher_argv() {
     assert!(
         verbose.lines().any(|l| l == "--verbose"),
         "a --verbose run forwards --verbose to the launcher: {verbose}"
+    );
+}
+
+#[test]
+fn the_microvm_qemu_backend_dry_run_audits_the_kernel_pair() {
+    // backends.md D9, bd myconfig-tvry: the qemu twin's run arm —
+    // the SAME krun chain with the backend's own pins. The dry-run
+    // argv must name the kernel (the one qemu-only VALUE) and the
+    // exit-channel switch; a missing kernel pin refuses; waypipe is
+    // refused like on podman-krun (the virtiofs AF_UNIX gap).
+    let Some((inv, _, sidecar)) = krun_fixture("microvm-qemu-dry-run-argv", &[]) else {
+        return; // no placeable fixture root here
+    };
+    std::fs::write(sidecar.join("config.toml"), "backend = \"microvm-qemu\"\n").unwrap();
+    let rootfs = sidecar.join("rootfs-stub");
+    std::fs::create_dir_all(rootfs.join("bin")).unwrap();
+    std::fs::write(rootfs.join("bin/mysbx-init"), "#!/bin/sh\n").unwrap();
+    let kernel = sidecar.join("kernel-stub.bzImage");
+    std::fs::write(&kernel, "stub\n").unwrap();
+
+    // A missing kernel pin refuses — even with launcher and rootfs
+    // pinned (no PATH fallback, the D9 pin rule).
+    let mut cmd = spawn_with_args(&inv, &["run", "--dry-run", "--", "/bin/true"]);
+    cmd.env("MYSBX_MICROVM_QEMU_LAUNCHER", "/does/not/matter/dry-run")
+        .env(
+            "MYSBX_MICROVM_QEMU_ROOTFS",
+            rootfs.to_str().unwrap().to_string(),
+        );
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_ne!(
+        out.status.code(),
+        Some(0),
+        "the missing kernel pin must refuse the run: {}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr_lossy = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        stderr_lossy.contains("no kernel configured (MYSBX_MICROVM_QEMU_KERNEL)"),
+        "{stderr_lossy}"
+    );
+
+    // The full dry run audits the argv: kernel right after the
+    // rootfs, the exit-channel switch, the shared spec (shares,
+    // manifest) around them.
+    let mut cmd = spawn_with_args(&inv, &["run", "--dry-run", "--", "/bin/true"]);
+    cmd.env("MYSBX_MICROVM_QEMU_LAUNCHER", "/does/not/matter/dry-run")
+        .env(
+            "MYSBX_MICROVM_QEMU_ROOTFS",
+            rootfs.to_str().unwrap().to_string(),
+        )
+        .env(
+            "MYSBX_MICROVM_QEMU_KERNEL",
+            kernel.to_str().unwrap().to_string(),
+        );
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout_lossy = String::from_utf8_lossy(&out.stdout).into_owned();
+    let lines: Vec<&str> = stdout_lossy.lines().collect();
+    let rootfs_i = lines
+        .iter()
+        .position(|l| *l == "--rootfs")
+        .expect("the dry run names --rootfs");
+    assert!(
+        lines[rootfs_i + 1].starts_with('/') || lines[rootfs_i + 1].starts_with('"'),
+        "the rootfs value follows the flag"
+    );
+    let kernel_i = lines
+        .iter()
+        .position(|l| *l == "--kernel")
+        .expect("the dry run names --kernel");
+    assert_eq!(lines[kernel_i + 1], kernel.to_str().unwrap());
+    assert!(
+        lines.iter().any(|l| *l == "--exit-channel"),
+        "the dry run names --exit-channel: {stdout_lossy}"
+    );
+    assert!(
+        stdout_lossy.contains("--manifest"),
+        "the shared manifest pointer rides: {stdout_lossy}"
+    );
+    assert!(
+        stdout_lossy.contains("MYSBX_BACKEND=microvm-qemu"),
+        "the backend identity env names the run's backend: {stdout_lossy}"
+    );
+}
+
+#[test]
+fn a_waypipe_display_is_refused_on_the_microvm_qemu_backend() {
+    // backends.md D9: the waypipe display is refused on the qemu
+    // twin too — the virtiofsd servers pass inodes, not live socket
+    // objects, so the host-client socket would be a dead inode in
+    // the guest (the same first-cut rule as podman-krun's D2 row).
+    let Some((inv, _, sidecar)) = krun_fixture("microvm-qemu-waypipe-refused", &[]) else {
+        return; // no placeable fixture root here
+    };
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"microvm-qemu\"\ndisplay = \"waypipe\"\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_with_args(&inv, &["run", "--dry-run", "--", "/bin/true"]);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_ne!(
+        out.status.code(),
+        Some(0),
+        "a waypipe run must refuse: {}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr_lossy = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        stderr_lossy
+            .contains("display = \"waypipe\" is not supported on the `microvm-qemu` backend"),
+        "{stderr_lossy}"
     );
 }
 
