@@ -28,7 +28,7 @@ or a decision id (`cli.md D8`, `backends.md D2`, …).
 | `microvm` | [`myconfig.ai.microvm/`](../../sandboxes/myconfig.ai.microvm) | `agent-microvm`, workmux `microvm-<agent>` panes | none (`myconfig.ai.dev.microvm.enable` is off everywhere) |
 | `mysbx` | [`mysbx/`](..) | `mysbx` | f13, p14, thing, workstation |
 
-`mysbx` has four backends. `config.backend` or `--backend` selects one
+`mysbx` has five backends. `config.backend` or `--backend` selects one
 (`cli.md` D7/D18). The generated user layer sets `backend = "bubblewrap"`.
 
 | Backend | Mechanism | Source |
@@ -37,6 +37,7 @@ or a decision id (`cli.md D8`, `backends.md D2`, …).
 | `nono` | bubblewrap builds the view, then `nono run` adds Landlock, seccomp and the egress proxy | `mysbx-rs/src/nono.rs`, `backends.md` D1 |
 | `podman-gvisor` | rootless `podman run --runtime=runsc` on the image of the `gvisor` tier | `mysbx-rs/src/podman_gvisor.rs` |
 | `podman-krun` | the same argv, runtime swapped to crun+libkrun: one rootless KVM microVM per run, mounts over virtio-fs | `podman_gvisor.rs` (`krun: true`), `backends.md` D2 |
+| `microvm-qemu` | one qemu microVM per run, one rootless virtiofsd per share device, SLiRP user-mode networking: the `krun` contract on stock qemu | `mysbx-rs/src/microvm_qemu.rs`, `backends.md` D9 |
 
 In the tables below, `mysbx/<backend>` means one backend. `mysbx` alone
 means all four.
@@ -54,6 +55,7 @@ means all four.
 | `mysbx/nono` | the bubblewrap view plus Landlock grants from the resolved layout. seccomp only when the network is denied or allowlisted | your uid on the host | `backends.md` D1 "Grants follow the resolved layout" |
 | `mysbx/podman-gvisor` | gVisor Sentry, `--cap-drop=ALL`, `no-new-privileges`, `--read-only`, keep-id user | the runsc process | `podman_gvisor.rs` |
 | `mysbx/podman-krun` | libkrunfw guest kernel. VMM and guest share one security context | the VMM = your rootless podman process | `backends.md` D2 "Threat model delta vs. gVisor" |
+| `mysbx/microvm-qemu` | pinned-kernel guest. qemu and the virtiofsd daemons are out-of-process but same-uid | the qemu and virtiofsd processes (your uid) | `backends.md` D9 |
 
 `podman-krun` is not a stronger boundary than gVisor. What it adds is
 isolation from host-kernel bugs and full kernel compatibility (nested
@@ -146,6 +148,7 @@ under the podman-gvisor backend").
 | `mysbx/bubblewrap`, `mysbx/nono` | none; set limit keys print a warning (`config.md` D23) | — |
 | `mysbx/podman-gvisor` | keys `memory`/`cpus`/`pids-limit` (`config.md` D23), overridden by the env pins `MYSBX_PODMAN_{MEMORY,CPUS,PIDS_LIMIT}` → podman flags | not rootless (`ignore-cgroups`). mysbx prints a warning (`lib.rs`) |
 | `mysbx/podman-krun` | the same keys and pins → `krun.cpus` / `krun.ram_mib` annotations. A `pids-limit` key is warned and dropped, the pin and fractional cpus are refused | yes (VM, bd myconfig-6di.5.6) |
+| `mysbx/microvm-qemu` | the same keys → qemu `-smp`/`-m`. `pids-limit` refused | yes (VM) |
 
 The config keys are `config.md` D23 (bd myconfig-91j).
 
@@ -219,6 +222,7 @@ No candidate has measured startup numbers in this repo. By mechanism:
 | `microvm` | prebuilt slot, boot of a systemd-managed VM. Waits for a free slot (`--wait`) |
 | `mysbx/podman-gvisor` | container start. The image is loaded once per rebuild (`mysbx podman-load-image`) |
 | `mysbx/podman-krun` | a microVM boot per run. Nix/podman state rebuilt per run on guest tmpfs |
+| `mysbx/microvm-qemu` | a qemu VM boot per run plus virtiofsd daemon starts (one per share device). Slower than `krun` by design; the runbook records the number (bd myconfig-26z4) |
 
 ## 14. Required host privileges
 
@@ -229,6 +233,7 @@ No candidate has measured startup numbers in this repo. By mechanism:
 | `qemu` | `/dev/kvm` for acceleration (TCG fallback). Rootless virtiofsd, no host config |
 | `gvisor`, `mysbx/podman-gvisor` | rootless podman, runsc registered in `containers.conf`, subuid/subgid (`autoSubUidGidRange`), all set by the gvisor tier module. `mysbx` also needs `podman.image` (null → refused) |
 | `mysbx/podman-krun` | the above image + rw `/dev/kvm` (the `kvm` group), checked before exec (`lib.rs` `kvm_available`) and by `mysbx doctor`. `--group-add=keep-groups` keeps the group for the VMM (bd myconfig-b5o) |
+| `mysbx/microvm-qemu` | rw `/dev/kvm` for acceleration (TCG fallback boots unaccelerated — a diagnosis, not a supported mode), rootless virtiofsd (`--sandbox none`), no host config. Checked by `mysbx doctor` |
 | `microvm` | root for every command (`sudo agent-microvm`, `passwordlessControl`), root-owned `runtimeRoot`/`stateRoot`, bridge `agentbr0` + per-slot TAPs + firewall chains, a rebuild to change the pool |
 
 ## 15. CLI and contract
@@ -265,7 +270,7 @@ arguments to the agent.
 | waypipe on `podman-krun` | — (no old tier has a display). Parity with the other mysbx backends | bd myconfig-ef6 |
 | state in clone sessions | `gvisor` per-session home, `microvm` `--persist-agent-state` | bd myconfig-9co |
 | containers removed after the run | `gvisor` `destroy` | bd myconfig-che |
-| native QEMU VM backend | `qemu`, `microvm` | bd myconfig-6di.6 (deferred fallback) |
+| native QEMU VM backend | `qemu`, `microvm` | bd myconfig-6di.6 (`backend = "microvm-qemu"`, `backends.md` D9; live validation bd myconfig-26z4) |
 
 `mysbx` does not plan to replace `agentUsers` (a separate uid, not a
 sandbox) or `microvm`'s root-owned slot pool (`backends.md` D2
