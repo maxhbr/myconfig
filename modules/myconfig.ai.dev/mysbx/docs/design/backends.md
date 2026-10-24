@@ -1065,6 +1065,7 @@ What differs from `krun`, stated honestly:
 | accel | KVM only (libkrun has no TCG) | `accel = kvm:tcg` — boots without /dev/kvm (slow), a diagnosis, not a supported mode |
 | console | the VMM's own stdio | `-serial mon:stdio` + `console=ttyS0` (bd myconfig-mbib): `-nodefaults` kills the default serial backend, so the argv wires it explicitly — the caller's terminal IS the guest console |
 | git trust | libkrun's in-memory `trustfs` device (`--krun-overlay` flags) | the RO staging tree (bd myconfig-govd): lib.rs writes the two trust texts into `<stage>/ro/gittrust-*` before the run, the trust shares ride `stage-ro` slots, and NO `--krun-overlay` flag is emitted (the launcher refuses them) |
+| host-side bwrap `/dev` | none needed (the virtiofs server is in-process) | `--dev-bind /dev/null` + `--dev-bind /dev/urandom` + `--tmpfs /tmp` (bd myconfig-ya1o): without any `--dev` flag bwrap exposes NO `/dev` at all — the launcher's `Stdio::null()` virtiofsd spawn dies ENOENT; the tmpfs is the runtime dir's socket surface (the ro rootfs's `/tmp` is read-only) |
 
 **The guest side is shared, not forked.** The rootfs derivation is
 the krun rootfs (`nix/krun-rootfs.nix`) consumed as-is: the baked

@@ -3574,8 +3574,23 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // included: --dev would SHADOW --dev-bind /dev/kvm if it
             // followed it, and the launcher would abort in libkrun's
             // KvmContext with a /dev/kvm it cannot see (finding 7).
-            // No --dev, no --tmpfs /tmp: the spike chain proved the
-            // launcher needs neither).
+            // For the krun launcher: no --dev, no --tmpfs /tmp (the
+            // spike chain proved it needs neither — libkrun's
+            // virtiofs is IN-PROCESS, no daemon spawn). The qemu
+            // launcher is the first backend that DOES (bd
+            // myconfig-ya1o): without any --dev flag bwrap exposes NO
+            // /dev at all, so the launcher's Stdio::null() spawn of
+            // virtiofsd opens /dev/null and dies ENOENT before the
+            // first daemon comes up. The qemu arm therefore adds the
+            // minimal device pair — /dev/null (the spawn stdio) and
+            // /dev/urandom (virtiofsd's and qemu's own entropy
+            // source) — plus a writable tmpfs at /tmp: the
+            // launcher's runtime dir (the virtiofsd + exit-channel
+            // SOCKET dir) needs a writable surface, and the ro-bound
+            // rootfs's /tmp is read-only. Order: the tmpfs/dev binds
+            // sit BEFORE the kvm bind and shadow nothing (different
+            // paths), the /dev/kvm bind of finding 7 keeps its
+            // guaranteed visibility.
             let mut inner_argv: Vec<String> = Vec::with_capacity(krun_argv.len() + 1);
             inner_argv.push(krun_launcher.clone());
             inner_argv.extend(krun_argv);
@@ -3596,6 +3611,23 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 "--ro-bind".into(),
                 krun_rootfs.clone(),
                 krun_rootfs.clone(),
+            ]);
+            // The qemu arm's device + tmp surface (bd myconfig-ya1o,
+            // the comment above): the krun argv stays byte-identical
+            // without them.
+            if backend == "microvm-qemu" {
+                argv.extend([
+                    "--dev-bind".into(),
+                    "/dev/null".into(),
+                    "/dev/null".into(),
+                    "--dev-bind".into(),
+                    "/dev/urandom".into(),
+                    "/dev/urandom".into(),
+                    "--tmpfs".into(),
+                    "/tmp".into(),
+                ]);
+            }
+            argv.extend([
                 "--dev-bind".into(),
                 "/dev/kvm".into(),
                 "/dev/kvm".into(),

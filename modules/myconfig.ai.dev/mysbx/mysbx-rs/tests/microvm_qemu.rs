@@ -165,7 +165,10 @@ fn golden_git_trust_rides_the_stage_tree_not_overlay_flags() {
         text.contains("--ro-share\nstage-ro:gittrust-system@/etc/gitconfig ro"),
         "the system trust share must ride stage-ro: {text}"
     );
-    assert!(!text.contains("trustfs"), "no trustfs device exists on qemu: {text}");
+    assert!(
+        !text.contains("trustfs"),
+        "no trustfs device exists on qemu: {text}"
+    );
     assert_golden("git-trust.txt", &argv);
 }
 

@@ -10181,6 +10181,89 @@ fn the_microvm_qemu_backend_dry_run_audits_the_kernel_pair() {
 }
 
 #[test]
+fn the_microvm_qemu_bwrap_wrap_carries_the_dev_and_tmp_surface() {
+    // bd myconfig-ya1o: without any --dev flag bwrap exposes NO
+    // /dev at all — the qemu launcher's Stdio::null() spawn of
+    // virtiofsd opened /dev/null and died ENOENT before the first
+    // daemon came up (live-verified in the review). The qemu arm's
+    // bwrap wrap therefore carries the minimal device pair
+    // (/dev/null, /dev/urandom) and a writable tmpfs at /tmp (the
+    // launcher's runtime dir — the virtiofsd and exit-channel
+    // SOCKET dir — needs a writable surface; the ro-bound rootfs's
+    // /tmp is read-only). The krun wrap carries NONE of them (its
+    // launcher needs neither: libkrun's virtiofs is in-process) —
+    // the detached dry run prints the full chain, so both are
+    // pinnable here.
+    if !is_bwrap_available() {
+        eprintln!("skipping: bwrap not available in this environment");
+        return;
+    }
+    for (backend, expect_surface) in [("microvm-qemu", true), ("krun", false)] {
+        let Some((inv, _, sidecar)) = krun_fixture(&format!("bwrap-dev-surface-{backend}"), &[])
+        else {
+            return; // no placeable fixture root here
+        };
+        std::fs::write(
+            sidecar.join("config.toml"),
+            format!("backend = \"{backend}\"\n"),
+        )
+        .unwrap();
+        let rootfs = sidecar.join("rootfs-stub");
+        std::fs::create_dir_all(rootfs.join("bin")).unwrap();
+        std::fs::write(rootfs.join("bin/mysbx-init"), "#!/bin/sh\n").unwrap();
+        let mut cmd = spawn_with_args(&inv, &["--detach", "--dry-run"]);
+        match backend {
+            "krun" => {
+                cmd.env("MYSBX_KRUN_LAUNCHER", "/does/not/matter/dry-run")
+                    .env("MYSBX_KRUN_ROOTFS", rootfs.to_str().unwrap().to_string());
+            }
+            _ => {
+                let kernel = sidecar.join("kernel-stub.bzImage");
+                std::fs::write(&kernel, "stub\n").unwrap();
+                cmd.env("MYSBX_MICROVM_QEMU_LAUNCHER", "/does/not/matter/dry-run")
+                    .env(
+                        "MYSBX_MICROVM_QEMU_ROOTFS",
+                        rootfs.to_str().unwrap().to_string(),
+                    )
+                    .env(
+                        "MYSBX_MICROVM_QEMU_KERNEL",
+                        kernel.to_str().unwrap().to_string(),
+                    );
+            }
+        }
+        let runtime = short_runtime_root(&format!("bwrap-dev-surface-{backend}"));
+        std::fs::create_dir_all(&runtime).unwrap();
+        let (dtach, _) = dtach_stub(&inv.home, true);
+        cmd.env("XDG_RUNTIME_DIR", &runtime)
+            .env("MYSBX_DTACH", &dtach);
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let chain = String::from_utf8_lossy(&out.stdout).into_owned();
+        let lines: Vec<&str> = chain.lines().collect();
+        let has = |flag: &str, value: &str| lines.windows(2).any(|w| w[0] == flag && w[1] == value);
+        // /dev/kvm is the one device BOTH wraps carry (finding 7).
+        assert!(has("--dev-bind", "/dev/kvm"), "the kvm bind: {chain}");
+        for (flag, value) in [
+            ("--dev-bind", "/dev/null"),
+            ("--dev-bind", "/dev/urandom"),
+            ("--tmpfs", "/tmp"),
+        ] {
+            assert_eq!(
+                has(flag, value),
+                expect_surface,
+                "{backend}'s wrap {flag} {value}: {chain}"
+            );
+        }
+    }
+}
+
+#[test]
 fn a_waypipe_display_is_refused_on_the_microvm_qemu_backend() {
     // backends.md D9: the waypipe display is refused on the qemu
     // twin too — the virtiofsd servers pass inodes, not live socket
