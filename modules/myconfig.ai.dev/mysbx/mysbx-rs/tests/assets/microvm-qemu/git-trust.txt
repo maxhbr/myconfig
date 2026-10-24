@@ -47,6 +47,8 @@ options edns0
 
 --env
 GIT_CONFIG_GLOBAL=/etc/mysbx/gitconfig
+--env
+MYSBX_MICROVM_NET=1
 --chdir
 /home/synth/repo
 --

@@ -522,6 +522,44 @@ let
         fi
     fi
 
+    # The SLiRP NIC of the qemu backend (bd myconfig-k106, the qemu
+    # bridge): libkrun's network is TSI (the guest has NO ethernet
+    # device — the resolver step above is the whole story there),
+    # but qemu's `-netdev user` attaches a REAL virtio-net-pci NIC
+    # that nothing configures guest-side: without an address and a
+    # route, resolv.conf alone resolves nothing. The marker env is
+    # set ONLY by the microvm-qemu builder when the network is
+    # shared (the krun backend sets none — no step runs, no eth0
+    # exists to configure). qemu's user netdev carries FIXED SLiRP
+    # defaults — guest 10.0.2.15/24, gateway and DNS 10.0.2.2 — so
+    # the config is static, no DHCP. The interface is found by
+    # DRIVER (the first virtio_net device), never by a name the
+    # kernel's probe order could change.
+    if [ "''${MYSBX_MICROVM_NET:-}" = "1" ]; then
+        _nic=""
+        for _if in /sys/class/net/*; do
+            # -e, never -f: a sysfs driver bind is a symlink to a
+            # DIRECTORY — [ -f ] follows the link and is false for
+            # it (the live-shaped fixture caught this).
+            [ -e "$_if/device/driver" ] || continue
+            case "$(  "$BB" readlink "$_if/device/driver")" in
+                *virtio_net) _nic="$(  "$BB" basename "$_if")" ;;
+            esac
+            [ -n "$_nic" ] && break
+        done
+        if [ -n "$_nic" ]; then
+            step "configuring the SLiRP NIC $_nic (10.0.2.15/24 via 10.0.2.2)"
+            "$BB" ip addr add 10.0.2.15/24 dev "$_nic" \
+                || fail "cannot address the NIC $_nic"
+            "$BB" ip link set "$_nic" up \
+                || fail "cannot bring the NIC $_nic up"
+            "$BB" ip route add default via 10.0.2.2 \
+                || fail "cannot add the default route via 10.0.2.2"
+        else
+            fail "MYSBX_MICROVM_NET=1 but no virtio_net interface exists — the NIC did not attach"
+        fi
+    fi
+
     # The scratch disk (bd myconfig-dak.7, backends.md D7): a REAL
     # virtio-blk device the launcher attached (krun_add_disk2), the
     # per-run raw file — no stale fs ever survives to be probed.

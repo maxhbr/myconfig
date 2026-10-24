@@ -484,6 +484,60 @@ class InitTests(unittest.TestCase):
         result = self.run_reconcile()
         self.assert_failed(result, "foreign-key violations remain")
 
+    def test_slirp_nic_step_gates_on_the_marker_and_finds_the_driver(self):
+        # bd myconfig-k106: the SLiRP NIC config step runs ONLY on the
+        # qemu backend's marker (the krun guest has no ethernet at
+        # all), finds the interface by DRIVER (virtio_net), and
+        # configures qemu's fixed user-netdev defaults. The shape is
+        # pinned on the generated text; the driver match runs live
+        # under the baked busybox against a synthetic sysfs tree.
+        start = INIT.index('if [ "${MYSBX_MICROVM_NET:-}" = "1" ]; then')
+        end = INIT.index("# The scratch disk", start)
+        block = INIT[start:end]
+        self.assertIn("*virtio_net)", block)
+        self.assertIn("ip addr add 10.0.2.15/24", block)
+        self.assertIn("ip route add default via 10.0.2.2", block)
+        self.assertIn("the NIC did not attach", block)
+        # `ip link set` — never a bare interface name assumption.
+        self.assertNotIn("eth0", block)
+
+        # The interface detection against a synthetic /sys/class/net:
+        # one lo (no device dir), one NON-virtio device, one
+        # virtio_net — the walk must pick the virtio one.
+        net = self.base / "sys/class/net"
+        lo = net / "lo"
+        lo.mkdir(parents=True)
+        other = net / "eth0"
+        (other / "device").mkdir(parents=True)
+        os.symlink("../../bus/pci/drivers/e1000e", other / "device/driver")
+        virtio = net / "ens3"
+        (virtio / "device").mkdir(parents=True)
+        # The driver symlink's TARGET must exist: the init probes
+        # with [ -e ] (follows the link). A real sysfs bind resolves
+        # against /sys, but the case match only needs the SPELLING —
+        # an absolute fixture target keeps the probe honest.
+        (self.base / "sys/bus/virtio/drivers/virtio_net").mkdir(parents=True)
+        os.symlink(self.base / "sys/bus/virtio/drivers/virtio_net",
+                   virtio / "device/driver")
+        detection = block[block.index('_nic=""'):block.index('if [ -n "$_nic" ]; then')]
+        detection = detection.replace("/sys/class/net", str(net))
+        script = (
+            "set -eu\n"
+            f"BB={shlex.quote(str(ROOTFS / 'bin/busybox'))}\n"
+            + detection
+            + 'printf "mysbx-test: nic=%s\\n" "$_nic"\n'
+        )
+        result = subprocess.run(
+            [str(ROOTFS / "bin/busybox"), "sh", "-c", script],
+            capture_output=True,
+            text=True,
+            env={"PATH": ""},
+            timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("mysbx-test: nic=ens3", result.stdout,
+                      f"the driver match: {result.stdout!r}")
+
     def test_exit_channel_resolves_the_port_through_sysfs(self):
         # bd myconfig-dnmk: /dev/virtio-ports/<name> is a UDEV
         # symlink a static-busybox guest never has — the init must

@@ -329,12 +329,30 @@ fn same_spec_as_krun_minimal() {
         &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
     );
     // The MYSBX_BACKEND identity names the run's own backend (bd
-    // myconfig-3nn) — the ONE entry the two renderers must differ
-    // in. Everything else is the shared spec, byte for byte.
+    // myconfig-3nn), and MYSBX_MICROVM_NET the qemu-only SLiRP NIC
+    // marker (bd myconfig-k106 — the krun backend's network is TSI,
+    // no guest-side NIC config step exists there) — the TWO env
+    // entries the renderers must differ in. Everything else is the
+    // shared spec, byte for byte.
     let identity = |v: Vec<String>| {
-        v.into_iter()
-            .filter(|a| !a.starts_with("MYSBX_BACKEND="))
-            .collect::<Vec<_>>()
+        let mut out: Vec<String> = Vec::with_capacity(v.len());
+        for a in v {
+            // The MYSBX_BACKEND identity names the run's own backend
+            // (bd myconfig-3nn); MYSBX_MICROVM_NET is the qemu-only
+            // SLiRP NIC marker (bd myconfig-k106, riding as an --env
+            // PAIR — drop the flag with its value, a bare filter
+            // would leave a dangling --env behind).
+            if a.starts_with("MYSBX_BACKEND=") || a.starts_with("MYSBX_MICROVM_NET=") {
+                if a.starts_with("MYSBX_MICROVM_NET=") {
+                    if out.last().map(|l| l == "--env").unwrap_or(false) {
+                        out.pop();
+                    }
+                }
+                continue;
+            }
+            out.push(a);
+        }
+        out
     };
     assert_eq!(identity(stripped), identity(krun));
 }

@@ -118,6 +118,14 @@ pub fn microvm_qemu_argv(
         argv.push("--env".to_owned());
         argv.push(format!("{k}={v}"));
     }
+    // The SLiRP NIC marker (bd myconfig-k106): the guest init
+    // configures the user-netdev NIC only when this env rides the
+    // manifest — the krun backend sets none (its network is TSI,
+    // no ethernet device exists in that guest).
+    if spec.network {
+        argv.push("--env".to_owned());
+        argv.push("MYSBX_MICROVM_NET=1".to_owned());
+    }
     // NO `--krun-overlay` flags (bd myconfig-govd): the launcher
     // refuses them (the in-memory trustfs device is libkrun's own),
     // and this renderer never emits what the launcher would reject

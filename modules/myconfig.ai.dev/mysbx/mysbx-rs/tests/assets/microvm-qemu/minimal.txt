@@ -41,6 +41,8 @@ PATH=/synth/bin
 MYSBX_KRUN_RESOLV=nameserver 10.0.0.53
 options edns0
 
+--env
+MYSBX_MICROVM_NET=1
 --chdir
 /home/synth/repo
 --
