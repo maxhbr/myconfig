@@ -309,9 +309,17 @@ let
             [ -n "$rkind" ] || continue
             case "$rkind" in
                 env)
-                    # r2 KEY, r3 base64(value)
-                    val=$(printf '%s' "$r3" | "$BB" base64 -d) \
+                    # r2 KEY, r3 base64(value). The sentinel x:
+                    # $( ) strips ALL trailing newlines from the
+                    # substitution (POSIX), so a value ENDING in a
+                    # newline would decode short (bd
+                    # myconfig-m6r1) — the sentinel makes the strip
+                    # exact: only the x itself goes (the && keeps
+                    # the || fail refusal semantics on a decode
+                    # error).
+                    val=$(printf '%s' "$r3" | "$BB" base64 -d && printf x) \
                         || fail "cannot decode the manifest env $r2"
+                    val=''${val%x}
                     export "$r2=$val"
                     ;;
                 share)
@@ -333,8 +341,13 @@ let
                     # losslessly).
                     [ "$r2" -eq "$_argv_n" ] \
                         || fail "manifest argv index $r2 is out of order (expected $_argv_n)"
-                    val=$(printf '%s' "$r3" | "$BB" base64 -d) \
+                    # The same sentinel as the env record (bd
+                    # myconfig-m6r1): a token ENDING in a newline
+                    # must arrive byte-identical — $( ) alone
+                    # strips it.
+                    val=$(printf '%s' "$r3" | "$BB" base64 -d && printf x) \
                         || fail "cannot decode the manifest argv $_argv_n"
+                    val=''${val%x}
                     if [ "$_argv_n" -eq 0 ]; then
                         set --
                     fi
@@ -343,8 +356,10 @@ let
                     ;;
                 chdir)
                     # r2 base64(dir) — applied AFTER the shares exist
-                    manifest_chdir=$(printf '%s' "$r2" | "$BB" base64 -d) \
+                    # (the same sentinel decode, bd myconfig-m6r1)
+                    manifest_chdir=$(printf '%s' "$r2" | "$BB" base64 -d && printf x) \
                         || fail "cannot decode the manifest chdir"
+                    manifest_chdir=''${manifest_chdir%x}
                     ;;
                 *)
                     fail "unknown manifest record: $rkind"

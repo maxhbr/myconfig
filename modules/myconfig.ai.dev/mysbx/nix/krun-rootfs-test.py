@@ -779,6 +779,23 @@ class InitTests(unittest.TestCase):
         self.assertIn("mysbx-test: token-count=2", result.stdout)
         self.assertIn("token=[]", result.stdout)
 
+        # A token ENDING in a newline survives byte-identically (bd
+        # myconfig-m6r1): $( ) strips ALL trailing newlines, so the
+        # loader decodes with a sentinel — the six-byte `hello\n`
+        # must arrive as six bytes, and an ALL-newline token must
+        # not collapse to the empty string. The harness prints
+        # token=[%s] with a literal newline inside, so the expected
+        # output carries the line break INSIDE the brackets.
+        records = [
+            "argv\t0\t" + base64_of("hello\n") + "\n",
+            "argv\t1\t" + base64_of("\n") + "\n",
+        ]
+        result = run_manifest(records)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("token-count=2", result.stdout)
+        self.assertIn("token=[hello\n]", result.stdout)
+        self.assertIn("token=[\n]", result.stdout)
+
         # A reordered or truncated index is a refusal, never a
         # silently reordered payload.
         result = run_manifest(["argv\t1\t" + base64_of("x") + "\n"])
