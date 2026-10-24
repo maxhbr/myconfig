@@ -446,6 +446,11 @@ fn kernel_cmdline(cfg: &Config) -> String {
     // case-0 arm reaches mount_nodev_root only when root_fs_names
     // is set (bd myconfig-7scm).
     let mut params = String::from("root=/dev/root rootfstype=virtiofs reboot=t panic=-1");
+    // console=ttyS0 (bd myconfig-mbib): the kernel's console goes
+    // to the ISA serial device — the -serial mon:stdio backend
+    // wires it to the caller's stdio, so the boot log, the init's
+    // step trace and the payload's stdio all reach the caller.
+    params.push_str(" console=ttyS0");
     if let Some(manifest) = &cfg.manifest {
         // The pointer's TAG:SLOT spelling matches
         // MYSBX_KRUN_MANIFEST's.
@@ -581,6 +586,17 @@ fn qemu_argv(
             "virtserialport,chardev={EXIT_CHARDEV},name={EXIT_PORT}"
         ));
     }
+    // The serial console (bd myconfig-mbib): -nodefaults kills
+    // qemu's default serial backend, and -nographic only
+    // redirects what exists — with -nodefaults there is nothing to
+    // redirect, so the guest is mute. -serial mon:stdio wires the
+    // ISA serial device to the caller's stdio AND keeps the qemu
+    // monitor on the same line (mon:stdio), the shape the live
+    // probe proved (kernel log + payload stdio on stdout). The
+    // guest side pairs with console=ttyS0 in kernel_cmdline —
+    // the microvm machine's serial device on x86.
+    argv.push("-serial".to_owned());
+    argv.push("mon:stdio".to_owned());
     argv.push("-nographic".to_owned());
     argv
 }
@@ -1042,7 +1058,7 @@ mod tests {
         ];
         let cmdline = kernel_cmdline(&cfg);
         assert!(
-            cmdline.starts_with("root=/dev/root rootfstype=virtiofs reboot=t panic=-1")
+            cmdline.starts_with("root=/dev/root rootfstype=virtiofs reboot=t panic=-1 console=ttyS0")
         );
         assert!(cmdline.contains("init=/bin/mysbx-init"));
         assert!(cmdline.contains("mysbx.manifest=stage-ro:manifest"));
@@ -1110,6 +1126,9 @@ mod tests {
         assert!(joined.contains("-no-reboot"));
         // Headless.
         assert!(joined.contains("-nographic"));
+        // The serial console (bd myconfig-mbib): -nodefaults kills
+        // the default backend, so the argv must wire stdio itself.
+        assert!(joined.contains("-serial\nmon:stdio"));
     }
 
     #[test]
