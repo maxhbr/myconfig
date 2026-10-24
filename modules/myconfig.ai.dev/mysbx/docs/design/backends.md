@@ -1018,3 +1018,129 @@ variant is then a small PR (drop the crun pin, the image build,
 the podman-krun arm of `podman_checks`), not a redesign. The f13
 runbook pass remains the open acceptance item — recorded in
 ../krun-validation-log.md when it runs.
+
+### D9: The `microvm-qemu` backend is `krun` with libkrun swapped for qemu + rootless virtiofsd (bd myconfig-6di.6)
+
+`backend = "microvm-qemu"` is the deferred fallback of the epic's
+alternatives table: the SAME contract as the direct `krun` backend
+(D3/D6/D7) on a different VMM. Where libkrun bundles its own kernel
+and in-process virtiofs server, this backend composes stock parts —
+one qemu microVM per run, one UNPRIVILEGED virtiofsd per staged share
+device, no net device beyond SLiRP user mode — the same pieces
+`myconfig.ai.qemu-agent-sandbox` proved rootless
+(builders.nix: `--sandbox none` virtiofsd, `type = "user"` SLiRP,
+no host config).
+
+The chain is the krun chain with the launcher swapped:
+
+```
+bwrap → mysbx-microvm-qemu → virtiofsd ×N + qemu → VM
+```
+
+(built in this branch, bd myconfig-6di.6 and its children)
+
+The builder is the krun builder's twin (`mysbx-rs/src/microvm_qemu.rs`):
+the merged config renders the SAME staged-spec argv — `--cpus/--ram`,
+`--rootfs/--kernel`, `--ro-device/--rw-device` stage trees
+(myconfig-xpq's grouping: constant device count, per-share slots),
+`--ro-share/--rw-share TAG:SLOT@DEST`, `--env K=V`, `--chdir`, `--`
+payload — so the layout checks, the share roots, the refusals and
+the golden-argv tests carry over verbatim. The HOST-side bwrap wrap
+is shared with `krun` down to the byte: the launcher is the only
+swap (the same `--ro-bind /nix/store`, the same stage binds, the
+same `--unshare-net` under `network = false`).
+
+What differs from `krun`, stated honestly:
+
+| | `krun` (D3) | `microvm-qemu` (D9) |
+| --- | --- | --- |
+| VMM | libkrun, in-process (the launcher IS the VMM) | qemu-system, out-of-process |
+| kernel | libkrunfw's stock kernel, bundled | a PINNED nixpkgs kernel (`microvm-qemu.kernel`, a bzImage) |
+| virtiofs server | in-process, per `krun_add_virtiofs3` tag | one rootless virtiofsd per stage device (`--sandbox none`), sockets in a per-run dir, killed on exit |
+| rootfs read-only flag | the virtiofs device's own ro flag | virtiofsd `--readonly` for the root and the ro stage device |
+| network = shared | TSI vsock proxy (D6) | SLiRP user mode (`-netdev user`), the qemu tier's model |
+| network = false | implicit vsock disabled — NO socket path | NO netdev at all; bwrap additionally `--unshare-net`s the chain |
+| nix scratch | virtio-blk via `krun_add_disk2` (D7) | a virtio-blk `-drive` on the same per-run sparse file, same guest init |
+| exit code | `krun_start_enter` returns the payload's | the init reports it over a virtio-serial port; PID-1 exit panics a stock guest, so the channel is out of band |
+| accel | KVM only (libkrun has no TCG) | `accel = kvm:tcg` — boots without /dev/kvm (slow), a diagnosis, not a supported mode |
+
+**The guest side is shared, not forked.** The rootfs derivation is
+the krun rootfs (`nix/krun-rootfs.nix`) consumed as-is: the baked
+`bin/mysbx-init` mounts virtiofs devices by TAG (the manifest's
+share records carry `stage-ro`/`stage-rw`/`trustfs`), and virtiofs
+tags are namespaced per-VM in qemu exactly as in libkrun — the
+same init serves both backends. The manifest channel (the x86
+cmdline-budget finding) is KEPT even though qemu's `-append` has
+no 2048-byte limit: the argv interface stays byte-stable and
+testable, and the guest init stays backend-agnostic.
+
+The boot protocol is the kernel's own, which libkrun's matches:
+`-append` carries `root=/dev/root rootfstype=virtiofs rootwait`
+(the KERNEL mounts the virtiofs tag `/dev/root` as the root fs —
+the init never mounts it), `init=/bin/mysbx-init` (the baked entry
+the kernel execs as PID 1), the manifest pointer and the exit
+channel as `mysbx.manifest=` / `mysbx.exit-channel=` / `mysbx.trace=`
+params (the init's ENV route is libkrun's envp mechanism, which a
+stock kernel does not carry to init — the cmdline is the qemu
+bridge, consumed by the same init), and the payload argv behind
+` -- ` (the kernel splits the cmdline there and hands the rest to
+init as `$1..`, exactly the krun_set_exec contract). The kernel
+pin (`nix/microvm-qemu-kernel.nix`) is a nixpkgs kernel rebuilt
+with the virtio stack, ext4 and overlayfs BUILT IN — the static
+busybox init loads no modules, and the nixpkgs default config
+builds virtio_fs, virtio_pci, ext4 and overlayfs as modules
+(FUSE too: VIRTIO_FS=y selects it).
+
+**Why qemu, not libkrun — and why NOT the default.** libkrun is
+the default VM backend: it is one fewer process tree, one fewer
+kernel pin and its boot is proven at 282 ms. `microvm-qemu` exists
+for the gaps the alternatives table named: a host whose kernel
+libkrun cannot use, a need to swap/compose VMM parts (a pinned
+kernel with a config libkrunfw does not ship, a TCG mode for
+KVM-less hosts), and as the stepping stone to a full NixOS guest
+(the `myconfig.ai.qemu-agent-sandbox` shapes) should the agent
+tiers ever need it. It is expected to boot SLOWER than krun (an
+out-of-process VMM and a full kernel image), and the live
+validation runbook records the real number (bd myconfig-26z4).
+
+**Threat model delta vs. `krun` — the same honesty rule.** Not a
+stronger boundary: a guest escape reaches the qemu and virtiofsd
+processes, the invoking user's own uid — the same single security
+context libkrun has (D2's delta applies verbatim). What differs:
+the VMM is OUT of process, so the launcher's own fd ceiling is
+not the virtiofs servers' bottleneck (the dj4 finding's
+accumulation arm does not apply to this backend); virtiofsd's
+`--sandbox none` means the daemon trusts the bwrap view, exactly
+as libkrun's in-process server does. `network = false` is the
+same two-layer kill (no netdev + `--unshare-net`). The allowlist
+keys stay refused (config.md D21): SLiRP has no per-domain or
+per-port hook — the same honesty rule TSI has (D6).
+
+#### Refusals
+
+The first cut refuses exactly what `krun` refuses, plus its own:
+
+- `pids-limit`, the allowlist keys, `orca`, a multiplexer
+  without a baked entry — the krun refusals verbatim.
+- `display = "waypipe"` — REFUSED in the first cut, for the same
+  reason `podman-krun`'s D2 row refuses it: the channel needs an
+  AF_UNIX socket that crosses virtio-fs, which passes inodes, not
+  live socket objects. Stated honestly: the DIRECT krun backend's
+  own display story is still open (bd myconfig-dak.9 — a vsock
+  transport); when it lands, microvm-qemu shares the same shape
+  (qemu carries a vhost-vsock device the same way libkrun does),
+  and this refusal lifts together with it.
+- A share `dest` outside the baked share roots — the same
+  `UnknownShareRoot` (the guest init is shared).
+- A missing kernel pin — the one qemu-specific refusal: a run
+  names `MYSBX_MICROVM_QEMU_KERNEL` or refuses, never a PATH
+  fallback (the launcher-pin rule of D3's doctor arm).
+
+#### Structure
+
+The epic myconfig-6di.6 breaks into: the decision record (this
+section), the builder module + golden tests (bd myconfig-tvry),
+the launcher binary `mysbx-microvm-qemu` (bd myconfig-kvq8), the
+rootfs/kernel pins and module options (bd myconfig-2l9b), and the
+doctor arm + checks + runbook (bd myconfig-6x9c). Live validation
+on a KVM host is bd myconfig-26z4.
