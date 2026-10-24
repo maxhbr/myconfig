@@ -92,6 +92,10 @@ in
                       # see: https://github.com/haslersn/any-nix-shell/blob/master/README.md#fish-1
                       ${pkgs.any-nix-shell}/bin/any-nix-shell fish --info-right | source
 
+                      # hydro prompt: use a plain '$' instead of '❱' so
+                      # shell output can be copy-pasted into AI agents
+                      set --global hydro_symbol_prompt '$'
+
                       # see: https://fishshell.com/docs/current/#command-line-editor
                       function hybrid_bindings --description "Vi-style bindings that inherit emacs-style bindings in all modes"
                           for mode in default insert visual
