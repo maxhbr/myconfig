@@ -1064,11 +1064,12 @@ What differs from `krun`, stated honestly:
 | exit code | `krun_start_enter` returns the payload's | the init reports it over a virtio-serial port; PID-1 exit panics a stock guest, so the channel is out of band |
 | accel | KVM only (libkrun has no TCG) | `accel = kvm:tcg` — boots without /dev/kvm (slow), a diagnosis, not a supported mode |
 | console | the VMM's own stdio | `-serial mon:stdio` + `console=ttyS0` (bd myconfig-mbib): `-nodefaults` kills the default serial backend, so the argv wires it explicitly — the caller's terminal IS the guest console |
+| git trust | libkrun's in-memory `trustfs` device (`--krun-overlay` flags) | the RO staging tree (bd myconfig-govd): lib.rs writes the two trust texts into `<stage>/ro/gittrust-*` before the run, the trust shares ride `stage-ro` slots, and NO `--krun-overlay` flag is emitted (the launcher refuses them) |
 
 **The guest side is shared, not forked.** The rootfs derivation is
 the krun rootfs (`nix/krun-rootfs.nix`) consumed as-is: the baked
 `bin/mysbx-init` mounts virtiofs devices by TAG (the manifest's
-share records carry `stage-ro`/`stage-rw`/`trustfs`), and virtiofs
+share records carry `stage-ro`/`stage-rw`), and virtiofs
 tags are namespaced per-VM in qemu exactly as in libkrun — the
 same init serves both backends. The manifest channel (the x86
 cmdline-budget finding) is KEPT even though qemu's `-append` has

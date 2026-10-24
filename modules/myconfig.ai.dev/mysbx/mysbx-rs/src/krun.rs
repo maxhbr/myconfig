@@ -129,6 +129,14 @@ pub const GUEST_STORE: &str = "/tmp/mysbx-shares/stage-ro/store";
 pub const STAGE_RO_TAG: &str = "stage-ro";
 pub const STAGE_RW_TAG: &str = "stage-rw";
 
+/// The device tag of the git trust's IN-MEMORY overlay files (bd
+/// myconfig-dak.8) — libkrun's own NullFs the krun launcher
+/// registers the trust texts on. Shared with the microvm-qemu
+/// renderer (backends.md D9), which maps trust shares onto the RO
+/// STAGING TREE instead (bd myconfig-govd: qemu has no in-memory
+/// device, the launcher refuses `--krun-overlay`).
+pub const TRUSTFS_TAG: &str = "trustfs";
+
 /// The host-side root of the per-run staging trees (inside the
 /// bwrap view, never shared into the guest as a sandbox path):
 /// `<STAGE_ROOT>/<ro|rw>/<slot>` is the slot dir of one share, the
@@ -764,7 +772,7 @@ pub fn backing_paths(
 /// microvm-qemu renderer (backends.md D9).
 pub(crate) fn share_device(slot: &str, read_only: bool) -> &'static str {
     match slot {
-        "gittrust-global" | "gittrust-system" => "trustfs",
+        "gittrust-global" | "gittrust-system" => TRUSTFS_TAG,
         _ if read_only => STAGE_RO_TAG,
         _ => STAGE_RW_TAG,
     }

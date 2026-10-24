@@ -3636,6 +3636,41 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                     return EXIT_INFRASTRUCTURE;
                 }
                 krun_stage_dir = Some(krun_stage_root.clone());
+                // The git trust of the microvm-qemu backend (bd
+                // myconfig-govd): libkrun serves the two texts from
+                // its in-memory trustfs device; qemu has no such
+                // device and the launcher REFUSES --krun-overlay
+                // flags — so the trust rides the RO staging tree as
+                // plain files at the trust shares' slots, written
+                // HERE (the krun backend stays overlay-flags, its
+                // argv byte-identical). The launcher's virtiofsd
+                // then serves the ro tree read-only like every
+                // other slot; the guest init's mount logic is
+                // unchanged. The MODE is the overlay's own 0644.
+                if backend == "microvm-qemu" {
+                    if let Some((global_text, system_text)) = krun_git_trust_paths.as_ref() {
+                        let trust_stage_writes = [
+                            ("gittrust-global", global_text),
+                            ("gittrust-system", system_text),
+                        ];
+                        for (slot, text) in trust_stage_writes {
+                            let path = krun_stage_root.join("ro").join(slot);
+                            if let Err(e) = std::fs::write(&path, text) {
+                                eprintln!(
+                                    "mysbx: cannot write the staged git trust {}: {e}",
+                                    path.display()
+                                );
+                                let _ = std::fs::remove_dir_all(&krun_stage_root);
+                                if let Some(f) = &git_trust_file {
+                                    let _ = std::fs::remove_dir_all(
+                                        f.parent().expect("trust file lives in its dir"),
+                                    );
+                                }
+                                return EXIT_INFRASTRUCTURE;
+                            }
+                        }
+                    }
+                }
             }
             // The tree itself rides into the launcher view rw (the
             // ro half's slots are --ro-bound into it below; the

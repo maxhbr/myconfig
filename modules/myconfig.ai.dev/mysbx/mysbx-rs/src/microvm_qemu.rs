@@ -20,9 +20,11 @@
 //!
 //! Section order (fixed, like krun.rs's): `--cpus/--ram`,
 //! `--verbose`, `--rootfs`, `--kernel`, `--init`, the staged
-//! devices + manifest, the shares, the env, the overlay files,
-//! `--network none` (shared is silent — SLiRP is the launcher's
-//! default, exactly as TSI is krun's), the scratch, `--chdir`,
+//! devices + manifest, the shares (the trust shares mapped onto
+//! stage-ro, bd myconfig-govd — NO overlay flags on this
+//! backend), the env, `--network none` (shared is silent — SLiRP
+//! is the launcher's default, exactly as TSI is krun's), the
+//! scratch, `--chdir`,
 //! `--` payload. `krun::krun_argv` stays byte-identical; this
 //! module re-renders its own spec and never touches the krun
 //! goldens.
@@ -85,7 +87,21 @@ pub fn microvm_qemu_argv(
         argv.push(format!("{}/ro/{}", krun::STAGE_ROOT, krun::MANIFEST_SLOT));
     }
     for share in &spec.shares {
-        let device = krun::share_device(share.slot.as_str(), share.read_only);
+        // The trust shares (bd myconfig-govd): libkrun serves them
+        // from the in-memory `trustfs` virtual device the launcher
+        // registers the overlay files on — qemu has no such device,
+        // and the launcher REFUSES `--krun-overlay` flags. The
+        // trust therefore rides the RO STAGING TREE instead:
+        // lib.rs writes the two texts as plain files into the
+        // stage's slots before the run, and the shares point at
+        // the stage-ro device like every other ro share — the
+        // guest init's slot mount logic is unchanged.
+        let device =
+            if krun::share_device(share.slot.as_str(), share.read_only) == krun::TRUSTFS_TAG {
+                krun::STAGE_RO_TAG
+            } else {
+                krun::share_device(share.slot.as_str(), share.read_only)
+            };
         argv.push(if share.read_only {
             "--ro-share".to_owned()
         } else {
@@ -102,10 +118,12 @@ pub fn microvm_qemu_argv(
         argv.push("--env".to_owned());
         argv.push(format!("{k}={v}"));
     }
-    for (path, mode, data) in &spec.overlays {
-        argv.push("--krun-overlay".to_owned());
-        argv.push(format!("trustfs@{path}:{mode:o}:{data}"));
-    }
+    // NO `--krun-overlay` flags (bd myconfig-govd): the launcher
+    // refuses them (the in-memory trustfs device is libkrun's own),
+    // and this renderer never emits what the launcher would reject
+    // — the spec's overlays are served by the staged slots above
+    // instead. The krun renderer keeps its own overlay emission
+    // untouched (its launcher registers them on the root device).
     // `network = false` (D9): NO netdev at all — the same silent
     // shared default as krun's (SLiRP there, TSI here), the same
     // explicit refusal of the denied mode.

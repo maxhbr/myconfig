@@ -11,6 +11,11 @@
 //! Everything else — share records, the manifest pointer, the env
 //! block, `--network none`, the scratch — must stay byte-equal to
 // the krun spelling, which the `same_spec_as_krun_*` tests pin.
+//! The ONE deliberate share-record divergence: a git-trust run
+// maps the two trust shares onto `stage-ro` (libkrun's in-memory
+// `trustfs` device does not exist on qemu, bd myconfig-govd) —
+// pinned by the git-trust golden, never hit by the parity tests
+// (they run without a trust).
 
 use mysbx::bwrap::{Payload, Workspace};
 use mysbx::config::{Mode, Mount, Multiplexer};
@@ -126,6 +131,42 @@ fn golden_minimal_config() {
         &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
     );
     assert_golden("minimal.txt", &argv);
+}
+
+#[test]
+fn golden_git_trust_rides_the_stage_tree_not_overlay_flags() {
+    // bd myconfig-govd: libkrun serves the trust from its in-memory
+    // trustfs device (the krun backend's --krun-overlay flags); the
+    // qemu launcher REFUSES overlay flags, so the trust shares map
+    // onto the RO STAGING TREE (lib.rs writes the texts into
+    // <stage>/ro/<slot> before the run) and the argv carries NO
+    // --krun-overlay at all.
+    let trust = mysbx::krun::GitTrust {
+        global_text: "safe.directory = /tmp/mysbx-shares/stage-rw/workspace\n".to_owned(),
+        system_text: "safe.directory = /tmp/mysbx-shares/stage-rw/workspace\n".to_owned(),
+    };
+    let mut p = params("/synth/rootfs", "/synth/shell", None, Workspace::Live);
+    p.git_trust = Some(&trust);
+    let argv = run(&base(true), &synth_repo(), &Payload::Shell, &p);
+    let text = argv.join("\n");
+    // NO overlay flag — the launcher refuses them; a builder that
+    // emits one makes every real run exit 125 before the boot.
+    assert!(
+        !text.contains("--krun-overlay"),
+        "the qemu argv must not carry overlay flags: {text}"
+    );
+    // The two trust shares exist — pointing at the RO STAGE device,
+    // never at libkrun's trustfs tag.
+    assert!(
+        text.contains("--ro-share\nstage-ro:gittrust-global@/etc/mysbx/gitconfig ro"),
+        "the global trust share must ride stage-ro: {text}"
+    );
+    assert!(
+        text.contains("--ro-share\nstage-ro:gittrust-system@/etc/gitconfig ro"),
+        "the system trust share must ride stage-ro: {text}"
+    );
+    assert!(!text.contains("trustfs"), "no trustfs device exists on qemu: {text}");
+    assert_golden("git-trust.txt", &argv);
 }
 
 #[test]
