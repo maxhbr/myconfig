@@ -564,6 +564,37 @@ class InitTests(unittest.TestCase):
             "an unresolved name keeps the udev spelling as the target",
         )
 
+    def test_exit_channel_runs_the_payload_synchronously(self):
+        # bd myconfig-8j3t: a NON-INTERACTIVE ash gives an async
+        # (`cmd &`) child /dev/null as stdin (the POSIX async-list
+        # rule — live-probed with this very busybox), so the
+        # exit-channel branch must run the payload synchronously.
+        # The generated init text is checked for the shape, and the
+        # REAL busybox proves the stdin difference live: the &-child
+        # reads EOF, the synchronous child reads the piped line.
+        start = INIT.index('if [ -n "$exit_channel" ]; then')
+        end = INIT.index('exec "$@"', start)
+        branch = INIT[start:end]
+        self.assertNotRegex(branch, r'"\$@"\s*&')
+        self.assertIn('"$@"\n    _exit_code=$?', branch)
+
+        payload = (
+            'read x\necho "child got: [$x]"\n'
+        )
+        async_probe = f'({payload}) & wait $!\n'
+        sync_probe = f'{payload}'
+        for form, expected in ((async_probe, "child got: []"), (sync_probe, "child got: [in]")):
+            result = subprocess.run(
+                [str(ROOTFS / "bin/busybox"), "sh", "-c", form],
+                input="in\n",
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn(expected, result.stdout,
+                          f"the {form!r} probe: {result.stdout!r}")
+
     def test_manifest_argv_records_replace_the_positionals(self):
         # bd myconfig-hq7k: the qemu run carries the payload through
         # the manifest's argv records (the stock kernel's `--`

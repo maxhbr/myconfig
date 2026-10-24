@@ -902,10 +902,17 @@ let
             fi
             break
         done
+        # SYNCHRONOUS, never `cmd &`: a NON-INTERACTIVE ash gives an
+        # async child /dev/null as stdin (the POSIX async-list rule —
+        # live probe with this very busybox 1.37.0: the &-child read
+        # EOF, the synchronous form read the piped line, bd
+        # myconfig-8j3t), so a shell session or a piped-stdin payload
+        # would see EOF the moment it starts. wait already blocks
+        # this init until the payload exits — the synchronous form
+        # reaps it just the same, keeps the console's stdin for the
+        # payload, and $? carries the code.
         set +e
-        "$@" &
-        _payload_pid=$!
-        wait "$_payload_pid"
+        "$@"
         _exit_code=$?
         set -e
         step "the payload exited with $_exit_code"
