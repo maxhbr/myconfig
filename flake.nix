@@ -647,6 +647,10 @@
                   # category — a plain script executed by a human on a
                   # KVM host.
                   "modules/myconfig.ai.dev/mysbx/nix/krun-live-validation.sh"
+                  # The microvm-qemu live-validation suite (bd
+                  # myconfig-6x9c/26z4, backends.md D9): same category —
+                  # a plain script executed by a human on a KVM host.
+                  "modules/myconfig.ai.dev/mysbx/nix/microvm-qemu-live-validation.sh"
                   # The wedged-krun-sandbox triage collector (bd
                   # myconfig-dj4 §6.1 of docs/krun-live-validation.md):
                   # same category — a plain read-only /proc inspection

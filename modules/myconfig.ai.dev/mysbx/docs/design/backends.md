@@ -1165,4 +1165,14 @@ section), the builder module + golden tests (bd myconfig-tvry),
 the launcher binary `mysbx-microvm-qemu` (bd myconfig-kvq8), the
 rootfs/kernel pins and module options (bd myconfig-2l9b), and the
 doctor arm + checks + runbook (bd myconfig-6x9c). Live validation
-on a KVM host is bd myconfig-26z4.
+on a KVM host is bd myconfig-26z4, scripted by
+`nix/microvm-qemu-live-validation.sh <repo>` (run with the wrapped
+`MYSBX` on PATH from a rebuilt switch): the boot, the pinned guest
+kernel, the exit-code channel (`sh -c "exit 7"` → 7, bd
+myconfig-hq7k/dnmk), the serial console (bd myconfig-mbib), the
+workspace bind, the ro root, the SLiRP NIC and its `network =
+false` kill (bd myconfig-k106), and the dry-run surface (no
+`--krun-overlay`, bd myconfig-govd). The static CI gate is
+`mysbx-microvm-qemu-wrapper-test` (nix/checks.nix): the wrapper's
+three closure pins and the dry-run flags, on STUB pins — the real
+kernel stays a host build.
