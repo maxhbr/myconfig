@@ -36,22 +36,60 @@ fn stub_dir(name: &str) -> PathBuf {
 
 fn virtiofsd_stub(dir: &PathBuf) -> PathBuf {
     let path = dir.join("virtiofsd-stub.sh");
+    // The stub records its own pid ($$) and EXECs sleep: with exec,
+    // the recorded pid names the exact process the launcher's
+    // Daemons::drop kills — pidfile semantics mirror "did the drop
+    // reap its child". A non-exec stub would leave `sleep` as sh's
+    // child, which a single kill() can never reach (bd
+    // myconfig-tjwy).
+    let pidfile = dir.join("virtiofsd-stub.pid");
     std::fs::write(
         &path,
-        "#!/bin/sh
+        format!(
+            "#!/bin/sh
 # A stub virtiofsd: create the socket named by --socket-path=...,
-# then serve (sleep) until killed — a process that OUTLIVES the
-# launcher if the teardown is broken.
+# record the pid, then serve (sleep) until killed — a process that
+# OUTLIVES the launcher if the teardown is broken.
 for a in \"$@\"; do
   case \"$a\" in
-    --socket-path=*) s=${a#--socket-path=}; : > \"$s\"; sleep 600 ;;
+    --socket-path=*) s=${{a#--socket-path=}}; : > \"$s\" ;;
   esac
 done
+echo $$ > {pidfile}
+exec sleep 600
 ",
+            pidfile = pidfile.display()
+        ),
     )
     .expect("the stub script");
     make_executable(&path);
     path
+}
+
+/// Whether a process is still alive, read from /proc DIRECTLY — a
+/// nix build sandbox has no `ps` on PATH (the thing build
+/// 2026-10-24 caught it), and /proc is the source `ps` would read
+/// anyway (bd myconfig-p9zu).
+fn pid_alive(pid: u32) -> bool {
+    std::path::Path::new(&format!("/proc/{pid}")).exists()
+}
+
+/// Read the stub's pidfile, retrying briefly: the stub records its
+/// pid moments after spawn, and the reader must not race that.
+fn read_pid(pidfile: &std::path::Path) -> Option<u32> {
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        if let Some(pid) = std::fs::read_to_string(pidfile)
+            .ok()
+            .and_then(|s| s.trim().parse::<u32>().ok())
+        {
+            return Some(pid);
+        }
+        if Instant::now() > deadline {
+            return None;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
 }
 
 #[cfg(unix)]
@@ -166,33 +204,52 @@ fn a_qemu_spawn_failure_kills_the_daemons_and_sweeps_the_dir() {
     assert!(no_runtime_dir(), "the runtime dir survived the refusal");
 }
 
-/// The stub processes themselves: nothing named like a stub may
-/// outlive the launcher by two seconds (the kill + reap is the
-/// drop's first half — a leak here means the guard never ran).
+/// The stub processes themselves: nothing the launcher spawned may
+/// outlive it by two seconds (the kill + reap is the drop's first
+/// half — a leak here means the guard never ran). The check reads
+/// the stub's own pidfile (recorded before exec sleep, so the pid
+/// IS the sleeper) straight from /proc — no ps, and no
+/// cross-process string greps that can never co-occur in one
+/// process's args (bd myconfig-tjwy/p9zu). Serialized on the
+/// suite lock like the other two: the runtime-dir scan only holds
+/// while no other launcher of this suite is mid-run.
 #[test]
 fn no_stub_daemon_survives_a_failed_run() {
+    let _guard = suite_lock().lock().unwrap_or_else(|e| e.into_inner());
     let dir = stub_dir("stub-survival");
     let virtiofsd = virtiofsd_stub(&dir);
+    let pidfile = dir.join("virtiofsd-stub.pid");
+    // Negative control FIRST: spawn the stub directly, prove the
+    // pidfile + /proc check can actually see a live stub — so the
+    // assertion below cannot regress into another vacuous pass.
+    let mut control = Command::new(&virtiofsd)
+        .arg("--socket-path=control")
+        .spawn()
+        .expect("the control stub spawns");
+    let control_pid = read_pid(&pidfile).expect("the control stub records its pid");
+    assert!(
+        pid_alive(control_pid),
+        "the /proc check cannot see a live stub — the leak check is vacuous"
+    );
+    let _ = control.kill();
+    let _ = control.wait();
+    let _ = std::fs::remove_file(&pidfile);
+
     let _output = run_launcher(
         PathBuf::from(env!("CARGO_BIN_EXE_mysbx-microvm-qemu")).as_path(),
         &virtiofsd,
         "/does/not/exist/qemu-system-x86_64",
     );
+    // The launcher spawns one virtiofsd per device (root + stage =
+    // two stubs) but they share the pidfile path — the last writer
+    // wins, and both had the same fate in the same kill loop, so
+    // the recorded one is a sound witness.
+    let pid = read_pid(&pidfile).expect("no stub recorded its pid — the fixture is broken");
     let deadline = Instant::now() + Duration::from_secs(2);
-    while Instant::now() < deadline {
-        let ps = Command::new("ps")
-            .arg("-eo")
-            .arg("args")
-            .output()
-            .expect("ps runs");
-        let args = String::from_utf8_lossy(&ps.stdout);
-        let leaked = args
-            .lines()
-            .any(|l| l.contains("virtiofsd-stub") && l.contains("sleep 600"));
-        if !leaked {
-            return; // reaped
+    while pid_alive(pid) {
+        if Instant::now() > deadline {
+            panic!("a virtiofsd stub (pid {pid}) survived the launcher's teardown");
         }
         std::thread::sleep(Duration::from_millis(100));
     }
-    panic!("a virtiofsd stub survived the launcher's teardown");
 }
