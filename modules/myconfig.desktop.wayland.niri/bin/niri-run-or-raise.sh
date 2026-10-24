@@ -8,7 +8,8 @@
 #   niri-run-or-raise <app-id> [command...]
 #
 # `<app-id>` is matched case-insensitively as a substring of the windows'
-# `app_id`, so `thunderbird` also matches ids like `thunderbird-beta`.
+# `app_id`, so `thunderbird` also matches ids like `thunderbird-beta` and
+# `pavucontrol` matches `org.pulseaudio.pavucontrol`.
 # `command...` defaults to the app id and is spawned through niri when no
 # window matches.
 #

@@ -37,6 +37,8 @@ in
             enable = false;
           };
           myconfig.desktop.wayland.launcherCommands = [ "pavucontrol" ];
+          # app_id is `org.pulseaudio.pavucontrol`, matched as substring.
+          myconfig.desktop.wayland.launcherRunOrRaise = [ { command = "pavucontrol"; } ];
         }
       )
     ];
