@@ -484,6 +484,86 @@ class InitTests(unittest.TestCase):
         result = self.run_reconcile()
         self.assert_failed(result, "foreign-key violations remain")
 
+    def test_exit_channel_resolves_the_port_through_sysfs(self):
+        # bd myconfig-dnmk: /dev/virtio-ports/<name> is a UDEV
+        # symlink a static-busybox guest never has — the init must
+        # resolve the port by NAME through /sys/class/virtio-ports/*
+        # and write to the devtmpfs node (vport<pdev>p<id>), with an
+        # mknod fallback. Runs the REAL generated block under the
+        # baked static busybox against a synthetic sysfs + dev tree.
+        start = INIT.index("    _exit_port=/dev/virtio-ports/$exit_channel")
+        end = INIT.index("    set +e", start)
+        block = INIT[start:end]
+        self.assertIn('/sys/class/virtio-ports', block)
+        self.assertIn('mknod', block)
+
+        sysfs = self.base / "sys/class/virtio-ports"
+        other = sysfs / "vport0p1"
+        exit_port = sysfs / "vport0p2"
+        for d, name in ((other, "not-the-exit-port"), (exit_port, "mysbx-exit")):
+            d.mkdir(parents=True)
+            (d / "name").write_text(name)
+            (d / "dev").write_text("245:2\n")
+        dev = self.base / "dev"
+        dev.mkdir()
+        block = block.replace('/sys/class/virtio-ports', str(sysfs))
+        block = block.replace('/dev/', str(dev) + "/")
+        script = (
+            "set -eu\n"
+            f"BB={shlex.quote(str(ROOTFS / 'bin/busybox'))}\n"
+            'step() { echo "mysbx-init: $*"; }\n'
+            'exit_channel=mysbx-exit\n'
+            + block
+            + 'printf "mysbx-test: port=%s\\n" "$_exit_port"\n'
+            # Two named ports — the resolution must pick the
+            # mysbx-exit one, not the first in the glob.
+        )
+        result = subprocess.run(
+            [str(ROOTFS / "bin/busybox"), "sh", "-c", script],
+            capture_output=True,
+            text=True,
+            env={"PATH": ""},
+            timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        # The node did NOT exist in the fixture /dev: the mknod
+        # fallback must have created it from the dev file.
+        self.assertEqual(result.stdout.strip(),
+                         f"mysbx-test: port={dev}/vport0p2",
+                         result.stdout + result.stderr)
+        self.assertTrue((dev / "vport0p2").exists())
+
+        # With the node already present (the devtmpfs shape on a
+        # real guest), the existing node is used.
+        (dev / "vport0p2").unlink()
+        (dev / "vport0p2").write_text("")
+        result = subprocess.run(
+            [str(ROOTFS / "bin/busybox"), "sh", "-c", script],
+            capture_output=True,
+            text=True,
+            env={"PATH": ""},
+            timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout.strip(), f"mysbx-test: port={dev}/vport0p2")
+
+        # A name match that does not exist: the fallback path stays
+        # (/dev/virtio-ports/<name>), the write fails, the teardown
+        # falls through — never a hang.
+        (exit_port / "name").write_text("also-not-it\n")
+        result = subprocess.run(
+            [str(ROOTFS / "bin/busybox"), "sh", "-c", script],
+            capture_output=True,
+            text=True,
+            env={"PATH": ""},
+            timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(
+            f"port={dev}/virtio-ports/mysbx-exit", result.stdout.strip(),
+            "an unresolved name keeps the udev spelling as the target",
+        )
+
     def test_manifest_argv_records_replace_the_positionals(self):
         # bd myconfig-hq7k: the qemu run carries the payload through
         # the manifest's argv records (the stock kernel's `--`

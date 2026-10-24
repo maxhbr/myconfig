@@ -875,9 +875,33 @@ let
         # CHILD so this PID 1 can observe its exit code, hand it to
         # the launcher's reader (one "N\n" line on the virtio-serial
         # port), and exit — the kernel panics on PID-1 exit and
-        # qemu's -no-reboot turns that panic into a clean exit. A
-        # failed write falls through to the same teardown: the
+        # qemu's -no-reboot turns that panic into a clean exit.
+        #
+        # The port's DEVICE NODE is devtmpfs's own (the driver's
+        # device_create names it vport<pdev>p<id>), but the FRIENDLY
+        # /dev/virtio-ports/<name> spelling is a UDEV symlink — the
+        # driver generates the udev event itself (virtio_console.c:
+        # "Generate a udev event so that appropriate symlinks can be
+        # created based on udev rules"), and this static-busybox
+        # guest runs no udev. Resolve the port by NAME through sysfs
+        # instead (bd myconfig-dnmk): walk /sys/class/virtio-ports/*,
+        # match the name file, and write to the /dev/vport* node the
+        # class dir names (devtmpfs already created it — a fallback
+        # mknod covers a guest whose /dev is not devtmpfs). A failed
+        # resolution or write falls through to the same teardown: the
         # launcher reports no code rather than hanging the VM.
+        _exit_port=/dev/virtio-ports/$exit_channel
+        for _port_dir in /sys/class/virtio-ports/*; do
+            [ "$("$BB" cat "$_port_dir/name" 2>/dev/null)" = "$exit_channel" ] || continue
+            _dev="$("$BB" cat "$_port_dir/dev" 2>/dev/null)" || continue
+            _node=/dev/"$("$BB" basename "$_port_dir")"
+            if [ -e "$_node" ]; then
+                _exit_port=$_node
+            elif "$BB" mknod "$_node" c "''${_dev%%:*}" "''${_dev#*:}" 2>/dev/null; then
+                _exit_port=$_node
+            fi
+            break
+        done
         set +e
         "$@" &
         _payload_pid=$!
@@ -885,8 +909,8 @@ let
         _exit_code=$?
         set -e
         step "the payload exited with $_exit_code"
-        printf '%s\n' "$_exit_code" > "/dev/virtio-ports/$exit_channel" \
-            || echo "mysbx-init: cannot write the exit code to the $exit_channel port" >&2
+        printf '%s\n' "$_exit_code" > "$_exit_port" \
+            || echo "mysbx-init: cannot write the exit code to the $exit_channel port ($_exit_port)" >&2
         exit 0
     fi
     exec "$@"
@@ -970,9 +994,14 @@ runCommand "mysbx-krun-rootfs"
         || { echo "mysbx-krun-rootfs: init lost the store-share degradation probe" >&2; exit 1; }
     # The qemu exit channel (backends.md D9): the init must report
     # the payload's exit code on the virtio-serial port the launcher
-    # reads.
-    grep -qF '/dev/virtio-ports' $out/bin/mysbx-init \
-        || { echo "mysbx-krun-rootfs: init lost the exit-channel report" >&2; exit 1; }
+    # reads — resolved by NAME through sysfs (bd myconfig-dnmk: the
+    # /dev/virtio-ports/<name> spelling is a udev symlink this
+    # static-busybox guest never has; the node is devtmpfs's own
+    # vport<pdev>p<id>).
+    grep -qF '/sys/class/virtio-ports' $out/bin/mysbx-init \
+        || { echo "mysbx-krun-rootfs: init lost the exit-channel sysfs resolution" >&2; exit 1; }
+    grep -qF 'mknod' $out/bin/mysbx-init \
+        || { echo "mysbx-krun-rootfs: init lost the exit-channel node fallback" >&2; exit 1; }
     # The manifest argv records (bd myconfig-hq7k): the payload rides
     # the manifest on the qemu backend — the init must both CONSUME
     # the records and refuse a corrupted one.

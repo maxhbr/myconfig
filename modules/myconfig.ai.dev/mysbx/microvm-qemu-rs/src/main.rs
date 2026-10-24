@@ -13,7 +13,10 @@
 //!   reports the payload's exit code over (libkrun gets the code
 //!   from krun_start_enter; a stock qemu guest PANICS on PID-1
 //!   exit, so the code rides out of band — the init writes it to
-//!   /dev/virtio-ports/mysbx-exit before powering off).
+//!   the port named mysbx-exit, resolved through sysfs because the
+//!   friendly /dev/virtio-ports/<name> spelling is a udev symlink
+//!   the static-busybox guest never has, bd myconfig-dnmk — before
+//!   powering off).
 //!
 //! What the launcher DOES (the builders.nix chain, rootless):
 //!
@@ -63,7 +66,9 @@ const FS_ROOT_TAG: &str = "/dev/root";
 const MANIFEST_SLOT: &str = "manifest";
 
 /// The exit-channel chardev/port ids (a stable guest contract —
-/// the init opens /dev/virtio-ports/mysbx-exit).
+/// the init opens the port named mysbx-exit — resolved through
+/// sysfs, since /dev/virtio-ports/<name> is a udev symlink the
+/// static-busybox guest never has, bd myconfig-dnmk).
 const EXIT_CHARDEV: &str = "exitchan";
 const EXIT_PORT: &str = "mysbx-exit";
 
@@ -1005,11 +1010,7 @@ mod tests {
         // guest init parses ONE format for both backends.
         let mut cfg = test_cfg();
         cfg.env.push(("HOME".to_owned(), "/mysbx-home".to_owned()));
-        cfg.payload = vec![
-            "/bin/sh".to_owned(),
-            "-c".to_owned(),
-            "exit 7".to_owned(),
-        ];
+        cfg.payload = vec!["/bin/sh".to_owned(), "-c".to_owned(), "exit 7".to_owned()];
         cfg.shares.push(Share {
             tag: "stage-ro".to_owned(),
             slot: "store".to_owned(),
@@ -1023,23 +1024,16 @@ mod tests {
         // tokens alike (the lines below assert the spelling of
         // each record, plus one decoded roundtrip for the value
         // the live run must reproduce: `sh -c "exit 7"` → 7).
-        assert_eq!(
-            lines[1],
-            format!("argv\t0\t{}", b64("/bin/sh".as_bytes()))
-        );
+        assert_eq!(lines[1], format!("argv\t0\t{}", b64("/bin/sh".as_bytes())));
         assert_eq!(lines[2], format!("argv\t1\t{}", b64("-c".as_bytes())));
-        assert_eq!(
-            lines[3],
-            format!("argv\t2\t{}", b64("exit 7".as_bytes()))
-        );
+        assert_eq!(lines[3], format!("argv\t2\t{}", b64("exit 7".as_bytes())));
         // An EMPTY argv token survives the roundtrip — the kernel
         // cmdline's `--` split would drop it entirely.
         cfg.payload.push(String::new());
         let text = manifest_text(&cfg);
-        assert!(
-            text.lines()
-                .any(|l| l == format!("argv\t3\t{}", b64("".as_bytes())))
-        );
+        assert!(text
+            .lines()
+            .any(|l| l == format!("argv\t3\t{}", b64("".as_bytes()))));
         let lines: Vec<&str> = text.lines().collect();
         assert_eq!(lines[5], "share\tstage-ro\tstore\t/nix/store\tro");
         assert!(lines[6].starts_with("chdir\t"));
@@ -1051,15 +1045,10 @@ mod tests {
     fn the_kernel_cmdline_carries_the_pointer_not_the_payload() {
         let mut cfg = test_cfg();
         cfg.init = Some("/bin/mysbx-init".to_owned());
-        cfg.payload = vec![
-            "/bin/sh".to_owned(),
-            "-c".to_owned(),
-            "exit 7".to_owned(),
-        ];
+        cfg.payload = vec!["/bin/sh".to_owned(), "-c".to_owned(), "exit 7".to_owned()];
         let cmdline = kernel_cmdline(&cfg);
-        assert!(
-            cmdline.starts_with("root=/dev/root rootfstype=virtiofs reboot=t panic=-1 console=ttyS0")
-        );
+        assert!(cmdline
+            .starts_with("root=/dev/root rootfstype=virtiofs reboot=t panic=-1 console=ttyS0"));
         assert!(cmdline.contains("init=/bin/mysbx-init"));
         assert!(cmdline.contains("mysbx.manifest=stage-ro:manifest"));
         assert!(cmdline.contains("mysbx.exit-channel=mysbx-exit"));
