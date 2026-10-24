@@ -1082,14 +1082,28 @@ the kernel execs as PID 1), the manifest pointer and the exit
 channel as `mysbx.manifest=` / `mysbx.exit-channel=` / `mysbx.trace=`
 params (the init's ENV route is libkrun's envp mechanism, which a
 stock kernel does not carry to init — the cmdline is the qemu
-bridge, consumed by the same init), and the payload argv behind
-` -- ` (the kernel splits the cmdline there and hands the rest to
-init as `$1..`, exactly the krun_set_exec contract). The kernel
+bridge, consumed by the same init). The kernel
 pin (`nix/microvm-qemu-kernel.nix`) is a nixpkgs kernel rebuilt
 with the virtio stack, ext4 and overlayfs BUILT IN — the static
 busybox init loads no modules, and the nixpkgs default config
 builds virtio_fs, virtio_pci, ext4 and overlayfs as modules
 (FUSE too: VIRTIO_FS=y selects it).
+
+The payload argv rides the MANIFEST, never the cmdline (bd
+myconfig-hq7k): the stock kernel's `--` cmdline split is lossy —
+`next_arg` (lib/cmdline.c) whitespace-splits, a token carrying
+`=` lands in init's ENVP via `repair_env_string` (init/main.c),
+and MAX_INIT_ARGS caps the vector at 31 tokens. `sh -c "exit 7"`
+would arrive as `sh -c exit 7` — a *new command* `7`, exiting 0:
+exit codes silently lie. The manifest therefore gains `argv
+<index> <base64>` records (one per token, indices ascending,
+validated by the init's running count), carrying each token
+losslessly — spaces, quotes, `=`, empty tokens alike. The
+launcher writes the records, keeps the cmdline payload-free, and
+the init's manifest loader replaces its own `$*` with the decoded
+records before exec. The krun backend is untouched (libkrun's
+envp route is lossless); the manifest stays the ONE channel whose
+format both backends share.
 
 **Why qemu, not libkrun — and why NOT the default.** libkrun is
 the default VM backend: it is one fewer process tree, one fewer

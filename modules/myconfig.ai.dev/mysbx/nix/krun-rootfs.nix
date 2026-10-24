@@ -109,11 +109,16 @@ let
   # measured 3075 — the tail silently never booted. The launcher
   # therefore writes env/shares/chdir into a MANIFEST FILE inside
   # the ro stage device and the cmdline carries only the pointer
-  # (MYSBX_KRUN_MANIFEST=stage-ro:manifest). This init mounts the
-  # stage-ro device, reads the file (tab-separated records, base64
-  # values via the busybox applet) and only THEN applies them. The
-  # legacy MYSBX_KRUN_SHARES env route remains for cmdline-sized
-  # debug runs.
+  # (MYSBX_KRUN_MANIFEST=stage-ro:manifest). The qemu bridge adds
+  # one record kind: the payload argv (bd myconfig-hq7k) — the stock
+  # kernel's `--` cmdline split is lossy (whitespace-split,
+  # `=`-tokens to init's envp, MAX_INIT_ARGS), so the qemu launcher
+  # carries the payload ONLY here. The krun launcher writes no argv
+  # records (libkrun's envp route is lossless). This init mounts
+  # the stage-ro device, reads the file (tab-separated records,
+  # base64 values via the busybox applet) and only THEN applies
+  # them. The legacy MYSBX_KRUN_SHARES env route remains for
+  # cmdline-sized debug runs.
   mysbxInit = ''
     #!/bin/busybox sh
     set -eu
@@ -267,6 +272,20 @@ let
         mounted_devices=" $mounted_devices $mtag "
         mpath=$mpoint/$mslot
         [ -f "$mpath" ] || fail "the manifest $mpath does not exist"
+        # The payload argv records (bd myconfig-hq7k, the qemu
+        # bridge): the stock kernel's `--` cmdline split is LOSSY
+        # (whitespace-split, `=`-tokens to init's envp,
+        # MAX_INIT_ARGS), so a manifest-bearing run carries the
+        # payload here instead — one `argv <index> <base64>` record
+        # per token, indices ascending. Each index is validated
+        # against the running count (a truncated or reordered
+        # manifest is a diagnosis, never a mangled payload); the
+        # decoded tokens REPLACE this init's own $* on the first
+        # record and append after (set -- keeps each token whole —
+        # no re-splitting, an EMPTY token survives). The krun
+        # guest rides envp, never sets a manifest, and its $* is
+        # untouched.
+        _argv_n=0
         # One record per line, tab-separated fields, base64 values:
         # a base64 value never contains a tab, the field split is
         # unambiguous.
@@ -284,6 +303,27 @@ let
                     [ -n "$r5" ] || fail "manifest share record $r2:$r3 is short a mode"
                     share_records="''${share_records:-}
     $r2 $r3 $r4 $r5"
+                    ;;
+                argv)
+                    # r2 index, r3 base64(token) — one record per
+                    # payload token, the index validated against
+                    # the running count (bd myconfig-hq7k). The
+                    # first record DISCARDS the cmdline-passed $*
+                    # (a manifest-bearing qemu run never puts the
+                    # payload on the cmdline; anything the kernel
+                    # split behind `--` is not the payload), the
+                    # rest append (set -- keeps each token whole —
+                    # no re-splitting, an EMPTY token survives
+                    # losslessly).
+                    [ "$r2" -eq "$_argv_n" ] \
+                        || fail "manifest argv index $r2 is out of order (expected $_argv_n)"
+                    val=$(printf '%s' "$r3" | "$BB" base64 -d) \
+                        || fail "cannot decode the manifest argv $_argv_n"
+                    if [ "$_argv_n" -eq 0 ]; then
+                        set --
+                    fi
+                    set -- "$@" "$val"
+                    _argv_n=$((_argv_n + 1))
                     ;;
                 chdir)
                     # r2 base64(dir) — applied AFTER the shares exist
@@ -693,10 +733,12 @@ let
         step "the nix scratch is $dev at /mysbx-nix; the store overlay is up"
     fi
 
-    # The payload is our own argv: $1 the path (absolute, no PATH
-    # lookup needed), $2.. its arguments, exactly as krun_set_exec
-    # carried them.
-    [ "$#" -gt 0 ] || fail "no payload in argv — the krun_set_exec args did not reach the guest init"
+    # The payload is our own argv: the manifest's argv records
+    # REPLACED $* when one exists (bd myconfig-hq7k); else the
+    # kernel's `--` split handed the krun_set_exec vector over as
+    # $1.. (the krun guest's own route — and the qemu debug run
+    # without a manifest).
+    [ "$#" -gt 0 ] || fail "no payload — neither the manifest's argv records nor the cmdline reached this init"
 
     # The workdir, applied AFTER the shares exist (the manifest's
     # chdir record — the cmdline route had /init.krun chdir BEFORE
@@ -931,6 +973,13 @@ runCommand "mysbx-krun-rootfs"
     # reads.
     grep -qF '/dev/virtio-ports' $out/bin/mysbx-init \
         || { echo "mysbx-krun-rootfs: init lost the exit-channel report" >&2; exit 1; }
+    # The manifest argv records (bd myconfig-hq7k): the payload rides
+    # the manifest on the qemu backend — the init must both CONSUME
+    # the records and refuse a corrupted one.
+    grep -qF 'manifest argv index' $out/bin/mysbx-init \
+        || { echo "mysbx-krun-rootfs: init lost the manifest argv loader" >&2; exit 1; }
+    grep -qF 'cannot decode the manifest argv' $out/bin/mysbx-init \
+        || { echo "mysbx-krun-rootfs: init lost the manifest argv decode refusal" >&2; exit 1; }
     # The shebang guard (the eighth live finding): an indented
     # Nix string strips only the MINIMAL common indent of its
     # lines, so mixed indents leave leading spaces before the

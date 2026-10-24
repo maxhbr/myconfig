@@ -4,6 +4,7 @@
 """Check the generated init without mounts or writes to the host store."""
 
 import argparse
+import base64
 import os
 from pathlib import Path
 import shlex
@@ -11,6 +12,10 @@ import sqlite3
 import subprocess
 import tempfile
 import unittest
+
+
+def base64_of(text):
+    return base64.b64encode(text.encode()).decode()
 
 
 SCHEMA = """
@@ -478,6 +483,85 @@ class InitTests(unittest.TestCase):
         self.seed(["directory"], [(1, 999)])
         result = self.run_reconcile()
         self.assert_failed(result, "foreign-key violations remain")
+
+    def test_manifest_argv_records_replace_the_positionals(self):
+        # bd myconfig-hq7k: the qemu run carries the payload through
+        # the manifest's argv records (the stock kernel's `--`
+        # cmdline split is lossy); the loader must replace $* with
+        # the decoded tokens, keep spaces/empties whole, refuse a
+        # reordered index and refuse a bad base64 — under the REAL
+        # generated init text and the baked static busybox.
+        start = INIT.index("    _argv_n=0")
+        end = INIT.index('    done < "$mpath"', start) + len('    done < "$mpath"\n')
+        loader = INIT[start:end]
+        self.assertIn('case "$rkind" in', loader)
+        self.assertIn("argv)", loader)
+        # The extracted block must carry the WHOLE loader: env, argv
+        # and the unknown-record refusal.
+        self.assertIn("unknown manifest record", loader)
+
+        def run_manifest(records):
+            manifest = self.base / "manifest"
+            manifest.write_text("".join(records))
+            script = (
+                "set -eu\n"
+                f"BB={shlex.quote(str(ROOTFS / 'bin/busybox'))}\n"
+                'fail() { echo "mysbx-init: $*" >&2; exit 125; }\n'
+                'step() { echo "mysbx-init: $*"; }\n'
+                f"mpath={shlex.quote(str(manifest))}\n"
+                + loader
+                + '\nprintf "mysbx-test: token-count=%d\\n" "$#"\n'
+                '\nfor t in "$@"; do printf "mysbx-test: token=[%s]\\n" "$t"; done\n'
+                '\necho "mysbx-test: loader boundary reached"\n'
+            )
+            return subprocess.run(
+                [str(ROOTFS / "bin/busybox"), "sh", "-c", script, "sh",
+                 "/bin/sh", "-c", "exit 7"],
+                capture_output=True,
+                text=True,
+                env={"PATH": ""},
+                timeout=20,
+            )
+
+        # The argv records ride AFTER env records; three tokens —
+        # spaced, empty and `=`-carrying — plus a share record the
+        # loop must still consume after them.
+        records = [
+            "env\tHOME\tL215c2J4LWhvbWU=\n",
+            "argv\t0\t" + base64_of("/bin/sh") + "\n",
+            "argv\t1\t" + base64_of("-c") + "\n",
+            "argv\t2\t" + base64_of("exit 7") + "\n",
+        ]
+        result = run_manifest(records)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("mysbx-test: token-count=3", result.stdout)
+        self.assertIn("token=[/bin/sh]", result.stdout)
+        self.assertIn("token=[-c]", result.stdout)
+        self.assertIn("token=[exit 7]", result.stdout)
+        # The positional split is NOT the spawned argv: the check
+        # sh -c "exit 7" needs the tokens SPACED as one argument,
+        # which the loader's set -- guarantees.
+
+        # An EMPTY token survives the roundtrip.
+        records = [
+            "argv\t0\t" + base64_of("/bin/sh") + "\n",
+            "argv\t1\t" + base64_of("") + "\n",
+        ]
+        result = run_manifest(records)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("mysbx-test: token-count=2", result.stdout)
+        self.assertIn("token=[]", result.stdout)
+
+        # A reordered or truncated index is a refusal, never a
+        # silently reordered payload.
+        result = run_manifest(["argv\t1\t" + base64_of("x") + "\n"])
+        self.assertEqual(result.returncode, 125, result.stdout + result.stderr)
+        self.assertIn("out of order", result.stderr)
+
+        # A bad base64 token is a refusal.
+        result = run_manifest(["argv\t0\tnot!base64\n"])
+        self.assertEqual(result.returncode, 125, result.stdout + result.stderr)
+        self.assertIn("cannot decode the manifest argv 0", result.stderr)
 
 
 if __name__ == "__main__":

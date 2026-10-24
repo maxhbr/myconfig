@@ -24,9 +24,11 @@
 //!    dead)
 //! 3. write the manifest records into the ro stage dir's slot
 //! 4. exec qemu-system-x86_64: -M microvm,accel=kvm:tcg, the
-//!    kernel + `-append` cmdline (kernel params, `--`, the payload
-//!    argv — the kernel splits at `--`, so the init's $1.. is the
-//!    payload, exactly libkrun's contract), one
+//!    kernel + `-append` cmdline (kernel params, the manifest
+//!    pointer; the payload argv rides the MANIFEST's argv records
+//!    — the stock kernel's `--` cmdline split is lossy, so a
+//!    manifest-bearing run keeps the cmdline payload-free, bd
+//!    myconfig-hq7k), one
 //!    `-chardev socket` + `-device vhost-user-fs-pci` per device,
 //!    the SLiRP `-netdev user` when `--network shared` (the qemu
 //!    tier's model), the exit-channel virtserialport
@@ -356,13 +358,25 @@ fn unb64(text: &str) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
-/// The manifest records (env/share/chdir, tab-separated, base64
-/// values) — the krun launcher's `manifest_text` verbatim: the
-/// shared guest init parses the SAME file for both backends.
+/// The manifest records (env/argv/share/chdir, tab-separated,
+/// base64 values) — the krun launcher's `manifest_text` plus the
+/// one record the qemu bridge adds: the payload argv. The stock
+/// kernel's `--` split is LOSSY (init/main.c next_arg
+/// whitespace-splits, an `=`-token lands in INIT'S ENVP via
+/// repair_env_string, MAX_INIT_ARGS caps the vector at 31), so
+/// the cmdline carries NO payload whenever a manifest exists —
+/// the argv rides the manifest losslessly instead (bd
+/// myconfig-hq7k). One `argv <index> <base64>` record per token,
+/// indices 0.. ascending; the init validates the running count
+/// against each index, so a truncated or reordered manifest is a
+/// diagnosis, never a mangled payload.
 fn manifest_text(cfg: &Config) -> String {
     let mut lines = String::new();
     for (k, v) in &cfg.env {
         lines.push_str(&format!("env\t{k}\t{}\n", b64(v.as_bytes())));
+    }
+    for (i, arg) in cfg.payload.iter().enumerate() {
+        lines.push_str(&format!("argv\t{i}\t{}\n", b64(arg.as_bytes())));
     }
     for s in &cfg.shares {
         let mode = cfg
@@ -413,9 +427,13 @@ fn virtiofsd_argv(bin: &Path, socket: &Path, device: &Device) -> Vec<String> {
 /// panics; -1 + `-no-reboot` makes qemu EXIT on it — the teardown
 /// path), the manifest pointer (`mysbx.manifest=TAG:SLOT` — the
 /// init's cmdline fallback reads it when its environment carries
-/// no pointer, the backend-agnostic bridge), ` -- `, then the
-/// init + payload argv (the kernel splits at `--`, so the init's
-/// $1.. is exactly libkrun's krun_set_exec contract).
+/// no pointer, the backend-agnostic bridge), and — ONLY on a
+/// manifest-less debug run — the payload argv behind ` -- `.
+/// With a manifest the cmdline carries NO payload at all: the
+/// kernel's `--` split is lossy (whitespace-split, `=`-tokens to
+/// envp, MAX_INIT_ARGS=31), so the argv rides the manifest's
+/// records losslessly instead (bd myconfig-hq7k) and the kernel
+/// execs the init with no args beyond init= itself.
 fn kernel_cmdline(cfg: &Config) -> String {
     // root=/dev/root: the kernel mounts the virtiofs tag FS_ROOT_TAG
     // ("/dev/root") as the root fs itself — libkrun's own contract,
@@ -440,7 +458,6 @@ fn kernel_cmdline(cfg: &Config) -> String {
     if cfg.verbose {
         params.push_str(" mysbx.trace=1");
     }
-    let mut init_and_payload = Vec::new();
     // init= names the guest entry (the baked /bin/mysbx-init — the
     // SAME init the krun rootfs serves both backends); without a
     // flag the kernel's default init applies (a debug run against a
@@ -448,11 +465,18 @@ fn kernel_cmdline(cfg: &Config) -> String {
     if let Some(init) = &cfg.init {
         params.push_str(&format!(" init={init}"));
     }
-    // The krun KRUN_INIT contract: argv[0] is the init path (the
-    // kernel's init=), the payload follows as $1... — the kernel
-    // splits the cmdline at `--`.
-    init_and_payload.extend(cfg.payload.iter().cloned());
-    format!("{params} -- {}", init_and_payload.join(" "))
+    if cfg.manifest.is_some() {
+        // The payload rides the manifest's argv records (bd
+        // myconfig-hq7k) — the cmdline stays payload-free, byte-safe
+        // against any argument spelling.
+        return params;
+    }
+    // The manifest-less debug run keeps the kernel's own argv
+    // route: the `--` split hands the rest to init as $1.. — the
+    // lossy limits (MAX_INIT_ARGS, the `=` envp theft) are
+    // documented and accepted for a debug path, never the
+    // builder's route.
+    format!("{params} -- {}", cfg.payload.join(" "))
 }
 
 /// The qemu argv (headless microVM, the microvm.nix proven shape):
@@ -957,10 +981,15 @@ mod tests {
 
     #[test]
     fn the_manifest_records_match_the_krun_format() {
-        // env/share/chdir, tab-separated, base64 values — the shared
+        // env/argv/share/chdir, tab-separated, base64 values — the shared
         // guest init parses ONE format for both backends.
         let mut cfg = test_cfg();
         cfg.env.push(("HOME".to_owned(), "/mysbx-home".to_owned()));
+        cfg.payload = vec![
+            "/bin/sh".to_owned(),
+            "-c".to_owned(),
+            "exit 7".to_owned(),
+        ];
         cfg.shares.push(Share {
             tag: "stage-ro".to_owned(),
             slot: "store".to_owned(),
@@ -969,16 +998,44 @@ mod tests {
         let text = manifest_text(&cfg);
         let lines: Vec<&str> = text.lines().collect();
         assert!(lines[0].starts_with("env\tHOME\t"));
-        assert_eq!(lines[1], "share\tstage-ro\tstore\t/nix/store\tro");
-        assert!(lines[2].starts_with("chdir\t"));
+        // The argv records (bd myconfig-hq7k): indexed, base64, in
+        // argv order — lossless for spaces, quotes, `=` and empty
+        // tokens alike (the lines below assert the spelling of
+        // each record, plus one decoded roundtrip for the value
+        // the live run must reproduce: `sh -c "exit 7"` → 7).
+        assert_eq!(
+            lines[1],
+            format!("argv\t0\t{}", b64("/bin/sh".as_bytes()))
+        );
+        assert_eq!(lines[2], format!("argv\t1\t{}", b64("-c".as_bytes())));
+        assert_eq!(
+            lines[3],
+            format!("argv\t2\t{}", b64("exit 7".as_bytes()))
+        );
+        // An EMPTY argv token survives the roundtrip — the kernel
+        // cmdline's `--` split would drop it entirely.
+        cfg.payload.push(String::new());
+        let text = manifest_text(&cfg);
+        assert!(
+            text.lines()
+                .any(|l| l == format!("argv\t3\t{}", b64("".as_bytes())))
+        );
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines[5], "share\tstage-ro\tstore\t/nix/store\tro");
+        assert!(lines[6].starts_with("chdir\t"));
         // base64 of /home/synth/repo
-        assert!(lines[2].contains("L2hvbWUvc3ludGgvcmVwbw=="));
+        assert!(lines[6].contains("L2hvbWUvc3ludGgvcmVwbw=="));
     }
 
     #[test]
-    fn the_kernel_cmdline_carries_the_pointer_and_the_payload() {
+    fn the_kernel_cmdline_carries_the_pointer_not_the_payload() {
         let mut cfg = test_cfg();
         cfg.init = Some("/bin/mysbx-init".to_owned());
+        cfg.payload = vec![
+            "/bin/sh".to_owned(),
+            "-c".to_owned(),
+            "exit 7".to_owned(),
+        ];
         let cmdline = kernel_cmdline(&cfg);
         assert!(
             cmdline.starts_with("root=/dev/root rootfstype=virtiofs rootwait reboot=t panic=-1")
@@ -986,11 +1043,21 @@ mod tests {
         assert!(cmdline.contains("init=/bin/mysbx-init"));
         assert!(cmdline.contains("mysbx.manifest=stage-ro:manifest"));
         assert!(cmdline.contains("mysbx.exit-channel=mysbx-exit"));
-        assert!(cmdline.ends_with(" -- /synth/shell"));
+        // The payload NEVER rides the cmdline of a manifest-bearing
+        // run (bd myconfig-hq7k): no `--` split, no argv text — the
+        // manifest's records carry it losslessly.
+        assert!(!cmdline.contains(" -- "));
+        assert!(!cmdline.contains("exit 7"));
         // Without an init flag the kernel's default applies — the
         // debug-run path.
         cfg.init = None;
         assert!(!kernel_cmdline(&cfg).contains("init="));
+        // And without a MANIFEST (the manifest-less debug run) the
+        // kernel's own argv route remains: the payload behind `-- `
+        // — documented as lossy, never the builder's route.
+        cfg.manifest = None;
+        let cmdline = kernel_cmdline(&cfg);
+        assert!(cmdline.ends_with(" -- /bin/sh -c exit 7"));
     }
 
     #[test]
