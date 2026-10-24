@@ -460,11 +460,15 @@ in
 
   mysbx-microvm-qemu-wrapper-test =
     let
-      # Stubs of the three pins: the shapes the wrapper --sets. The
-      # pins are opaque store paths to the wrapper, so stubs keep
-      # this check from building the whole pinned kernel in CI — the
-      # REAL pin chain is evaluated by the module and built on a
-      # host that opts into the backend.
+      # Stubs of the three pins, in the REAL shapes the wrapper
+      # --sets: a launcher package with bin/, a rootfs package with
+      # bin/, and a kernel PACKAGE whose bzImage member is the pin
+      # (the module wiring passes "${pkg}/bzImage", never the
+      # package — bd myconfig-q3se). Stubs keep this check from
+      # building the whole pinned kernel in CI; the wiring itself
+      # is pinned by the source grep below and the run-path
+      # is-file refusal (mysbx-rs) on a host that opts into the
+      # backend.
       stubLauncher = pkgs.runCommand "mysbx-microvm-qemu-stub-launcher" { } ''
         mkdir -p $out/bin
         printf '#!/bin/sh\necho "mysbx-microvm-qemu: unknown argument $1" >&2\nexit 2\n' > $out/bin/mysbx-microvm-qemu
@@ -475,7 +479,10 @@ in
         printf '#!/bin/sh\n' > $out/bin/mysbx-init
         chmod +x $out/bin/mysbx-init
       '';
-      stubKernel = pkgs.writeText "mysbx-microvm-qemu-stub-bzImage" "stub";
+      stubKernelPkg = pkgs.runCommand "mysbx-microvm-qemu-stub-kernel" { } ''
+        printf 'stub-bzImage' > $out/bzImage
+      '';
+      stubKernel = "${stubKernelPkg}/bzImage";
       pkgQemu = pkgs.callPackage ../nix/mysbx.nix {
         microvmQemuLauncher = stubLauncher;
         microvmQemuRootfs = stubRootfs;
@@ -508,6 +515,21 @@ in
           *) fail "the pinned launcher is not the stub: $launcher" ;;
         esac
         test -x "$launcher" || fail "the pinned launcher does not exist: $launcher"
+        # The kernel pin names the bzImage FILE (a store file path),
+        # never the package directory (bd myconfig-q3se).
+        kernel=$(echo "$content" | tr -d "'" | awk '/--set MYSBX_MICROVM_QEMU_KERNEL/ {print $4; exit}')
+        case "$kernel" in
+          /nix/store/*-mysbx-microvm-qemu-stub-kernel/bzImage) ;;
+          *) fail "the pinned kernel is not the stub bzImage: $kernel" ;;
+        esac
+        test -f "$kernel" || fail "the pinned kernel is not a file: $kernel"
+        # And the module wiring passes the member: the line in
+        # default.nix that feeds the wrapper's kernel pin must name
+        # the bzImage INSIDE the package, never the package itself.
+        wiring=$(grep -n 'microvmQemuKernel = ' ${../../default.nix} \
+          || fail "the module wiring (default.nix microvmQemuKernel) is gone")
+        echo "$wiring" | grep -q '/bzImage"' \
+          || fail "the module wiring does not pin the bzImage member: $wiring"
 
         # 2. the dry run: a repo below a placeable share root, the
         #    backend in its sidecar, the payload a one-shot true.

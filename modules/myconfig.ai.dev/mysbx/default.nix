@@ -464,7 +464,10 @@ in
         # libkrun bundles, pinned as MYSBX_MICROVM_QEMU_*.
         microvmQemuLauncher = cfg.microvm-qemu.launcher;
         microvmQemuRootfs = cfg.microvm-qemu.rootfs;
-        microvmQemuKernel = cfg.microvm-qemu.kernel;
+        # The IMAGE FILE, not the kernel package: qemu's -kernel
+        # reads a file (a directory is EISDIR), and doctor's
+        # is-file rule matches only the image (bd myconfig-q3se).
+        microvmQemuKernel = "${cfg.microvm-qemu.kernel}/bzImage";
         waypipe = cfg.display.package;
         # The dtach master of detached runs (docs/design/detach.md
         # B10): pinned so `--detach` needs no host PATH lookup.

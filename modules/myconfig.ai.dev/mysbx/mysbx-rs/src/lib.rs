@@ -3364,6 +3364,16 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 );
                 return EXIT_INFRASTRUCTURE;
             };
+            // The pin must name the bzImage FILE, not the kernel
+            // package (a directory is EISDIR at qemu's -kernel):
+            // the same rule doctor applies (bd myconfig-q3se).
+            if kernel_pin && !std::path::Path::new(&microvm_qemu_kernel).is_file() {
+                eprintln!(
+                    "mysbx: microvm-qemu: the kernel pin is not a file: {microvm_qemu_kernel}"
+                );
+                eprintln!("  pin the image (\"${{kernel}}/bzImage\"), not the kernel package");
+                return EXIT_INFRASTRUCTURE;
+            }
             // The session-lifetime GC roots (bd myconfig-mxu): the
             // guest sees the LIVE host store, so pin every store
             // path this run resolves through it — the launcher and

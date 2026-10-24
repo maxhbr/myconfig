@@ -369,10 +369,13 @@
   # forked) and the kernel bzImage (./microvm-qemu-kernel.nix — the one
   # input libkrun bundles and qemu needs handed over; built with the
   # virtio stack compiled in, the static busybox init loads no
-  # modules). `null` pins nothing and `backend = "microvm-qemu"` runs
-  # are refused with a naming message (the same contract as the krun
-  # pins). Parameters, not `pkgs.` references, so a host pins exactly
-  # the qemu/virtiofsd/kernel builds its runs need.
+  # modules). The kernel pin is the bzImage FILE inside the package
+  # (`${pkg}/bzImage`), never the package itself: qemu's -kernel
+  # reads a file, and doctor's is-file rule rejects a directory (bd
+  # myconfig-q3se). `null` pins nothing and `backend =
+  # "microvm-qemu"` runs are refused with a naming message (the same
+  # contract as the krun pins). Parameters, not `pkgs.` references, so
+  # a host pins exactly the qemu/virtiofsd/kernel builds its runs need.
   microvmQemuLauncher ? null,
   microvmQemuRootfs ? null,
   microvmQemuKernel ? null,

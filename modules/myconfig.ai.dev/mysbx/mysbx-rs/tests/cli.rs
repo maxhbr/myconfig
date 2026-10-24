@@ -10130,6 +10130,33 @@ fn the_microvm_qemu_backend_dry_run_audits_the_kernel_pair() {
         "{stderr_lossy}"
     );
 
+    // A kernel pin naming a DIRECTORY (the kernel package instead
+    // of its bzImage member) refuses at run start — the same rule
+    // doctor applies; qemu's -kernel would only fail later with
+    // EISDIR (bd myconfig-q3se).
+    let kernel_pkg = sidecar.join("kernel-stub-pkg");
+    std::fs::create_dir_all(&kernel_pkg).unwrap();
+    let mut cmd = spawn_with_args(&inv, &["run", "--dry-run", "--", "/bin/true"]);
+    cmd.env("MYSBX_MICROVM_QEMU_LAUNCHER", "/does/not/matter/dry-run")
+        .env(
+            "MYSBX_MICROVM_QEMU_ROOTFS",
+            rootfs.to_str().unwrap().to_string(),
+        )
+        .env(
+            "MYSBX_MICROVM_QEMU_KERNEL",
+            kernel_pkg.to_str().unwrap().to_string(),
+        );
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stderr_lossy = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        out.status.code() != Some(0),
+        "a directory kernel pin must refuse the run: {stderr_lossy}"
+    );
+    assert!(
+        stderr_lossy.contains("the kernel pin is not a file"),
+        "{stderr_lossy}"
+    );
+
     // The full dry run audits the argv: kernel right after the
     // rootfs, the exit-channel switch, the shared spec (shares,
     // manifest) around them.
