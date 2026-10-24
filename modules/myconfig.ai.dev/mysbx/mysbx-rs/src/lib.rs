@@ -3636,6 +3636,18 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                     "--tmpfs".into(),
                     "/tmp".into(),
                 ]);
+                // The host resolver for libslirp (bd myconfig-m0to):
+                // the SLiRP DNS proxy reads the HOST upstream from
+                // /etc/resolv.conf through qemu's OWN filesystem
+                // view — this bwrap view has no /etc at all without
+                // the bind. -try: a host without the file must
+                // still boot (the guest resolver is the init's
+                // business, not qemu's).
+                argv.extend([
+                    "--ro-bind-try".into(),
+                    "/etc/resolv.conf".into(),
+                    "/etc/resolv.conf".into(),
+                ]);
             }
             argv.extend([
                 "--dev-bind".into(),

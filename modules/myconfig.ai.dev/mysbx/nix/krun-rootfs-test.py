@@ -499,6 +499,14 @@ class InitTests(unittest.TestCase):
         self.assertIn("ip addr add 10.0.2.15/24", block)
         self.assertIn("ip route add default via 10.0.2.2", block)
         self.assertIn("the NIC did not attach", block)
+        # The resolver rewrite (bd myconfig-m0to): the host's own
+        # nameservers are host-local — behind the SLiRP NAT they
+        # point into the GUEST, where nothing listens. The step
+        # rewrites /etc/resolv.conf to SLiRP's DNS proxy (.3, not
+        # the .2 gateway) and keeps the localhost hosts mapping.
+        self.assertIn("nameserver 10.0.2.3", block)
+        self.assertIn("> /etc/resolv.conf", block)
+        self.assertIn("127.0.0.1 localhost", block)
         # `ip link set` — never a bare interface name assumption.
         self.assertNotIn("eth0", block)
 

@@ -497,8 +497,9 @@ let
     # (TSI has no net device, no DHCP); the manifest's env is the
     # transport. The share loop's tmpfs-at-/etc (when it ran) is
     # already in place; on a rootfs without /etc shares this mounts
-    # the component first. After the resolver exists, nothing must
-    # mount over /etc.
+    # the component first. After the resolver exists, only the
+    # SLiRP step below may write it (the DNS rewrite, bd
+    # myconfig-m0to).
     if [ -n "''${MYSBX_KRUN_RESOLV:-}" ]; then
         step "writing /etc/resolv.conf from the host resolver"
         # /etc is the ro root's share-root unless a share below it
@@ -547,10 +548,17 @@ let
     # set ONLY by the microvm-qemu builder when the network is
     # shared (the krun backend sets none — no step runs, no eth0
     # exists to configure). qemu's user netdev carries FIXED SLiRP
-    # defaults — guest 10.0.2.15/24, gateway and DNS 10.0.2.2 — so
-    # the config is static, no DHCP. The interface is found by
-    # DRIVER (the first virtio_net device), never by a name the
-    # kernel's probe order could change.
+    # defaults — guest 10.0.2.15/24, gateway 10.0.2.2, DNS proxy
+    # 10.0.2.3 — so the config is static, no DHCP. The interface
+    # is found by DRIVER (the first virtio_net device), never by a
+    # name the kernel's probe order could change. The host's own
+    # resolver addresses are host-local (e.g. systemd-resolved's
+    # 127.0.0.53): behind the SLiRP NAT they point into the GUEST,
+    # where nothing listens — DNS would be dead (bd
+    # myconfig-m0to). SLiRP's DNS proxy is the .3 address, NOT the
+    # .2 gateway; the resolver written above is therefore REWRITTEN
+    # to the proxy (the krun arm never runs this — TSI dials from
+    # the HOST netns, where the host's addresses are exactly right).
     if [ "''${MYSBX_MICROVM_NET:-}" = "1" ]; then
         _nic=""
         for _if in /sys/class/net/*; do
@@ -571,6 +579,21 @@ let
                 || fail "cannot bring the NIC $_nic up"
             "$BB" ip route add default via 10.0.2.2 \
                 || fail "cannot add the default route via 10.0.2.2"
+            # The SLiRP DNS proxy — the host's resolver addresses
+            # are unreachable from behind the NAT (bd
+            # myconfig-m0to). A fresh tmpfs (no /etc shares) keeps
+            # the baked /etc/hosts; a tmpfs'd /etc carries it —
+            # the localhost mapping must survive the rewrite.
+            if ! "$BB" touch /etc/.mysbx-resolv-probe 2>/dev/null; then
+                "$BB" mount -t tmpfs tmpfs /etc \
+                    || fail "cannot mount the tmpfs for /etc (the SLiRP resolver)"
+            else
+                "$BB" rm -f /etc/.mysbx-resolv-probe
+            fi
+            [ -f /etc/hosts ] || "$BB" printf '%s\n' \
+                '127.0.0.1 localhost' > /etc/hosts
+            "$BB" printf 'nameserver 10.0.2.3\n' > /etc/resolv.conf \
+                || fail "cannot write the SLiRP resolver"
         else
             fail "MYSBX_MICROVM_NET=1 but no virtio_net interface exists — the NIC did not attach"
         fi

@@ -1058,7 +1058,7 @@ What differs from `krun`, stated honestly:
 | kernel | libkrunfw's stock kernel, bundled | a PINNED nixpkgs kernel (`microvm-qemu.kernel`, a bzImage) |
 | virtiofs server | in-process, per `krun_add_virtiofs3` tag | one rootless virtiofsd per stage device (`--sandbox none`), sockets in a per-run dir, killed on exit |
 | rootfs read-only flag | the virtiofs device's own ro flag | virtiofsd `--readonly` for the root and the ro stage device |
-| network = shared | TSI vsock proxy (D6) | SLiRP user mode (`-netdev user`), the qemu tier's model — the guest init configures the NIC statically (10.0.2.15/24, default route 10.0.2.2 — qemu's fixed SLiRP defaults), gated on the `MYSBX_MICROVM_NET` manifest marker (bd myconfig-k106) |
+| network = shared | TSI vsock proxy (D6) | SLiRP user mode (`-netdev user`), the qemu tier's model — the guest init configures the NIC statically (10.0.2.15/24, default route 10.0.2.2, DNS 10.0.2.3 — qemu's fixed SLiRP defaults), gated on the `MYSBX_MICROVM_NET` manifest marker (bd myconfig-k106), and rewrites the guest resolver to the SLiRP DNS proxy — the host's own nameservers are host-local and dead behind the NAT (bd myconfig-m0to); libslirp's upstream discovery reads the host resolv.conf through a `--ro-bind-try` in the qemu arm's bwrap wrap |
 | network = false | implicit vsock disabled — NO socket path | NO netdev at all; bwrap additionally `--unshare-net`s the chain |
 | nix scratch | virtio-blk via `krun_add_disk2` (D7) | a virtio-blk `-drive` on the same per-run sparse file, same guest init |
 | exit code | `krun_start_enter` returns the payload's | the init reports it over a virtio-serial port; PID-1 exit panics a stock guest, so the channel is out of band |

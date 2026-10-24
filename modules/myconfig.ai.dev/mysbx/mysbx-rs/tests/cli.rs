@@ -10280,6 +10280,11 @@ fn the_microvm_qemu_bwrap_wrap_carries_the_dev_and_tmp_surface() {
             ("--dev-bind", "/dev/null"),
             ("--dev-bind", "/dev/urandom"),
             ("--tmpfs", "/tmp"),
+            // The host resolver libslirp reads (bd myconfig-m0to):
+            // the SLiRP DNS proxy discovers its upstream through
+            // qemu's own filesystem view — without the bind, the
+            // bwrap view has no /etc at all.
+            ("--ro-bind-try", "/etc/resolv.conf"),
         ] {
             assert_eq!(
                 has(flag, value),
