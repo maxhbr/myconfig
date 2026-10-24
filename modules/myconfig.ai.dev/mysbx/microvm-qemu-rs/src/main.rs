@@ -852,19 +852,33 @@ fn run(cfg: Config, boot_started: Instant) -> i32 {
     // the socket on exit — a read after vm-wait would race the
     // unlink and lose the code), buffers the one line the guest
     // init writes, and hands it over once qemu has exited. The
-    // connect loop's whole budget runs during the boot, so a slow
-    // guest still connects.
-    let exit_reader = exit_socket
-        .clone()
-        .map(|sock| std::thread::spawn(move || read_exit_code(&sock)));
-
-    let vm = match Command::new(&qemu).args(&argv[1..]).status() {
-        Ok(status) => status,
+    // connect loop retries AS LONG AS qemu lives (bd
+    // myconfig-lzu9): a fixed budget that starts before qemu even
+    // exec'd would lapse on a slow start (a ~50MB binary on a cold
+    // page cache), and then NOTHING would ever consume the socket:
+    // the guest's blocking virtio-serial write would wait for a
+    // host connection that never comes — PID 1, and with it qemu,
+    // would never exit. The child stays a zombie until the wait()
+    // below reaps it, so /proc/<pid> reliably says "still alive".
+    let mut qemu_child = match Command::new(&qemu).args(&argv[1..]).spawn() {
+        Ok(child) => child,
         Err(e) => {
             eprintln!(
                 "mysbx-microvm-qemu: cannot spawn qemu ({}): {e}",
                 qemu.display()
             );
+            return EXIT_SETUP;
+        }
+    };
+    let exit_reader = exit_socket.clone().map(|sock| {
+        let qemu_pid = qemu_child.id();
+        std::thread::spawn(move || read_exit_code(&sock, qemu_pid))
+    });
+
+    let vm = match qemu_child.wait() {
+        Ok(status) => status,
+        Err(e) => {
+            eprintln!("mysbx-microvm-qemu: waiting on qemu failed: {e}");
             return EXIT_SETUP;
         }
     };
@@ -883,9 +897,10 @@ fn run(cfg: Config, boot_started: Instant) -> i32 {
             None => {
                 eprintln!(
                     "mysbx-microvm-qemu: no exit code on the {EXIT_PORT} channel — \
-                     the guest init did not report one (an init without the \
-                     channel support, bd myconfig-2l9b, or a boot that died \
-                     before the payload ran)"
+                     qemu exited without the guest init reporting one (an init \
+                     without the channel support, bd myconfig-2l9b, a boot that \
+                     died before the payload ran, or a chardev the reader \
+                     could not reach)"
                 );
                 EXIT_SETUP
             }
@@ -900,27 +915,56 @@ fn run(cfg: Config, boot_started: Instant) -> i32 {
 }
 
 /// Read the exit code the guest init wrote to the channel: one
-/// `N\n` line. The connect loop runs while qemu starts up (the
-/// caller spawns this BEFORE waiting on qemu); the read then
-/// blocks until the guest writes or qemu's exit closes the
-/// socket — `None` is a diagnosis, never a guess.
-fn read_exit_code(sock: &Path) -> Option<i32> {
-    for _ in 0..100 {
+/// `N\n` line. The connect loop retries while qemu (the pid the
+/// caller hands over) is alive — the budget is the GUEST's whole
+/// lifetime, so a slow qemu start still connects (bd
+/// myconfig-lzu9); once qemu is gone (the child stays a zombie
+/// until the caller's wait() reaps it, so kill(pid, 0) is the
+/// liveness truth) a short grace covers the exit race, then `None`
+/// is a diagnosis, never a guess.
+fn read_exit_code(sock: &Path, qemu_pid: u32) -> Option<i32> {
+    let read_one = |stream: &mut UnixStream| -> Option<i32> {
+        let mut reader = std::io::BufReader::new(stream);
+        let mut line = String::new();
+        // The read ends at EOF: qemu closes the chardev when it
+        // exits, so a code sent before the shutdown arrives as
+        // one line, then EOF.
+        reader.read_line(&mut line).ok()?;
+        line.trim().parse::<i32>().ok()
+    };
+    loop {
         if let Ok(mut stream) = UnixStream::connect(sock) {
-            let mut reader = std::io::BufReader::new(&mut stream);
-            let mut line = String::new();
-            // The read ends at EOF: qemu closes the chardev when it
-            // exits, so a code sent before the shutdown arrives as
-            // one line, then EOF.
-            if reader.read_line(&mut line).is_err() {
-                return None;
+            if let Some(code) = read_one(&mut stream) {
+                return Some(code);
             }
-            let code = line.trim().parse::<i32>().ok()?;
-            return Some(code);
+            return None; // a connected reader that read no code:
+                         // qemu died before the init wrote
         }
-        std::thread::sleep(Duration::from_millis(10));
+        if !pid_alive(qemu_pid) {
+            // qemu exited before the socket appeared (or is
+            // mid-unlink): a short grace, then the diagnosis.
+            for _ in 0..10 {
+                if let Ok(mut stream) = UnixStream::connect(sock) {
+                    if let Some(code) = read_one(&mut stream) {
+                        return Some(code);
+                    }
+                    return None;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            return None;
+        }
+        std::thread::sleep(Duration::from_millis(50));
     }
-    None
+}
+
+/// Whether the pid is still alive, straight from /proc (the
+/// launcher is zero-dependency by design): the zombie a spawned
+/// child stays as until its parent reaps it counts as alive, so a
+/// missing /proc entry reliably means "the caller's wait() already
+/// collected it".
+fn pid_alive(pid: u32) -> bool {
+    std::path::Path::new(&format!("/proc/{pid}")).exists()
 }
 
 // ---------------------------------------------------------------------------
@@ -1225,5 +1269,81 @@ mod tests {
         )
         .is_err());
         assert!(parse_args_result("-- /bin/true".split_whitespace().map(str::to_owned)).is_err());
+    }
+
+    /// read_exit_code retries while the qemu pid lives (bd
+    /// myconfig-lzu9): a server that appears LATE — after any
+    /// fixed budget the old code had — must still be read through.
+    /// The liveness truth is the CALLER's pid (this test process),
+    /// which stays alive for the whole call.
+    #[test]
+    fn the_exit_reader_connects_to_a_late_socket() {
+        use std::os::unix::net::UnixListener;
+        let dir = std::env::temp_dir().join(format!("mysbx-exit-test-late-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("the test dir");
+        let sock = dir.join("late.sock");
+        // The server appears 1.5s in — past the old 100x10ms budget.
+        let sock_path = sock.clone();
+        let server = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(1500));
+            let listener = UnixListener::bind(&sock_path).expect("the late server binds");
+            if let Ok((mut stream, _)) = listener.accept() {
+                use std::io::Write;
+                let _ = stream.write_all(b"7\n");
+            }
+        });
+        let code = read_exit_code(&sock, std::process::id());
+        server.join().expect("the server thread");
+        assert_eq!(code, Some(7), "the late socket must still be read");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A qemu that dies WITHOUT ever creating the socket: the
+    /// reader gives up after the grace — bounded, never a hang —
+    /// and reports no code.
+    #[test]
+    fn the_exit_reader_gives_up_when_the_caller_is_gone() {
+        let dir = std::env::temp_dir().join(format!("mysbx-exit-test-dead-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("the test dir");
+        let sock = dir.join("never.sock");
+        // A pid that is gone (the reaped self-child): the loop must
+        // exit within its grace, not loop forever.
+        let mut child = std::process::Command::new("true")
+            .spawn()
+            .expect("a dying child");
+        let dead_pid = child.id();
+        let _ = child.wait();
+        let started = Instant::now();
+        let code = read_exit_code(&sock, dead_pid);
+        assert_eq!(code, None);
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "the reader must not hang on a dead qemu"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The immediate case: a server that exists up front still
+    /// reads (the boot race covered by the old budget).
+    #[test]
+    fn the_exit_reader_reads_an_immediate_socket() {
+        use std::io::Write;
+        use std::os::unix::net::UnixListener;
+        let dir = std::env::temp_dir().join(format!("mysbx-exit-test-now-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("the test dir");
+        let sock = dir.join("now.sock");
+        let listener = UnixListener::bind(&sock).expect("the immediate server binds");
+        let server = std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let _ = stream.write_all(b"42\n");
+            }
+        });
+        let code = read_exit_code(&sock, std::process::id());
+        server.join().expect("the server thread");
+        assert_eq!(code, Some(42));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

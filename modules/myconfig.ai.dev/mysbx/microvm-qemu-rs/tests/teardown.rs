@@ -223,7 +223,7 @@ fn no_stub_daemon_survives_a_failed_run() {
     // pidfile + /proc check can actually see a live stub — so the
     // assertion below cannot regress into another vacuous pass.
     let mut control = Command::new(&virtiofsd)
-        .arg("--socket-path=control")
+        .arg(format!("--socket-path={}", dir.join("control").display()))
         .spawn()
         .expect("the control stub spawns");
     let control_pid = read_pid(&pidfile).expect("the control stub records its pid");
