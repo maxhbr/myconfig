@@ -1075,9 +1075,14 @@ no 2048-byte limit: the argv interface stays byte-stable and
 testable, and the guest init stays backend-agnostic.
 
 The boot protocol is the kernel's own, which libkrun's matches:
-`-append` carries `root=/dev/root rootfstype=virtiofs rootwait`
-(the KERNEL mounts the virtiofs tag `/dev/root` as the root fs —
-the init never mounts it), `init=/bin/mysbx-init` (the baked entry
+`-append` carries `root=/dev/root rootfstype=virtiofs` — and NO
+`rootwait`: init/do_mounts.c's wait_for_root loops on
+early_lookup_bdev, which is BLOCK-ONLY, so a virtiofs tag never
+satisfies it and the boot would hang forever (bd myconfig-7scm).
+`rootfstype=virtiofs` stays: mount_root's nodev arm needs
+root_fs_names set to reach mount_nodev_root. The KERNEL mounts the
+virtiofs tag `/dev/root` as the root fs (the init never mounts
+it), `init=/bin/mysbx-init` (the baked entry
 the kernel execs as PID 1), the manifest pointer and the exit
 channel as `mysbx.manifest=` / `mysbx.exit-channel=` / `mysbx.trace=`
 params (the init's ENV route is libkrun's envp mechanism, which a

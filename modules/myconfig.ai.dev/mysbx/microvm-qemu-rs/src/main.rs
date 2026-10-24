@@ -438,10 +438,14 @@ fn kernel_cmdline(cfg: &Config) -> String {
     // root=/dev/root: the kernel mounts the virtiofs tag FS_ROOT_TAG
     // ("/dev/root") as the root fs itself — libkrun's own contract,
     // which the SHARED init relies on (it never mounts the root).
-    // rootwait: the virtiofs device appears with the vhost-user
-    // daemon handshake, which can land after the kernel's device
-    // probe — never fail the boot over a race the wait solves.
-    let mut params = String::from("root=/dev/root rootfstype=virtiofs rootwait reboot=t panic=-1");
+    // NO rootwait: init/do_mounts.c wait_for_root loops on
+    // early_lookup_bdev, which is BLOCK-ONLY (block/early-lookup.c
+    // — a virtiofs tag never becomes a block device, so rootwait
+    // would hang the boot forever "Waiting for root device
+    // /dev/root"). rootfstype=virtiofs stays: the mount_root
+    // case-0 arm reaches mount_nodev_root only when root_fs_names
+    // is set (bd myconfig-7scm).
+    let mut params = String::from("root=/dev/root rootfstype=virtiofs reboot=t panic=-1");
     if let Some(manifest) = &cfg.manifest {
         // The pointer's TAG:SLOT spelling matches
         // MYSBX_KRUN_MANIFEST's.
@@ -1038,7 +1042,7 @@ mod tests {
         ];
         let cmdline = kernel_cmdline(&cfg);
         assert!(
-            cmdline.starts_with("root=/dev/root rootfstype=virtiofs rootwait reboot=t panic=-1")
+            cmdline.starts_with("root=/dev/root rootfstype=virtiofs reboot=t panic=-1")
         );
         assert!(cmdline.contains("init=/bin/mysbx-init"));
         assert!(cmdline.contains("mysbx.manifest=stage-ro:manifest"));
