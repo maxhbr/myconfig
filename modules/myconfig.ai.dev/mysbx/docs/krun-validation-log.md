@@ -130,3 +130,86 @@ occur).
 bd myconfig-mxu acceptance: COMPLETE (live, real boot path).
 The upstream why-does-a-fetch-register-a-symlink question stays
 with bd myconfig-yiw.
+
+## 2026-10-24, the microvm-qemu session sandbox — a silent mid-walk death (bd myconfig-dj4 recurrence)
+
+The agent sandbox this branch's work ran in (direct krun, host
+'thing', branch `microvm-qemu`) died overnight WITHOUT the EMFILE
+symptom — and was restarted in bubblewrap before the §6.1
+collect-before-kill evidence could be taken. The reconstruction
+below is from the pi session transcript, which survives on the
+persistent home share (the guest /tmp and the launcher's /proc
+died with the VM).
+
+### The timeline (session
+2026-10-23T17-11-48Z, transcript lines ~2995–3019)
+
+- 17:11–21:11 — hours of normal agent work: nix evals over the
+  flake (each registering a fresh `…-source` tree of nixpkgs in
+  the guest store), the mysbx-rs test suite, a first kernel build
+  that died ENOSPC at the 32g scratch cap (D7), a `nix store gc`
+  (166075 paths, 276.8 GiB freed), a second full kernel build.
+- 23:05 — the second build launched; 00:01 — it failed ENOSPC
+  again (objcopy "No space left on device").
+- 00:04:05Z — the last successful tool call: `mount | grep …; du -sh
+  /nix/store; ls /mysbx-nix/state` — a METADATA WALK over the
+  whole ro store share. Its result NEVER ARRIVED: no toolResult,
+  no error, nothing further in the transcript until the human
+  restart at 08:11Z.
+
+### Why this reads as the dj4 wedge, not disk exhaustion
+
+- ENOSPC kills builds loudly (two earlier failures proved that:
+  exit 2 + "No space left on device" in the log); the death was
+  SILENT mid-call — the shape of the guest I/O path failing under
+  the launcher, not of a full disk.
+- The last call was a `du` over the ro store share — exactly the
+  workload of every documented wedge: dj4's fd histogram is
+  dominated by O_PATH fds into nixpkgs `-source` trees, and the
+  fd-stress harness reproduces the wedge with store scans.
+- The session profile fits: ~7 hours old, hundreds of nix evals
+  (each walking + registering a fresh nixpkgs tree), two full
+  kernel builds, a 166k-path GC — far more store-inode churn than
+  the ~70k-inode steady state the watchdog's baseline tolerates.
+- pi appends every toolResult to its transcript on the home share;
+  the transcript simply STOPS. The guest was gone or its I/O was
+  wedged before the result could be written.
+
+### Why the mitigations did not save this session (all in place)
+
+1. fd ceilings raised (mnr, guest init + launcher best-effort,
+   host userNofileLimit=8388608) — necessary but not sufficient:
+   dj4 proved the accumulation is unbounded (case (b), live fd
+   histogram 524k fds against the raised ceiling).
+2. libkrun patches (readdirplus accounting c5g, zero entry
+   timeout phw) — do not bound the count; dj4's re-measure showed
+   the refs survive regardless.
+3. guest inode watchdog (dj4, drop_caches past 20000 growth over
+   the post-drop baseline, 1 s interval) — mitigates, cannot
+   prevent: a single fast walk pins unbounded fds between two
+   ticks (the jjfy overshoot), and no evidence survived to say
+   whether it ran at all in this VM (the /tmp watchdog log died
+   with the guest).
+
+### What the next wedge must do differently (process gap)
+
+The §6.1 runbook (collect-before-kill,
+`krun-inspect-and-collect.sh`) was NOT applied: the sandbox was
+restarted from outside before anyone could run it host-side. The
+launcher's fd count / limits / fd-target histogram is THE evidence
+that separates dj4 case (b) from alternatives; without it the
+diagnosis stays a strong signature match, not a confirmation. On
+the next silent death of a krun sandbox: collect host-side FIRST
+(§6.1), only then restart. The transcript-based reconstruction
+here is the fallback when that window is missed — keep agent
+session transcripts on the persistent home share so the death
+point survives (this one did).
+
+### Follow-ups filed
+
+- bd myconfig-dj4 gains this recurrence as its third live data
+  point (silent-death variant, evidence-collection window missed).
+- The disk ceiling stands: a full kernel build does not fit the
+  32g scratch twice-over without a GC between builds (D7's cap is
+  a real constraint for kernel-sized builds — build on a bigger
+  host or GC between attempts).
