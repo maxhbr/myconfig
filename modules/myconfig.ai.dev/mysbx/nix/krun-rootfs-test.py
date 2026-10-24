@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import shlex
 import sqlite3
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -545,11 +546,22 @@ class InitTests(unittest.TestCase):
         # and write to the devtmpfs node (vport<pdev>p<id>), with an
         # mknod fallback. Runs the REAL generated block under the
         # baked static busybox against a synthetic sysfs + dev tree.
+        # The mknod sub-check is capability-gated: an unprivileged
+        # nix builder lacks CAP_MKNOD, so there the DESIGNED
+        # fallback is asserted instead (bd myconfig-opx8).
         start = INIT.index("    _exit_port=/dev/virtio-ports/$exit_channel")
         end = INIT.index("    set +e", start)
         block = INIT[start:end]
         self.assertIn('/sys/class/virtio-ports', block)
         self.assertIn('mknod', block)
+
+        try:
+            os.mknod(self.base / "mknod-probe", 0o600 | stat.S_IFCHR,
+                     os.makedev(1, 3))
+            have_mknod = True
+            (self.base / "mknod-probe").unlink()
+        except OSError:
+            have_mknod = False
 
         sysfs = self.base / "sys/class/virtio-ports"
         other = sysfs / "vport0p1"
@@ -580,16 +592,28 @@ class InitTests(unittest.TestCase):
             timeout=20,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        # The node did NOT exist in the fixture /dev: the mknod
-        # fallback must have created it from the dev file.
-        self.assertEqual(result.stdout.strip(),
-                         f"mysbx-test: port={dev}/vport0p2",
-                         result.stdout + result.stderr)
-        self.assertTrue((dev / "vport0p2").exists())
+        if have_mknod:
+            # The node did NOT exist in the fixture /dev: the mknod
+            # fallback must have created it from the dev file.
+            self.assertEqual(result.stdout.strip(),
+                             f"mysbx-test: port={dev}/vport0p2",
+                             result.stdout + result.stderr)
+            self.assertTrue((dev / "vport0p2").exists())
+        else:
+            # No CAP_MKNOD (the nix build sandbox): the designed
+            # degradation — the port stays the udev path and no
+            # node appears.
+            self.assertEqual(result.stdout.strip(),
+                             f"mysbx-test: port={dev}/virtio-ports/mysbx-exit",
+                             result.stdout + result.stderr)
+            self.assertFalse((dev / "vport0p2").exists())
 
         # With the node already present (the devtmpfs shape on a
-        # real guest), the existing node is used.
-        (dev / "vport0p2").unlink()
+        # real guest), the existing node is used. A regular file
+        # satisfies the init's [ -e ] probe just as well, so this
+        # covers the primary real-guest branch even without
+        # CAP_MKNOD.
+        (dev / "vport0p2").unlink(missing_ok=True)
         (dev / "vport0p2").write_text("")
         result = subprocess.run(
             [str(ROOTFS / "bin/busybox"), "sh", "-c", script],
