@@ -8,37 +8,37 @@
 {
   bro-skill = {
     pname = "bro-skill";
-    version = "3aa8c40b1241111f73ab5360e770f7512193a20e";
+    version = "6c08e7ee5eb8ef8b9bf0588d400170654abc256b";
     src = fetchFromGitHub {
       owner = "luchasarie";
       repo = "bro-skill";
-      rev = "3aa8c40b1241111f73ab5360e770f7512193a20e";
+      rev = "6c08e7ee5eb8ef8b9bf0588d400170654abc256b";
       fetchSubmodules = false;
-      sha256 = "sha256-LrkDPQQs/9nBkEf1ozB/oi320FMtin1BZcrTFBiKds0=";
+      sha256 = "sha256-RUSUah5c2pfWltDdNPaWfc3evSfvieodqOqp+v4Q/Yc=";
     };
-    date = "2026-08-26";
+    date = "2026-10-12";
   };
   grafana-skills = {
     pname = "grafana-skills";
-    version = "1ccacf29049fde66637fe01ab93a83a772da323b";
+    version = "cc33318b60a7fbc2c69a25122164baf00e805f79";
     src = fetchFromGitHub {
       owner = "grafana";
       repo = "skills";
-      rev = "1ccacf29049fde66637fe01ab93a83a772da323b";
+      rev = "cc33318b60a7fbc2c69a25122164baf00e805f79";
       fetchSubmodules = false;
-      sha256 = "sha256-zkgIRXkk4nSmVRKZ+LnJzqjp9fnQZSzLyh7pSwv7Umc=";
+      sha256 = "sha256-a6HBM7nbOkbLw9lz1DAuADGMxyH32WC9waSdtqUp+mo=";
     };
-    date = "2026-09-22";
+    date = "2026-10-16";
   };
   litellm-grafana-dashboard = {
     pname = "litellm-grafana-dashboard";
-    version = "7efce7f8e05e58fb86e006a6427ab39b6db467fb";
+    version = "6762d65eb866a670e0b8c93d5e6135c06857a2e9";
     src = fetchurl {
-      url = "https://raw.githubusercontent.com/BerriAI/litellm/7efce7f8e05e58fb86e006a6427ab39b6db467fb/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json";
+      url = "https://raw.githubusercontent.com/BerriAI/litellm/6762d65eb866a670e0b8c93d5e6135c06857a2e9/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json";
       name = "litellm-grafana-dashboard.json";
       sha256 = "sha256-BepW78CWd6K27AL0nrIamyTESsVKsY/5/kO67QNU6vA=";
     };
-    date = "2026-10-12";
+    date = "2026-10-19";
   };
   pi-token-speed = {
     pname = "pi-token-speed";
