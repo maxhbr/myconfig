@@ -157,4 +157,19 @@ if printf '%s\n' "$dry" | grep -q -- '--krun-overlay'; then
 fi
 pass "9 dry-run surface: kernel + exit-channel pinned, no overlay flags"
 
+# 10. the guest bootstrap (bd myconfig-af0j): the PID-1 init must
+# mount devpts (tmux/mux sessions allocate PTYs in the guest), a
+# tmpfs /dev/shm, link /dev/fd, and bring up lo (the baked
+# /etc/hosts localhost mapping is dialable). Each probe is one
+# one-shot run inside the sandbox.
+run sh -c '[ -d /dev/pts ] && [ -c /dev/ptmx ]' ||
+    fail "10 guest bootstrap" "no devpts mount — tmux cannot allocate a PTY"
+run test -d /dev/shm ||
+    fail "10 guest bootstrap" "no /dev/shm tmpfs"
+run test -e /dev/fd/0 ||
+    fail "10 guest bootstrap" "no /dev/fd link"
+run sh -c 'ip link show lo | grep -q "state UP"' ||
+    fail "10 guest bootstrap" "lo is not up — 127.0.0.1 is not bindable"
+pass "10 guest bootstrap: devpts + shm + fd + lo up"
+
 printf 'microvm-qemu live validation: all probes passed\n'

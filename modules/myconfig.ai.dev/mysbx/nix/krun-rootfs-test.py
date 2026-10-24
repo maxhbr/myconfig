@@ -673,6 +673,36 @@ class InitTests(unittest.TestCase):
             self.assertIn(expected, result.stdout,
                           f"the {form!r} probe: {result.stdout!r}")
 
+    def test_qemu_pid1_bootstrap_mounts_the_pty_shm_fd_and_lo_surface(self):
+        # bd myconfig-af0j: the qemu PID-1 arm must complete the
+        # guest bootstrap libkrun's implicit init does for the krun
+        # guest — devpts (mux sessions allocate PTYs), a tmpfs
+        # /dev/shm, the /dev/fd link and lo UP. Every step lives
+        # INSIDE the /proc/uptime guard so the krun arm stays
+        # byte-identical. The mounts themselves need a real PID-1
+        # guest (bd myconfig-26z4's live probes); here the text and
+        # the guard placement are pinned.
+        start = INIT.index("if [ ! -f /proc/uptime ]; then")
+        end = INIT.index("fi", start)
+        guard = INIT[start:end]
+        for needle in (
+            "mount -t devpts devpts /dev/pts",
+            "mount -t tmpfs tmpfs /dev/shm",
+            "ln -s /proc/self/fd /dev/fd",
+            "ip link set lo up",
+            "mkdir -p /dev/pts /dev/shm",
+        ):
+            self.assertIn(needle, guard,
+                          f"the qemu PID-1 bootstrap is missing: {needle}")
+        # All five steps must sit BEFORE the guard's fi — the krun
+        # arm (a mounted /proc skips the block) is unchanged.
+        self.assertLess(guard.index("ip link set lo up"), len(guard))
+        # The krun path must NOT bring up lo or mount devpts itself:
+        # nothing outside the guard may carry the steps.
+        after = INIT[end:]
+        self.assertNotIn("mount -t devpts", after)
+        self.assertNotIn("ip link set lo up", after)
+
     def test_manifest_argv_records_replace_the_positionals(self):
         # bd myconfig-hq7k: the qemu run carries the payload through
         # the manifest's argv records (the stock kernel's `--`

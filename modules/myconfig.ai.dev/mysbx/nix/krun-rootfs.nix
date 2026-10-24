@@ -134,10 +134,17 @@ let
     }
 
     # PID-1 boot (the qemu bridge, backends.md D9): the krun guest
-    # runs after libkrun's implicit init mounted proc/sys/dev; the
-    # qemu guest runs this script AS PID 1 (the kernel's init=), so
-    # nothing is mounted yet. The /proc/uptime probe keeps the krun
-    # path unchanged: mounted pseudo-filesystems skip every mount.
+    # runs after libkrun's implicit init mounted proc/sys/dev +
+    # devpts + /dev/shm + the /dev/fd link; the qemu guest runs this
+    # script AS PID 1 (the kernel's init=), so NOTHING is mounted
+    # yet. The /proc/uptime probe keeps the krun path unchanged:
+    # mounted pseudo-filesystems skip every mount. The devpts mount
+    # is what makes PTYs exist at all (tmux/mux sessions allocate
+    # them in the guest — the supported session path); /dev/shm is
+    # POSIX shared memory; /dev/fd is the standard fd redirection
+    # link; lo up makes 127.0.0.1 bindable (the baked /etc/hosts
+    # localhost mapping is dead weight without it) (bd
+    # myconfig-af0j).
     if [ ! -f /proc/uptime ]; then
         "$BB" mount -t proc proc /proc \
             || fail "cannot mount proc as pid 1"
@@ -145,6 +152,15 @@ let
             || fail "cannot mount sysfs as pid 1"
         "$BB" mount -t devtmpfs devtmpfs /dev \
             || fail "cannot mount devtmpfs as pid 1"
+        "$BB" mkdir -p /dev/pts /dev/shm
+        "$BB" mount -t devpts devpts /dev/pts \
+            || fail "cannot mount devpts as pid 1"
+        "$BB" mount -t tmpfs tmpfs /dev/shm \
+            || fail "cannot mount /dev/shm as pid 1"
+        "$BB" ln -s /proc/self/fd /dev/fd \
+            || fail "cannot link /dev/fd as pid 1"
+        "$BB" ip link set lo up \
+            || fail "cannot bring up lo as pid 1"
     fi
 
     # The mysbx.* cmdline params (the qemu bridge): libkrun hands the

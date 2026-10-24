@@ -1090,7 +1090,13 @@ the kernel execs as PID 1), the manifest pointer and the exit
 channel as `mysbx.manifest=` / `mysbx.exit-channel=` / `mysbx.trace=`
 params (the init's ENV route is libkrun's envp mechanism, which a
 stock kernel does not carry to init — the cmdline is the qemu
-bridge, consumed by the same init). The kernel
+bridge, consumed by the same init). The PID-1 bootstrap completes
+what libkrun's implicit init does for the krun guest (bd
+myconfig-af0j): proc/sysfs/devtmpfs plus devpts (mux sessions
+allocate PTYs in the guest), a tmpfs `/dev/shm`, the `/dev/fd`
+link and `lo` UP (the baked /etc/hosts localhost mapping is
+dialable) — all inside the `/proc/uptime` guard, so the krun arm
+is byte-identical. The kernel
 pin (`nix/microvm-qemu-kernel.nix`) is a nixpkgs kernel rebuilt
 with the virtio stack, ext4 and overlayfs BUILT IN — the static
 busybox init loads no modules, and the nixpkgs default config
