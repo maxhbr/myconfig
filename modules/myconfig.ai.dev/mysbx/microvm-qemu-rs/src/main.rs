@@ -613,27 +613,30 @@ fn qemu_argv(
 /// A PINNED binary path (no PATH fallback — the run pipeline's own
 /// rule): the wrapper sets it; a missing pin is a 125, never a
 /// silent guess off the PATH.
-fn pinned_bin(var: &str, what: &str) -> PathBuf {
+fn pinned_bin(var: &str, what: &str) -> Option<PathBuf> {
     match std::env::var_os(var) {
-        Some(path) if !path.is_empty() => PathBuf::from(path),
+        Some(path) if !path.is_empty() => Some(PathBuf::from(path)),
         _ => {
             eprintln!("mysbx-microvm-qemu: no {what} pinned ({var})");
             eprintln!(
                 "  the Nix wrapper pins {var} when the host builds the \
                  microvm-qemu backend; an unwrapped build sets none"
             );
-            std::process::exit(EXIT_SETUP);
+            None
         }
     }
 }
 
-fn wait_for_socket(path: &Path, what: &str) {
+/// Ok(()) when the socket came up in the 100 × 10 ms budget, Err(())
+/// with the diagnosis printed — the CALLER returns the exit code so
+/// the Daemons guard still drops (bd myconfig-1ct7).
+fn wait_for_socket(path: &Path, what: &str) -> Result<(), ()> {
     // The builders.nix wait loop: qemu exits immediately on a dead
     // chardev socket, so every daemon must be serving first. 100 ×
     // 10 ms, the proven budget.
     for _ in 0..100 {
         if path.exists() {
-            return;
+            return Ok(());
         }
         std::thread::sleep(Duration::from_millis(10));
     }
@@ -641,7 +644,7 @@ fn wait_for_socket(path: &Path, what: &str) {
         "mysbx-microvm-qemu: timed out waiting for the {what} socket {}",
         path.display()
     );
-    std::process::exit(EXIT_SETUP);
+    Err(())
 }
 
 struct Daemons {
@@ -667,7 +670,21 @@ fn main() {
         eprintln!("mysbx-microvm-qemu: {e}");
         usage();
     });
+    // The ONLY process::exit of the run path (bd myconfig-1ct7): it
+    // fires AFTER run() returned — after the Daemons guard DROPPED,
+    // so the virtiofsd children die and the runtime dir is swept on
+    // every path, success and failure alike. Every exit inside run()
+    // is a plain `return`, which unwinds through the guard.
+    std::process::exit(run(cfg, boot_started));
+}
 
+/// The run path (the old main body): owns the Daemons guard for its
+/// whole scope and RETURNS the exit code instead of exiting — a
+/// return unwinds through the guard's drop (kill the daemons, sweep
+/// the per-run dir), a process::exit would NOT (bd myconfig-1ct7:
+/// every failure path between the first virtiofsd spawn and the end
+/// used to orphan the daemons and leak the runtime dir).
+fn run(cfg: Config, boot_started: Instant) -> i32 {
     // The banner (the krun launcher's rule: a hung run must not be
     // a silent one).
     eprintln!(
@@ -716,11 +733,15 @@ fn main() {
              backend (the in-memory trustfs device is libkrun's own); the trust \
              must ride the staged tree instead"
         );
-        std::process::exit(EXIT_SETUP);
+        return EXIT_SETUP;
     }
 
-    let virtiofsd = pinned_bin("MYSBX_MICROVM_QEMU_VIRTIOFSD", "virtiofsd");
-    let qemu = pinned_bin("MYSBX_MICROVM_QEMU_QEMU", "qemu");
+    let Some(virtiofsd) = pinned_bin("MYSBX_MICROVM_QEMU_VIRTIOFSD", "virtiofsd") else {
+        return EXIT_SETUP;
+    };
+    let Some(qemu) = pinned_bin("MYSBX_MICROVM_QEMU_QEMU", "qemu") else {
+        return EXIT_SETUP;
+    };
 
     // The per-run dir: every socket lives in it, the sweep is the
     // Daemons drop.
@@ -730,7 +751,7 @@ fn main() {
             "mysbx-microvm-qemu: cannot create the runtime dir {}: {e}",
             dir.display()
         );
-        std::process::exit(EXIT_SETUP);
+        return EXIT_SETUP;
     }
     let socket_of = |tag: &str| -> PathBuf {
         // A stable, daemon-safe spelling of the tag (the root's
@@ -774,15 +795,19 @@ fn main() {
                     device.tag,
                     virtiofsd.display()
                 );
-                std::process::exit(EXIT_SETUP);
+                return EXIT_SETUP;
             }
         }
     }
     for device in &all_devices {
-        wait_for_socket(
+        if wait_for_socket(
             &socket_of(&device.tag),
             &format!("virtiofsd {}", device.tag),
-        );
+        )
+        .is_err()
+        {
+            return EXIT_SETUP;
+        }
     }
     eprintln!(
         "mysbx-microvm-qemu: {} virtiofsd daemons ready ({:?} total)",
@@ -804,14 +829,14 @@ fn main() {
             eprintln!(
                 "mysbx-microvm-qemu: --manifest needs a stage-ro --ro-device to reach the guest"
             );
-            std::process::exit(EXIT_SETUP);
+            return EXIT_SETUP;
         }
         if let Err(e) = std::fs::write(manifest, manifest_text(&cfg)) {
             eprintln!(
                 "mysbx-microvm-qemu: cannot write the manifest {}: {e}",
                 manifest.display()
             );
-            std::process::exit(EXIT_SETUP);
+            return EXIT_SETUP;
         }
     }
 
@@ -840,7 +865,7 @@ fn main() {
                 "mysbx-microvm-qemu: cannot spawn qemu ({}): {e}",
                 qemu.display()
             );
-            std::process::exit(EXIT_SETUP);
+            return EXIT_SETUP;
         }
     };
     eprintln!(
@@ -853,7 +878,7 @@ fn main() {
         match reader.join().ok().flatten() {
             Some(code) => {
                 eprintln!("mysbx-microvm-qemu: payload exited with {code}");
-                std::process::exit(code);
+                code
             }
             None => {
                 eprintln!(
@@ -862,15 +887,16 @@ fn main() {
                      channel support, bd myconfig-2l9b, or a boot that died \
                      before the payload ran)"
                 );
-                std::process::exit(EXIT_SETUP);
+                EXIT_SETUP
             }
         }
+    } else {
+        // Without the channel: qemu's own status is the run's (a
+        // panicking guest reboots into -no-reboot's exit; the code the
+        // payload exited with is lost — the reason the channel is the
+        // builder's DEFAULT).
+        vm.code().unwrap_or(EXIT_SETUP)
     }
-    // Without the channel: qemu's own status is the run's (a
-    // panicking guest reboots into -no-reboot's exit; the code the
-    // payload exited with is lost — the reason the channel is the
-    // builder's DEFAULT).
-    std::process::exit(vm.code().unwrap_or(EXIT_SETUP));
 }
 
 /// Read the exit code the guest init wrote to the channel: one
