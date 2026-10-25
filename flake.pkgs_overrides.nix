@@ -58,6 +58,11 @@
 # |                | `voxtype-osd-gtk4` nor `voxtype-osd-native` lands on PATH and   |
 # |                | the `voxtype-osd` launcher crashes on every daemon start.    |
 # |                | Override builds the `osd-gtk4` feature + GTK4 deps.           |
+# | mcp-nixos      | Its `fastmcp` -> `fastmcp-slim` chain is marked broken at the  |
+# |                | pinned rev: nixpkgs ships `mcp` 2.2.0, but `fastmcp-slim`     |
+# |                | 3.4.7 wants `mcp<2.0` and imports the removed `McpError`.      |
+# |                | Taken from the `nixpkgs-sbomnix` input (mcp 1.29.0, cached).  |
+# |                | Breaks the f13 toplevel via tng.nix's opencode module.        |
 #
 # When removing an override, also drop its entry here and rebuild.
 
@@ -274,6 +279,22 @@
     # (the drv then coincides with `master`'s and the override is a no-op).
     (self: _super: {
       herdr = self.master.herdr;
+    })
+
+    # mcp-nixos: it depends on `fastmcp` -> `fastmcp-slim`, and at the pinned
+    # nixpkgs that chain is marked broken because nixpkgs ships `mcp` 2.2.0
+    # while `fastmcp-slim` 3.4.7 declares `mcp<2.0,>=1.24.0`. Allowing the
+    # package through with `problems.handlers` is not enough: it then fails
+    # to build, because `mcp` 2.x renamed `McpError` to `MCPError` and
+    # `fastmcp/tools/function_tool.py` still imports the old name:
+    #   ImportError: cannot import name 'McpError' from 'mcp.shared.exceptions'
+    # Take it from the `nixpkgs-sbomnix` input, whose `mcp` 1.29.0 satisfies
+    # the `fastmcp-slim` pin, so the whole closure is coherent and cached.
+    # Breaks the f13 toplevel through tng.nix's opencode module, which
+    # registers `mcp-nixos` as a local MCP server. See
+    # doc/TODOs/drop-mcp-nixos-nixpkgs-pin.md.
+    (self: _super: {
+      mcp-nixos = self.nixpkgs-sbomnix.mcp-nixos;
     })
 
     # eternal-terminal: the C++17→C++20 bump (needed against the
