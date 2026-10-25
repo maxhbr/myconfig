@@ -136,8 +136,13 @@ let
     # PID-1 boot (the qemu bridge, backends.md D9): the krun guest
     # runs after libkrun's implicit init mounted proc/sys/dev +
     # devpts + /dev/shm + the /dev/fd link; the qemu guest runs this
-    # script AS PID 1 (the kernel's init=), so NOTHING is mounted
-    # yet. The /proc/uptime probe keeps the krun path unchanged:
+    # script AS PID 1 (the kernel's init=), so the mounts the init
+    # needs are not up yet — except /dev: the pinned nixpkgs kernel
+    # has CONFIG_DEVTMPFS_MOUNT=y and automounts devtmpfs on /dev
+    # right after mounting root, so the init's own devtmpfs mount
+    # would hit EBUSY. A mounted devtmpfs IS the goal — the
+    # /proc/mounts probe accepts it and moves on. The /proc/uptime
+    # probe keeps the krun path unchanged:
     # mounted pseudo-filesystems skip every mount. The devpts mount
     # is what makes PTYs exist at all (tmux/mux sessions allocate
     # them in the guest — the supported session path); /dev/shm is
@@ -150,7 +155,8 @@ let
             || fail "cannot mount proc as pid 1"
         "$BB" mount -t sysfs sysfs /sys \
             || fail "cannot mount sysfs as pid 1"
-        "$BB" mount -t devtmpfs devtmpfs /dev \
+        "$BB" grep -q ' /dev devtmpfs ' /proc/mounts \
+            || "$BB" mount -t devtmpfs devtmpfs /dev \
             || fail "cannot mount devtmpfs as pid 1"
         "$BB" mkdir -p /dev/pts /dev/shm
         "$BB" mount -t devpts devpts /dev/pts \
