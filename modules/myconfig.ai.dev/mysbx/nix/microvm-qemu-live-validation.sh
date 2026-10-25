@@ -196,8 +196,13 @@ run test -e /dev/fd/0 ||
 # lo reports 'state UNKNOWN' even when administratively UP (both
 # iproute2 and the guest's busybox ip) — the operative token is the
 # flags word: ',UP,' cannot false-match LOWER_UP (no leading
-# comma) (bd myconfig-xxmy).
-run sh -c 'ip link show lo | grep -q ",UP,"' ||
+# comma) (bd myconfig-xxmy). The probe runs the GUEST's busybox
+# applet by absolute path: the payload PATH is the tools env, and a
+# host whose tool set lacks iproute2 would false-fail on
+# `ip: command not found` (the live finding of the thing run —
+# /bin/busybox is baked into the rootfs, valid with or without the
+# store share).
+run sh -c '/bin/busybox ip link show lo | grep -q ",UP,"' ||
     fail "10 guest bootstrap" "lo is not administratively up — 127.0.0.1 is not bindable"
 pass "10 guest bootstrap: devpts + shm + fd + lo up"
 
@@ -228,9 +233,11 @@ if command -v script >/dev/null 2>&1 && command -v stty >/dev/null 2>&1; then
     # stty-ing the pty before the run fixes both the interactive
     # and the piped case to the same $rows x $cols.
     # shellcheck disable=SC2016 # $(stty size) runs inside the sandbox
+    # (busybox's own stty — the payload PATH may lack util-linux, the
+    # same false-fail class the lo probe's ip taught the thing run)
     script -qec "\
 stty rows $rows cols $cols; \\
-${mysbx} run --backend microvm-qemu -- sh -c 'echo \"WINSIZE-\$(stty size)\"' \\
+${mysbx} run --backend microvm-qemu -- sh -c 'echo \"WINSIZE-\$(/bin/busybox stty size)\"' \\
 " "$ptylog" >/dev/null 2>&1 || true
     got=$(sed -n 's/.*WINSIZE-\([0-9]* [0-9]*\).*/\1/p' "$ptylog" | tail -n 1)
     rm -f "$ptylog"
