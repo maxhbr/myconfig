@@ -1130,6 +1130,13 @@ KVM-less hosts), and as the stepping stone to a full NixOS guest
 tiers ever need it. It is expected to boot SLOWER than krun (an
 out-of-process VMM and a full kernel image), and the live
 validation runbook records the real number (bd myconfig-26z4).
+RECORDED (2026-10-25, thing, KVM): a one-shot boot-to-payload is
+~2.4 s of kernel time (`[2.3]` root mounted → `[2.4]` init runs),
+~3.1 s wall for the full qemu run incl. teardown; the rootless
+virtiofsd daemons (3, socket-per-device) are ready in ~10 ms.
+That is the slower-than-krun expectation confirmed — usable as
+the fallback it is, not as the default. Full run:
+../microvm-qemu-validation-log.md.
 
 **Threat model delta vs. `krun` — the same honesty rule.** Not a
 stronger boundary: a guest escape reaches the qemu and virtiofsd
@@ -1177,8 +1184,11 @@ on a KVM host is bd myconfig-26z4, scripted by
 kernel, the exit-code channel (`sh -c "exit 7"` → 7, bd
 myconfig-hq7k/dnmk), the serial console (bd myconfig-mbib), the
 workspace bind, the ro root, the SLiRP NIC and its `network =
-false` kill (bd myconfig-k106), and the dry-run surface (no
-`--krun-overlay`, bd myconfig-govd). The static CI gate is
+false` kill (bd myconfig-k106), the dry-run surface (no
+`--krun-overlay`, bd myconfig-govd), the guest bootstrap (bd
+myconfig-af0j) and the console size (bd myconfig-a2uq). ALL
+PROBES PASSED 2026-10-25 on thing —
+../microvm-qemu-validation-log.md. The static CI gate is
 `mysbx-microvm-qemu-wrapper-test` (nix/checks.nix): the wrapper's
 three closure pins and the dry-run flags, on STUB pins — the real
 kernel stays a host build.
