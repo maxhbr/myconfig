@@ -61,14 +61,40 @@ cd "$repo"
 run true
 pass "1 boot: a one-shot true"
 
+# The dry-run argv every later probe audits (9) and probe 2 reads
+# the --kernel pin from — captured once, before the first use.
+dry=$("$mysbx" run --backend microvm-qemu --dry-run -- true)
+
 # 2. guest kernel proof: uname -r inside the VM is the PINNED nixpkgs
-# kernel (the microvm-qemu.kernel build), never the host's.
-host_kernel=$(uname -r)
-guest_kernel=$(run uname -r | tr -d '\r\n')
-if [ "$guest_kernel" = "$host_kernel" ]; then
-    fail "2 guest kernel" "uname -r inside the sandbox equals the host's ($host_kernel) — the VM did not boot a guest kernel"
-fi
-pass "2 guest kernel: $guest_kernel (host: $host_kernel)"
+# kernel (the microvm-qemu.kernel build), never the host's. The
+# version rides a MARKER-delimited payload line: -serial mon:stdio
+# makes the caller's stdout the guest console, so a bare `run uname
+# -r` captures the kernel BOOT LOG and the PID-1-exit panic too —
+# contamination the old host-inequality check could not see (the
+# noisy string never equaled the host's version, so even a
+# host-kernel guest passed). The expected side comes from the
+# wrapper's OWN pin: the dry run prints the launcher argv one
+# argument per line, so the line after --kernel is the bzImage
+# path, and its parent store dir is <hash>-linux-<version> — the
+# kernel build sets no LOCALVERSION, so uname -r reports the
+# version verbatim.
+dry_kernel=$(printf '%s\n' "$dry" | grep -A1 -- '^--kernel$' | tail -n 1 | tr -d '\r')
+case $dry_kernel in
+    /nix/store/*) : ;;
+    *) fail "2 guest kernel" "the dry run carries no --kernel path" ;;
+esac
+expected_kernel=$(basename "$(dirname "$dry_kernel")")
+case $expected_kernel in
+    *-linux-*) expected_kernel=${expected_kernel#*-linux-} ;;
+    *) fail "2 guest kernel" "the pinned kernel path is not a store kernel: $dry_kernel" ;;
+esac
+guest_kernel=$(run sh -c 'echo "KVM-START$(uname -r)KVM-END"' |
+    sed -n 's/.*KVM-START\(.*\)KVM-END.*/\1/p' | tail -n 1)
+[ -n "$guest_kernel" ] ||
+    fail "2 guest kernel" "no KVM-START..KVM-END marker reached the console — the payload never ran"
+[ "$guest_kernel" = "$expected_kernel" ] ||
+    fail "2 guest kernel" "uname -r inside the sandbox is '$guest_kernel', not the pinned $expected_kernel ($dry_kernel)"
+pass "2 guest kernel: $guest_kernel (the pinned $dry_kernel)"
 
 # 3. exit code propagation through the manifest argv + the
 # virtio-serial channel (bd hq7k + dnmk): sh -c "exit 7" must
@@ -145,7 +171,6 @@ done
 # 9. the dry-run audit surface: the launcher argv names the qemu
 # pins, and NO --krun-overlay rides (bd govd — a builder that
 # emits one makes every real run exit 125 before the boot).
-dry=$("$mysbx" run --backend microvm-qemu --dry-run -- true)
 printf '%s\n' "$dry" | grep -q -- '--kernel' ||
     fail "9 dry-run surface" "the dry run carries no --kernel"
 printf '%s\n' "$dry" | grep -q -- '--exit-channel' ||
