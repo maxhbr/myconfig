@@ -32,6 +32,7 @@ pub mod handoff;
 pub mod krun;
 pub mod loadimage;
 pub mod merge;
+pub mod microvm_qemu;
 pub mod nono;
 pub mod podman_gvisor;
 pub mod repo;
@@ -1622,6 +1623,52 @@ pub(crate) fn stdin_is_tty() -> bool {
     unsafe { isatty(0) != 0 }
 }
 
+/// The caller's terminal size, `ROWSxCOLS` (bd myconfig-a2uq): the
+/// microvm-qemu guest console is the ISA 16550 serial port
+/// (backends.md D9, bd myconfig-mbib), which carries NO winsize — the
+/// guest ctty reports a 0x0 grid, so herdr refuses to attach and fish
+/// renders blind. The pipeline reads the caller's winsize here and
+/// rides it through the manifest env
+/// (MYSBX_MICROVM_CONSOLE_SIZE=ROWSxCOLS); the guest init stty's the
+/// console from it. `None` when no fd 0/1/2 is a sized terminal — a
+/// piped run forwards no marker and the init skips its stty step.
+/// The same zero-dependency raw-extern idiom as `landlock_abi`
+/// (doctor.rs): TIOCGWINSZ only writes the 8-byte struct.
+pub(crate) fn console_size() -> Option<String> {
+    use std::os::raw::c_long;
+    #[repr(C)]
+    struct Winsize {
+        ws_row: u16,
+        ws_col: u16,
+        ws_xpixel: u16,
+        ws_ypixel: u16,
+    }
+    extern "C" {
+        fn syscall(num: c_long, ...) -> c_long;
+    }
+    #[cfg(target_arch = "x86_64")]
+    const SYS_IOCTL: c_long = 16;
+    #[cfg(target_arch = "aarch64")]
+    const SYS_IOCTL: c_long = 29;
+    const TIOCGWINSZ: u64 = 0x5413;
+    for fd in [0, 1, 2] {
+        let mut ws = Winsize {
+            ws_row: 0,
+            ws_col: 0,
+            ws_xpixel: 0,
+            ws_ypixel: 0,
+        };
+        // SAFETY: the ioctl writes only the 8-byte struct at `ws` and
+        // reads only the fd number; a non-tty fd returns -1 and writes
+        // nothing.
+        let rc = unsafe { syscall(SYS_IOCTL, fd as c_long, TIOCGWINSZ, &mut ws) };
+        if rc == 0 && ws.ws_row > 0 && ws.ws_col > 0 {
+            return Some(format!("{}x{}", ws.ws_row, ws.ws_col));
+        }
+    }
+    None
+}
+
 /// The git trust paths of a run (bd myconfig-zj2): exactly what the
 /// argv's section-5 workspace binds mount. `/*` suffix entries cover
 /// git repos the workspace contains (submodules, worktree checkouts
@@ -2058,10 +2105,10 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     if let Some(name) = &flags.backend {
         if !matches!(
             name.as_str(),
-            "bubblewrap" | "podman-gvisor" | "nono" | "podman-krun" | "krun"
+            "bubblewrap" | "podman-gvisor" | "nono" | "podman-krun" | "krun" | "microvm-qemu"
         ) {
             eprintln!(
-                "mysbx: unknown backend `{name}` (from --backend) — available: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`, `krun`"
+                "mysbx: unknown backend `{name}` (from --backend) — available: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`, `krun`, `microvm-qemu`"
             );
             return EXIT_INFRASTRUCTURE;
         }
@@ -2263,18 +2310,18 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // `merged.backend` alike; the flag's own refusal one merge above
     // echoed it early, this arm is the authoritative one.
     let backend = match merged.backend.as_deref() {
-        Some("bubblewrap" | "podman-gvisor" | "nono" | "podman-krun" | "krun") => {
+        Some("bubblewrap" | "podman-gvisor" | "nono" | "podman-krun" | "krun" | "microvm-qemu") => {
             merged.backend.as_deref().unwrap()
         }
         Some(other) => {
             eprintln!(
-                "mysbx: unsupported backend `{other}` — available: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`, `krun`"
+                "mysbx: unsupported backend `{other}` — available: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`, `krun`, `microvm-qemu`"
             );
             return EXIT_INFRASTRUCTURE;
         }
         None => {
             eprintln!(
-                "mysbx: no backend configured — set `backend = \"bubblewrap\"`, `backend = \"podman-gvisor\"`, `backend = \"nono\"`, `backend = \"podman-krun\"` or `backend = \"krun\"` in the user or sidecar config"
+                "mysbx: no backend configured — set `backend = \"bubblewrap\"`, `backend = \"podman-gvisor\"`, `backend = \"nono\"`, `backend = \"podman-krun\"`, `backend = \"krun\"` or `backend = \"microvm-qemu\"` in the user or sidecar config"
             );
             return EXIT_INFRASTRUCTURE;
         }
@@ -2337,10 +2384,12 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         // VM itself, krun.rs) and REFUSES pids-limit in the builder
         // (no pids controller is wired for a whole VM) — no warning
         // arm, the builder's refusal is the audit.
-        "podman-krun" | "krun" => [merged.pids_limit.is_some().then_some("pids-limit")]
-            .into_iter()
-            .flatten()
-            .collect(),
+        "podman-krun" | "krun" | "microvm-qemu" => {
+            [merged.pids_limit.is_some().then_some("pids-limit")]
+                .into_iter()
+                .flatten()
+                .collect()
+        }
         _ => [
             merged.memory.is_some().then_some("memory"),
             merged.cpus.is_some().then_some("cpus"),
@@ -2483,9 +2532,12 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // The refusal sits BEFORE the session clone (a broken
     // configuration creates nothing) and before the `--dry-run`
     // early return, so a dry run audits the refusal too.
-    if backend == "podman-krun" && merged.display.is_waypipe() {
+    // The microvm-qemu backend shares the refusal (backends.md D9):
+    // its virtiofsd servers are the SAME passthrough kind, so the
+    // AF_UNIX-over-virtio-fs gap applies verbatim.
+    if matches!(backend, "podman-krun" | "microvm-qemu") && merged.display.is_waypipe() {
         eprintln!(
-            "mysbx: display = \"waypipe\" is not supported on the `podman-krun` backend \
+            "mysbx: display = \"waypipe\" is not supported on the `{backend}` backend \
              (first cut, docs/design/backends.md D2)"
         );
         eprintln!(
@@ -2591,7 +2643,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // gone (ESRCH): a LIVE parallel run's dirs are never touched,
     // and the sweep is !dry_run-gated (a dry run creates and
     // removes nothing).
-    if matches!(backend, "podman-krun" | "krun") && !preflight_only {
+    if matches!(backend, "podman-krun" | "krun" | "microvm-qemu") && !preflight_only {
         for dir in [
             repo.sidecar.join("gittrust"),
             repo.sidecar.join("krun-stage"),
@@ -2608,7 +2660,21 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     }
 
     // 5. the argv — its single source is `bwrap::bwrap_argv` (mvp-4).
-    let host_env = collect_host_env(&merged);
+    let mut host_env = collect_host_env(&merged);
+    // The console size marker (bd myconfig-a2uq, backends.md D9): the
+    // qemu guest's serial console carries no winsize, so the caller's
+    // terminal size rides the manifest env instead — the init stty's
+    // the guest console from it before exec-ing the payload. Only the
+    // microvm-qemu backend reads and forwards it: the krun console
+    // (libkrun's proxy) carries a real size, and the bwrap/podman
+    // tiers set the pty size themselves. A run without a sized
+    // terminal (piped, cron) forwards no marker — the init skips its
+    // stty step and the one-shot probes stay unchanged.
+    if backend == "microvm-qemu" {
+        if let Some(size) = console_size() {
+            host_env.insert("MYSBX_MICROVM_CONSOLE_SIZE".to_owned(), size);
+        }
+    }
     // Without the Nix wrapper (item 6 pins MYSBX_SHELL and
     // MYSBX_TOOLS_PATH) the fallbacks are silent and deliberate: /bin/sh
     // for the interactive shell, /usr/bin (a base-bound path) for PATH —
@@ -3284,8 +3350,22 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
         // is the INNER argv: the outer argv here is bwrap's, so the
         // `--dry-run` audit shows both layers, like the nono
         // backend's (backends.md D1).
-        "krun" => {
+        "krun" | "microvm-qemu" => {
             use std::borrow::Cow;
+
+            // The backend's own spelling of the two launchers' pins
+            // (backends.md D9): the microvm-qemu variant names its
+            // own launcher, its own rootfs and the kernel libkrun
+            // bundles — the same no-fallback pin rule for both.
+            let (launcher_pin, rootfs_pin, kernel_pin) = if backend == "microvm-qemu" {
+                (
+                    "MYSBX_MICROVM_QEMU_LAUNCHER",
+                    "MYSBX_MICROVM_QEMU_ROOTFS",
+                    true,
+                )
+            } else {
+                ("MYSBX_KRUN_LAUNCHER", "MYSBX_KRUN_ROOTFS", false)
+            };
 
             // The /dev/kvm pre-flight (the spike's finding 7: libkrun
             // ABORTS — exit 134, no return code to map — when
@@ -3293,10 +3373,14 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // O_RDWR probe the podman-krun variant runs, never a
             // mode-bit guess). Refused before the argv and before
             // the `--dry-run` return, so a dry run audits it too.
+            // The qemu variant shares the gate: its default is
+            // KVM too (D9's kvm:tcg is the launcher's own fallback
+            // mode, a diagnosis — the run pipeline keeps requiring
+            // the accelerator a supported run needs).
             if !dry_run && !kvm_available() {
-                eprintln!("mysbx: krun: /dev/kvm is not readable+writable for this user");
+                eprintln!("mysbx: {backend}: /dev/kvm is not readable+writable for this user");
                 eprintln!(
-                    "  the direct libkrun backend starts every run as a KVM microVM through /dev/kvm; \
+                    "  the {backend} backend starts every run as a KVM microVM through /dev/kvm; \
                      a host without rw access cannot run this backend"
                 );
                 eprintln!(
@@ -3308,22 +3392,48 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // The launcher and rootfs pins of the Nix wrapper
             // (dak.4's packaging): no fallbacks — an unwrapped
             // build has no launcher binary to find on a PATH.
-            let Some(krun_launcher) = env_opt("MYSBX_KRUN_LAUNCHER") else {
-                eprintln!("mysbx: krun: no launcher configured");
+            let Some(krun_launcher) = env_opt(launcher_pin) else {
+                eprintln!("mysbx: {backend}: no launcher configured ({launcher_pin})");
                 eprintln!(
-                    "  the Nix wrapper pins MYSBX_KRUN_LAUNCHER when the host \
-                     builds the mysbx-krun launcher; an unwrapped build sets none"
+                    "  the Nix wrapper pins {launcher_pin} when the host \
+                     builds the {backend} launcher; an unwrapped build sets none"
                 );
                 return EXIT_INFRASTRUCTURE;
             };
-            let Some(krun_rootfs) = env_opt("MYSBX_KRUN_ROOTFS") else {
-                eprintln!("mysbx: krun: no rootfs configured");
+            let Some(krun_rootfs) = env_opt(rootfs_pin) else {
+                eprintln!("mysbx: {backend}: no rootfs configured ({rootfs_pin})");
                 eprintln!(
-                    "  the Nix wrapper pins MYSBX_KRUN_ROOTFS when the host \
-                     builds the krun guest rootfs; an unwrapped build sets none"
+                    "  the Nix wrapper pins {rootfs_pin} when the host \
+                     builds the guest rootfs; an unwrapped build sets none"
                 );
                 return EXIT_INFRASTRUCTURE;
             };
+            // The microvm-qemu kernel pin (D9): libkrun bundles its
+            // kernel, qemu needs one handed over — the one
+            // qemu-specific refusal of the backend.
+            let Some(microvm_qemu_kernel) = (if kernel_pin {
+                env_opt("MYSBX_MICROVM_QEMU_KERNEL")
+            } else {
+                Some(String::new())
+            }) else {
+                eprintln!("mysbx: microvm-qemu: no kernel configured (MYSBX_MICROVM_QEMU_KERNEL)");
+                eprintln!(
+                    "  the Nix wrapper pins MYSBX_MICROVM_QEMU_KERNEL when the host \
+                     builds the microvm-qemu backend (myconfig.ai.dev.mysbx.microvmQemu.kernel); \
+                     an unwrapped build sets none"
+                );
+                return EXIT_INFRASTRUCTURE;
+            };
+            // The pin must name the bzImage FILE, not the kernel
+            // package (a directory is EISDIR at qemu's -kernel):
+            // the same rule doctor applies (bd myconfig-q3se).
+            if kernel_pin && !std::path::Path::new(&microvm_qemu_kernel).is_file() {
+                eprintln!(
+                    "mysbx: microvm-qemu: the kernel pin is not a file: {microvm_qemu_kernel}"
+                );
+                eprintln!("  pin the image (\"${{kernel}}/bzImage\"), not the kernel package");
+                return EXIT_INFRASTRUCTURE;
+            }
             // The session-lifetime GC roots (bd myconfig-mxu): the
             // guest sees the LIVE host store, so pin every store
             // path this run resolves through it — the launcher and
@@ -3339,6 +3449,9 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                     shell.clone(),
                     tools_path.clone(),
                 ];
+                if kernel_pin {
+                    krun_pins.push(microvm_qemu_kernel.clone());
+                }
                 krun_pins.extend(mux_entry.iter().cloned());
                 krun_pins.extend(waypipe_client.iter().cloned());
                 krun_pins.extend(bin_sh.iter().cloned());
@@ -3487,17 +3600,38 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 // lib, the manifest, the fd limits).
                 verbose: flags.verbose,
             };
-            let krun_argv = match krun::krun_argv(&merged, &repo, &payload, &host_env, &krun_params)
-            {
-                Ok(a) => a,
-                Err(e) => {
-                    eprintln!("mysbx: {e}");
-                    if let Some(f) = &git_trust_file {
-                        let _ = std::fs::remove_dir_all(
-                            f.parent().expect("trust file lives in its dir"),
-                        );
+            let krun_argv = if backend == "microvm-qemu" {
+                match microvm_qemu::microvm_qemu_argv(
+                    &merged,
+                    &repo,
+                    &payload,
+                    &host_env,
+                    &krun_params,
+                    &microvm_qemu_kernel,
+                ) {
+                    Ok(a) => a,
+                    Err(e) => {
+                        eprintln!("mysbx: {e}");
+                        if let Some(f) = &git_trust_file {
+                            let _ = std::fs::remove_dir_all(
+                                f.parent().expect("trust file lives in its dir"),
+                            );
+                        }
+                        return EXIT_INFRASTRUCTURE;
                     }
-                    return EXIT_INFRASTRUCTURE;
+                }
+            } else {
+                match krun::krun_argv(&merged, &repo, &payload, &host_env, &krun_params) {
+                    Ok(a) => a,
+                    Err(e) => {
+                        eprintln!("mysbx: {e}");
+                        if let Some(f) = &git_trust_file {
+                            let _ = std::fs::remove_dir_all(
+                                f.parent().expect("trust file lives in its dir"),
+                            );
+                        }
+                        return EXIT_INFRASTRUCTURE;
+                    }
                 }
             };
             // The bwrap wrap: --ro-bind /nix/store (the launcher's
@@ -3510,8 +3644,23 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // included: --dev would SHADOW --dev-bind /dev/kvm if it
             // followed it, and the launcher would abort in libkrun's
             // KvmContext with a /dev/kvm it cannot see (finding 7).
-            // No --dev, no --tmpfs /tmp: the spike chain proved the
-            // launcher needs neither).
+            // For the krun launcher: no --dev, no --tmpfs /tmp (the
+            // spike chain proved it needs neither — libkrun's
+            // virtiofs is IN-PROCESS, no daemon spawn). The qemu
+            // launcher is the first backend that DOES (bd
+            // myconfig-ya1o): without any --dev flag bwrap exposes NO
+            // /dev at all, so the launcher's Stdio::null() spawn of
+            // virtiofsd opens /dev/null and dies ENOENT before the
+            // first daemon comes up. The qemu arm therefore adds the
+            // minimal device pair — /dev/null (the spawn stdio) and
+            // /dev/urandom (virtiofsd's and qemu's own entropy
+            // source) — plus a writable tmpfs at /tmp: the
+            // launcher's runtime dir (the virtiofsd + exit-channel
+            // SOCKET dir) needs a writable surface, and the ro-bound
+            // rootfs's /tmp is read-only. Order: the tmpfs/dev binds
+            // sit BEFORE the kvm bind and shadow nothing (different
+            // paths), the /dev/kvm bind of finding 7 keeps its
+            // guaranteed visibility.
             let mut inner_argv: Vec<String> = Vec::with_capacity(krun_argv.len() + 1);
             inner_argv.push(krun_launcher.clone());
             inner_argv.extend(krun_argv);
@@ -3532,6 +3681,35 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 "--ro-bind".into(),
                 krun_rootfs.clone(),
                 krun_rootfs.clone(),
+            ]);
+            // The qemu arm's device + tmp surface (bd myconfig-ya1o,
+            // the comment above): the krun argv stays byte-identical
+            // without them.
+            if backend == "microvm-qemu" {
+                argv.extend([
+                    "--dev-bind".into(),
+                    "/dev/null".into(),
+                    "/dev/null".into(),
+                    "--dev-bind".into(),
+                    "/dev/urandom".into(),
+                    "/dev/urandom".into(),
+                    "--tmpfs".into(),
+                    "/tmp".into(),
+                ]);
+                // The host resolver for libslirp (bd myconfig-m0to):
+                // the SLiRP DNS proxy reads the HOST upstream from
+                // /etc/resolv.conf through qemu's OWN filesystem
+                // view — this bwrap view has no /etc at all without
+                // the bind. -try: a host without the file must
+                // still boot (the guest resolver is the init's
+                // business, not qemu's).
+                argv.extend([
+                    "--ro-bind-try".into(),
+                    "/etc/resolv.conf".into(),
+                    "/etc/resolv.conf".into(),
+                ]);
+            }
+            argv.extend([
                 "--dev-bind".into(),
                 "/dev/kvm".into(),
                 "/dev/kvm".into(),
@@ -3572,6 +3750,41 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                     return EXIT_INFRASTRUCTURE;
                 }
                 krun_stage_dir = Some(krun_stage_root.clone());
+                // The git trust of the microvm-qemu backend (bd
+                // myconfig-govd): libkrun serves the two texts from
+                // its in-memory trustfs device; qemu has no such
+                // device and the launcher REFUSES --krun-overlay
+                // flags — so the trust rides the RO staging tree as
+                // plain files at the trust shares' slots, written
+                // HERE (the krun backend stays overlay-flags, its
+                // argv byte-identical). The launcher's virtiofsd
+                // then serves the ro tree read-only like every
+                // other slot; the guest init's mount logic is
+                // unchanged. The MODE is the overlay's own 0644.
+                if backend == "microvm-qemu" {
+                    if let Some((global_text, system_text)) = krun_git_trust_paths.as_ref() {
+                        let trust_stage_writes = [
+                            ("gittrust-global", global_text),
+                            ("gittrust-system", system_text),
+                        ];
+                        for (slot, text) in trust_stage_writes {
+                            let path = krun_stage_root.join("ro").join(slot);
+                            if let Err(e) = std::fs::write(&path, text) {
+                                eprintln!(
+                                    "mysbx: cannot write the staged git trust {}: {e}",
+                                    path.display()
+                                );
+                                let _ = std::fs::remove_dir_all(&krun_stage_root);
+                                if let Some(f) = &git_trust_file {
+                                    let _ = std::fs::remove_dir_all(
+                                        f.parent().expect("trust file lives in its dir"),
+                                    );
+                                }
+                                return EXIT_INFRASTRUCTURE;
+                            }
+                        }
+                    }
+                }
             }
             // The tree itself rides into the launcher view rw (the
             // ro half's slots are --ro-bound into it below; the

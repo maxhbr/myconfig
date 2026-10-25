@@ -109,11 +109,16 @@ let
   # measured 3075 — the tail silently never booted. The launcher
   # therefore writes env/shares/chdir into a MANIFEST FILE inside
   # the ro stage device and the cmdline carries only the pointer
-  # (MYSBX_KRUN_MANIFEST=stage-ro:manifest). This init mounts the
-  # stage-ro device, reads the file (tab-separated records, base64
-  # values via the busybox applet) and only THEN applies them. The
-  # legacy MYSBX_KRUN_SHARES env route remains for cmdline-sized
-  # debug runs.
+  # (MYSBX_KRUN_MANIFEST=stage-ro:manifest). The qemu bridge adds
+  # one record kind: the payload argv (bd myconfig-hq7k) — the stock
+  # kernel's `--` cmdline split is lossy (whitespace-split,
+  # `=`-tokens to init's envp, MAX_INIT_ARGS), so the qemu launcher
+  # carries the payload ONLY here. The krun launcher writes no argv
+  # records (libkrun's envp route is lossless). This init mounts
+  # the stage-ro device, reads the file (tab-separated records,
+  # base64 values via the busybox applet) and only THEN applies
+  # them. The legacy MYSBX_KRUN_SHARES env route remains for
+  # cmdline-sized debug runs.
   mysbxInit = ''
     #!/bin/busybox sh
     set -eu
@@ -126,6 +131,62 @@ let
     fail() {
         echo "mysbx-init: $*" >&2
         exit 125
+    }
+
+    # PID-1 boot (the qemu bridge, backends.md D9): the krun guest
+    # runs after libkrun's implicit init mounted proc/sys/dev +
+    # devpts + /dev/shm + the /dev/fd link; the qemu guest runs this
+    # script AS PID 1 (the kernel's init=), so the mounts the init
+    # needs are not up yet — except /dev: the pinned nixpkgs kernel
+    # has CONFIG_DEVTMPFS_MOUNT=y and automounts devtmpfs on /dev
+    # right after mounting root, so the init's own devtmpfs mount
+    # would hit EBUSY. A mounted devtmpfs IS the goal — the
+    # /proc/mounts probe accepts it and moves on. The /proc/uptime
+    # probe keeps the krun path unchanged:
+    # mounted pseudo-filesystems skip every mount. The devpts mount
+    # is what makes PTYs exist at all (tmux/mux sessions allocate
+    # them in the guest — the supported session path); /dev/shm is
+    # POSIX shared memory; /dev/fd is the standard fd redirection
+    # link; lo up makes 127.0.0.1 bindable (the baked /etc/hosts
+    # localhost mapping is dead weight without it) (bd
+    # myconfig-af0j).
+    if [ ! -f /proc/uptime ]; then
+        "$BB" mount -t proc proc /proc \
+            || fail "cannot mount proc as pid 1"
+        "$BB" mount -t sysfs sysfs /sys \
+            || fail "cannot mount sysfs as pid 1"
+        "$BB" grep -q ' /dev devtmpfs ' /proc/mounts \
+            || "$BB" mount -t devtmpfs devtmpfs /dev \
+            || fail "cannot mount devtmpfs as pid 1"
+        "$BB" mkdir -p /dev/pts /dev/shm
+        "$BB" mount -t devpts devpts /dev/pts \
+            || fail "cannot mount devpts as pid 1"
+        "$BB" mount -t tmpfs tmpfs /dev/shm \
+            || fail "cannot mount /dev/shm as pid 1"
+        "$BB" ln -s /proc/self/fd /dev/fd \
+            || fail "cannot link /dev/fd as pid 1"
+        "$BB" ip link set lo up \
+            || fail "cannot bring up lo as pid 1"
+    fi
+
+    # The mysbx.* cmdline params (the qemu bridge): libkrun hands the
+    # guest its settings through envp; qemu has no envp — the kernel
+    # cmdline carries them instead (mysbx.trace=, mysbx.manifest=,
+    # mysbx.exit-channel=). Env stays first-class: every consumer
+    # below falls back to _cval ONLY when its variable is unset, and
+    # the krun cmdline (libkrun's own) carries no mysbx.* params.
+    _cval=""
+    _cmdline_mysbx() {
+        # $1: the param name; sets _cval to the LAST value before
+        # the `--` split (empty when absent). The payload argv
+        # follows `--` and must not be parsed as a param.
+        _cval=""
+        for _cw in $("$BB" cat /proc/cmdline 2>/dev/null); do
+            case "$_cw" in
+                --) break ;;
+                "mysbx.$1="*) _cval="''${_cw#*=}" ;;
+            esac
+        done
     }
 
     # The trace of last resort (live debugging, bd myconfig-2n8):
@@ -149,6 +210,10 @@ let
     # parsing. A read failure (no /proc yet) reports 0 — timing is
     # best-effort, the step names are the point.
     trace="''${MYSBX_KRUN_TRACE:-}"
+    if [ -z "$trace" ]; then
+        _cmdline_mysbx trace
+        if [ "$_cval" = "1" ]; then trace=1; fi
+    fi
     _now_ms() {
         if read _up _ < /proc/uptime 2>/dev/null; then
             _ms=$(( (10${basePrefix}''${_up%%.*} * 100 + 10${basePrefix}''${_up#*.}) * 10 ))
@@ -206,6 +271,17 @@ let
     # at once (the init's OWN steps use none of them; the payload
     # inherits everything through exec).
     manifest="''${MYSBX_KRUN_MANIFEST:-}"
+    if [ -z "$manifest" ]; then
+        _cmdline_mysbx manifest
+        manifest=$_cval
+    fi
+    # The exit channel (the qemu bridge, backends.md D9): the
+    # virtio-serial port the payload's exit code travels back on.
+    # Cmdline-only — the krun guest has no channel and never sets
+    # one.
+    exit_channel=""
+    _cmdline_mysbx exit-channel
+    exit_channel=$_cval
     if [ -n "$manifest" ]; then
         mtag=''${manifest%%':'*}
         mslot=''${manifest#*':'}
@@ -218,6 +294,20 @@ let
         mounted_devices=" $mounted_devices $mtag "
         mpath=$mpoint/$mslot
         [ -f "$mpath" ] || fail "the manifest $mpath does not exist"
+        # The payload argv records (bd myconfig-hq7k, the qemu
+        # bridge): the stock kernel's `--` cmdline split is LOSSY
+        # (whitespace-split, `=`-tokens to init's envp,
+        # MAX_INIT_ARGS), so a manifest-bearing run carries the
+        # payload here instead — one `argv <index> <base64>` record
+        # per token, indices ascending. Each index is validated
+        # against the running count (a truncated or reordered
+        # manifest is a diagnosis, never a mangled payload); the
+        # decoded tokens REPLACE this init's own $* on the first
+        # record and append after (set -- keeps each token whole —
+        # no re-splitting, an EMPTY token survives). The krun
+        # guest rides envp, never sets a manifest, and its $* is
+        # untouched.
+        _argv_n=0
         # One record per line, tab-separated fields, base64 values:
         # a base64 value never contains a tab, the field split is
         # unambiguous.
@@ -225,9 +315,17 @@ let
             [ -n "$rkind" ] || continue
             case "$rkind" in
                 env)
-                    # r2 KEY, r3 base64(value)
-                    val=$(printf '%s' "$r3" | "$BB" base64 -d) \
+                    # r2 KEY, r3 base64(value). The sentinel x:
+                    # $( ) strips ALL trailing newlines from the
+                    # substitution (POSIX), so a value ENDING in a
+                    # newline would decode short (bd
+                    # myconfig-m6r1) — the sentinel makes the strip
+                    # exact: only the x itself goes (the && keeps
+                    # the || fail refusal semantics on a decode
+                    # error).
+                    val=$(printf '%s' "$r3" | "$BB" base64 -d && printf x) \
                         || fail "cannot decode the manifest env $r2"
+                    val=''${val%x}
                     export "$r2=$val"
                     ;;
                 share)
@@ -236,10 +334,38 @@ let
                     share_records="''${share_records:-}
     $r2 $r3 $r4 $r5"
                     ;;
+                argv)
+                    # r2 index, r3 base64(token) — one record per
+                    # payload token, the index validated against
+                    # the running count (bd myconfig-hq7k). The
+                    # first record DISCARDS the cmdline-passed $*
+                    # (a manifest-bearing qemu run never puts the
+                    # payload on the cmdline; anything the kernel
+                    # split behind `--` is not the payload), the
+                    # rest append (set -- keeps each token whole —
+                    # no re-splitting, an EMPTY token survives
+                    # losslessly).
+                    [ "$r2" -eq "$_argv_n" ] \
+                        || fail "manifest argv index $r2 is out of order (expected $_argv_n)"
+                    # The same sentinel as the env record (bd
+                    # myconfig-m6r1): a token ENDING in a newline
+                    # must arrive byte-identical — $( ) alone
+                    # strips it.
+                    val=$(printf '%s' "$r3" | "$BB" base64 -d && printf x) \
+                        || fail "cannot decode the manifest argv $_argv_n"
+                    val=''${val%x}
+                    if [ "$_argv_n" -eq 0 ]; then
+                        set --
+                    fi
+                    set -- "$@" "$val"
+                    _argv_n=$((_argv_n + 1))
+                    ;;
                 chdir)
                     # r2 base64(dir) — applied AFTER the shares exist
-                    manifest_chdir=$(printf '%s' "$r2" | "$BB" base64 -d) \
+                    # (the same sentinel decode, bd myconfig-m6r1)
+                    manifest_chdir=$(printf '%s' "$r2" | "$BB" base64 -d && printf x) \
                         || fail "cannot decode the manifest chdir"
+                    manifest_chdir=''${manifest_chdir%x}
                     ;;
                 *)
                     fail "unknown manifest record: $rkind"
@@ -392,8 +518,9 @@ let
     # (TSI has no net device, no DHCP); the manifest's env is the
     # transport. The share loop's tmpfs-at-/etc (when it ran) is
     # already in place; on a rootfs without /etc shares this mounts
-    # the component first. After the resolver exists, nothing must
-    # mount over /etc.
+    # the component first. After the resolver exists, only the
+    # SLiRP step below may write it (the DNS rewrite, bd
+    # myconfig-m0to).
     if [ -n "''${MYSBX_KRUN_RESOLV:-}" ]; then
         step "writing /etc/resolv.conf from the host resolver"
         # /etc is the ro root's share-root unless a share below it
@@ -430,6 +557,66 @@ let
         # if the share loop mounted a tmpfs over /etc.
         if [ ! -f /etc/hosts ]; then
             printf '127.0.0.1 localhost\n::1 localhost\n' > /etc/hosts 2>/dev/null || true
+        fi
+    fi
+
+    # The SLiRP NIC of the qemu backend (bd myconfig-k106, the qemu
+    # bridge): libkrun's network is TSI (the guest has NO ethernet
+    # device — the resolver step above is the whole story there),
+    # but qemu's `-netdev user` attaches a REAL virtio-net-pci NIC
+    # that nothing configures guest-side: without an address and a
+    # route, resolv.conf alone resolves nothing. The marker env is
+    # set ONLY by the microvm-qemu builder when the network is
+    # shared (the krun backend sets none — no step runs, no eth0
+    # exists to configure). qemu's user netdev carries FIXED SLiRP
+    # defaults — guest 10.0.2.15/24, gateway 10.0.2.2, DNS proxy
+    # 10.0.2.3 — so the config is static, no DHCP. The interface
+    # is found by DRIVER (the first virtio_net device), never by a
+    # name the kernel's probe order could change. The host's own
+    # resolver addresses are host-local (e.g. systemd-resolved's
+    # 127.0.0.53): behind the SLiRP NAT they point into the GUEST,
+    # where nothing listens — DNS would be dead (bd
+    # myconfig-m0to). SLiRP's DNS proxy is the .3 address, NOT the
+    # .2 gateway; the resolver written above is therefore REWRITTEN
+    # to the proxy (the krun arm never runs this — TSI dials from
+    # the HOST netns, where the host's addresses are exactly right).
+    if [ "''${MYSBX_MICROVM_NET:-}" = "1" ]; then
+        _nic=""
+        for _if in /sys/class/net/*; do
+            # -e, never -f: a sysfs driver bind is a symlink to a
+            # DIRECTORY — [ -f ] follows the link and is false for
+            # it (the live-shaped fixture caught this).
+            [ -e "$_if/device/driver" ] || continue
+            case "$(  "$BB" readlink "$_if/device/driver")" in
+                *virtio_net) _nic="$(  "$BB" basename "$_if")" ;;
+            esac
+            [ -n "$_nic" ] && break
+        done
+        if [ -n "$_nic" ]; then
+            step "configuring the SLiRP NIC $_nic (10.0.2.15/24 via 10.0.2.2)"
+            "$BB" ip addr add 10.0.2.15/24 dev "$_nic" \
+                || fail "cannot address the NIC $_nic"
+            "$BB" ip link set "$_nic" up \
+                || fail "cannot bring the NIC $_nic up"
+            "$BB" ip route add default via 10.0.2.2 \
+                || fail "cannot add the default route via 10.0.2.2"
+            # The SLiRP DNS proxy — the host's resolver addresses
+            # are unreachable from behind the NAT (bd
+            # myconfig-m0to). A fresh tmpfs (no /etc shares) keeps
+            # the baked /etc/hosts; a tmpfs'd /etc carries it —
+            # the localhost mapping must survive the rewrite.
+            if ! "$BB" touch /etc/.mysbx-resolv-probe 2>/dev/null; then
+                "$BB" mount -t tmpfs tmpfs /etc \
+                    || fail "cannot mount the tmpfs for /etc (the SLiRP resolver)"
+            else
+                "$BB" rm -f /etc/.mysbx-resolv-probe
+            fi
+            [ -f /etc/hosts ] || "$BB" printf '%s\n' \
+                '127.0.0.1 localhost' > /etc/hosts
+            "$BB" printf 'nameserver 10.0.2.3\n' > /etc/resolv.conf \
+                || fail "cannot write the SLiRP resolver"
+        else
+            fail "MYSBX_MICROVM_NET=1 but no virtio_net interface exists — the NIC did not attach"
         fi
     fi
 
@@ -644,10 +831,12 @@ let
         step "the nix scratch is $dev at /mysbx-nix; the store overlay is up"
     fi
 
-    # The payload is our own argv: $1 the path (absolute, no PATH
-    # lookup needed), $2.. its arguments, exactly as krun_set_exec
-    # carried them.
-    [ "$#" -gt 0 ] || fail "no payload in argv — the krun_set_exec args did not reach the guest init"
+    # The payload is our own argv: the manifest's argv records
+    # REPLACED $* when one exists (bd myconfig-hq7k); else the
+    # kernel's `--` split handed the krun_set_exec vector over as
+    # $1.. (the krun guest's own route — and the qemu debug run
+    # without a manifest).
+    [ "$#" -gt 0 ] || fail "no payload — neither the manifest's argv records nor the cmdline reached this init"
 
     # The workdir, applied AFTER the shares exist (the manifest's
     # chdir record — the cmdline route had /init.krun chdir BEFORE
@@ -778,7 +967,96 @@ let
         ) &
     fi
 
+    # The console size (bd myconfig-a2uq): the qemu guest's serial
+    # console is a 16550 — it carries NO winsize, so the guest ctty
+    # reports a 0x0 grid and herdr refuses to attach (fish renders
+    # blind). The pipeline read the CALLER's terminal size and rode
+    # it through the manifest env; this stty applies it to the
+    # guest console before the payload runs, so interactive payloads
+    # see a real grid. Gated on the marker: the krun guest (libkrun's
+    # console proxy carries a real size) and piped runs never set it.
+    # The 16550 has no resize signaling either — the size is the
+    # boot-time snapshot; a host resize mid-session does not
+    # propagate (recorded in backends.md D9).
+    _csize="''${MYSBX_MICROVM_CONSOLE_SIZE:-}"
+    case "$_csize" in
+        x*|*x*x|*x) ;;
+        [0-9]*x[0-9]*)
+            _rows=''${_csize%%x*}
+            _cols=''${_csize#*x}
+            case "$_rows$_cols" in
+                *[!0-9]*) ;;
+                *)
+                    if [ "$_rows" -ge 1 ] && [ "$_cols" -ge 1 ]; then
+                        "$BB" stty rows "$_rows" cols "$_cols" 2>/dev/null || :
+                    fi
+                    ;;
+            esac
+            ;;
+    esac
+
     step "exec-ing the payload: $1"
+    if [ -n "$exit_channel" ]; then
+        # The exit channel (the qemu bridge): the payload runs as a
+        # CHILD so this PID 1 can observe its exit code, hand it to
+        # the launcher's reader (one "N\n" line on the virtio-serial
+        # port), and exit — the kernel panics on PID-1 exit and
+        # qemu's -no-reboot turns that panic into a clean exit.
+        #
+        # The port's DEVICE NODE is devtmpfs's own (the driver's
+        # device_create names it vport<pdev>p<id>), but the FRIENDLY
+        # /dev/virtio-ports/<name> spelling is a UDEV symlink — the
+        # driver generates the udev event itself (virtio_console.c:
+        # "Generate a udev event so that appropriate symlinks can be
+        # created based on udev rules"), and this static-busybox
+        # guest runs no udev. Resolve the port by NAME through sysfs
+        # instead (bd myconfig-dnmk): walk /sys/class/virtio-ports/*,
+        # match the name file, and write to the /dev/vport* node the
+        # class dir names (devtmpfs already created it — a fallback
+        # mknod covers a guest whose /dev is not devtmpfs). A failed
+        # resolution or write falls through to the same teardown: the
+        # launcher reports no code rather than hanging the VM.
+        _exit_port=/dev/virtio-ports/$exit_channel
+        for _port_dir in /sys/class/virtio-ports/*; do
+            [ "$("$BB" cat "$_port_dir/name" 2>/dev/null)" = "$exit_channel" ] || continue
+            _dev="$("$BB" cat "$_port_dir/dev" 2>/dev/null)" || continue
+            _node=/dev/"$("$BB" basename "$_port_dir")"
+            if [ -e "$_node" ]; then
+                _exit_port=$_node
+            elif "$BB" mknod "$_node" c "''${_dev%%:*}" "''${_dev#*:}" 2>/dev/null; then
+                _exit_port=$_node
+            fi
+            break
+        done
+        # SYNCHRONOUS, never `cmd &`: a NON-INTERACTIVE ash gives an
+        # async child /dev/null as stdin (the POSIX async-list rule —
+        # live probe with this very busybox 1.37.0: the &-child read
+        # EOF, the synchronous form read the piped line, bd
+        # myconfig-8j3t), so a shell session or a piped-stdin payload
+        # would see EOF the moment it starts. wait already blocks
+        # this init until the payload exits — the synchronous form
+        # reaps it just the same, keeps the console's stdin for the
+        # payload, and $? carries the code.
+        #
+        # The CONTROLLING TERMINAL (bd myconfig-w8jd): PID 1 owns the
+        # session; a plain child inherits the fds but never a ctty —
+        # /dev/tty is ENXIO, job control is off, and ^C reaches no
+        # foreground group. `setsid -c` execs the payload as a NEW
+        # session leader WITH the console as its ctty (live-probed:
+        # from ash the child is not a group leader, so setsid execs
+        # in place and $? still carries the payload's code; a
+        # non-tty stdin makes TIOCSCTTY fail silently and the
+        # payload simply runs on, so piped one-shot runs are
+        # unaffected).
+        set +e
+        "$BB" setsid -c "$@"
+        _exit_code=$?
+        set -e
+        step "the payload exited with $_exit_code"
+        printf '%s\n' "$_exit_code" > "$_exit_port" \
+            || echo "mysbx-init: cannot write the exit code to the $exit_channel port ($_exit_port)" >&2
+        exit 0
+    fi
     exec "$@"
   '';
 in
@@ -858,6 +1136,28 @@ runCommand "mysbx-krun-rootfs"
     # diagnosis instead of the live mid-session ENOENT.
     grep -qF 'the store share lost' $out/bin/mysbx-init \
         || { echo "mysbx-krun-rootfs: init lost the store-share degradation probe" >&2; exit 1; }
+    # The qemu exit channel (backends.md D9): the init must report
+    # the payload's exit code on the virtio-serial port the launcher
+    # reads — resolved by NAME through sysfs (bd myconfig-dnmk: the
+    # /dev/virtio-ports/<name> spelling is a udev symlink this
+    # static-busybox guest never has; the node is devtmpfs's own
+    # vport<pdev>p<id>).
+    grep -qF '/sys/class/virtio-ports' $out/bin/mysbx-init \
+        || { echo "mysbx-krun-rootfs: init lost the exit-channel sysfs resolution" >&2; exit 1; }
+    grep -qF 'mknod' $out/bin/mysbx-init \
+        || { echo "mysbx-krun-rootfs: init lost the exit-channel node fallback" >&2; exit 1; }
+    # The payload's controlling terminal (bd myconfig-w8jd): without
+    # setsid -c the payload child never acquires the console —
+    # interactive runs have no job control and /dev/tty is ENXIO.
+    grep -qF 'setsid -c' $out/bin/mysbx-init \
+        || { echo "mysbx-krun-rootfs: init lost the payload ctty acquisition" >&2; exit 1; }
+    # The manifest argv records (bd myconfig-hq7k): the payload rides
+    # the manifest on the qemu backend — the init must both CONSUME
+    # the records and refuse a corrupted one.
+    grep -qF 'manifest argv index' $out/bin/mysbx-init \
+        || { echo "mysbx-krun-rootfs: init lost the manifest argv loader" >&2; exit 1; }
+    grep -qF 'cannot decode the manifest argv' $out/bin/mysbx-init \
+        || { echo "mysbx-krun-rootfs: init lost the manifest argv decode refusal" >&2; exit 1; }
     # The shebang guard (the eighth live finding): an indented
     # Nix string strips only the MINIMAL common indent of its
     # lines, so mixed indents leave leading spaces before the

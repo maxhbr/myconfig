@@ -129,6 +129,14 @@ pub const GUEST_STORE: &str = "/tmp/mysbx-shares/stage-ro/store";
 pub const STAGE_RO_TAG: &str = "stage-ro";
 pub const STAGE_RW_TAG: &str = "stage-rw";
 
+/// The device tag of the git trust's IN-MEMORY overlay files (bd
+/// myconfig-dak.8) — libkrun's own NullFs the krun launcher
+/// registers the trust texts on. Shared with the microvm-qemu
+/// renderer (backends.md D9), which maps trust shares onto the RO
+/// STAGING TREE instead (bd myconfig-govd: qemu has no in-memory
+/// device, the launcher refuses `--krun-overlay`).
+pub const TRUSTFS_TAG: &str = "trustfs";
+
 /// The host-side root of the per-run staging trees (inside the
 /// bwrap view, never shared into the guest as a sandbox path):
 /// `<STAGE_ROOT>/<ro|rw>/<slot>` is the slot dir of one share, the
@@ -361,25 +369,6 @@ impl std::fmt::Display for Error {
     }
 }
 
-/// One virtiofs share: a SLOT inside its access mode's staging
-/// device and the SANDBOX path the payload must see it at. The
-/// guest init (bd myconfig-dak.5) mounts each DEVICE once, under
-/// [`GUEST_SHARE_ROOT`] keyed by the device tag (nesting a virtiofs
-/// device under another virtiofs mount returns EBUSY, spike finding
-/// 9, so no DEVICE ever mounts at the sandbox path directly), and
-/// then bind-mounts `<device-mount>/<slot>` at each sandbox path, so the
-/// payload's contract is the SANDBOX layout, the tmpfs placement is
-/// the init's. The `MYSBX_KRUN_SHARES` encoding the launcher hands
-/// the init is one `DEVICE SLOT SANDBOX_PATH ro|rw` entry per share.
-struct Share {
-    /// The share's slot inside its device's staging tree — distinct
-    /// per share (a digest of the sandbox path, like the podman
-    /// container names).
-    slot: String,
-    sandbox_path: String,
-    read_only: bool,
-}
-
 /// The fixed sandbox paths the rootfs bakes links for — a share's
 /// path may live BELOW the home but never replace one of the roots.
 const BAKED_LINK_PATHS: [&str; 2] = ["/nix/store", "/mysbx-home"];
@@ -532,37 +521,39 @@ fn check_share_root(sandbox_path: &str) -> Result<(), Error> {
 /// The built spec — sections in fixed order (the module docs), the
 /// argv of the launcher binary plus the shares' guest placement
 /// (which rides as `MYSBX_KRUN_SHARES` in the env, section 4).
-struct Spec {
-    cpus: u32,
-    ram_mib: u32,
-    rootfs: String,
-    init: String,
-    shares: Vec<Share>,
-    env: Vec<(String, String)>,
+/// Shared with the microvm-qemu backend (backends.md D9: the same
+/// spec, a different renderer).
+pub(crate) struct Spec {
+    pub(crate) cpus: u32,
+    pub(crate) ram_mib: u32,
+    pub(crate) rootfs: String,
+    pub(crate) init: String,
+    pub(crate) shares: Vec<Share>,
+    pub(crate) env: Vec<(String, String)>,
     /// The payload's working directory (bwrap's `--chdir`
     /// equivalent): the workspace path the shares already placed —
     /// the repo root, where every other backend's payload starts.
     /// The launcher maps it onto `krun_set_workdir`.
-    workdir: String,
-    payload: Vec<String>,
+    pub(crate) workdir: String,
+    pub(crate) payload: Vec<String>,
     /// The merged config's `network` (bd myconfig-dak.6, backends.md
     /// D6): `true` keeps libkrun's implicit vsock (the TSI proxy
     /// dials from the launcher's netns), `false` disables it — no
     /// socket path to the host at all.
-    network: bool,
+    pub(crate) network: bool,
     /// The scratch disk's launcher-view path (bd myconfig-dak.7):
     /// the launcher attaches the file with krun_add_disk2 and
     /// announces the disk in the manifest env so the init finds it.
-    scratch: Option<String>,
+    pub(crate) scratch: Option<String>,
     /// The in-memory overlay files (bd myconfig-dak.8): (guest path,
     /// octal file mode, b64 content) triples the launcher registers
     /// on the ROOT device. The git trust is the first consumer — no
     /// sidecar file, no stage slot, no init placement.
-    overlays: Vec<(String, u32, String)>,
+    pub(crate) overlays: Vec<(String, u32, String)>,
     /// Whether the caller passed `--verbose`: forwarded to the
     /// launcher for its phase timings, setup logs and the guest
     /// init's step trace.
-    verbose: bool,
+    pub(crate) verbose: bool,
 }
 
 /// The staging-tree BINDS of a run's shares — one `(host_dir,
@@ -766,7 +757,7 @@ pub fn backing_paths(
     Ok(krun_shares(cfg, repo, params)?
         .into_iter()
         .map(|s| {
-            let device = share_device(&s);
+            let device = share_device(&s.slot, s.read_only);
             (
                 s.sandbox_path,
                 format!("{GUEST_SHARE_ROOT}/{device}/{}", s.slot),
@@ -777,13 +768,33 @@ pub fn backing_paths(
 
 /// The device tag a share's guest mount lives under: the two
 /// staging devices by access mode, the trustfs virtual device for
-/// the trust overlay shares (bd myconfig-dak.8).
-fn share_device(share: &Share) -> &'static str {
-    match share.slot.as_str() {
-        "gittrust-global" | "gittrust-system" => "trustfs",
-        _ if share.read_only => STAGE_RO_TAG,
+/// the trust overlay shares (bd myconfig-dak.8). Shared with the
+/// microvm-qemu renderer (backends.md D9).
+pub(crate) fn share_device(slot: &str, read_only: bool) -> &'static str {
+    match slot {
+        "gittrust-global" | "gittrust-system" => TRUSTFS_TAG,
+        _ if read_only => STAGE_RO_TAG,
         _ => STAGE_RW_TAG,
     }
+}
+
+/// One virtiofs share: a SLOT inside its access mode's staging
+/// device and the SANDBOX path the payload must see it at. The
+/// guest init (bd myconfig-dak.5) mounts each DEVICE once, under
+/// [`GUEST_SHARE_ROOT`] keyed by the device tag (nesting a virtiofs
+/// device under another virtiofs mount returns EBUSY, spike finding
+/// 9, so no DEVICE ever mounts at the sandbox path directly), and
+/// then bind-mounts `<device-mount>/<slot>` at each sandbox path, so the
+/// payload's contract is the SANDBOX layout, the tmpfs placement is
+/// the init's. The `MYSBX_KRUN_SHARES` encoding the launcher hands
+/// the init is one `DEVICE SLOT SANDBOX_PATH ro|rw` entry per share.
+pub(crate) struct Share {
+    /// The share's slot inside its device's staging tree — distinct
+    /// per share (a digest of the sandbox path, like the podman
+    /// container names).
+    pub(crate) slot: String,
+    pub(crate) sandbox_path: String,
+    pub(crate) read_only: bool,
 }
 
 pub fn krun_argv(
@@ -793,6 +804,21 @@ pub fn krun_argv(
     host_env: &HostEnv,
     params: &Params<'_>,
 ) -> Result<Vec<String>, Error> {
+    Ok(render(&spec_of(cfg, repo, payload, host_env, params)?))
+}
+
+/// The krun spec builder's shared core (backends.md D9): the SAME
+/// merged-config-to-spec mapping the `krun` backend renders and the
+/// `microvm-qemu` twin re-renders — every refusal, check, env entry
+/// and share record lives HERE, so the two backends cannot drift
+/// apart. The renderers differ only in what their launchers need.
+pub(crate) fn spec_of(
+    cfg: &Merged,
+    repo: &Repo,
+    payload: &Payload,
+    host_env: &HostEnv,
+    params: &Params<'_>,
+) -> Result<Spec, Error> {
     // The multiplexer applies to the INTERACTIVE payload only (cli.md
     // D11), like on every backend: a one-shot `run -- CMD` is never
     // wrapped. A session multiplexer without a pinned entry is
@@ -878,7 +904,7 @@ pub fn krun_argv(
         Payload::Command(args) => args.clone(),
     };
 
-    let spec = Spec {
+    Ok(Spec {
         cpus,
         ram_mib,
         rootfs: params.rootfs.to_owned(),
@@ -898,8 +924,7 @@ pub fn krun_argv(
         scratch: params.scratch.map(str::to_owned),
         overlays: params.git_trust.map(trust_overlays).unwrap_or_default(),
         verbose: params.verbose,
-    };
-    Ok(render(&spec))
+    })
 }
 
 /// The `--krun-overlay` flags of the run's git trust (bd
@@ -1201,7 +1226,7 @@ fn render(spec: &Spec) -> Vec<String> {
         argv.push(format!("{STAGE_ROOT}/ro/{}", MANIFEST_SLOT));
     }
     for share in &spec.shares {
-        let device = share_device(share);
+        let device = share_device(share.slot.as_str(), share.read_only);
         argv.push(if share.read_only {
             "--ro-share".to_owned()
         } else {

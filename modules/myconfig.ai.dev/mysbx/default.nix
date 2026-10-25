@@ -459,6 +459,15 @@ in
         # MYSBX_KRUN_LAUNCHER/MYSBX_KRUN_ROOTFS.
         krunLauncher = cfg.krun.direct.launcher;
         krunRootfs = cfg.krun.direct.rootfs;
+        # The native-qemu backend (backends.md D9, bd myconfig-2l9b):
+        # the launcher, the SHARED guest rootfs and the kernel
+        # libkrun bundles, pinned as MYSBX_MICROVM_QEMU_*.
+        microvmQemuLauncher = cfg.microvm-qemu.launcher;
+        microvmQemuRootfs = cfg.microvm-qemu.rootfs;
+        # The IMAGE FILE, not the kernel package: qemu's -kernel
+        # reads a file (a directory is EISDIR), and doctor's
+        # is-file rule matches only the image (bd myconfig-q3se).
+        microvmQemuKernel = "${cfg.microvm-qemu.kernel}/bzImage";
         waypipe = cfg.display.package;
         # The dtach master of detached runs (docs/design/detach.md
         # B10): pinned so `--detach` needs no host PATH lookup.
@@ -1150,6 +1159,73 @@ in
             against a plain `nix`).
           '';
         };
+      };
+    };
+
+    # The native-qemu backend (mysbx-rs/src/microvm_qemu.rs,
+    # docs/design/backends.md D9, bd myconfig-6di.6): the krun
+    # contract on a stock VMM — `backend = "microvm-qemu"` execs
+    # bwrap → mysbx-microvm-qemu → rootless virtiofsd ×N + qemu, the
+    # SAME shared guest rootfs as the direct krun backend plus a
+    # pinned kernel (libkrun bundles one; qemu needs it handed
+    # over). Requires rw /dev/kvm for the supported (accelerated)
+    # mode — the launcher's kvm:tcg fallback is a diagnosis, not a
+    # supported mode (D9).
+    microvm-qemu = {
+      launcher = mkOption {
+        type = types.package;
+        default = pkgs.callPackage ./nix/microvm-qemu-launcher.nix {
+          # The qemu and virtiofsd the runs invoke — pinned into the
+          # launcher wrapper, so a host swapping either rebuilds the
+          # backend (no PATH lookup under bwrap).
+          qemu = pkgs.qemu_test;
+          virtiofsd = pkgs.virtiofsd;
+        };
+        defaultText = literalExpression "pkgs.callPackage ./nix/microvm-qemu-launcher.nix { qemu = pkgs.qemu_test; virtiofsd = pkgs.virtiofsd; }";
+        description = ''
+          The mysbx-microvm-qemu launcher of the native-qemu
+          backend — the zero-dependency Rust binary
+          (../microvm-qemu-rs) that spawns one rootless virtiofsd per
+          device and one qemu microVM per run. Pinned into the
+          wrapper as MYSBX_MICROVM_QEMU_LAUNCHER.
+        '';
+      };
+
+      rootfs = mkOption {
+        type = types.package;
+        # D9: the guest side is SHARED, not forked — the krun rootfs
+        # serves both backends (its init mounts virtiofs devices by
+        # TAG, which qemu carries namespaced exactly like libkrun).
+        default = cfg.krun.direct.rootfs;
+        defaultText = literalExpression "cfg.krun.direct.rootfs";
+        description = ''
+          The guest rootfs of the native-qemu backend — the
+          direct-krun rootfs consumed AS-IS (backends.md D9: the
+          same baked init, static busybox entry path and shell
+          symlinks; only the VMM differs). Pinned into the wrapper
+          as MYSBX_MICROVM_QEMU_ROOTFS.
+        '';
+      };
+
+      kernel = mkOption {
+        type = types.package;
+        default = pkgs.callPackage ./nix/microvm-qemu-kernel.nix {
+          # The kernel version the runs boot — the one input libkrun
+          # bundles (libkrunfw) and a stock qemu needs as a bzImage.
+          # Built with the virtio device stack compiled IN (the
+          # static busybox guest init loads no modules).
+          kernelPackages = pkgs.linuxKernel.packages.linux_6_12;
+        };
+        defaultText = literalExpression "pkgs.callPackage ./nix/microvm-qemu-kernel.nix { kernelPackages = pkgs.linuxKernel.packages.linux_6_12; }";
+        description = ''
+          The guest kernel bzImage of the native-qemu backend —
+          rebuilt with the microvm device set built in
+          (virtio_pci/virtio_fs/virtio_blk/ext4/overlayfs: the
+          static-busybox guest init loads no modules, so nothing
+          may stay a module). Pinned into the wrapper as
+          MYSBX_MICROVM_QEMU_KERNEL; the launcher forwards it as
+          the qemu -kernel.
+        '';
       };
     };
 

@@ -43,7 +43,14 @@ use std::time::{Duration, Instant};
 const USAGE_DOCTOR: &str = "usage: mysbx doctor [BACKEND...]";
 
 /// The backends the doctor knows, the same set the run pipeline accepts.
-pub const BACKENDS: &[&str] = &["bubblewrap", "podman-gvisor", "nono", "podman-krun", "krun"];
+pub const BACKENDS: &[&str] = &[
+    "bubblewrap",
+    "podman-gvisor",
+    "nono",
+    "podman-krun",
+    "krun",
+    "microvm-qemu",
+];
 
 /// The variables that name a model endpoint, in lookup order.
 pub const ENDPOINT_VARS: &[&str] = &["OPENAI_BASE_URL", "ANTHROPIC_BASE_URL"];
@@ -943,6 +950,89 @@ fn krun_checks(checks: &mut Vec<Check>) {
     }
 }
 
+/// The microvm-qemu doctor checks (backends.md D9): the SAME shape
+/// as the krun arm — the shared /dev/kvm gate, the shared rootfs
+/// shape (the guest side is shared) — with the backend's own three
+/// pins: launcher, rootfs and the KERNEL libkrun would have
+/// bundled. The full arm (the launcher self-probe over the real
+/// binary) lands with the launcher (bd myconfig-kvq8).
+fn microvm_qemu_checks(checks: &mut Vec<Check>) {
+    checks.push(kvm_check(
+        Path::new("/dev/kvm").exists(),
+        crate::kvm_available(),
+    ));
+    let launcher = match crate::env_opt("MYSBX_MICROVM_QEMU_LAUNCHER") {
+        Some(pin) => match resolve_executable(&pin, std::env::var_os("PATH").as_deref()) {
+            Some(path) => {
+                checks.push(Check::ok("launcher", path.display().to_string()));
+                Some(path)
+            }
+            None => {
+                checks.push(Check::fail(
+                    "launcher",
+                    format!("`{pin}` is not an executable file (MYSBX_MICROVM_QEMU_LAUNCHER)"),
+                    "the Nix wrapper pins it when the host builds the qemu backend \
+                     (myconfig.ai.dev.mysbx.microvmQemu.launcher), or set \
+                     MYSBX_MICROVM_QEMU_LAUNCHER",
+                ));
+                None
+            }
+        },
+        None => {
+            checks.push(Check::fail(
+                "launcher",
+                "no launcher pinned (MYSBX_MICROVM_QEMU_LAUNCHER)",
+                "the Nix wrapper pins it when the host builds the qemu backend \
+                 (myconfig.ai.dev.mysbx.microvmQemu.launcher), or set MYSBX_MICROVM_QEMU_LAUNCHER",
+            ));
+            None
+        }
+    };
+    let rootfs = crate::env_opt("MYSBX_MICROVM_QEMU_ROOTFS").map(PathBuf::from);
+    checks.push(krun_rootfs_check(rootfs));
+    // The one qemu-only pin: the kernel image. A file, not a dir —
+    // the bzImage the wrapper pins.
+    match crate::env_opt("MYSBX_MICROVM_QEMU_KERNEL") {
+        Some(pin) => {
+            let path = PathBuf::from(&pin);
+            if path.is_file() {
+                checks.push(Check::ok("kernel", pin));
+            } else {
+                checks.push(Check::fail(
+                    "kernel",
+                    format!("`{pin}` is not a file (MYSBX_MICROVM_QEMU_KERNEL)"),
+                    "the Nix wrapper pins it when the host builds the qemu backend \
+                     (myconfig.ai.dev.mysbx.microvmQemu.kernel), or set MYSBX_MICROVM_QEMU_KERNEL",
+                ));
+            }
+        }
+        None => checks.push(Check::fail(
+            "kernel",
+            "no kernel pinned (MYSBX_MICROVM_QEMU_KERNEL)",
+            "the Nix wrapper pins it when the host builds the qemu backend \
+             (myconfig.ai.dev.mysbx.microvmQemu.kernel), or set MYSBX_MICROVM_QEMU_KERNEL",
+        )),
+    }
+    match &launcher {
+        Some(bin) => {
+            let probe = run_probe(bin, &["--doctor-probe-invalid".to_owned()]);
+            if probe.stderr.contains("unknown argument") {
+                checks.push(Check::ok(
+                    "launcher probe",
+                    "the launcher runs and reaches argument parsing",
+                ));
+            } else {
+                checks.push(Check::fail(
+                    "launcher probe",
+                    probe.error(),
+                    "run the launcher with no arguments: it prints its usage",
+                ));
+            }
+        }
+        None => checks.push(Check::skip("launcher probe", &["launcher"])),
+    }
+}
+
 /// podman binary, OCI runtime, `/dev/kvm` (krun), image, startup probe
 /// and the model endpoint through the run's network.
 fn podman_checks(
@@ -1415,6 +1505,7 @@ pub fn run(args: &[String]) -> i32 {
                 host_endpoint_check(&mut checks, &merged, &forwarded);
             }
             "krun" => krun_checks(&mut checks),
+            "microvm-qemu" => microvm_qemu_checks(&mut checks),
             _ => podman_checks(&mut checks, backend, &merged, &forwarded),
         }
         sections.push(Section {

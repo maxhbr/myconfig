@@ -21,6 +21,16 @@
 #                 `--runtime=<that path>` — the runtime swap is the only
 #                 argv difference, so the dry run doubles as the swap proof.
 #
+#   mysbx-microvm-qemu-wrapper-test
+#                 the native-qemu wrapper pins (backends.md D9, bd
+#                 myconfig-6x9c): the wrapper carries the backend's three
+#                 closure pins (launcher, rootfs, kernel) and a
+#                 `backend = "microvm-qemu"` dry run names --kernel,
+#                 --exit-channel, --rootfs, --init and the manifest
+#                 pointer — and carries NO --krun-overlay flag (bd
+#                 myconfig-govd: the launcher refuses it). Stubs for the
+#                 pins — the real kernel stays a host build.
+#
 #   mysbx-krun-guest-nix-test
 #                 the guest nix wrappers of the podman-krun backend
 #                 (./krun-guest-nix.nix, docs/design/backends.md D2).
@@ -444,6 +454,124 @@ in
           || fail "the image reference is missing from the krun argv"
         test "$(echo "$argv" | tail -n 1)" = "/bin/bash" \
           || fail "the payload is not the image shell"
+
+        touch $out
+      '';
+
+  mysbx-microvm-qemu-wrapper-test =
+    let
+      # Stubs of the three pins, in the REAL shapes the wrapper
+      # --sets: a launcher package with bin/, a rootfs package with
+      # bin/, and a kernel PACKAGE whose bzImage member is the pin
+      # (the module wiring passes "${pkg}/bzImage", never the
+      # package — bd myconfig-q3se). Stubs keep this check from
+      # building the whole pinned kernel in CI; the wiring itself
+      # is pinned by the source grep below and the run-path
+      # is-file refusal (mysbx-rs) on a host that opts into the
+      # backend.
+      stubLauncher = pkgs.runCommand "mysbx-microvm-qemu-stub-launcher" { } ''
+        mkdir -p $out/bin
+        printf '#!/bin/sh\necho "mysbx-microvm-qemu: unknown argument $1" >&2\nexit 2\n' > $out/bin/mysbx-microvm-qemu
+        chmod +x $out/bin/mysbx-microvm-qemu
+      '';
+      stubRootfs = pkgs.runCommand "mysbx-microvm-qemu-stub-rootfs" { } ''
+        mkdir -p $out/bin
+        printf '#!/bin/sh\n' > $out/bin/mysbx-init
+        chmod +x $out/bin/mysbx-init
+      '';
+      stubKernelPkg = pkgs.runCommand "mysbx-microvm-qemu-stub-kernel" { } ''
+        mkdir $out
+        printf 'stub-bzImage' > $out/bzImage
+      '';
+      stubKernel = "${stubKernelPkg}/bzImage";
+      pkgQemu = pkgs.callPackage ../nix/mysbx.nix {
+        microvmQemuLauncher = stubLauncher;
+        microvmQemuRootfs = stubRootfs;
+        microvmQemuKernel = stubKernel;
+        ssh-keygen = pkgs.openssh;
+      };
+    in
+    pkgs.runCommand "mysbx-microvm-qemu-wrapper-test"
+      {
+        nativeBuildInputs = [
+          pkgs.git
+        ];
+      }
+      ''
+        fail() {
+          echo "mysbx-microvm-qemu-wrapper-test: $*" >&2
+          exit 1
+        }
+
+        content=$(cat "${pkgQemu}/bin/mysbx")
+        # 1. the wrapper pins all three, as --set values pointing at
+        #    the stubs. The makeBinaryWrapper docstring quotes BOTH the
+        #    variable and the value (`--set 'VAR' 'VALUE'`), so match the
+        #    variable NAME alone and strip the quotes before awk — the
+        #    krun check's idiom. After `tr -d "'"` the value is awk
+        #    field 3 (field 4 is the line-continuation backslash).
+        for pin in MYSBX_MICROVM_QEMU_LAUNCHER MYSBX_MICROVM_QEMU_ROOTFS MYSBX_MICROVM_QEMU_KERNEL; do
+          echo "$content" | grep -q -- "$pin" \
+            || fail "the wrapper does not pin $pin"
+        done
+        launcher=$(echo "$content" | tr -d "'" | awk '/--set MYSBX_MICROVM_QEMU_LAUNCHER/ {print $3; exit}')
+        case "$launcher" in
+          /nix/store/*-mysbx-microvm-qemu-stub-launcher/bin/mysbx-microvm-qemu) ;;
+          *) fail "the pinned launcher is not the stub: $launcher" ;;
+        esac
+        test -x "$launcher" || fail "the pinned launcher does not exist: $launcher"
+        # The kernel pin names the bzImage FILE (a store file path),
+        # never the package directory (bd myconfig-q3se).
+        kernel=$(echo "$content" | tr -d "'" | awk '/--set MYSBX_MICROVM_QEMU_KERNEL/ {print $3; exit}')
+        case "$kernel" in
+          /nix/store/*-mysbx-microvm-qemu-stub-kernel/bzImage) ;;
+          *) fail "the pinned kernel is not the stub bzImage: $kernel" ;;
+        esac
+        test -f "$kernel" || fail "the pinned kernel is not a file: $kernel"
+        # And the module wiring passes the member: the line in
+        # default.nix that feeds the wrapper's kernel pin must name
+        # the bzImage INSIDE the package, never the package itself.
+        wiring=$(grep -n 'microvmQemuKernel = ' ${../default.nix} \
+          || fail "the module wiring (default.nix microvmQemuKernel) is gone")
+        echo "$wiring" | grep -q '/bzImage"' \
+          || fail "the module wiring does not pin the bzImage member: $wiring"
+
+        # 2. the dry run: a repo below a placeable share root, the
+        #    backend in its sidecar, the payload a one-shot true.
+        if ! mkdir -p /tmp/mysbx-microvm-qemu-wrapper-test-$$ 2>/dev/null; then
+          fail "cannot create a fixture root under /tmp (the one placeable share root)"
+        fi
+        work=/tmp/mysbx-microvm-qemu-wrapper-test-$$
+        trap 'rm -rf "$work"' EXIT
+        repo="$work/repo"
+        mkdir -p "$repo" "$work/repo.mysbx"
+        printf 'backend = "microvm-qemu"\n' > "$work/repo.mysbx/config.toml"
+        git -C "$repo" init -q
+        git -C "$repo" config user.email t@invalid
+        git -C "$repo" config user.name t
+        touch "$repo/README"
+        git -C "$repo" add . && git -C "$repo" commit -qm init
+        mkdir -p "$work/home"
+        argv=$( cd "$repo" && HOME="$work/home" "${pkgQemu}/bin/mysbx" run --dry-run -- true ) \
+          || fail "the wrapped dry run refused: run it verbosely for the diagnosis"
+        # The qemu-only pins: kernel + exit-channel after the rootfs.
+        echo "$argv" | grep -qx -- '--kernel' \
+          || fail "the dry run does not name --kernel"
+        echo "$argv" | grep -qx -- '--exit-channel' \
+          || fail "the dry run does not name --exit-channel (the exit-code channel is the default contract)"
+        echo "$argv" | grep -qx -- '--rootfs' \
+          || fail "the dry run does not name --rootfs"
+        echo "$argv" | grep -qx -- '--init' \
+          || fail "the dry run does not name --init"
+        echo "$argv" | grep -qx -- '/bin/mysbx-init' \
+          || fail "the dry run does not pin the guest init"
+        # NO overlay flag — the launcher refuses it (bd myconfig-govd).
+        if echo "$argv" | grep -q -- '--krun-overlay'; then
+          fail "the dry run carries a --krun-overlay flag — the launcher refuses it, every real run would exit 125"
+        fi
+        # The manifest pointer rides (the argv records' channel).
+        echo "$argv" | grep -q -- '--manifest' \
+          || fail "the dry run does not carry the manifest pointer"
 
         touch $out
       '';

@@ -4,13 +4,20 @@
 """Check the generated init without mounts or writes to the host store."""
 
 import argparse
+import base64
 import os
+import pty
 from pathlib import Path
 import shlex
 import sqlite3
+import stat
 import subprocess
 import tempfile
 import unittest
+
+
+def base64_of(text):
+    return base64.b64encode(text.encode()).decode()
 
 
 SCHEMA = """
@@ -478,6 +485,436 @@ class InitTests(unittest.TestCase):
         self.seed(["directory"], [(1, 999)])
         result = self.run_reconcile()
         self.assert_failed(result, "foreign-key violations remain")
+
+    def test_slirp_nic_step_gates_on_the_marker_and_finds_the_driver(self):
+        # bd myconfig-k106: the SLiRP NIC config step runs ONLY on the
+        # qemu backend's marker (the krun guest has no ethernet at
+        # all), finds the interface by DRIVER (virtio_net), and
+        # configures qemu's fixed user-netdev defaults. The shape is
+        # pinned on the generated text; the driver match runs live
+        # under the baked busybox against a synthetic sysfs tree.
+        start = INIT.index('if [ "${MYSBX_MICROVM_NET:-}" = "1" ]; then')
+        end = INIT.index("# The scratch disk", start)
+        block = INIT[start:end]
+        self.assertIn("*virtio_net)", block)
+        self.assertIn("ip addr add 10.0.2.15/24", block)
+        self.assertIn("ip route add default via 10.0.2.2", block)
+        self.assertIn("the NIC did not attach", block)
+        # The resolver rewrite (bd myconfig-m0to): the host's own
+        # nameservers are host-local — behind the SLiRP NAT they
+        # point into the GUEST, where nothing listens. The step
+        # rewrites /etc/resolv.conf to SLiRP's DNS proxy (.3, not
+        # the .2 gateway) and keeps the localhost hosts mapping.
+        self.assertIn("nameserver 10.0.2.3", block)
+        self.assertIn("> /etc/resolv.conf", block)
+        self.assertIn("127.0.0.1 localhost", block)
+        # `ip link set` — never a bare interface name assumption.
+        self.assertNotIn("eth0", block)
+
+        # The interface detection against a synthetic /sys/class/net:
+        # one lo (no device dir), one NON-virtio device, one
+        # virtio_net — the walk must pick the virtio one.
+        net = self.base / "sys/class/net"
+        lo = net / "lo"
+        lo.mkdir(parents=True)
+        other = net / "eth0"
+        (other / "device").mkdir(parents=True)
+        os.symlink("../../bus/pci/drivers/e1000e", other / "device/driver")
+        virtio = net / "ens3"
+        (virtio / "device").mkdir(parents=True)
+        # The driver symlink's TARGET must exist: the init probes
+        # with [ -e ] (follows the link). A real sysfs bind resolves
+        # against /sys, but the case match only needs the SPELLING —
+        # an absolute fixture target keeps the probe honest.
+        (self.base / "sys/bus/virtio/drivers/virtio_net").mkdir(parents=True)
+        os.symlink(self.base / "sys/bus/virtio/drivers/virtio_net",
+                   virtio / "device/driver")
+        detection = block[block.index('_nic=""'):block.index('if [ -n "$_nic" ]; then')]
+        detection = detection.replace("/sys/class/net", str(net))
+        script = (
+            "set -eu\n"
+            f"BB={shlex.quote(str(ROOTFS / 'bin/busybox'))}\n"
+            + detection
+            + 'printf "mysbx-test: nic=%s\\n" "$_nic"\n'
+        )
+        result = subprocess.run(
+            [str(ROOTFS / "bin/busybox"), "sh", "-c", script],
+            capture_output=True,
+            text=True,
+            env={"PATH": ""},
+            timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("mysbx-test: nic=ens3", result.stdout,
+                      f"the driver match: {result.stdout!r}")
+
+    def test_exit_channel_resolves_the_port_through_sysfs(self):
+        # bd myconfig-dnmk: /dev/virtio-ports/<name> is a UDEV
+        # symlink a static-busybox guest never has — the init must
+        # resolve the port by NAME through /sys/class/virtio-ports/*
+        # and write to the devtmpfs node (vport<pdev>p<id>), with an
+        # mknod fallback. Runs the REAL generated block under the
+        # baked static busybox against a synthetic sysfs + dev tree.
+        # The mknod sub-check is capability-gated: an unprivileged
+        # nix builder lacks CAP_MKNOD, so there the DESIGNED
+        # fallback is asserted instead (bd myconfig-opx8).
+        start = INIT.index("    _exit_port=/dev/virtio-ports/$exit_channel")
+        end = INIT.index("    set +e", start)
+        block = INIT[start:end]
+        self.assertIn('/sys/class/virtio-ports', block)
+        self.assertIn('mknod', block)
+
+        try:
+            os.mknod(self.base / "mknod-probe", 0o600 | stat.S_IFCHR,
+                     os.makedev(1, 3))
+            have_mknod = True
+            (self.base / "mknod-probe").unlink()
+        except OSError:
+            have_mknod = False
+
+        sysfs = self.base / "sys/class/virtio-ports"
+        other = sysfs / "vport0p1"
+        exit_port = sysfs / "vport0p2"
+        for d, name in ((other, "not-the-exit-port"), (exit_port, "mysbx-exit")):
+            d.mkdir(parents=True)
+            (d / "name").write_text(name)
+            (d / "dev").write_text("245:2\n")
+        dev = self.base / "dev"
+        dev.mkdir()
+        block = block.replace('/sys/class/virtio-ports', str(sysfs))
+        block = block.replace('/dev/', str(dev) + "/")
+        script = (
+            "set -eu\n"
+            f"BB={shlex.quote(str(ROOTFS / 'bin/busybox'))}\n"
+            'step() { echo "mysbx-init: $*"; }\n'
+            'exit_channel=mysbx-exit\n'
+            + block
+            + 'printf "mysbx-test: port=%s\\n" "$_exit_port"\n'
+            # Two named ports — the resolution must pick the
+            # mysbx-exit one, not the first in the glob.
+        )
+        result = subprocess.run(
+            [str(ROOTFS / "bin/busybox"), "sh", "-c", script],
+            capture_output=True,
+            text=True,
+            env={"PATH": ""},
+            timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        if have_mknod:
+            # The node did NOT exist in the fixture /dev: the mknod
+            # fallback must have created it from the dev file.
+            self.assertEqual(result.stdout.strip(),
+                             f"mysbx-test: port={dev}/vport0p2",
+                             result.stdout + result.stderr)
+            self.assertTrue((dev / "vport0p2").exists())
+        else:
+            # No CAP_MKNOD (the nix build sandbox): the designed
+            # degradation — the port stays the udev path and no
+            # node appears.
+            self.assertEqual(result.stdout.strip(),
+                             f"mysbx-test: port={dev}/virtio-ports/mysbx-exit",
+                             result.stdout + result.stderr)
+            self.assertFalse((dev / "vport0p2").exists())
+
+        # With the node already present (the devtmpfs shape on a
+        # real guest), the existing node is used. A regular file
+        # satisfies the init's [ -e ] probe just as well, so this
+        # covers the primary real-guest branch even without
+        # CAP_MKNOD.
+        (dev / "vport0p2").unlink(missing_ok=True)
+        (dev / "vport0p2").write_text("")
+        result = subprocess.run(
+            [str(ROOTFS / "bin/busybox"), "sh", "-c", script],
+            capture_output=True,
+            text=True,
+            env={"PATH": ""},
+            timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout.strip(), f"mysbx-test: port={dev}/vport0p2")
+
+        # A name match that does not exist: the fallback path stays
+        # (/dev/virtio-ports/<name>), the write fails, the teardown
+        # falls through — never a hang.
+        (exit_port / "name").write_text("also-not-it\n")
+        result = subprocess.run(
+            [str(ROOTFS / "bin/busybox"), "sh", "-c", script],
+            capture_output=True,
+            text=True,
+            env={"PATH": ""},
+            timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(
+            f"port={dev}/virtio-ports/mysbx-exit", result.stdout.strip(),
+            "an unresolved name keeps the udev spelling as the target",
+        )
+
+    def test_exit_channel_runs_the_payload_synchronously(self):
+        # bd myconfig-8j3t: a NON-INTERACTIVE ash gives an async
+        # (`cmd &`) child /dev/null as stdin (the POSIX async-list
+        # rule — live-probed with this very busybox), so the
+        # exit-channel branch must run the payload synchronously.
+        # The generated init text is checked for the shape, and the
+        # REAL busybox proves the stdin difference live: the &-child
+        # reads EOF, the synchronous child reads the piped line.
+        start = INIT.index('if [ -n "$exit_channel" ]; then')
+        end = INIT.index('exec "$@"', start)
+        branch = INIT[start:end]
+        self.assertNotRegex(branch, r'"\$@"\s*&')
+        # The launch shape (bd myconfig-w8jd): setsid -c acquires the
+        # console as ctty for the payload — synchronous, never '&'.
+        self.assertIn('"$BB" setsid -c "$@"\n    _exit_code=$?', branch)
+
+        payload = (
+            'read x\necho "child got: [$x]"\n'
+        )
+        async_probe = f'({payload}) & wait $!\n'
+        sync_probe = f'{payload}'
+        for form, expected in ((async_probe, "child got: []"), (sync_probe, "child got: [in]")):
+            result = subprocess.run(
+                [str(ROOTFS / "bin/busybox"), "sh", "-c", form],
+                input="in\n",
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn(expected, result.stdout,
+                          f"the {form!r} probe: {result.stdout!r}")
+
+    def _ctty_probe(self, master, slave, launch):
+        # A session-leader waiter drives the launch line VERBATIM
+        # (via `set --`) over the console, exactly like the init.
+        # The payload must OPEN /dev/tty: existence pins nothing
+        # (/dev/tty exists in devtmpfs even with no ctty, so
+        # `test -e` passes either way), and a bare `exec 3</dev/tty`
+        # would succeed into a *new* session were the shell ever a
+        # leader — so the open happens inside a subshell, which can
+        # never acquire a ctty on its own. The outcome maps into
+        # the exit code: 5 = ctty acquired, 9 = open failed (ENXIO).
+        bb = shlex.quote(str(ROOTFS / "bin/busybox"))
+        script = (
+            "set -eu\n"
+            f"BB={bb}\n"
+            'set -- "$BB" sh -c '
+            + shlex.quote("(exec 3</dev/tty) && exit 5; exit 9")
+            + "\n"
+            "set +e\n"
+            f"{launch}\n"
+            "code=$?\n"
+            "set -e\n"
+            'exit "$code"\n'
+        )
+        proc = subprocess.Popen(
+            [str(ROOTFS / "bin/busybox"), "sh"],
+            stdin=slave, stdout=slave, stderr=slave,
+            start_new_session=True,  # the PID-1 shape: session leader
+            env={"PATH": ""},
+        )
+        # Feed the script on the console stdin.
+        os.write(master, script.encode())
+        try:
+            return proc.wait(timeout=20)
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+
+    def test_the_exit_channel_payload_acquires_the_console_as_ctty(self):
+        # bd myconfig-w8jd: PID 1 owns the session, so a plain child
+        # never gets a controlling terminal — opening /dev/tty is
+        # ENXIO, no job control, ^C reaches nobody. The launch wraps
+        # the payload in `setsid -c`: a new session leader with the
+        # console as ctty, exec'd in place so $? still carries the
+        # payload's code. Live-probed on a pty in the EXACT PID-1
+        # shape: the session-leader waiter forks the launch as a
+        # non-leader (exec in place), the child must OPEN /dev/tty
+        # and its code (5 = ctty, 9 = not) must reach the waiter.
+        try:
+            master, slave = pty.openpty()
+        except OSError:
+            self.skipTest("no pty in this environment")
+        try:
+            self.assertTrue('"$BB" setsid -c "$@"' in INIT,
+                            "the ctty launch line is gone from the init")
+            rc = self._ctty_probe(master, slave, '"$BB" setsid -c "$@"')
+            # rc==5 proves BOTH halves at once — the /dev/tty OPEN
+            # succeeded inside setsid -c (the ctty) AND the code
+            # propagated through setsid to the session-leader waiter.
+            # rc==9: no ctty (the regression this test exists for);
+            # rc==0: the payload never ran; 127/126: the exec failed.
+            self.assertEqual(rc, 5,
+                             "the ctty payload open failed (exit "
+                             f"{rc}) or the code was lost")
+
+            # NEGATIVE CONTROL (review r4/3): the same probe against
+            # a launch with setsid STRIPPED — the exact regression
+            # shape — must yield the failure code, proving this
+            # test can fail at all. Without it, a vacuous probe
+            # (existence check, unconditional exit) passes both.
+            broken = INIT.replace('"$BB" setsid -c "$@"', '"$@"')
+            self.assertIsNot(broken, INIT,
+                             "the setsid launch line to strip is gone")
+            rc = self._ctty_probe(master, slave, '"$@"')
+            self.assertEqual(rc, 9,
+                             "the stripped-setsid launch must fail the "
+                             f"ctty open (exit {rc} instead of 9)")
+        finally:
+            os.close(master)
+            os.close(slave)
+
+    def test_qemu_pid1_bootstrap_mounts_the_pty_shm_fd_and_lo_surface(self):
+        # bd myconfig-af0j: the qemu PID-1 arm must complete the
+        # guest bootstrap libkrun's implicit init does for the krun
+        # guest — devpts (mux sessions allocate PTYs), a tmpfs
+        # /dev/shm, the /dev/fd link and lo UP. Every step lives
+        # INSIDE the /proc/uptime guard so the krun arm stays
+        # byte-identical. The mounts themselves need a real PID-1
+        # guest (bd myconfig-26z4's live probes); here the text and
+        # the guard placement are pinned.
+        start = INIT.index("if [ ! -f /proc/uptime ]; then")
+        end = INIT.index("fi", start)
+        guard = INIT[start:end]
+        for needle in (
+            "mount -t devpts devpts /dev/pts",
+            "mount -t tmpfs tmpfs /dev/shm",
+            "ln -s /proc/self/fd /dev/fd",
+            "ip link set lo up",
+            "mkdir -p /dev/pts /dev/shm",
+        ):
+            self.assertIn(needle, guard,
+                          f"the qemu PID-1 bootstrap is missing: {needle}")
+        # All five steps must sit BEFORE the guard's fi — the krun
+        # arm (a mounted /proc skips the block) is unchanged.
+        self.assertLess(guard.index("ip link set lo up"), len(guard))
+        # The krun path must NOT bring up lo or mount devpts itself:
+        # nothing outside the guard may carry the steps.
+        after = INIT[end:]
+        self.assertNotIn("mount -t devpts", after)
+        self.assertNotIn("ip link set lo up", after)
+
+    def test_console_size_marker_applies_stty_to_the_console(self):
+        # bd myconfig-a2uq: the qemu guest's serial console carries no
+        # winsize — the init must stty the console from the manifest's
+        # MYSBX_MICROVM_CONSOLE_SIZE marker before the payload runs, and
+        # the step must be GATED (the krun guest and piped runs set no
+        # marker, and a malformed marker must never kill the init).
+        start = INIT.index('_csize="')
+        block = INIT[start:INIT.index('step "exec-ing the payload', start)]
+        for needle in (
+            'MYSBX_MICROVM_CONSOLE_SIZE',
+            'stty rows',
+        ):
+            self.assertIn(needle, block,
+                          f"the console-size step is missing: {needle}")
+        # A malformed marker skips the stty instead of failing the init
+        # (the 2>/dev/null || : on the stty line and the case arms),
+        # and the stty targets the console fd 0 by default.
+        self.assertIn('|| :', block,
+                      "the stty must not be fatal on a refused console")
+        self.assertNotIn("fail \"", block,
+                        "a bad marker must be ignored, never fatal")
+        # The step sits before the payload exec (the console must carry
+        # the size before the payload can observe it).
+        self.assertLess(INIT.index('_csize="'),
+                        INIT.index('step "exec-ing the payload'))
+
+    def test_manifest_argv_records_replace_the_positionals(self):
+        # bd myconfig-hq7k: the qemu run carries the payload through
+        # the manifest's argv records (the stock kernel's `--`
+        # cmdline split is lossy); the loader must replace $* with
+        # the decoded tokens, keep spaces/empties whole, refuse a
+        # reordered index and refuse a bad base64 — under the REAL
+        # generated init text and the baked static busybox.
+        start = INIT.index("    _argv_n=0")
+        end = INIT.index('    done < "$mpath"', start) + len('    done < "$mpath"\n')
+        loader = INIT[start:end]
+        self.assertIn('case "$rkind" in', loader)
+        self.assertIn("argv)", loader)
+        # The extracted block must carry the WHOLE loader: env, argv
+        # and the unknown-record refusal.
+        self.assertIn("unknown manifest record", loader)
+
+        def run_manifest(records):
+            manifest = self.base / "manifest"
+            manifest.write_text("".join(records))
+            script = (
+                "set -eu\n"
+                f"BB={shlex.quote(str(ROOTFS / 'bin/busybox'))}\n"
+                'fail() { echo "mysbx-init: $*" >&2; exit 125; }\n'
+                'step() { echo "mysbx-init: $*"; }\n'
+                f"mpath={shlex.quote(str(manifest))}\n"
+                + loader
+                + '\nprintf "mysbx-test: token-count=%d\\n" "$#"\n'
+                '\nfor t in "$@"; do printf "mysbx-test: token=[%s]\\n" "$t"; done\n'
+                '\necho "mysbx-test: loader boundary reached"\n'
+            )
+            return subprocess.run(
+                [str(ROOTFS / "bin/busybox"), "sh", "-c", script, "sh",
+                 "/bin/sh", "-c", "exit 7"],
+                capture_output=True,
+                text=True,
+                env={"PATH": ""},
+                timeout=20,
+            )
+
+        # The argv records ride AFTER env records; three tokens —
+        # spaced, empty and `=`-carrying — plus a share record the
+        # loop must still consume after them.
+        records = [
+            "env\tHOME\tL215c2J4LWhvbWU=\n",
+            "argv\t0\t" + base64_of("/bin/sh") + "\n",
+            "argv\t1\t" + base64_of("-c") + "\n",
+            "argv\t2\t" + base64_of("exit 7") + "\n",
+        ]
+        result = run_manifest(records)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("mysbx-test: token-count=3", result.stdout)
+        self.assertIn("token=[/bin/sh]", result.stdout)
+        self.assertIn("token=[-c]", result.stdout)
+        self.assertIn("token=[exit 7]", result.stdout)
+        # The positional split is NOT the spawned argv: the check
+        # sh -c "exit 7" needs the tokens SPACED as one argument,
+        # which the loader's set -- guarantees.
+
+        # An EMPTY token survives the roundtrip.
+        records = [
+            "argv\t0\t" + base64_of("/bin/sh") + "\n",
+            "argv\t1\t" + base64_of("") + "\n",
+        ]
+        result = run_manifest(records)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("mysbx-test: token-count=2", result.stdout)
+        self.assertIn("token=[]", result.stdout)
+
+        # A token ENDING in a newline survives byte-identically (bd
+        # myconfig-m6r1): $( ) strips ALL trailing newlines, so the
+        # loader decodes with a sentinel — the six-byte `hello\n`
+        # must arrive as six bytes, and an ALL-newline token must
+        # not collapse to the empty string. The harness prints
+        # token=[%s] with a literal newline inside, so the expected
+        # output carries the line break INSIDE the brackets.
+        records = [
+            "argv\t0\t" + base64_of("hello\n") + "\n",
+            "argv\t1\t" + base64_of("\n") + "\n",
+        ]
+        result = run_manifest(records)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("token-count=2", result.stdout)
+        self.assertIn("token=[hello\n]", result.stdout)
+        self.assertIn("token=[\n]", result.stdout)
+
+        # A reordered or truncated index is a refusal, never a
+        # silently reordered payload.
+        result = run_manifest(["argv\t1\t" + base64_of("x") + "\n"])
+        self.assertEqual(result.returncode, 125, result.stdout + result.stderr)
+        self.assertIn("out of order", result.stderr)
+
+        # A bad base64 token is a refusal.
+        result = run_manifest(["argv\t0\tnot!base64\n"])
+        self.assertEqual(result.returncode, 125, result.stdout + result.stderr)
+        self.assertIn("cannot decode the manifest argv 0", result.stderr)
 
 
 if __name__ == "__main__":
