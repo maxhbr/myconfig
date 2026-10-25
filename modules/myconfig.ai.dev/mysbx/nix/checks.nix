@@ -505,12 +505,16 @@ in
 
         content=$(cat "${pkgQemu}/bin/mysbx")
         # 1. the wrapper pins all three, as --set values pointing at
-        #    the stubs.
+        #    the stubs. The makeBinaryWrapper docstring quotes BOTH the
+        #    variable and the value (`--set 'VAR' 'VALUE'`), so match the
+        #    variable NAME alone and strip the quotes before awk — the
+        #    krun check's idiom. After `tr -d "'"` the value is awk
+        #    field 3 (field 4 is the line-continuation backslash).
         for pin in MYSBX_MICROVM_QEMU_LAUNCHER MYSBX_MICROVM_QEMU_ROOTFS MYSBX_MICROVM_QEMU_KERNEL; do
-          echo "$content" | grep -q -- "--set $pin " \
+          echo "$content" | grep -q -- "$pin" \
             || fail "the wrapper does not pin $pin"
         done
-        launcher=$(echo "$content" | tr -d "'" | awk '/--set MYSBX_MICROVM_QEMU_LAUNCHER/ {print $4; exit}')
+        launcher=$(echo "$content" | tr -d "'" | awk '/--set MYSBX_MICROVM_QEMU_LAUNCHER/ {print $3; exit}')
         case "$launcher" in
           /nix/store/*-mysbx-microvm-qemu-stub-launcher/bin/mysbx-microvm-qemu) ;;
           *) fail "the pinned launcher is not the stub: $launcher" ;;
@@ -518,7 +522,7 @@ in
         test -x "$launcher" || fail "the pinned launcher does not exist: $launcher"
         # The kernel pin names the bzImage FILE (a store file path),
         # never the package directory (bd myconfig-q3se).
-        kernel=$(echo "$content" | tr -d "'" | awk '/--set MYSBX_MICROVM_QEMU_KERNEL/ {print $4; exit}')
+        kernel=$(echo "$content" | tr -d "'" | awk '/--set MYSBX_MICROVM_QEMU_KERNEL/ {print $3; exit}')
         case "$kernel" in
           /nix/store/*-mysbx-microvm-qemu-stub-kernel/bzImage) ;;
           *) fail "the pinned kernel is not the stub bzImage: $kernel" ;;
