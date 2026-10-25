@@ -684,51 +684,85 @@ class InitTests(unittest.TestCase):
             self.assertIn(expected, result.stdout,
                           f"the {form!r} probe: {result.stdout!r}")
 
+    def _ctty_probe(self, master, slave, launch):
+        # A session-leader waiter drives the launch line VERBATIM
+        # (via `set --`) over the console, exactly like the init.
+        # The payload must OPEN /dev/tty: existence pins nothing
+        # (/dev/tty exists in devtmpfs even with no ctty, so
+        # `test -e` passes either way), and a bare `exec 3</dev/tty`
+        # would succeed into a *new* session were the shell ever a
+        # leader — so the open happens inside a subshell, which can
+        # never acquire a ctty on its own. The outcome maps into
+        # the exit code: 5 = ctty acquired, 9 = open failed (ENXIO).
+        bb = shlex.quote(str(ROOTFS / "bin/busybox"))
+        script = (
+            "set -eu\n"
+            f"BB={bb}\n"
+            'set -- "$BB" sh -c '
+            + shlex.quote("(exec 3</dev/tty) && exit 5; exit 9")
+            + "\n"
+            "set +e\n"
+            f"{launch}\n"
+            "code=$?\n"
+            "set -e\n"
+            'exit "$code"\n'
+        )
+        proc = subprocess.Popen(
+            [str(ROOTFS / "bin/busybox"), "sh"],
+            stdin=slave, stdout=slave, stderr=slave,
+            start_new_session=True,  # the PID-1 shape: session leader
+            env={"PATH": ""},
+        )
+        # Feed the script on the console stdin.
+        os.write(master, script.encode())
+        try:
+            return proc.wait(timeout=20)
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+
     def test_the_exit_channel_payload_acquires_the_console_as_ctty(self):
         # bd myconfig-w8jd: PID 1 owns the session, so a plain child
-        # never gets a controlling terminal — /dev/tty is ENXIO, no
-        # job control, ^C reaches nobody. The launch wraps the
-        # payload in `setsid -c`: a new session leader with the
+        # never gets a controlling terminal — opening /dev/tty is
+        # ENXIO, no job control, ^C reaches nobody. The launch wraps
+        # the payload in `setsid -c`: a new session leader with the
         # console as ctty, exec'd in place so $? still carries the
         # payload's code. Live-probed on a pty in the EXACT PID-1
-        # shape: the session-leader waiter forks setsid -c as a
-        # non-leader (exec in place), the child opens /dev/tty.
+        # shape: the session-leader waiter forks the launch as a
+        # non-leader (exec in place), the child must OPEN /dev/tty
+        # and its code (5 = ctty, 9 = not) must reach the waiter.
         try:
             master, slave = pty.openpty()
         except OSError:
             self.skipTest("no pty in this environment")
         try:
-            bb = shlex.quote(str(ROOTFS / "bin/busybox"))
-            script = (
-                "set -eu\n"
-                f"BB={bb}\n"
-                "set +e\n"
-                '"$BB" setsid -c "$BB" sh -c \'test -e /dev/tty; exit 5\'\n'
-                "code=$?\n"
-                "set -e\n"
-                'exit "$code"\n'
-            )
-            proc = subprocess.Popen(
-                [str(ROOTFS / "bin/busybox"), "sh"],
-                stdin=slave, stdout=slave, stderr=slave,
-                start_new_session=True,  # the PID-1 shape: session leader
-                env={"PATH": ""},
-            )
-            os.close(slave)
-            # Feed the script on the console stdin.
-            os.write(master, script.encode())
-            rc = proc.wait(timeout=20)
-            # The payload exits 5 BY DESIGN: rc==5 proves BOTH
-            # halves at once — the /dev/tty open succeeded inside
-            # setsid -c (the ctty) AND the code propagated through
-            # setsid to the session-leader waiter. rc==0 would mean
-            # the test never ran its payload; 127 or 126 would mean
-            # the exec failed.
+            self.assertTrue('"$BB" setsid -c "$@"' in INIT,
+                            "the ctty launch line is gone from the init")
+            rc = self._ctty_probe(master, slave, '"$BB" setsid -c "$@"')
+            # rc==5 proves BOTH halves at once — the /dev/tty OPEN
+            # succeeded inside setsid -c (the ctty) AND the code
+            # propagated through setsid to the session-leader waiter.
+            # rc==9: no ctty (the regression this test exists for);
+            # rc==0: the payload never ran; 127/126: the exec failed.
             self.assertEqual(rc, 5,
                              "the ctty payload open failed (exit "
                              f"{rc}) or the code was lost")
+
+            # NEGATIVE CONTROL (review r4/3): the same probe against
+            # a launch with setsid STRIPPED — the exact regression
+            # shape — must yield the failure code, proving this
+            # test can fail at all. Without it, a vacuous probe
+            # (existence check, unconditional exit) passes both.
+            broken = INIT.replace('"$BB" setsid -c "$@"', '"$@"')
+            self.assertIsNot(broken, INIT,
+                             "the setsid launch line to strip is gone")
+            rc = self._ctty_probe(master, slave, '"$@"')
+            self.assertEqual(rc, 9,
+                             "the stripped-setsid launch must fail the "
+                             f"ctty open (exit {rc} instead of 9)")
         finally:
             os.close(master)
+            os.close(slave)
 
     def test_qemu_pid1_bootstrap_mounts_the_pty_shm_fd_and_lo_surface(self):
         # bd myconfig-af0j: the qemu PID-1 arm must complete the
