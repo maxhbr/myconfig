@@ -6,10 +6,13 @@
 # reverse proxy).
 #
 # The proxy requires no authentication (no master_key is configured, so
-# LiteLLM does not enforce API keys). This allows agent users —
-# including the network-isolated "offline" agent, which can only reach
-# loopback — to use AI models without credentials. The LiteLLM service
-# runs as a dynamic system user, so its outbound requests to the
+# LiteLLM does not enforce API keys). LiteLLM's master-key boot check
+# (it refuses to start with no master key) is satisfied by
+# general_settings.dangerously_permit_weak_or_unset_master_key, set in
+# services.litellm.nix for this credential-free setup. This allows agent
+# users — including the network-isolated "offline" agent, which can only
+# reach loopback — to use AI models without credentials. The LiteLLM
+# service runs as a dynamic system user, so its outbound requests to the
 # upstream are not subject to the offline agent's iptables egress block.
 #
 # Because a host using this pattern does not register any localModels

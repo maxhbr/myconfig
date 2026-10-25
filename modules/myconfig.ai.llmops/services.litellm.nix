@@ -102,6 +102,11 @@
       settings.general_settings = {
         disable_spend_logs = true;
         request_timeout = 3600; # 60 minutes, upstream default is 600s (10 min)
+        # LiteLLM refuses to start with no master key set. Every instance
+        # in this deployment is intentionally credential-free (loopback-only
+        # forwarding proxies, home-network local-models gateway), so permit
+        # the unset key instead of breaking the unauthenticated clients.
+        dangerously_permit_weak_or_unset_master_key = true;
         # GET /health sends a *real* chat completion ("test from litellm")
         # to every deployment, with unbounded parallelism by default
         # (asyncio.gather over the whole model_list). For on-demand local
