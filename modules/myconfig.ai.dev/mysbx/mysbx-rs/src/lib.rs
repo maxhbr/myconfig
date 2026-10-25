@@ -1623,6 +1623,52 @@ pub(crate) fn stdin_is_tty() -> bool {
     unsafe { isatty(0) != 0 }
 }
 
+/// The caller's terminal size, `ROWSxCOLS` (bd myconfig-a2uq): the
+/// microvm-qemu guest console is the ISA 16550 serial port
+/// (backends.md D9, bd myconfig-mbib), which carries NO winsize — the
+/// guest ctty reports a 0x0 grid, so herdr refuses to attach and fish
+/// renders blind. The pipeline reads the caller's winsize here and
+/// rides it through the manifest env
+/// (MYSBX_MICROVM_CONSOLE_SIZE=ROWSxCOLS); the guest init stty's the
+/// console from it. `None` when no fd 0/1/2 is a sized terminal — a
+/// piped run forwards no marker and the init skips its stty step.
+/// The same zero-dependency raw-extern idiom as `landlock_abi`
+/// (doctor.rs): TIOCGWINSZ only writes the 8-byte struct.
+pub(crate) fn console_size() -> Option<String> {
+    use std::os::raw::c_long;
+    #[repr(C)]
+    struct Winsize {
+        ws_row: u16,
+        ws_col: u16,
+        ws_xpixel: u16,
+        ws_ypixel: u16,
+    }
+    extern "C" {
+        fn syscall(num: c_long, ...) -> c_long;
+    }
+    #[cfg(target_arch = "x86_64")]
+    const SYS_IOCTL: c_long = 16;
+    #[cfg(target_arch = "aarch64")]
+    const SYS_IOCTL: c_long = 29;
+    const TIOCGWINSZ: u64 = 0x5413;
+    for fd in [0, 1, 2] {
+        let mut ws = Winsize {
+            ws_row: 0,
+            ws_col: 0,
+            ws_xpixel: 0,
+            ws_ypixel: 0,
+        };
+        // SAFETY: the ioctl writes only the 8-byte struct at `ws` and
+        // reads only the fd number; a non-tty fd returns -1 and writes
+        // nothing.
+        let rc = unsafe { syscall(SYS_IOCTL, fd as c_long, TIOCGWINSZ, &mut ws) };
+        if rc == 0 && ws.ws_row > 0 && ws.ws_col > 0 {
+            return Some(format!("{}x{}", ws.ws_row, ws.ws_col));
+        }
+    }
+    None
+}
+
 /// The git trust paths of a run (bd myconfig-zj2): exactly what the
 /// argv's section-5 workspace binds mount. `/*` suffix entries cover
 /// git repos the workspace contains (submodules, worktree checkouts
@@ -2614,7 +2660,21 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     }
 
     // 5. the argv — its single source is `bwrap::bwrap_argv` (mvp-4).
-    let host_env = collect_host_env(&merged);
+    let mut host_env = collect_host_env(&merged);
+    // The console size marker (bd myconfig-a2uq, backends.md D9): the
+    // qemu guest's serial console carries no winsize, so the caller's
+    // terminal size rides the manifest env instead — the init stty's
+    // the guest console from it before exec-ing the payload. Only the
+    // microvm-qemu backend reads and forwards it: the krun console
+    // (libkrun's proxy) carries a real size, and the bwrap/podman
+    // tiers set the pty size themselves. A run without a sized
+    // terminal (piped, cron) forwards no marker — the init skips its
+    // stty step and the one-shot probes stay unchanged.
+    if backend == "microvm-qemu" {
+        if let Some(size) = console_size() {
+            host_env.insert("MYSBX_MICROVM_CONSOLE_SIZE".to_owned(), size);
+        }
+    }
     // Without the Nix wrapper (item 6 pins MYSBX_SHELL and
     // MYSBX_TOOLS_PATH) the fallbacks are silent and deliberate: /bin/sh
     // for the interactive shell, /usr/bin (a base-bound path) for PATH —

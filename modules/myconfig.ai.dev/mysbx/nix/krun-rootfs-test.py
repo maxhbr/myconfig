@@ -794,6 +794,32 @@ class InitTests(unittest.TestCase):
         self.assertNotIn("mount -t devpts", after)
         self.assertNotIn("ip link set lo up", after)
 
+    def test_console_size_marker_applies_stty_to_the_console(self):
+        # bd myconfig-a2uq: the qemu guest's serial console carries no
+        # winsize — the init must stty the console from the manifest's
+        # MYSBX_MICROVM_CONSOLE_SIZE marker before the payload runs, and
+        # the step must be GATED (the krun guest and piped runs set no
+        # marker, and a malformed marker must never kill the init).
+        start = INIT.index('_csize="')
+        block = INIT[start:INIT.index('step "exec-ing the payload', start)]
+        for needle in (
+            'MYSBX_MICROVM_CONSOLE_SIZE',
+            'stty rows',
+        ):
+            self.assertIn(needle, block,
+                          f"the console-size step is missing: {needle}")
+        # A malformed marker skips the stty instead of failing the init
+        # (the 2>/dev/null || : on the stty line and the case arms),
+        # and the stty targets the console fd 0 by default.
+        self.assertIn('|| :', block,
+                      "the stty must not be fatal on a refused console")
+        self.assertNotIn("fail \"", block,
+                        "a bad marker must be ignored, never fatal")
+        # The step sits before the payload exec (the console must carry
+        # the size before the payload can observe it).
+        self.assertLess(INIT.index('_csize="'),
+                        INIT.index('step "exec-ing the payload'))
+
     def test_manifest_argv_records_replace_the_positionals(self):
         # bd myconfig-hq7k: the qemu run carries the payload through
         # the manifest's argv records (the stock kernel's `--`

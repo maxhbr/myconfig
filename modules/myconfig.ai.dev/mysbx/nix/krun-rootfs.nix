@@ -967,6 +967,34 @@ let
         ) &
     fi
 
+    # The console size (bd myconfig-a2uq): the qemu guest's serial
+    # console is a 16550 — it carries NO winsize, so the guest ctty
+    # reports a 0x0 grid and herdr refuses to attach (fish renders
+    # blind). The pipeline read the CALLER's terminal size and rode
+    # it through the manifest env; this stty applies it to the
+    # guest console before the payload runs, so interactive payloads
+    # see a real grid. Gated on the marker: the krun guest (libkrun's
+    # console proxy carries a real size) and piped runs never set it.
+    # The 16550 has no resize signaling either — the size is the
+    # boot-time snapshot; a host resize mid-session does not
+    # propagate (recorded in backends.md D9).
+    _csize="''${MYSBX_MICROVM_CONSOLE_SIZE:-}"
+    case "$_csize" in
+        x*|*x*x|*x) ;;
+        [0-9]*x[0-9]*)
+            _rows=''${_csize%%x*}
+            _cols=''${_csize#*x}
+            case "$_rows$_cols" in
+                *[!0-9]*) ;;
+                *)
+                    if [ "$_rows" -ge 1 ] && [ "$_cols" -ge 1 ]; then
+                        "$BB" stty rows "$_rows" cols "$_cols" 2>/dev/null || :
+                    fi
+                    ;;
+            esac
+            ;;
+    esac
+
     step "exec-ing the payload: $1"
     if [ -n "$exit_channel" ]; then
         # The exit channel (the qemu bridge): the payload runs as a

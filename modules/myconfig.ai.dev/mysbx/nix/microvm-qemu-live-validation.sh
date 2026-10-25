@@ -201,4 +201,44 @@ run sh -c 'ip link show lo | grep -q ",UP,"' ||
     fail "10 guest bootstrap" "lo is not administratively up — 127.0.0.1 is not bindable"
 pass "10 guest bootstrap: devpts + shm + fd + lo up"
 
+# 11. the console size (bd myconfig-a2uq): the 16550 serial console
+# carries NO winsize, so the guest ctty reports a 0x0 grid and herdr
+# refuses to attach (the live finding of this validation). The fix
+# rides the manifest env: the pipeline reads the caller's terminal
+# size (MYSBX_MICROVM_CONSOLE_SIZE=ROWSxCOLS) and the init stty's
+# the console from it. This probe runs the sandbox payload under a
+# sized pty (util-linux script): the guest must report the pty's
+# rows/cols, never 0x0.
+if command -v script >/dev/null 2>&1 && command -v stty >/dev/null 2>&1; then
+    ptylog=$(mktemp)
+    # The outer size: the runbook's own terminal when interactive,
+    # a 24x80 fallback when piped — script sizes its pty from the
+    # current terminal.
+    rows=$(stty size </dev/tty 2>/dev/null | cut -d' ' -f1)
+    cols=$(stty size </dev/tty 2>/dev/null | cut -d' ' -f2)
+    [ -n "${cols:-}" ] || {
+        rows=24
+        cols=80
+    }
+    # A DISTINCTIVE marker: the boot log's bracketed timestamps and
+    # the memory map would false-match a bare number pair, the
+    # WINSIZE- prefix cannot. The pty's size is PINNED first: a
+    # piped runbook gets script's default 0x0 pty, the pipeline
+    # would forward no marker and the probe would false-fail —
+    # stty-ing the pty before the run fixes both the interactive
+    # and the piped case to the same $rows x $cols.
+    # shellcheck disable=SC2016 # $(stty size) runs inside the sandbox
+    script -qec "\
+stty rows $rows cols $cols; \\
+${mysbx} run --backend microvm-qemu -- sh -c 'echo \"WINSIZE-\$(stty size)\"' \\
+" "$ptylog" >/dev/null 2>&1 || true
+    got=$(sed -n 's/.*WINSIZE-\([0-9]* [0-9]*\).*/\1/p' "$ptylog" | tail -n 1)
+    rm -f "$ptylog"
+    [ "$got" = "$rows $cols" ] ||
+        fail "11 console size" "the guest stty reports '${got:-nothing}', not the caller's '$rows $cols' — the manifest size marker did not reach the init's stty"
+    pass "11 console size: the guest console carries the caller's $rows x $cols"
+else
+    printf 'SKIP 11 console size — util-linux script/stty is not on PATH\n' >&2
+fi
+
 printf 'microvm-qemu live validation: all probes passed\n'
