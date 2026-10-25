@@ -118,7 +118,7 @@ fn run(cfg: &Merged, repo: &Repo, payload: &Payload, params: &Params<'_>) -> Vec
         "tests/assets/microvm-qemu/resolv.conf",
     );
     let host_env = BTreeMap::new();
-    microvm_qemu_argv(cfg, repo, payload, &host_env, params, KERNEL)
+    microvm_qemu_argv(cfg, repo, payload, &host_env, params, KERNEL, &[])
         .unwrap_or_else(|e| panic!("the argv builds: {e}"))
 }
 
@@ -433,6 +433,83 @@ fn a_scratch_param_renders_the_flag_and_the_announcement() {
 }
 
 #[test]
+fn backend_env_pins_ride_after_the_layers_and_win_over_config() {
+    // MYSBX_MICROVM_QEMU_ENV (bd myconfig-mzys): the pins are emitted
+    // as --env after the config layers' `[env]` (so a pin wins over a
+    // configured value) and before the SLiRP NIC marker and the
+    // infrastructure entries the shared spec owns. The model
+    // endpoint is the consumer: the SLiRP guest's loopback is its
+    // own, the pins repoint the URL at the gateway `10.0.2.2`.
+    let mut cfg = base(true);
+    cfg.env.insert(
+        "OPENAI_BASE_URL".to_owned(),
+        "http://localhost:4000/v1".to_owned(),
+    );
+    let pins = vec![
+        "OPENAI_BASE_URL=http://10.0.2.2:4000/v1".to_owned(),
+        "MYCONFIG_LITELLM_BASE_URL=http://10.0.2.2:4000/v1".to_owned(),
+    ];
+    let argv = microvm_qemu_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &BTreeMap::new(),
+        &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
+        KERNEL,
+        &pins,
+    )
+    .unwrap();
+    // Both the configured value and the pin appear — the pin AFTER
+    // the layers, so the guest init's later export of the same key
+    // wins (the manifest env is applied in record order).
+    let positions: Vec<usize> = argv
+        .iter()
+        .enumerate()
+        .filter(|(_, a)| a.starts_with("OPENAI_BASE_URL="))
+        .map(|(i, _)| i)
+        .collect();
+    assert_eq!(
+        positions.len(),
+        2,
+        "the configured value and the pin must both ride: {argv:?}"
+    );
+    assert_eq!(
+        argv[positions[0]], "OPENAI_BASE_URL=http://localhost:4000/v1",
+        "the config layer comes first"
+    );
+    assert_eq!(
+        argv[positions[1]], "OPENAI_BASE_URL=http://10.0.2.2:4000/v1",
+        "the pin comes after the layer and wins in the guest"
+    );
+    assert!(argv
+        .windows(2)
+        .any(|w| w[0] == "--env" && w[1] == "MYCONFIG_LITELLM_BASE_URL=http://10.0.2.2:4000/v1"));
+    // The pins sit BEFORE the qemu-only SLiRP NIC marker — the same
+    // placement rule the podman arm gives its MYSBX_PODMAN_ENV pins
+    // (after the layers, before the infrastructure).
+    let pin_pos = argv
+        .iter()
+        .position(|a| a == "MYCONFIG_LITELLM_BASE_URL=http://10.0.2.2:4000/v1")
+        .unwrap();
+    let net_pos = argv
+        .iter()
+        .position(|a| a == "MYSBX_MICROVM_NET=1")
+        .expect("the shared run carries the SLiRP NIC marker");
+    assert!(pin_pos < net_pos, "the pins must precede the NIC marker");
+    // No pins, no divergence: the empty-pins argv is the golden
+    // shape (the parity test pins it byte-for-byte).
+    let bare = run(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
+    );
+    assert!(!bare
+        .windows(2)
+        .any(|w| w[0] == "--env" && w[1].starts_with("OPENAI_BASE_URL=http://10.0.2.2")));
+}
+
+#[test]
 fn a_pids_limit_is_refused() {
     // The shared refusal surface: a pids-limit the whole VM cannot
     // express is refused, never dropped silently (D9).
@@ -445,6 +522,7 @@ fn a_pids_limit_is_refused() {
         &BTreeMap::new(),
         &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
         KERNEL,
+        &[],
     )
     .unwrap_err();
     assert_eq!(err, mysbx::krun::Error::PidsLimit { pids: 100 });
@@ -461,6 +539,7 @@ fn a_session_multiplexer_without_an_entry_is_refused() {
         &BTreeMap::new(),
         &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
         KERNEL,
+        &[],
     )
     .unwrap_err();
     assert_eq!(
@@ -486,6 +565,7 @@ fn a_dest_below_an_unbaked_share_root_is_refused() {
         &BTreeMap::new(),
         &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
         KERNEL,
+        &[],
     )
     .unwrap_err();
     assert!(
@@ -510,6 +590,7 @@ fn limits_size_the_vm() {
         &BTreeMap::new(),
         &p,
         KERNEL,
+        &[],
     )
     .unwrap();
     assert!(argv.windows(2).any(|w| w[0] == "--cpus" && w[1] == "4"));

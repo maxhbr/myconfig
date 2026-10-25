@@ -390,6 +390,33 @@ let
       throw "mysbx generated-config test: a host without the forwarder pinned backend env (${builtins.toJSON off.env})"
     else
       "ok";
+  # The microvm-qemu backend's env pins (bd myconfig-mzys): the
+  # SLiRP guest's loopback is its own, so the module must pin the
+  # model endpoint at the SLiRP gateway `10.0.2.2` — which maps to
+  # the HOST loopback, where the loopback-only LiteLLM proxy listens
+  # — whenever the host runs litellm, and pin NOTHING on a host that
+  # does not. Checked here like `gvisorPinGate` above: both are
+  # options, not file content.
+  qemuEnvGate =
+    let
+      qemuOf = extraModules: (evaluated extraModules).myconfig.ai.dev.mysbx.microvm-qemu;
+      on = qemuOf [
+        {
+          services.litellm = {
+            enable = true;
+            port = 4000;
+          };
+        }
+      ];
+      off = qemuOf [ { } ];
+      expected = "http://10.0.2.2:4000/v1";
+    in
+    if (on.env.OPENAI_BASE_URL or null) != expected then
+      throw "mysbx generated-config test: the qemu backend env does not carry the SLiRP-gateway endpoint (got ${builtins.toJSON on.env})"
+    else if off.env != { } then
+      throw "mysbx generated-config test: a host without litellm pinned qemu backend env (${builtins.toJSON off.env})"
+    else
+      "ok";
   # The podman-krun runtime pin (docs/design/backends.md D2, bd
   # myconfig-6di.5.2): the wrapper must carry the crun+libkrun store
   # path (MYSBX_KRUN_RUNTIME), so `backend = "podman-krun"` runs the
@@ -545,6 +572,7 @@ pkgs.runCommand "mysbx-generated-config-test"
     inherit
       assertionGate
       gvisorPinGate
+      qemuEnvGate
       krunPinGate
       krunNestedPodmanGate
       krunNixGate
