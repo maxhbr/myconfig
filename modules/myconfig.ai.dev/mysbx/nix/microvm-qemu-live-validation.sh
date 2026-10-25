@@ -168,8 +168,12 @@ run test -d /dev/shm ||
     fail "10 guest bootstrap" "no /dev/shm tmpfs"
 run test -e /dev/fd/0 ||
     fail "10 guest bootstrap" "no /dev/fd link"
-run sh -c 'ip link show lo | grep -q "state UP"' ||
-    fail "10 guest bootstrap" "lo is not up — 127.0.0.1 is not bindable"
+# lo reports 'state UNKNOWN' even when administratively UP (both
+# iproute2 and the guest's busybox ip) — the operative token is the
+# flags word: ',UP,' cannot false-match LOWER_UP (no leading
+# comma) (bd myconfig-xxmy).
+run sh -c 'ip link show lo | grep -q ",UP,"' ||
+    fail "10 guest bootstrap" "lo is not administratively up — 127.0.0.1 is not bindable"
 pass "10 guest bootstrap: devpts + shm + fd + lo up"
 
 printf 'microvm-qemu live validation: all probes passed\n'
