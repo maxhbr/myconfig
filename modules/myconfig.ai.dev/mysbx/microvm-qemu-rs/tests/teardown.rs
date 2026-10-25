@@ -167,8 +167,10 @@ fn a_readiness_timeout_kills_the_daemons_and_sweeps_the_dir() {
         &virtiofsd,
         "#!/bin/sh
 # A stub virtiofsd that serves NOTHING: no socket file, just a
-# sleep the launcher's kill must reach.
-sleep 600
+# sleep the launcher's kill must reach — EXEC so the killed pid IS
+# the sleeper (a bare child sleep would be reparented and outlive
+# the launcher, bd myconfig-6mkm).
+exec sleep 600
 ",
     )
     .expect("the silent stub");
