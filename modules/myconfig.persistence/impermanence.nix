@@ -428,7 +428,6 @@ in
         "${persistentPrivDir}/etc/ssh/ssh_host_rsa_key"
       ];
 
-      boot.initrd.systemd.enable = true;
       boot.initrd.systemd.services.impermanence-setup = {
         description = "Impermanence initrd preparation";
 

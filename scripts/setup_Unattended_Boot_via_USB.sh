@@ -77,7 +77,19 @@ echo "  # generic mass-storage driver.  Add uas if your stick uses the UAS proto
 echo '  boot.initrd.kernelModules = [ "xhci_pci" "ehci_pci" "usb_storage" ];'
 echo ""
 echo "  # Give USB time to enumerate before the key is read."
-echo '  boot.initrd.postDeviceCommands = lib.mkBefore '"''"'sleep 2'"''"';'
+echo "  # systemd stage 1 is the only stage 1 left, so this is a unit, not a"
+echo "  # boot.initrd.*Commands hook (those were removed with scripted stage 1)."
+echo '  boot.initrd.systemd.services.wait-for-usb-key = {'
+echo '    description = "Give USB time to enumerate before the LUKS key is read";'
+echo '    wantedBy = [ "systemd-cryptsetup@luksroot.service" ];'
+echo '    before = [ "systemd-cryptsetup@luksroot.service" ];'
+echo '    serviceConfig = {'
+echo '      Type = "oneshot";'
+echo '      RemainAfterExit = true;'
+# shellcheck disable=SC2016 # emitted verbatim: this is Nix, not shell
+echo '      ExecStart = "${pkgs.coreutils}/bin/sleep 2";'
+echo '    };'
+echo '  };'
 echo ""
 echo "  boot.initrd.luks.devices = {"
 echo "    luksroot = {"

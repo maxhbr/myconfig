@@ -16,8 +16,6 @@
       observability.client.enable = true;
     };
 
-    boot.initrd.systemd.enable = true;
-
     networking.hostName = "optiplex";
     # Random 8 hex digits (only needs to be stable and unique on this LAN,
     # e.g. for ZFS host-identification purposes; not otherwise meaningful).

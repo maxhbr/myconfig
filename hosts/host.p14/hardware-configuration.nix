@@ -26,8 +26,6 @@
     options = [ "subvol=@" ];
   };
 
-  # Give USB time to enumerate before the key is read.
-  boot.initrd.systemd.enable = true;
   boot.initrd.systemd.services.wait-for-usb-key = {
     description = "Give USB time to enumerate before the LUKS key is read";
     wantedBy = [ "systemd-cryptsetup@enc\\x2dpv.service" ];
@@ -41,7 +39,6 @@
 
   boot.initrd.luks.devices."enc-pv" = {
     device = "/dev/disk/by-uuid/50d4205b-70d1-4836-99e3-6cb568e832bb";
-    preLVM = true;
     allowDiscards = true;
     keyFileSize = 4096;
     keyFile = "/dev/disk/by-id/usb-SanDisk_Ultra_Fit_4C530001100720106492-0:0";
