@@ -480,6 +480,7 @@ in
         chmod +x $out/bin/mysbx-init
       '';
       stubKernelPkg = pkgs.runCommand "mysbx-microvm-qemu-stub-kernel" { } ''
+        mkdir $out
         printf 'stub-bzImage' > $out/bzImage
       '';
       stubKernel = "${stubKernelPkg}/bzImage";
@@ -526,7 +527,7 @@ in
         # And the module wiring passes the member: the line in
         # default.nix that feeds the wrapper's kernel pin must name
         # the bzImage INSIDE the package, never the package itself.
-        wiring=$(grep -n 'microvmQemuKernel = ' ${../../default.nix} \
+        wiring=$(grep -n 'microvmQemuKernel = ' ${../default.nix} \
           || fail "the module wiring (default.nix microvmQemuKernel) is gone")
         echo "$wiring" | grep -q '/bzImage"' \
           || fail "the module wiring does not pin the bzImage member: $wiring"
