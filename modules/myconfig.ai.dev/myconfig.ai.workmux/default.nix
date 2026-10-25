@@ -296,10 +296,30 @@ in
           home.file.".pi/agent/extensions/workmux-status.ts".source =
             srcFile "resources/pi/extensions/workmux-status.ts";
         })
+        # OpenCode 2 replaced the V1 plugin API: a plugin file that only
+        # exports a callable (the old `export const WorkmuxStatusPlugin =
+        # async ({ $, client }) => …`) is rejected with
+        # `Plugin must export a default definition with an id and an effect or
+        # setup function` and never runs. Upstream ships the V2 port as a
+        # DIRECTORY of three modules (`resources/opencode/v2/workmux-status/`),
+        # which is also where `workmux setup` installs it for OpenCode 2, and
+        # the status tracking narrowed to the terminal client's own plugin
+        # (`tui.ts`, `@opencode/plugin/tui`). The `package.json` drops out: it
+        # only pinned `@opencode-ai/plugin` for the V1 file, and OpenCode
+        # resolves `@opencode/plugin` (and `/tui`) from its own runtime.
         (lib.mkIf aiCfg.opencode.enable {
-          home.file.".config/opencode/package.json".source = srcFile "resources/opencode/package.json";
-          home.file.".config/opencode/plugins/workmux-status.ts".source =
-            srcFile "resources/opencode/plugins/workmux-status.ts";
+          home.file = builtins.listToAttrs (
+            lib.map
+              (name: {
+                name = ".config/opencode/plugins/workmux-status/${name}";
+                value.source = srcFile "resources/opencode/v2/workmux-status/${name}";
+              })
+              [
+                "index.ts"
+                "status.ts"
+                "tui.ts"
+              ]
+          );
         })
         (lib.mkIf aiCfg.codex.enable {
           programs.codex.hooks = codexStatusHooks;

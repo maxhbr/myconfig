@@ -147,8 +147,13 @@ let
 
       # --- 3. opencode overlay config ------------------------------------
       # Deep-merged by opencode ON TOP of the copied global config, so only the
-      # provider block needs to be written. `npm`/`options` are repeated so the
-      # overlay also stands on its own if the global copy is absent.
+      # provider block needs to be written. `package`/`settings` are repeated so
+      # the overlay also stands on its own if the global copy is absent; the
+      # v2 `providers` spelling matches what `programs.opencode` renders. The
+      # context window goes into `limit` — `limit.context` is the field opencode
+      # reads (`contextWindowSize` is in no schema and was silently dropped);
+      # `limit.output` is required by the 1.x schema, and the context is the
+      # honest upper bound for it.
       mkdir -p -- "$OUT_DIR"
       opencode_tmp=$(mktemp "$OUT_DIR/opencode.json.XXXXXX")
       jq -n \
@@ -159,13 +164,16 @@ let
           --arg name "$PROVIDER_NAME" \
           --arg base "$ENDPOINT/v1" \
           '{
-             provider: {
+             providers: {
                ($key): {
-                 npm: "@ai-sdk/openai-compatible",
+                 package: "aisdk:@ai-sdk/openai-compatible",
                  name: $name,
-                 options: { baseURL: $base },
+                 settings: { baseURL: $base },
                  models: ( $ids
-                           | map({ key: ., value: { name: ., contextWindowSize: ($cw[.] // $dcw) } })
+                           | map({ key: .,
+                                   value: { name: .,
+                                            limit: { context: ($cw[.] // $dcw),
+                                                     output: ($cw[.] // $dcw) } } })
                            | from_entries )
                }
              }

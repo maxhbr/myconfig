@@ -7,12 +7,12 @@
   name,
   pkg,
   extraRuntimeInputs ? [ ],
+  # Config dirs bound READ-ONLY into the jail, at the same `~`-relative path.
   readOnlyConfigDirs ? [ ],
-  writableDirs ? [
-    ".local/share"
-    ".cache"
-    ".local/state"
-  ],
+  # Dirs bound READ-WRITE, at the same `~`-relative path. They are created and
+  # deduplicated against the XDG dirs that are always bound below, so the
+  # default list and an explicit entry may overlap.
+  writableDirs ? [ ],
   extraBwrapArgs ? [ ],
   envVars ? { },
   shareNet ? true,
@@ -28,11 +28,32 @@ let
   # and ./nono-app.nix carry it.
   runtimeInputs = [ pkgs.curl ] ++ extraRuntimeInputs;
 
-  readOnlyDirsStr = lib.concatMapStringsSep " " (dir: ''"$HOME/${dir}"'') readOnlyConfigDirs;
+  # The XDG dirs are always bound writable, at their (possibly non-default)
+  # variable paths: a tool that honours a custom `XDG_STATE_HOME` must find it
+  # writable too. `writableDirs` entries are relative to `$HOME`, so the three
+  # default spellings are filtered out here to avoid binding a path twice
+  # (bubblewrap rejects a duplicate destination).
+  xdgWritableDirs = [
+    ".local/share"
+    ".cache"
+    ".local/state"
+  ];
+  extraWritableDirs = lib.subtractLists xdgWritableDirs writableDirs;
+
+  # The bind SOURCES are host paths and must exist before bubblewrap runs
+  # (bubblewrap creates missing DESTINATION parents itself, including below the
+  # `--tmpfs "$HOME"`).
+  mkdirArgs = lib.concatMapStringsSep "\n    " (dir: ''mkdir -p "$HOME/${dir}"'') (
+    lib.unique (readOnlyConfigDirs ++ writableDirs)
+  );
 
   roBindArgs = lib.concatMapStringsSep "\n      " (
     dir: ''--ro-bind "$HOME/${dir}" "$HOME/${dir}"''
   ) readOnlyConfigDirs;
+
+  rwBindArgs = lib.concatMapStringsSep "\n      " (
+    dir: ''--bind "$HOME/${dir}" "$HOME/${dir}"''
+  ) extraWritableDirs;
 
   envArgs = lib.concatStringsSep "\n      " (
     lib.mapAttrsToList (k: v: ''--setenv ${k} "${v}"'') envVars
@@ -52,7 +73,7 @@ pkgs.writeShellApplication {
     XDG_CACHE_HOME="''${XDG_CACHE_HOME:-$HOME/.cache}"
     XDG_STATE_HOME="''${XDG_STATE_HOME:-$HOME/.local/state}"
 
-    ${lib.optionalString (readOnlyConfigDirs != [ ]) "mkdir -p ${readOnlyDirsStr}"}
+    ${mkdirArgs}
     mkdir -p "$XDG_DATA_HOME" "$XDG_CACHE_HOME" "$XDG_STATE_HOME"
 
     # NOTE: `/run` is intentionally *not* bound into the sandbox. A blanket
@@ -81,9 +102,10 @@ pkgs.writeShellApplication {
       --dir "$HOME/.cache"
 
       ${roBindArgs}
-      --bind "$XDG_DATA_HOME"  "$XDG_DATA_HOME"
+      --bind "$XDG_DATA_HOME" "$XDG_DATA_HOME"
       --bind "$XDG_CACHE_HOME" "$XDG_CACHE_HOME"
       --bind "$XDG_STATE_HOME" "$XDG_STATE_HOME"
+      ${rwBindArgs}
 
       --bind "$PWD_REAL" "$PWD_REAL"
       --chdir "$PWD_REAL"

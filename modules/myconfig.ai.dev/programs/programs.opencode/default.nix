@@ -170,22 +170,73 @@ let
   mysbxOpencodeMounts =
     (sandboxConfigLib.mkSandboxConfig {
       homeFile = hmHomeFile;
-      subtrees = [
-        # The generated config (providers, permission rules, agents,
-        # commands, skills — everything the `programs.opencode` block below
-        # writes below `~/.config/opencode`) — always populated because
-        # the `settings` set below is non-empty, so Home Manager writes
-        # at least `opencode/opencode.json`.
-        ".config/opencode"
-      ]
-      # MCP server definitions, activated by `enableMcpIntegration` below.
-      # The whole `mcp` directory rather than the single file: one mount
-      # covers whatever Home Manager writes there.
-      ++ lib.optional (hmMcpServers != { }) ".config/mcp";
+      # The deployed CHILDREN of `.config/opencode`, not the dir itself.
+      # OpenCode 2's terminal client and background service write
+      # `.config/opencode/service.json` (a per-installation lock + password)
+      # on first start, so a read-only mount of the whole config dir makes
+      # every invocation die with `EROFS … service.json.tmp` before it serves
+      # anything (verified against opencode 2.1.1; the same reason the agent
+      # modules mount their config dir per child, see
+      # ../programs.claude-code). Leaving the dir root in the sandbox's
+      # writable tmpfs home gives OpenCode somewhere to put that file while
+      # everything Home Manager deploys below it stays read-only.
+      subtrees =
+        sandboxConfigLib.childSubtrees {
+          homeFile = hmHomeFile;
+          homeDirectory = hmHomeDirectory;
+          extraFiles = mysbxOpencodeSkillsBundle;
+          dir = ".config/opencode";
+        }
+        # MCP server definitions, activated by `enableMcpIntegration` below.
+        # The whole `mcp` directory rather than the single file: one mount
+        # covers whatever Home Manager writes there (and nothing writes to it
+        # at run time).
+        ++ lib.optional (hmMcpServers != { }) ".config/mcp";
       name = "opencode-sandbox-config";
       homeDirectory = hmHomeDirectory;
       extraFiles = mysbxOpencodeSkillsBundle;
     }).mounts;
+
+  # opencode's model catalog entry for one model: its display name plus, when
+  # the publisher knows it, the context window. `limit` is the field OpenCode
+  # reads (`Config.ModelEncoded.limit`, 1.x and 2.x alike); the
+  # `contextWindowSize` key this module used to emit is in neither schema, so
+  # OpenCode silently dropped it and every model advertised as unknown-context.
+  #
+  # `limit.output` is required by the 1.x schema and optional in 2.x. A
+  # completion cannot be longer than the per-request context, so the context is
+  # the honest upper bound here.
+  mkModelEntry =
+    modelName: contextWindow:
+    {
+      name = modelName;
+    }
+    // lib.optionalAttrs (contextWindow != null) {
+      limit = {
+        context = contextWindow;
+        output = contextWindow;
+      };
+    };
+
+  # `localModels` may contain plain strings or `{ name, kind, contextWindow }`
+  # submodules (`kind` is one of "base"/"variant"/"alias", computed by the
+  # publisher). Flatten both shapes into `{ name, contextWindow }`; opencode
+  # treats every name the same, so the kind tag is ignored here.
+  flattenModels =
+    modelNames:
+    lib.map (
+      m:
+      if builtins.isAttrs m then
+        {
+          name = m.name;
+          contextWindow = m.contextWindow or null;
+        }
+      else
+        {
+          name = m;
+          contextWindow = null;
+        }
+    ) modelNames;
 
   # Build a lookup: model name (raw or provider-prefixed) -> contextWindow.
   contextWindowLookup = lib.listToAttrs (
@@ -194,11 +245,10 @@ let
       let
         hostPort = "${provider.host}:${toString provider.port}";
         providerName = if provider.name != null then provider.name else hostPort;
-        rawModels = if provider.models != [ ] then provider.models else [ ];
       in
       lib.concatMap (
         m:
-        if builtins.isAttrs m && m.contextWindow != null then
+        if m.contextWindow != null then
           [
             {
               name = m.name;
@@ -211,7 +261,7 @@ let
           ]
         else
           [ ]
-      ) rawModels
+      ) (flattenModels (if provider.models != [ ] then provider.models else [ ]))
     ) osconfig.myconfig.ai.llmops.localModels
   );
 in
@@ -249,11 +299,16 @@ in
       # carrying nothing but the provider's `baseURL` replaces that one
       # key and leaves the rest of the mounted configuration in place.
       #
+      # Same native-v2 `providers.<id>.settings` shape as the `settings`
+      # block below (a v1 `provider.<id>.options` fragment would still merge,
+      # but mixing both shapes for one provider is exactly what the
+      # migration guide warns about).
+      #
       # `podman.env` reaches that backend ALONE / the bubblewrap backend
       # shares the host network namespace, where the baked URL is right.
       podman.env = lib.mkIf osconfig.myconfig.ai.dev.litellm-forwarder.enable {
         OPENCODE_CONFIG_CONTENT = builtins.toJSON {
-          provider."${osconfig.networking.hostName}-litellm".options.baseURL =
+          providers."${osconfig.networking.hostName}-litellm".settings.baseURL =
             osconfig.myconfig.ai.dev.litellm-forwarder.endpoint;
         };
       };
@@ -274,42 +329,97 @@ in
             enableMcpIntegration = true;
             web.enable = true;
 
+            # Native OpenCode 2 shape: `update`, `permissions`, `providers`,
+            # `agents`, `policies`. The deprecated v1 spellings (`autoupdate`,
+            # `permission`, `provider`, `small_model`, `disabled_providers`)
+            # are gone on purpose — keeping both would mean two sources of
+            # truth for the same setting.
+            #
+            # This is also what `pkgs.opencode` pins: nixpkgs tracks OpenCode
+            # 2.x, so the module never has to serve a 1.x package. (For the
+            # record, 1.19.0 rejects the whole document on an unknown
+            # top-level key rather than ignoring it; putting a 1.x package
+            # behind this block would need the v1 spellings back.)
             settings = {
-              "autoupdate" = false;
+              # `false` (v1) and `"disable"` (v2) mean the same thing; the
+              # schema of neither version accepts the other's spelling.
+              "update" = "disable";
               "share" = "disabled";
-              "permission" = lib.mkForce {
-                "bash" = {
-                  "*" = "ask";
-                  "head *" = "allow";
-                  "tail *" = "allow";
-                  "git add *" = "allow";
-                  "git status *" = "allow";
-                  "git log *" = "allow";
-                  "git diff *" = "allow";
-                  "nix flake check *" = "allow";
-                  "nix flake *" = "allow";
-                  "nix fmt" = "allow";
-                  "nix fmt *" = "allow";
-                  "nix build --dry-run *" = "allow";
-                  "nix-instantiate *" = "allow";
-                  "go build *" = "allow";
-                  "go test *" = "allow";
-                  "go generate *" = "allow";
-                  "go fmt *" = "allow";
-                  "go vet *" = "allow";
-                  "npm run dev *" = "allow";
-                  "npm run build *" = "allow";
-                  "npm run lint *" = "allow";
-                  "npm test *" = "allow";
-                  "ls *" = "allow";
-                  "grep *" = "allow";
-                  "rg *" = "allow";
-                  "find *" = "allow";
-                  "mkdir *" = "allow";
-                };
-                "edit" = "ask";
-              };
-              "provider" = lib.mkMerge [
+              # Ordered rule list: the LAST matching rule wins, so the broad
+              # `ask` comes first and the allowlist after it (v1 was a map per
+              # tool, v2 an ordered array; `bash` is called `shell` in v2).
+              #
+              # `external_directory` restores the v1 posture: v2 allows paths
+              # outside the project by DEFAULT and only asks when a rule says
+              # so, so without this rule an upgrade silently widens what the
+              # agent may touch.
+              "permissions" = lib.mkForce (
+                [
+                  {
+                    action = "shell";
+                    resource = "*";
+                    effect = "ask";
+                  }
+                ]
+                ++
+                  lib.map
+                    (cmd: {
+                      action = "shell";
+                      resource = cmd;
+                      effect = "allow";
+                    })
+                    [
+                      "head *"
+                      "tail *"
+                      "git add *"
+                      "git status *"
+                      "git log *"
+                      "git diff *"
+                      "nix flake check *"
+                      "nix flake *"
+                      "nix fmt"
+                      "nix fmt *"
+                      "nix build --dry-run *"
+                      "nix-instantiate *"
+                      "go build *"
+                      "go test *"
+                      "go generate *"
+                      "go fmt *"
+                      "go vet *"
+                      "npm run dev *"
+                      "npm run build *"
+                      "npm run lint *"
+                      "npm test *"
+                      "ls *"
+                      "grep *"
+                      "rg *"
+                      "find *"
+                      "mkdir *"
+                    ]
+                ++ [
+                  {
+                    action = "edit";
+                    resource = "*";
+                    effect = "ask";
+                  }
+                  {
+                    action = "external_directory";
+                    resource = "*";
+                    effect = "ask";
+                  }
+                ]
+              );
+              # `disabled_providers` (v1, deprecated) is a provider policy in
+              # v2. The v1 field is still normalised by both versions, but the
+              # policy is the native spelling and it is what `policies` is for.
+              "policies" = [
+                {
+                  action = "provider.use";
+                  resource = "opencode";
+                  effect = "deny";
+                }
+              ];
+              "providers" = lib.mkMerge [
                 (lib.mkIf (osconfig.myconfig.ai.llmops.localModels != [ ]) (
                   builtins.listToAttrs (
                     lib.map (
@@ -317,40 +427,21 @@ in
                       let
                         hostPort = "${model.host}:${toString model.port}";
                         providerName = if model.name != null then model.name else hostPort;
-                        # localModels may contain plain strings or
-                        # `{ name, kind ? null }` submodules (`kind` is one
-                        # of "base"/"variant"/"alias"/null, computed by the
-                        # publisher); flatten both shapes to a string list
-                        # for the opencode `models` map. opencode treats
-                        # every name the same, so the kind tag is ignored
-                        # here.
-                        rawModels = if model.models != [ ] then model.models else [ providerName ];
-                        modelNames = lib.map (m: if builtins.isAttrs m then m.name else m) rawModels;
+                        models = flattenModels (if model.models != [ ] then model.models else [ providerName ]);
                       in
                       {
                         name = "local-${providerName}";
                         value = {
-                          "npm" = "@ai-sdk/openai-compatible";
+                          "package" = "aisdk:@ai-sdk/openai-compatible";
                           "name" = "${hostPort}";
-                          "options" = {
+                          "settings" = {
                             "baseURL" = "http://${hostPort}/v1";
                           };
                           "models" = builtins.listToAttrs (
-                            lib.map (
-                              modelName:
-                              let
-                                cw = contextWindowLookup.${modelName} or null;
-                              in
-                              {
-                                name = modelName;
-                                value = {
-                                  "name" = modelName;
-                                }
-                                // lib.optionalAttrs (cw != null) {
-                                  "contextWindowSize" = cw;
-                                };
-                              }
-                            ) modelNames
+                            lib.map (m: {
+                              name = m.name;
+                              value = mkModelEntry m.name m.contextWindow;
+                            }) models
                           );
                         };
                       }
@@ -367,12 +458,7 @@ in
                         in
                         {
                           name = model.model_name;
-                          value = {
-                            "name" = model.model_name;
-                          }
-                          // lib.optionalAttrs (cw != null) {
-                            "contextWindowSize" = cw;
-                          };
+                          value = mkModelEntry model.model_name cw;
                         }
                       ) osconfig.services.litellm.settings.model_list
                     );
@@ -383,9 +469,9 @@ in
                   in
                   {
                     "${osconfig.networking.hostName}-litellm" = {
-                      "npm" = "@ai-sdk/openai-compatible";
+                      "package" = "aisdk:@ai-sdk/openai-compatible";
                       "name" = "LiteLLM (${osconfig.networking.hostName})";
-                      "options" = {
+                      "settings" = {
                         "baseURL" = "http://${litellmHost}:${toString osconfig.services.litellm.port}/v1";
                       };
                       "models" = opencodeModels;
@@ -402,21 +488,16 @@ in
                         in
                         {
                           name = model;
-                          value = {
-                            "name" = model;
-                          }
-                          // lib.optionalAttrs (cw != null) {
-                            "contextWindowSize" = cw;
-                          };
+                          value = mkModelEntry model cw;
                         }
                       ) (builtins.attrNames osconfig.services.llama-swap.settings.models)
                     );
                   in
                   {
                     "llama-swap" = {
-                      "npm" = "@ai-sdk/openai-compatible";
+                      "package" = "aisdk:@ai-sdk/openai-compatible";
                       "name" = "llama-swap";
-                      "options" = {
+                      "settings" = {
                         "baseURL" = "http://localhost:${toString osconfig.services.llama-swap.port}/v1";
                       };
                       "models" = llamaSwapModels;
@@ -424,12 +505,16 @@ in
                   }
                 ))
               ];
-              "disabled_providers" = [
-                "opencode"
-              ];
             };
-            tui = {
-              "theme" = "system";
+            # Terminal-client settings live in `cli.json` as of OpenCode 2, and
+            # its `theme` is an object (`{ name, mode }`), not the v1 scalar.
+            # `mode = "system"` keeps following the terminal's light/dark mode
+            # — that is what the old `tui.theme = "system"` meant.
+            cli = {
+              "theme" = {
+                "name" = "system";
+                "mode" = "system";
+              };
             };
             agents = {
               code-reviewer = ''
@@ -463,7 +548,14 @@ in
               '';
             };
           };
-          myconfig.persistence.directories = [ ".local/share/opencode" ];
+          # `service.json` (the background service's registration: url, port,
+          # password and pid) lives in `.local/state/opencode` in OpenCode 2, so
+          # both state dirs are persisted — a non-impermanent reboot would
+          # otherwise leave a stale registration behind.
+          myconfig.persistence.directories = [
+            ".local/share/opencode"
+            ".local/state/opencode"
+          ];
           home.packages = [
             pkgs.opencode-desktop
             opencodeBwrap

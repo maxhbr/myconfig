@@ -112,7 +112,7 @@ path lists **mirror** the tier-4 registry `myconfig.ai.microvm/agents.nix` for
 every agent that registry knows — including `herdr` itself):
 
 - `pi` — `~/.pi/agent/{agents,extensions,keybindings.json,prompts,themes}`.
-- `opencode` — `~/.config/opencode/{agents,commands,opencode.json,tui.json,skills}`.
+- `opencode` — `~/.config/opencode/{agents,commands,opencode.json,cli.json,skills}`.
 - `claude` (`claude-code`) — `~/.claude/settings.json`, `~/.claude/skills`.
 - `codex` — `~/.codex/{config.toml,hooks.json,skills}`.
 - `qwen-code`, `github-copilot-cli` — the shared `~/.agents/skills` tree.

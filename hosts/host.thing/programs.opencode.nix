@@ -20,7 +20,12 @@
           # Fast/small model: "opencode-fast" alias -> Qwen3.6-35B-A3B-UD-Q5_K_XL
           # on the host-level router bound to the NVIDIA RTX 5090
           # (provider name "rtx5090", port 33656).
-          small_model = "local-rtx5090/opencode-fast";
+          #
+          # `small_model` is the OpenCode 1 spelling; OpenCode 2 selects the
+          # model of its built-in `title` agent instead, and the schema only
+          # allows a models.dev id in `small_model` (so a local provider fails
+          # validation there). Same value, current field.
+          agents.title.model = "local-rtx5090/opencode-fast";
         };
       }
     ];

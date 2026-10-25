@@ -157,14 +157,15 @@ let
     ];
     # `~/.config/opencode` also collects `auth.json` and host-coupled plugins,
     # so only the rendered configuration, agents/commands and the skills tree
-    # are staged.
+    # are staged. Terminal-client settings live in `cli.json` as of OpenCode 2
+    # (`tui.json` was the 1.x file).
     opencode = [
       ".agents/skills"
       ".config/opencode/agents"
+      ".config/opencode/cli.json"
       ".config/opencode/commands"
       ".config/opencode/opencode.json"
       ".config/opencode/skills"
-      ".config/opencode/tui.json"
     ];
     # `~/.pi` also holds session state and provider credentials, so only the
     # rendered agent configuration is staged.

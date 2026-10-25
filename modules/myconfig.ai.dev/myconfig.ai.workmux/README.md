@@ -49,8 +49,9 @@ names, the dashboard and the sidebar. This module installs the *exact same
 artefacts* declaratively, gated on which agents the host actually enables:
 
 - **pi** — `~/.pi/agent/extensions/workmux-status.ts` (file drop).
-- **opencode** — `~/.config/opencode/package.json` + the
-  `plugins/workmux-status.ts` plugin (file drop).
+- **opencode** — `~/.config/opencode/plugins/workmux-status/{index,status,tui}.ts`
+  (file drop; the OpenCode 2 plugin layout, which upstream also installs for
+  OpenCode 2 — the 1.x single-file plugin no longer loads).
 - **codex** — `programs.codex.hooks` (native hook merge) + `features.hooks`.
 - **claude-code** — `programs.claude-code.settings.hooks` (native merge).
 

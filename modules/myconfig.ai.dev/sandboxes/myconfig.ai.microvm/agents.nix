@@ -168,14 +168,15 @@ let
       # `~/.config/opencode` also collects `auth.json` and host-coupled
       # plugins, so only the rendered configuration, agents/commands and the
       # skills tree are staged. The LIVE model list is provisioned separately,
-      # at guest boot, by ./guest-model-config.nix.
+      # at guest boot, by ./guest-model-config.nix. Terminal-client settings
+      # moved from `tui.json` to `cli.json` with OpenCode 2.
       configPaths = [
         ".agents/skills"
         ".config/opencode/agents"
+        ".config/opencode/cli.json"
         ".config/opencode/commands"
         ".config/opencode/opencode.json"
         ".config/opencode/skills"
-        ".config/opencode/tui.json"
       ];
     };
     pi = {
