@@ -1003,8 +1003,19 @@ let
         # this init until the payload exits — the synchronous form
         # reaps it just the same, keeps the console's stdin for the
         # payload, and $? carries the code.
+        #
+        # The CONTROLLING TERMINAL (bd myconfig-w8jd): PID 1 owns the
+        # session; a plain child inherits the fds but never a ctty —
+        # /dev/tty is ENXIO, job control is off, and ^C reaches no
+        # foreground group. `setsid -c` execs the payload as a NEW
+        # session leader WITH the console as its ctty (live-probed:
+        # from ash the child is not a group leader, so setsid execs
+        # in place and $? still carries the payload's code; a
+        # non-tty stdin makes TIOCSCTTY fail silently and the
+        # payload simply runs on, so piped one-shot runs are
+        # unaffected).
         set +e
-        "$@"
+        "$BB" setsid -c "$@"
         _exit_code=$?
         set -e
         step "the payload exited with $_exit_code"
@@ -1101,6 +1112,11 @@ runCommand "mysbx-krun-rootfs"
         || { echo "mysbx-krun-rootfs: init lost the exit-channel sysfs resolution" >&2; exit 1; }
     grep -qF 'mknod' $out/bin/mysbx-init \
         || { echo "mysbx-krun-rootfs: init lost the exit-channel node fallback" >&2; exit 1; }
+    # The payload's controlling terminal (bd myconfig-w8jd): without
+    # setsid -c the payload child never acquires the console —
+    # interactive runs have no job control and /dev/tty is ENXIO.
+    grep -qF 'setsid -c' $out/bin/mysbx-init \
+        || { echo "mysbx-krun-rootfs: init lost the payload ctty acquisition" >&2; exit 1; }
     # The manifest argv records (bd myconfig-hq7k): the payload rides
     # the manifest on the qemu backend — the init must both CONSUME
     # the records and refuse a corrupted one.
