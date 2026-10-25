@@ -11,7 +11,8 @@
 # `app_id`, so `thunderbird` also matches ids like `thunderbird-beta` and
 # `pavucontrol` matches `org.pulseaudio.pavucontrol`.
 # `command...` defaults to the app id and is spawned through niri when no
-# window matches.
+# window matches; for apps whose cli command differs from their window app_id
+# (`spawn_command` below) it defaults to that command instead.
 #
 # Windows, their ids and focus state come from `niri msg --json windows`, so
 # the script never parses niri's human-readable output (the JSON endpoint is
@@ -31,8 +32,14 @@ fi
 
 app="$1"
 shift
+
+# Supported apps whose cli command differs from their window `app_id`.
+declare -A spawn_command=(
+    [signal]=signal-desktop
+)
+
 if [[ $# -eq 0 ]]; then
-    set -- "$app"
+    set -- "${spawn_command[${app,,}]:-$app}"
 fi
 
 # Line 1: id of the focused match (empty if no match is focused).

@@ -326,7 +326,9 @@ window-rule {
 }
 
 window-rule {
-    match app-id="^Signal$"
+    // The Signal window reports its app-id in lowercase (`signal`), and
+    // app-id matching is case-sensitive, so match case-insensitively.
+    match app-id="(?i)^signal$"
 
     open-on-workspace "chat"
 }
