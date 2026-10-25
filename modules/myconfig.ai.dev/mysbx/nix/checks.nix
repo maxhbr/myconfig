@@ -552,7 +552,7 @@ in
         touch "$repo/README"
         git -C "$repo" add . && git -C "$repo" commit -qm init
         mkdir -p "$work/home"
-        argv=$( cd "$repo" && HOME="$work/home" "${pkgQemu}/bin/mysbx" --dry-run -- true ) \
+        argv=$( cd "$repo" && HOME="$work/home" "${pkgQemu}/bin/mysbx" run --dry-run -- true ) \
           || fail "the wrapped dry run refused: run it verbosely for the diagnosis"
         # The qemu-only pins: kernel + exit-channel after the rootfs.
         echo "$argv" | grep -qx -- '--kernel' \
