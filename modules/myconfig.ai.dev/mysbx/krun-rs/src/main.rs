@@ -525,6 +525,16 @@ struct Config {
     /// disk — a run without the scratch keeps the plain ro store
     /// share.
     scratch: Option<PathBuf>,
+    /// The guest-own nix store disk (docs/design/guest-store.md): a
+    /// HOST-side erofs image the Nix wrapper built from the tools
+    /// closure, attached as a SECOND real virtio-blk device —
+    /// `krun_add_disk2` with read_only=true, so the negotiation sets
+    /// VIRTIO_BLK_F_RO and the guest kernel itself refuses every
+    /// write to it. The block id is `nixstore`; the init tells the
+    /// two disks apart by their READ-ONLY flag (the scratch is the
+    /// WRITABLE /dev/vd*), never by order or name. None attaches no
+    /// disk — the run keeps the host-store share (backends.md D3).
+    store_disk: Option<PathBuf>,
     payload: Vec<String>,
 }
 
@@ -533,7 +543,7 @@ fn usage() -> ! {
         "usage: mysbx-krun [--cpus N] [--ram MIB] [--verbose] --rootfs DIR [--init PATH] \
          [--ro-device TAG=DIR] [--rw-device TAG=DIR] \
          [--manifest FILE] [--network shared|none] \
-         [--scratch FILE] [--env K=V]... \
+         [--scratch FILE] [--store-disk FILE] [--env K=V]... \
          [--krun-overlay TAG@PATH:MODE:B64]... [--chdir DIR] -- CMD [ARGS...] \
   (the manifest FILE carries the shares; --ro-share/--rw-share remain \
    accepted for cmdline-sized debug runs)"
@@ -563,6 +573,7 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
         network: true,
         workdir: PathBuf::from("/"),
         scratch: None,
+        store_disk: None,
         payload: Vec::new(),
     };
     let mut it = args.by_ref().peekable();
@@ -627,6 +638,12 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
                     it.next()
                         .ok_or_else(|| "missing value for --scratch".to_owned())?,
                 ))
+            }
+            "--store-disk" => {
+                cfg.store_disk =
+                    Some(PathBuf::from(it.next().ok_or_else(|| {
+                        "missing value for --store-disk".to_owned()
+                    })?))
             }
             "--env" => {
                 let value = it
@@ -974,6 +991,12 @@ const MANIFEST_SLOT: &str = "manifest";
 /// the device by it, bd myconfig-dak.7).
 const SCRATCH_BLOCK_ID: &str = "scratch";
 
+/// The store disk's BLOCK ID (the scratch's twin, a fixed name —
+/// host-side MMIO slot naming only: the block id is no serial the
+/// guest reads, so the init finds the device by its READ-ONLY
+/// flag, never by name).
+const STORE_BLOCK_ID: &str = "nixstore";
+
 fn exec_spec(cfg: &Config) -> (String, Vec<String>, Vec<String>) {
     let exec_path = cfg.init.clone().unwrap_or_else(|| cfg.payload[0].clone());
     // krun_set_exec's argv vector rides the cmdline behind " -- "
@@ -1182,6 +1205,7 @@ fn main() {
             if cfg.network { "shared" } else { "none" }
         );
         eprintln!("mysbx-krun: scratch: {:?}", cfg.scratch);
+        eprintln!("mysbx-krun: store disk: {:?}", cfg.store_disk);
         eprintln!("mysbx-krun: fd limit: soft={soft} hard={hard}");
         eprintln!(
             "mysbx-krun: {} env entries, {} overlay files",
@@ -1321,6 +1345,40 @@ fn main() {
                     eprintln!(
                         "mysbx-krun: --scratch but libkrun has no \
                          krun_add_disk2 (blk feature) — the scratch disk cannot attach"
+                    );
+                    std::process::exit(EXIT_SETUP);
+                }
+            }
+        }
+        // The guest-own nix store disk (docs/design/guest-store.md):
+        // the erofs image the Nix wrapper built from the tools
+        // closure, attached READ-ONLY. The flag is load-bearing twice:
+        // it negotiates VIRTIO_BLK_F_RO (the guest kernel refuses
+        // every write to the device itself — the guest root included)
+        // and it is how the init tells this disk from the scratch (a
+        // WRITABLE /dev/vd*), which the old "the scratch is the only
+        // vd*" assumption can no longer do. The same blk-feature
+        // gate as the scratch: the symbol's absence is REFUSED, never
+        // a silent run against the host-store share it replaces.
+        if let Some(store) = &cfg.store_disk {
+            match api.krun_add_disk2 {
+                Some(add_disk2) => {
+                    const KRUN_DISK_FORMAT_RAW: u32 = 0;
+                    check(
+                        (add_disk2)(
+                            ctx,
+                            cstr(STORE_BLOCK_ID).as_ptr(),
+                            cstr(store).as_ptr(),
+                            KRUN_DISK_FORMAT_RAW,
+                            true,
+                        ),
+                        "krun_add_disk2",
+                    );
+                }
+                None => {
+                    eprintln!(
+                        "mysbx-krun: --store-disk but libkrun has no \
+                         krun_add_disk2 (blk feature) — the store disk cannot attach"
                     );
                     std::process::exit(EXIT_SETUP);
                 }
@@ -1504,6 +1562,7 @@ mod tests {
             network: true,
             workdir: PathBuf::from("/"),
             scratch: None,
+            store_disk: None,
             payload: Vec::new(),
         }
     }
@@ -1613,6 +1672,29 @@ mod tests {
         let without = parse(&["--rootfs", "/root", "--", "/bin/true"]).unwrap();
         assert_eq!(without.scratch, None);
         assert!(parse(&["--rootfs", "/root", "--scratch", "--", "/bin/true"]).is_err());
+    }
+
+    #[test]
+    fn store_disk_parses_a_path() {
+        // --store-disk names the wrapper-built erofs image (docs/
+        // design/guest-store.md); without it no disk attaches and
+        // the run keeps the host-store share.
+        let with = parse(&[
+            "--rootfs",
+            "/root",
+            "--store-disk",
+            "/store/store-disk.img",
+            "--",
+            "/bin/true",
+        ])
+        .unwrap();
+        assert_eq!(
+            with.store_disk,
+            Some(PathBuf::from("/store/store-disk.img"))
+        );
+        let without = parse(&["--rootfs", "/root", "--", "/bin/true"]).unwrap();
+        assert_eq!(without.store_disk, None);
+        assert!(parse(&["--rootfs", "/root", "--store-disk", "--", "/bin/true"]).is_err());
     }
 
     #[test]
