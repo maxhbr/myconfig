@@ -290,6 +290,18 @@
   # Values must not contain whitespace — the crate splits the list on
   # it, so a value with a space would be silently truncated.
   podmanEnv ? { },
+  # Backend-specific environment pins of the microvm-qemu backend
+  # (`MYSBX_MICROVM_QEMU_ENV`, bd myconfig-mzys): an attrset rendered
+  # as a space-separated `KEY=VALUE` list, the qemu twin of
+  # `podmanEnv`. The SLiRP guest's loopback is its own, so the model
+  # endpoint URLs the other backends share (the host loopback the
+  # bwrap backend reaches, the TSI-translated loopback of the krun
+  # backend) are dead here — the pins repoint them at the SLiRP
+  # gateway `10.0.2.2`, which libslirp maps to the HOST loopback.
+  #
+  # Values must not contain whitespace — the crate splits the list on
+  # it, so a value with a space would be silently truncated.
+  microvmQemuEnv ? { },
   # The podman-krun backend's OCI runtime (backends.md D2, bd
   # myconfig-6di.5.2): crun built against libkrun — nixpkgs' `crun`
   # already defaults `withLibkrun` to `lib.meta.availableOn
@@ -696,6 +708,22 @@ let
     ) podmanEnv
   );
 
+  # The rendered `MYSBX_MICROVM_QEMU_ENV` value (see the
+  # `microvmQemuEnv` argument): `KEY=VALUE` entries,
+  # space-separated, in attribute order — the qemu twin of
+  # `podmanEnvValue`. A value carrying whitespace cannot survive
+  # that encoding, so refuse it here instead of shipping a
+  # truncated variable.
+  microvmQemuEnvValue = lib.concatStringsSep " " (
+    lib.mapAttrsToList (
+      name: value:
+      if builtins.match ".*[[:space:]].*" value != null then
+        throw "mysbx: microvmQemuEnv.${name} must not contain whitespace (MYSBX_MICROVM_QEMU_ENV is a space-separated list), got `${value}`"
+      else
+        "${name}=${value}"
+    ) microvmQemuEnv
+  );
+
   podmanPins =
     lib.optionalString (podmanImage != null) (
       "--set MYSBX_PODMAN_TARBALL '${podmanImage}' "
@@ -800,7 +828,13 @@ let
     ) "--set MYSBX_MICROVM_QEMU_ROOTFS '${microvmQemuRootfs}' "
     + lib.optionalString (
       microvmQemuKernel != null
-    ) "--set MYSBX_MICROVM_QEMU_KERNEL '${microvmQemuKernel}'";
+    ) "--set MYSBX_MICROVM_QEMU_KERNEL '${microvmQemuKernel}' "
+    # The backend's env pins (bd myconfig-mzys): `--set-default`, the
+    # same operator-knob reasoning as the pasta spec — an invocation
+    # can override a pinned endpoint for a debugging run.
+    + lib.optionalString (
+      microvmQemuEnv != { }
+    ) "--set-default MYSBX_MICROVM_QEMU_ENV '${microvmQemuEnvValue}'";
 in
 symlinkJoin {
   # keep the crate's derivation name: build-pkg-for-host.sh matches on

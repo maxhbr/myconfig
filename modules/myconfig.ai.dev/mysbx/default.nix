@@ -468,6 +468,9 @@ in
         # reads a file (a directory is EISDIR), and doctor's
         # is-file rule matches only the image (bd myconfig-q3se).
         microvmQemuKernel = "${cfg.microvm-qemu.kernel}/bzImage";
+        # Backend-specific env pins (bd myconfig-mzys): the SLiRP
+        # guest's model endpoint, the qemu twin of `podmanEnv`.
+        microvmQemuEnv = cfg.microvm-qemu.env;
         waypipe = cfg.display.package;
         # The dtach master of detached runs (docs/design/detach.md
         # B10): pinned so `--detach` needs no host PATH lookup.
@@ -477,7 +480,7 @@ in
         nono = cfg.nono.package;
         ssh-keygen = pkgs.openssh;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; shell = cfg.shell.path; podmanImage = cfg.podman.image; podmanShell = cfg.podman.shell; podmanPastaSpec = cfg.podman.pastaSpec; podmanEnv = cfg.podman.env; krunRuntime = cfg.krun.runtime; krunScratchSize = if cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null; krunLauncher = cfg.krun.direct.launcher; krunRootfs = cfg.krun.direct.rootfs; waypipe = cfg.display.package; dtach = pkgs.dtach; podmanWaypipe = cfg.podman.waypipe; podmanMuxEntries = cfg.podman.muxEntries; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; shell = cfg.shell.path; podmanImage = cfg.podman.image; podmanShell = cfg.podman.shell; podmanPastaSpec = cfg.podman.pastaSpec; podmanEnv = cfg.podman.env; microvmQemuEnv = cfg.microvm-qemu.env; krunRuntime = cfg.krun.runtime; krunScratchSize = if cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null; krunLauncher = cfg.krun.direct.launcher; krunRootfs = cfg.krun.direct.rootfs; waypipe = cfg.display.package; dtach = pkgs.dtach; podmanWaypipe = cfg.podman.waypipe; podmanMuxEntries = cfg.podman.muxEntries; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -1227,6 +1230,34 @@ in
           the qemu -kernel.
         '';
       };
+
+      env = mkOption {
+        type = types.attrsOf types.str;
+        default = { };
+        example = literalExpression ''{ OPENAI_BASE_URL = "http://10.0.2.2:4000/v1"; }'';
+        description = ''
+          Environment variables handed to the payload of the
+          microvm-qemu backend ALONE, pinned into the wrapper as
+          `MYSBX_MICROVM_QEMU_ENV` and emitted as `--env` after the
+          config layers' `[env]` (so they win over a configured value)
+          and before the sandbox's own `HOME`/`PATH`/XDG variables
+          (which no pin can repoint).
+
+          This is for environment that is only CORRECT under this
+          backend: the SLiRP guest's loopback is its OWN (nothing
+          translates `127.0.0.1` to the host, unlike the krun
+          backend's TSI), so the host loopback URLs the other
+          backends share are dead here. The SLiRP gateway
+          `10.0.2.2` maps to the host loopback, so the keyless
+          host LiteLLM proxy is reachable there directly — no
+          host-side forwarder, unlike the podman-gvisor backend.
+          Values must not contain whitespace (the variable is a
+          space-separated list).
+
+          Per-agent modules append their own entries, like they
+          append to `config.mounts` and `podman.env`.
+        '';
+      };
     };
 
     nono = {
@@ -1816,6 +1847,20 @@ in
     # ../programs/programs.opencode).
     myconfig.ai.dev.mysbx.podman.env = lib.mkIf litellmForwarder.enable {
       OPENAI_BASE_URL = litellmForwarder.endpoint;
+    };
+
+    # The endpoint as the SLiRP GUEST of the microvm-qemu backend sees
+    # it (bd myconfig-mzys): its loopback is its own — nothing maps
+    # `127.0.0.1` to the host, unlike the krun backend's TSI — but
+    # the SLiRP gateway `10.0.2.2` maps to the host loopback, where
+    # the keyless LiteLLM proxy listens. No host-side forwarder is
+    # needed (the port-scoped forwarder of
+    # ../myconfig.ai.dev.litellm-forwarder.nix exists for pasta's
+    # `--map-guest-addr`, which maps an address, not a loopback). The
+    # same per-agent modules that fill `podman.env` add their own
+    # `microvm-qemu.env` entries.
+    myconfig.ai.dev.mysbx.microvm-qemu.env = lib.mkIf config.services.litellm.enable {
+      OPENAI_BASE_URL = "http://10.0.2.2:${toString config.services.litellm.port}/v1";
     };
 
     # The selected multiplexer's own tooling, on the sandbox PATH: the

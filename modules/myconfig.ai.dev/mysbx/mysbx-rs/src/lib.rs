@@ -3601,6 +3601,18 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 verbose: flags.verbose,
             };
             let krun_argv = if backend == "microvm-qemu" {
+                // Backend-specific env pins (MYSBX_MICROVM_QEMU_ENV, bd
+                // myconfig-mzys): the qemu twin of the podman arm's
+                // MYSBX_PODMAN_ENV below — the SLiRP guest's loopback
+                // is its own, so the model endpoint cannot live in the
+                // config `[env]` the other backends share. Entries
+                // without a `=` are ignored rather than turned into an
+                // empty variable name.
+                let qemu_env: Vec<String> = env_or("MYSBX_MICROVM_QEMU_ENV", "")
+                    .split_whitespace()
+                    .filter(|entry| entry.contains('='))
+                    .map(|entry| entry.to_owned())
+                    .collect();
                 match microvm_qemu::microvm_qemu_argv(
                     &merged,
                     &repo,
@@ -3608,6 +3620,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                     &host_env,
                     &krun_params,
                     &microvm_qemu_kernel,
+                    &qemu_env,
                 ) {
                     Ok(a) => a,
                     Err(e) => {

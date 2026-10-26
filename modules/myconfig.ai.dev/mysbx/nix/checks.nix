@@ -488,6 +488,10 @@ in
         microvmQemuLauncher = stubLauncher;
         microvmQemuRootfs = stubRootfs;
         microvmQemuKernel = stubKernel;
+        microvmQemuEnv = {
+          OPENAI_BASE_URL = "http://10.0.2.2:4000/v1";
+          MYCONFIG_LITELLM_BASE_URL = "http://10.0.2.2:4000/v1";
+        };
         ssh-keygen = pkgs.openssh;
       };
     in
@@ -536,7 +540,23 @@ in
         echo "$wiring" | grep -q '/bzImage"' \
           || fail "the module wiring does not pin the bzImage member: $wiring"
 
-        # 2. the dry run: a repo below a placeable share root, the
+        # 2. the env pins (bd myconfig-mzys): the wrapper pins them as
+        #    a --set-default SPACE-SEPARATED list, and the dry run
+        #    carries each entry as a manifest --env AFTER the config
+        #    layers (a pin wins over a configured value in the guest,
+        #    where the manifest env records are exported in order).
+        #    Strip the wrapper's quotes BEFORE matching (the krun
+        #    check's idiom), then the value is awk field 3.
+        content=$(echo "$content" | tr -d "'")
+        echo "$content" | grep -aq -- '--set-default MYSBX_MICROVM_QEMU_ENV' \
+          || fail "the wrapper does not pin MYSBX_MICROVM_QEMU_ENV"
+        qemu_env=$(echo "$content" | awk '/--set-default MYSBX_MICROVM_QEMU_ENV/ {$1=""; $2=""; print; exit}' | sed 's/^  //')
+        case "$qemu_env" in
+          "MYCONFIG_LITELLM_BASE_URL=http://10.0.2.2:4000/v1 OPENAI_BASE_URL=http://10.0.2.2:4000/v1") ;;
+          *) fail "the pinned MYSBX_MICROVM_QEMU_ENV is not the expected list: $qemu_env" ;;
+        esac
+
+        # 3. the dry run: a repo below a placeable share root, the
         #    backend in its sidecar, the payload a one-shot true.
         if ! mkdir -p /tmp/mysbx-microvm-qemu-wrapper-test-$$ 2>/dev/null; then
           fail "cannot create a fixture root under /tmp (the one placeable share root)"
@@ -572,6 +592,22 @@ in
         # The manifest pointer rides (the argv records' channel).
         echo "$argv" | grep -q -- '--manifest' \
           || fail "the dry run does not carry the manifest pointer"
+        # The backend env pins ride as --env records after the config
+        # layers (bd myconfig-mzys).
+        echo "$argv" | grep -qx -- '--env' \
+          || fail "the dry run carries no --env records"
+        echo "$argv" | grep -qx -- 'OPENAI_BASE_URL=http://10.0.2.2:4000/v1' \
+          || fail "the dry run does not carry the pinned OPENAI_BASE_URL"
+        echo "$argv" | grep -qx -- 'MYCONFIG_LITELLM_BASE_URL=http://10.0.2.2:4000/v1' \
+          || fail "the dry run does not carry the pinned MYCONFIG_LITELLM_BASE_URL"
+        # The pins must precede the SLiRP NIC marker (the same
+        # placement rule as the podman backend's pins).
+        if grep -n -q -- 'MYSBX_MICROVM_NET=1' <<<"$argv"; then
+          pin_line=$(grep -n -- 'MYCONFIG_LITELLM_BASE_URL=' <<<"$argv" | head -1 | cut -d: -f1)
+          net_line=$(grep -n -- 'MYSBX_MICROVM_NET=1' <<<"$argv" | head -1 | cut -d: -f1)
+          [ "$pin_line" -lt "$net_line" ] \
+            || fail "the env pins must precede the SLiRP NIC marker"
+        fi
 
         touch $out
       '';

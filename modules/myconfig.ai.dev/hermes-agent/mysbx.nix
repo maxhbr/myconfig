@@ -124,6 +124,14 @@ in
         };
       };
 
+      # The litellm endpoint of the microvm-qemu backend (bd
+      # myconfig-mzys): the SLiRP gateway `10.0.2.2` maps to the host
+      # loopback — the same `CUSTOM_BASE_URL` override as the podman
+      # one above, with the qemu-guest URL instead of the forwarder's.
+      microvm-qemu.env = lib.mkIf osconfig.services.litellm.enable {
+        CUSTOM_BASE_URL = "http://10.0.2.2:${toString osconfig.services.litellm.port}/v1";
+      };
+
       config.stateDirs = [ ".hermes" ];
     };
   };

@@ -312,6 +312,17 @@ in
             osconfig.myconfig.ai.dev.litellm-forwarder.endpoint;
         };
       };
+      # The litellm endpoint of the microvm-qemu backend (bd
+      # myconfig-mzys): the SLiRP gateway `10.0.2.2` maps to the host
+      # loopback — the same `OPENCODE_CONFIG_CONTENT` override as the
+      # podman one above, with the qemu-guest URL instead of the
+      # forwarder's.
+      microvm-qemu.env = lib.mkIf osconfig.services.litellm.enable {
+        OPENCODE_CONFIG_CONTENT = builtins.toJSON {
+          providers."${osconfig.networking.hostName}-litellm".settings.baseURL =
+            "http://10.0.2.2:${toString osconfig.services.litellm.port}/v1";
+        };
+      };
     };
 
     home-manager.sharedModules = [

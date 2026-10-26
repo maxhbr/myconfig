@@ -1672,6 +1672,16 @@ in
       podman.env = lib.mkIf osconfig.myconfig.ai.dev.litellm-forwarder.enable {
         ${litellmBaseUrlEnvVar} = osconfig.myconfig.ai.dev.litellm-forwarder.endpoint;
       };
+      # The litellm endpoint of the microvm-qemu backend (bd
+      # myconfig-mzys): the SLiRP guest's loopback is its own — the
+      # same class of wrong URL as the container's — but the SLiRP
+      # gateway `10.0.2.2` maps to the HOST loopback, where the
+      # keyless proxy listens (no forwarder needed, unlike pasta).
+      # Both generated extensions read the variable
+      # (`litellmBaseUrlEnvVar` above).
+      microvm-qemu.env = lib.mkIf osconfig.services.litellm.enable {
+        ${litellmBaseUrlEnvVar} = "http://10.0.2.2:${toString osconfig.services.litellm.port}/v1";
+      };
       # pi's session store, backed by `<repo>.mysbx/state/.pi/agent/sessions`
       # (D15). No nesting conflict with the opencode/rtk entries
       # (`.local/...`) — `check_state_dirs` enforces that pairwise anyway.

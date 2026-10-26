@@ -22,12 +22,12 @@
 //! `--verbose`, `--rootfs`, `--kernel`, `--init`, the staged
 //! devices + manifest, the shares (the trust shares mapped onto
 //! stage-ro, bd myconfig-govd — NO overlay flags on this
-//! backend), the env, `--network none` (shared is silent — SLiRP
-//! is the launcher's default, exactly as TSI is krun's), the
-//! scratch, `--chdir`,
-//! `--` payload. `krun::krun_argv` stays byte-identical; this
-//! module re-renders its own spec and never touches the krun
-//! goldens.
+//! backend), the env plus the backend pins
+//! (MYSBX_MICROVM_QEMU_ENV, bd myconfig-mzys), `--network none`
+//! (shared is silent — SLiRP is the launcher's default, exactly as
+//! TSI is krun's), the scratch, `--chdir`, `--` payload.
+//! `krun::krun_argv` stays byte-identical; this module re-renders its
+//! own spec and never touches the krun goldens.
 
 use crate::bwrap::Payload;
 use crate::krun::{self, Params};
@@ -47,6 +47,7 @@ pub fn microvm_qemu_argv(
     host_env: &krun::HostEnv,
     params: &Params<'_>,
     kernel: &str,
+    backend_env: &[String],
 ) -> Result<Vec<String>, Error> {
     // The krun spec, verbatim: every refusal (multiplexer, pids
     // limit, share roots, hidden mounts, the limit grammar) and
@@ -117,6 +118,19 @@ pub fn microvm_qemu_argv(
     for (k, v) in &spec.env {
         argv.push("--env".to_owned());
         argv.push(format!("{k}={v}"));
+    }
+    // Backend pins (MYSBX_MICROVM_QEMU_ENV, bd myconfig-mzys): after
+    // the spec's env, so a pin wins over a configured value, and
+    // before the SLiRP NIC marker — the same placement the podman
+    // arm gives its MYSBX_PODMAN_ENV pins (src/podman_gvisor.rs
+    // section 7). The model endpoint is the first consumer: the
+    // SLiRP guest's loopback is its own, so the host-loopback URLs
+    // the shared config carries are dead here and the pins repoint
+    // them at the SLiRP gateway `10.0.2.2`, which maps to the host
+    // loopback.
+    for entry in backend_env {
+        argv.push("--env".to_owned());
+        argv.push(entry.clone());
     }
     // The SLiRP NIC marker (bd myconfig-k106): the guest init
     // configures the user-netdev NIC only when this env rides the
