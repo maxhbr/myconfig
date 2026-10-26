@@ -100,6 +100,7 @@
 }:
 let
   pkgs = inputs.nixpkgs.legacyPackages.${system};
+  lib = inputs.nixpkgs.lib;
 
   # The full package (./mysbx.nix), whose `passthru.crate` is the bare
   # rustPlatform.buildRustPackage — the tests set their own `MYSBX_*`
@@ -140,6 +141,84 @@ in
   # copied-db safety and validation before the fresh store overlay is mounted.
   mysbx-krun-rootfs-test =
     self.nixosConfigurations.test-f13.config.myconfig.ai.dev.mysbx.krun.direct.rootfs;
+
+  # The guest-own store disk (docs/design/guest-store.md): the
+  # erofs image probed with the tool that reads it in anger. Built
+  # from a SMALL fixture closure, not the full wrapper's tool tree -
+  # the image's contract is closure-independent (mkfs.erofs packs
+  # whatever rootPaths name) and the full bake costs CI the whole
+  # tool closure. fsck.erofs walks the tree the guest kernel walks
+  # over the virtio-blk device, --extract lays it out, and the
+  # superblock carries the FIXED UUID the determinism block pins
+  # (dump.erofs -s prints it verbatim). The store/, var/nix/db and
+  # gcroots members follow the dockerTools recipe the guest nix
+  # reads. The WRAPPER side is pinned by source greps: the --set
+  # spelling and the module wiring; the negative (a flags-off host
+  # pins nothing) is the disabled-backends check's list.
+  mysbx-krun-store-disk-test =
+    let
+      storeImage = pkgs.callPackage ../nix/krun-store-image.nix { };
+      img = storeImage { rootPaths = [ pkgs.hello ]; };
+    in
+    pkgs.runCommand "mysbx-krun-store-disk-test"
+      {
+        nativeBuildInputs = [
+          pkgs.erofs-utils
+          pkgs.sqlite
+        ];
+      }
+      ''
+        fail() {
+          echo "mysbx-krun-store-disk-test: $*" >&2
+          exit 1
+        }
+
+        # 1. integrity: fsck.erofs checks every file is well
+        #    encoded (lz4, xattrs, the --tar layout) — the same
+        #    reader the guest kernel runs over the ro blk device.
+        fsck.erofs -d2 "${img}" >/dev/null \
+          || fail "fsck.erofs rejects the store disk image"
+
+        # 2. the fixed superblock metadata (krun-store-image.nix's
+        #    determinism block): the UUID the launcher and init can
+        #    pin. dump.erofs -s prints it verbatim; the label is not
+        #    in its output (erofs-utils 1.9.4), so the UUID is the
+        #    assertable half of the pair.
+        dump.erofs -s "${img}" | grep -q "5f6d7962-7374-6f72-6564-69736b2d0001" \
+          || fail "the superblock does not carry the fixed UUID"
+
+        # 3. the layout: store/<name> for the fixture root (the
+        #    --transform rewrite), the REGISTERED db and the
+        #    gcroots of the dockerTools recipe.
+        extract=$(mktemp -d)
+        fsck.erofs --extract="$extract" "${img}" >/dev/null \
+          || fail "fsck.erofs cannot extract the store disk image"
+        ls "$extract"/store/ | grep -q -- "-hello-" \
+          || fail "the store/ directory does not carry the fixture root"
+        test -f "$extract/var/nix/db/db.sqlite" \
+          || fail "the var/nix/db/db.sqlite registration is missing"
+        rows=$(${lib.getExe pkgs.sqlite} "$extract/var/nix/db/db.sqlite" \
+          'SELECT count(*) FROM ValidPaths')
+        test "$rows" -gt 0 \
+          || fail "the registered db is empty"
+        test -n "$(find "$extract/var/nix/gcroots/mysbx" -type l)" \
+          || fail "the gcroots do not pin the fixture closure"
+        # No rm of the extract tree: the store/ members keep their
+        # read-only modes (dr-xr-xr-x) and the builder sandbox sweeps
+        # the tempdir anyway.
+
+        # 4. the wrapper side, pinned by source: the --set spelling
+        #    the crate reads as MYSBX_KRUN_STORE_DISK, and the module
+        #    wiring that opts a host in.
+        grep -q -- '--set MYSBX_KRUN_STORE_DISK' ${../nix/mysbx.nix} \
+          || fail "the wrapper lost the MYSBX_KRUN_STORE_DISK pin"
+        grep -q 'krunStoreBaked = cfg.krun.store.enable' ${../default.nix} \
+          || fail "the module wiring (default.nix krunStoreBaked) is gone"
+        grep -q 'krunStoreExtraRoots = lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages' ${../default.nix} \
+          || fail "the module wiring (default.nix krunStoreExtraRoots) is gone"
+
+        touch $out
+      '';
 
   mysbx-krun-fd-monitor-test = pkgs.runCommand "mysbx-krun-fd-monitor-test" { } ''
     ${pkgs.python3}/bin/python3 ${./krun-fd-stress.py} --self-test
@@ -689,7 +768,7 @@ in
           MYSBX_PODMAN_TARBALL MYSBX_PODMAN_IMAGE MYSBX_PODMAN_IMAGE_ID \
           MYSBX_PODMAN_SHELL MYSBX_PODMAN_PASTA_SPEC MYSBX_PODMAN_ENV \
           MYSBX_PODMAN_WAYPIPE MYSBX_KRUN_RUNTIME MYSBX_KRUN_SCRATCH_SIZE \
-          MYSBX_KRUN_LAUNCHER MYSBX_KRUN_ROOTFS \
+          MYSBX_KRUN_LAUNCHER MYSBX_KRUN_ROOTFS MYSBX_KRUN_STORE_DISK \
           MYSBX_MICROVM_QEMU_LAUNCHER MYSBX_MICROVM_QEMU_ROOTFS \
           MYSBX_MICROVM_QEMU_KERNEL MYSBX_MICROVM_QEMU_ENV; do
           echo "$wrapped" | grep -aq -- "$pin" \
