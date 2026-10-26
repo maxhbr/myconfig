@@ -28,6 +28,7 @@ let
     sharpTemplate = ../../../modules/myconfig.ai.llmops/myconfig.ai.llmops.llama-cpp/templates/sharp.jinja;
   };
   hy3 = import ./Hy3-Q2_K_L.nix { inherit modelsPullDir; };
+  nanbeige4_3_33B = import ./Nanbeige4.3-33B-GGUF.nix { inherit modelsPullDir; };
   # The `-MTP` entries need a llama.cpp build with the qwen4exp MTP
   # graph — mainline ships it since the merge of #29761 (llama.cpp
   # v0.6.0), which the pinned nixpkgs already builds, so the stock
@@ -58,7 +59,7 @@ let
   ++ gemma4.rtxModels
   ++ agentsA1.rtxModels
   ++ withGroup "MoE" nex_n25_mini.rtxModels
-  ++ withGroup "dense" qwen3_8_27B.rtxModels;
+  ++ withGroup "dense" (qwen3_8_27B.rtxModels ++ nanbeige4_3_33B.rtxModels);
 
   amdModels = map (model: model // { params = (model.params or [ ]) ++ [ "--no-mmap" ]; }) (
     [
@@ -93,6 +94,7 @@ let
     ++ qwen38_flash_next.amdModels
     ++ nex_n25_mini.amdModels
     ++ hy3.amdModels
+    ++ nanbeige4_3_33B.amdModels
   );
   # Names of all models that get a host-side Vulkan1 wrapper through
   # `scriptOnlyModels` in `rtx-llama-cpp-config` below (every
@@ -283,6 +285,7 @@ in
           ++ qwen3_8_27B.candidateModels
           ++ qwen38_flash_next.amdModels
           ++ nex_n25_mini.amdModels
+          ++ nanbeige4_3_33B.amdModels
         )
       )
     );
