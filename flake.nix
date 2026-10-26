@@ -155,6 +155,7 @@
                       (_: _: {
                         mybackup = pkgs.callPackage ../pkgs/mybackup { inherit pkgs; };
                         playwright-cli = pkgs.callPackage ./pkgs/playwright-cli { };
+                        thinkrail = pkgs.callPackage ./pkgs/thinkrail { };
                         my-wallpapers = inputs.my-wallpapers.defaultPackage.x86_64-linux;
                       })
                     ];

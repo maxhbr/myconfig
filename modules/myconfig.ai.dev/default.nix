@@ -55,6 +55,7 @@ in
     ./programs/programs.pi-coding-agent
     ./programs/programs.qwen-code
     ./programs/programs.rtk
+    ./programs/programs.thinkrail.nix
     ./skills
     ./myconfig.ai.workmux
   ];
@@ -93,6 +94,9 @@ in
         # host without `myconfig.ai.dev` never pulls a browser closure.
         skills.playwright-cli.enable = lib.mkDefault true;
         ccusage.enable = lib.mkDefault true;
+        # heavyweight prebuilt binary (~130 MB + FHS/bwrap closure), so opt-in
+        # like lmstudio/hermes rather than default-on
+        thinkrail.enable = lib.mkDefault false;
       };
       home-manager.sharedModules = [
         {

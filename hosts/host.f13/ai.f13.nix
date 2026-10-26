@@ -25,6 +25,8 @@
             # microvm-qemu.enable = true;
           };
 
+          thinkrail.enable = true;
+
           # microvm = {
           #   enable = false;
           #   enabledAgents = [
