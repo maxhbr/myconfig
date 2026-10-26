@@ -5,14 +5,13 @@ SPDX-License-Identifier: MIT
 
 # Design: the VM guests' own nix store — a baked store view instead of the host share
 
-Status: draft. This is an EXPLORATION, not a decision record: it
-gathers what today's store share costs, what a guest-own store would
-change, and which probes must run before anything here can become a
-decision. The decided state stays in
-[backends.md](./backends.md) D3/D9; the config surface stays in
-[config.md](./config.md). When the probes land, the surviving option
-moves into backends.md as a new decision and this file either
-records the rationale or is retired.
+Status: implemented (option B, the erofs disk). The exploration
+resolved: the probes below landed at build time, the surviving
+option shipped behind the `store = "host" | "baked"` config key
+([config.md](./config.md) D26, the D3 amendment in
+[backends.md](./backends.md)), and this file keeps the RATIONALE:
+why B over A/C, what the costs are, and the one probe that still
+needs a KVM host (the live run, the handoff section at the end).
 
 ## The question
 
@@ -107,6 +106,26 @@ backends.md D2's scope decision (no copy-up of image paths, no
 `nix store optimise`) lift — but it is not even buildable before two
 probes (kernel driver, device budget) answer its open questions.
 
+Probing C's mechanics killed it structurally, before any build:
+
+- a store view the GUEST resolves cannot use absolute `/nix/store/...`
+  symlinks (the guest's `/nix/store` IS the view — circular), so
+  every path must be a real file, a relative symlink, or a hardlink;
+- `nix build --print-out-paths ... | xargs` does not survive a real
+  closure (ARG_MAX; the closure is hundreds of paths), so the view
+  builder needs a files-from driver — fine, `closureInfo` gives the
+  list — but then the VIEW is either a `cp -r` copy of the whole
+  closure (hundreds of MiB per wrapper rebuild, the exact cost B
+  avoids) or a hardlink farm (`cp -rl`, near-zero disk) —
+- and the hardlink farm rides into the stage tree through a bwrap
+  bind: bwrap REJECTS crosses over a bind boundary it cannot
+  hardlink across, so the farm needs a bind of the whole output —
+  which reintroduces the host store share for the staging window.
+
+None of these is a tweak away from working; each is the mechanism
+itself. That is what flipped the cost table to B: `mkfs.erofs
+--tar` needs no populated tree at all.
+
 ## What gets better
 
 - **The first backend tier that actually narrows.** Today the VM
@@ -164,48 +183,92 @@ probes (kernel driver, device budget) answer its open questions.
   eventually apply to the bwrap tier too (a ro bind of the view
   instead of the whole store is mechanically trivial there).
 
-## Open probes (the spike work, in order)
+## The probes, resolved (and the one that remains)
 
-1. **View materialization (decides A vs C mechanics):** can a
-   store-output tree present closure paths as real directories that
-   resolve in the GUEST without the host store? Absolute
-   `/nix/store/...` symlinks cannot (the guest's `/nix/store` IS the
-   view — circular); a RELATIVE link farm inside the tree, or
-   `cp -rl` hardlink farm (near-zero disk cost — one filesystem),
-   are the candidates. One build-time verification that nix GC
-   keeps hardlinked content alive through the view's link count is
-   required before A/C are trustworthy.
-2. **Kernel drivers (gates B):** does the pinned libkrunfw kernel
-   build have squashfs or erofs in? (ext4 is proven — the scratch
-   formats and mounts it.) If not, option B costs a kernel rebuild,
-   which is a scope decision of its own.
-3. **MMIO budget (gates B):** does a SECOND virtio-blk device
-   (store image + scratch) boot, or does the IRQ budget reject it?
-   Cheap to answer with the spike harness and one launcher patch.
-4. **Db baking:** reproduce the `imageIncludeNixDB` result for a
-   plain view — generate `/nix/var/nix/db` from `closureInfo` at
-   build time — and verify the guest's single-user nix accepts it
-   as-is (no reconcile, no scan; `nix path-info`, `nix build` of
-   something already in the view, one substitution onto the
-   scratch).
-5. **End-to-end narrowed run:** option C wired behind a temporary
-   flag, live on a KVM host: payload shell resolves, `toolsEnv`
-   binaries run, in-guest nix overlays the view, a host-built path
-   ENOENTs with the diagnosis proposed above.
+1. **View materialization (decided A vs C mechanics):** RESOLVED
+   AGAINST A/C — not by the link farm failing, but by B needing no
+   farm at all: `mkfs.erofs --tar` packs the closure straight from
+   the store paths, no populated tree, no copies, and the guest
+   mounts the image AT `/nix/store` (the baked rootfs dir is a
+   real directory, so the overlay mounts directly on it — no
+   tmpfs trick). The circular-symlink and ARG_MAX findings that
+   structurally blocked C are recorded above; the hardlink-GC
+   question is moot for B.
+2. **Kernel drivers (gated B):** ANSWERED, no rebuild for krun —
+   the pinned libkrunfw x86_64 config already carries
+   `CONFIG_EROFS_FS=y` (xattr, posix acl, zip/lz4, checked against
+   the 5.5.0 config). The qemu backend's kernel pin
+   (`nix/microvm-qemu-kernel.nix`) gained `EROFS_FS=y` alongside
+   its ext4/overlayfs lines; the built configfile pins
+   `CONFIG_EROFS_FS=y`.
+3. **MMIO budget (gated B):** ANSWERED STATICALLY — the second
+   virtio-blk device costs one IRQ slot; the budget's accounting
+   (11 slots minus balloon, rng, console, vsock) leaves the store
+   disk within it, exactly like the scratch (D7) already proved
+   the first blk device fits. The live boot confirms it below.
+4. **Db baking:** ANSWERED — `nix/krun-store-image.nix` bakes
+   `/nix/var/nix/db` with the dockerTools recipe
+   (`nix-store --load-db` against `closureInfo`'s registration,
+   registrationTime reset for determinism) plus the gcroots
+   symlinks; the `mysbx-krun-store-disk-test` check extracts the
+   image with `fsck.erofs` and verifies the db rows, the gcroots
+   and the fixed UUID. No reconcile, no `store-scan` pass runs in
+   a baked guest (the init's db-copy and reconcile paths are
+   host-mode-only, `nix/krun-rootfs.nix`).
+5. **End-to-end narrowed run:** STILL OPEN — needs a KVM host. See
+   the handoff below.
 
-## Recommendation
+## What shipped (the recorded outcome)
 
-Spike option C first: it needs no probe except 1 and 4 (the two
-build-time ones), touches no guest code, inherits to `microvm-qemu`
-for free, and — behind an explicit `store = "host" | "tools"` config
-key with the db baked alongside the view — can run on a real host
-long enough to answer the ENOENT-diagnosis question honestly.
-Option B is worth a parallel spike (probes 2 and 3 are cheap) as the
-cleaner long-term shape, but it is not the first move: its payoff is
-lifting caveats the overlay-nix model already tolerates, while its
-open questions could invalidate it entirely.
+Option B, not the C first move the recommendation proposed: while
+probing C's mechanics (probe 1) turned up the structural blockers
+recorded above — the circular `/nix/store` symlink, the ARG_MAX wall
+of `nix build --print-out-paths | xargs`, hardlink-refusing bwrap
+binds, and a closure COPY whose size and rebuild cost dwarf the
+disk's — and probe 2 answered erofs as free on the krun side, the
+cost table flipped: `mkfs.erofs --tar` gives B everything C would
+have needed a farm for, with no populated tree at all. The key
+spelled `store = "host" | "baked"` (not `"tools"`): the disk carries
+the whole tool closure, and "baked" names the mechanism, not the
+contents.
 
-If the C spike survives live use, the follow-up decision — flipping
-the default, or extending the key to the bwrap tier — is a
-backends.md/config.md change with its own bead, informed by what the
-live runs broke.
+Shipped pieces: the image (`nix/krun-store-image.nix`), the krun
+launcher flag (`--store-disk`, `krun-rs`), the qemu twin
+(`microvm-qemu-rs` + `EROFS_FS=y` in the kernel pin), the guest init
+arm (`nix/krun-rootfs.nix` — erofs at `/nix`, the `/sys/block`
+ro-flag discrimination, the announced-refusal of unannounced ro
+devices), the spec wiring (`mysbx-rs` — the `store` key, the share
+drop, the manifest gate, the refusal on unpinned baked runs and on
+non-VM backends), the module option
+(`myconfig.ai.dev.mysbx.krun.store.enable`), the doctor line and
+the check (`mysbx-krun-store-disk-test`).
+
+If live runs survive, the follow-up decision — flipping the
+default, or extending the key to the bwrap tier (a ro bind of a
+view instead of the whole store) — is a backends.md/config.md
+change of its own, informed by what the live runs broke.
+
+## Handoff: the live validation this sandbox cannot run
+
+Everything above is verified at BUILD time (the rootfs test suite
+inside the derivation, the erofs check, the cargo suites, the
+goldens). What still needs a real KVM host — the probe-5 half:
+
+1. Boot a `store = "baked"` krun run (and the microvm-qemu twin)
+   with `MYSBX_KRUN_TRACE=1`: the init's trace must show the erofs
+   mount at `/nix` and NO store share placement.
+2. In-guest nix against the baked db: `nix path-info --all` lists
+   the baked closure, one substitution onto the scratch overlay
+   succeeds (the overlay's lowerdir IS the erofs mount), `nix
+   verify` on a baked path passes.
+3. The ro-device honesty: a write attempt to a baked store path
+   fails (read-only block device), the refusal names the disk, not
+   a generic EROFS.
+4. A host-built path outside the tool closure ENOENTs with the
+   diagnosis proposed in "What a narrowed store breaks".
+5. The budget: a config with the usual share set AND the two disks
+   boots (the static IRQ accounting says it fits — confirm).
+
+The harnesses exist (`nix/krun-live-validation.sh`,
+`nix/microvm-qemu-live-validation.sh`); the store-disk cases are
+the addition a KVM host runs.

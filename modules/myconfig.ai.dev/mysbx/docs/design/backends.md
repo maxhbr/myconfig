@@ -737,6 +737,28 @@ What the guest may read is decided entirely by the SPEC's shares:
   key: it can only NARROW (bind specific closures when a host
   wants the store hidden), never widen — the whole-store default
   is what the spike validated.
+- **The whole-store share is now OPTIONAL per run (guest-store.md,
+  the shipped narrowing).** The `store = "host" | "baked"` config
+  key (either layer, the sidecar wins, `host` when silent) selects
+  per run: `host` is D3's layout above, byte for byte; `baked`
+  DROPS the whole-store share and the j23 nix-var ride-along and
+  attaches the guest-own store disk the wrapper bakes — a
+  read-only erofs image of the wrapper's own tool closure with a
+  REGISTERED db (the dockerTools recipe, no host-db copy and no
+  reconcile), mounted at `/nix` by the init, the per-run scratch
+  overlay writing on top exactly as on the podman tier's image
+  store. The first tier NARROWER than the store it replaces: a
+  baked run sees its own tools only. The disk is attached by the
+  launchers (`--store-disk`, krun's `krun_add_disk2` with
+  read_only=true and qemu's `readonly=on` — the write protection
+  rides the virtio config into the guest, the init tells the disk
+  from the writable scratch by the `/sys/block` ro flag), gated on
+  the host's opt-in (`krun.store.enable` bakes and pins
+  `MYSBX_KRUN_STORE_DISK`; a baked run without the pin is refused,
+  never a silent host-store run) and refused on every non-VM
+  backend. `baked` still sees nothing host-side beyond its
+  workspace and configured mounts — the D3 share set minus the
+  store slot.
 - **Rootfs contents (what is baked vs. shared):** the rootfs bakes
   ONLY what must exist before any share is mounted — the static
   busybox of the guest entry (shebang + applet invocation: the
@@ -803,7 +825,9 @@ What the guest may read is decided entirely by the SPEC's shares:
   rule, for callers that CHOOSE a path.
 
 The KrunSpec builder (dak.3) turns the merged config into exactly
-this: cpus, ram, the rootfs pin, one ro store share, one rw
+this: cpus, ram, the rootfs pin, one ro store share (dropped for a
+`store = "baked"` run, its slot exempt from the mount cover check BY
+SLOT — a positional slice would exempt the workspace), one rw
 workspace share per the merged mounts' live/clone layout, the rw
 `<repo>__worktrees` sibling share (live run, sibling exists), the
 state-dirs shares, the configured mounts (implicit shares first; a
@@ -826,9 +850,11 @@ shares: mysbx builds one per-run tree per access mode under
 host dir into its slot, and each tree is ONE virtiofs device
 (`stage-ro`, read-only; `stage-rw`, read-write — the mode is the
 device's, enforced by the virtiofs server end to end). The store
-share rides in the ro tree like every other ro share (the rootfs's
-baked `/nix/store` link targets
-`/tmp/mysbx-shares/stage-ro/store`), so the device count is a
+share rides in the ro tree like every other ro share when present
+(a baked run carries none, and the manifest keeps its ro device
+anyway: its env records must not fall back to the 2048-byte
+cmdline); the rootfs's baked `/nix/store` link targets
+`/tmp/mysbx-shares/stage-ro/store`, so the device count is a
 CONSTANT 2 whatever the config mounts; the share records carry
 `DEVICE SLOT DEST ro|rw` and the init mounts each device once,
 bind-mounting `<device-mount>/<slot>` at each dest (a bind is no
@@ -1061,6 +1087,7 @@ What differs from `krun`, stated honestly:
 | network = shared | TSI vsock proxy (D6) | SLiRP user mode (`-netdev user`), the qemu tier's model — the guest init configures the NIC statically (10.0.2.15/24, default route 10.0.2.2, DNS 10.0.2.3 — qemu's fixed SLiRP defaults), gated on the `MYSBX_MICROVM_NET` manifest marker (bd myconfig-k106), and rewrites the guest resolver to the SLiRP DNS proxy — the host's own nameservers are host-local and dead behind the NAT (bd myconfig-m0to); libslirp's upstream discovery reads the host resolv.conf through a `--ro-bind-try` in the qemu arm's bwrap wrap |
 | network = false | implicit vsock disabled — NO socket path | NO netdev at all; bwrap additionally `--unshare-net`s the chain |
 | nix scratch | virtio-blk via `krun_add_disk2` (D7) | a virtio-blk `-drive` on the same per-run sparse file, same guest init |
+| guest-own store disk (`store = "baked"`) | `krun_add_disk2` with read_only=true — VIRTIO_BLK_F_RO, the same fixed id (`nixstore`) | a virtio-blk `-drive` with `readonly=on` on the same erofs image, same id; the kernel pin adds EROFS_FS=y (libkrunfw's x86_64 config already carries it) — the ro flag reaches /sys/block identically on both, which is how the init tells the disk from the writable scratch (guest-store.md) |
 | exit code | `krun_start_enter` returns the payload's | the init reports it over a virtio-serial port; PID-1 exit panics a stock guest, so the channel is out of band; the payload runs under `setsid -c` — a new session with the console as ctty, so interactive payloads keep job control and ^C (bd myconfig-w8jd) |
 | accel | KVM only (libkrun has no TCG) | `accel = kvm:tcg` — boots without /dev/kvm (slow), a diagnosis, not a supported mode |
 | console | the VMM's own stdio | `-serial mon:stdio` + `console=ttyS0` (bd myconfig-mbib): `-nodefaults` kills the default serial backend, so the argv wires it explicitly — the caller's terminal IS the guest console. A 16550 carries NO winsize (a live finding of bd myconfig-26z4, bd myconfig-a2uq): the guest ctty reported a 0x0 grid, herdr refused to attach and fish rendered blind. The pipeline therefore reads the caller's terminal size and rides it through the manifest env (`MYSBX_MICROVM_CONSOLE_SIZE=ROWSxCOLS`); the init stty's the console from it before the payload runs. Residual, inherent to the device: a resize mid-session does not propagate — the guest keeps the boot-time snapshot |
