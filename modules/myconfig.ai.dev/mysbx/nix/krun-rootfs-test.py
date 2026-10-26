@@ -54,8 +54,20 @@ class InitTests(unittest.TestCase):
 
     def run_reconcile(self, fail_query=None):
         # Extract the init's complete copy/reconcile block, not a SQL replica.
-        start = INIT.index("    if [ -d /tmp/mysbx-shares/stage-ro/nix-var/db ]; then")
-        reconcile = INIT.index("    if [ -f /mysbx-nix/state/db/db.sqlite ]; then", start)
+        # The block opens at the db_src pick (the store mode selects the
+        # source db: the baked disk's own or the host share's) so the
+        # extraction is self-contained; with the env unset the harness
+        # exercises the HOST branch, the one with a live share to diverge
+        # from the db snapshot.
+        start = INIT.index(
+            '    if [ "${MYSBX_KRUN_STORE_DISK:-}" = "1" ]; then\n'
+            "        db_src=/nix/var/nix/db"
+        )
+        reconcile = INIT.index(
+            '    if [ "${MYSBX_KRUN_STORE_DISK:-}" != "1" ]'
+            " && [ -f /mysbx-nix/state/db/db.sqlite ]; then",
+            start,
+        )
         end = INIT.index("\n    fi\n", reconcile) + len("\n    fi\n")
         block = INIT[start:end]
         self.assertNotRegex(block, r'"\$BB"\s+(?:mount|umount|chroot)\b|/bin/mkfs')
@@ -199,30 +211,71 @@ class InitTests(unittest.TestCase):
             '"$BB" mkdir -p /mysbx-nix/store-upper /mysbx-nix/store-work',
             '"$BB" mount -t tmpfs tmpfs /nix \\\n',
             '"$BB" mkdir -p /nix/store',
-            '"$BB" mount -t overlay overlay',
+            '-o lowerdir=/tmp/mysbx-shares/stage-ro/store,upperdir=/mysbx-nix/store-upper',
             'exec "$@"',
         ]
         offsets = [INIT.index(phase) for phase in phases]
         self.assertEqual(offsets, sorted(offsets), "DB validation must precede /nix shadowing and the overlay")
-        self.assertEqual(INIT.count('"$BB" mount -t overlay overlay'), 1)
+        # Both store modes mount exactly one store overlay (the baked
+        # erofs lower and the host-share lower), and only the SHARE mode
+        # needs the tmpfs mountpoint trick — /nix/store is a baked symlink
+        # there, a real erofs directory in the baked mode.
+        self.assertEqual(INIT.count('"$BB" mount -t overlay overlay'), 2)
+        self.assertEqual(
+            INIT.count('-o lowerdir=/nix/store,upperdir=/mysbx-nix/store-upper'), 1
+        )
+        self.assertEqual(
+            INIT.count(
+                '-o lowerdir=/tmp/mysbx-shares/stage-ro/store,'
+                "upperdir=/mysbx-nix/store-upper"
+            ),
+            1,
+        )
         self.assertEqual(INIT.count('"$BB" mount -t tmpfs tmpfs /nix \\\n'), 1)
         self.assertEqual(
             os.readlink(ROOTFS / "nix/store"),
             "/tmp/mysbx-shares/stage-ro/store",
         )
 
+    def test_store_disk_section(self):
+        # docs/design/guest-store.md: the guest-own store disk. The erofs
+        # mounts BEFORE the scratch section (the db copy reads /nix/var/nix
+        # off it), read-only at the device level; the two disks identify
+        # by their /sys/block/*/ro flag — the old "the scratch is the only
+        # /dev/vd*" assumption died with the second disk.
+        erofs = INIT.index('"$BB" mount -t erofs -o ro "$store_dev" /nix')
+        announce = INIT.index('if [ "${MYSBX_KRUN_STORE_DISK:-}" = "1" ]; then')
+        scratch = INIT.index('if [ "${MYSBX_KRUN_SCRATCH:-}" = "1" ]; then')
+        db_copy = INIT.index('db_src=/nix/var/nix/db')
+        baked_overlay = INIT.index('-o lowerdir=/nix/store,upperdir=/mysbx-nix/store-upper')
+        self.assertLess(announce, erofs)
+        self.assertLess(erofs, scratch)
+        self.assertLess(scratch, db_copy)
+        self.assertLess(db_copy, baked_overlay)
+        self.assertIn('store_dev="/dev/${d##*/}"', INIT)
+        self.assertIn('scratch_dev="/dev/${d##*/}"', INIT)
+        # The refusal side of the announce-or-refuse rule: a read-only vd*
+        # without the env marker is a disk the manifest forgot — never a
+        # silent store the payload could see unmounted.
+        self.assertIn(
+            "exists but MYSBX_KRUN_STORE_DISK is unset",
+            INIT,
+        )
+
     def test_trace_phases(self):
         # The traced step names of the db reconcile: the split of the
         # old single "validating" step into enumerate + check (each
         # with its own timing) must keep the ORDER and the completion
-        # marker the live validation greps for.
+        # marker the live validation greps for. The overlay phase anchors
+        # the SHARE branch's mount (the baked branch's overlay mounts on
+        # the erofs /nix/store directly, earlier in the file).
         phases = [
             'step "enumerating the registered store paths from the copied nix db"',
             "SELECT path FROM ValidPaths WHERE path LIKE",
             'fail "foreign-key violations remain in the copied nix database"',
             'step "copied nix db validation complete"',
             'step "mounting the store overlay (fresh scratch upper)"',
-            '"$BB" mount -t overlay overlay',
+            '-o lowerdir=/tmp/mysbx-shares/stage-ro/store,upperdir=/mysbx-nix/store-upper',
         ]
         offsets = [INIT.index(phase) for phase in phases]
         self.assertEqual(offsets, sorted(offsets))
