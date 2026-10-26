@@ -1651,6 +1651,106 @@ mod tests {
         assert!(BACKENDS.contains(&"krun"));
     }
 
+    /// The env is process-global (the crate runs its unit tests in
+    /// threads): every gate test takes the lock for its duration, so
+    /// the save/set/restore triple is never interleaved with another
+    /// test's — the tests touching MYSBX_ENABLED_BACKENDS serialize
+    /// among themselves while the rest of the suite stays parallel.
+    static GATE_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn with_enabled_backends<T>(v: Option<&str>, f: impl FnOnce() -> T) -> T {
+        let _guard = GATE_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let old = std::env::var("MYSBX_ENABLED_BACKENDS").ok();
+        match v {
+            Some(x) => unsafe { std::env::set_var("MYSBX_ENABLED_BACKENDS", x) },
+            None => unsafe { std::env::remove_var("MYSBX_ENABLED_BACKENDS") },
+        }
+        let out = f();
+        match old {
+            Some(x) => unsafe { std::env::set_var("MYSBX_ENABLED_BACKENDS", x) },
+            None => unsafe { std::env::remove_var("MYSBX_ENABLED_BACKENDS") },
+        }
+        out
+    }
+
+    #[test]
+    fn unset_enabled_backends_means_every_backend() {
+        // The unwrapped-build contract (bd myconfig-vc8k): no pin, no
+        // gate — every backend the crate knows stays selectable.
+        with_enabled_backends(None, || {
+            assert_eq!(enabled_backends(), BACKENDS.to_vec());
+        });
+    }
+
+    #[test]
+    fn empty_enabled_backends_means_every_backend() {
+        // The empty-means-unset rule of `env_or`/`env_opt` applies to
+        // the gate too: a wrapper that --set an empty value must not
+        // refuse every backend (an unwrapped shell export would).
+        with_enabled_backends(Some(""), || {
+            assert_eq!(enabled_backends(), BACKENDS.to_vec());
+        });
+    }
+
+    #[test]
+    fn enabled_backends_filters_to_the_pinned_list() {
+        // The module layer's flags-off host (bd myconfig-jlam):
+        // bubblewrap + nono only.
+        with_enabled_backends(Some("bubblewrap nono"), || {
+            assert_eq!(enabled_backends(), vec!["bubblewrap", "nono"]);
+        });
+        // Whitespace-separated in any order, and unknown names in the
+        // variable are ignored (the wrapper validates at build time,
+        // but the read must be robust anyway).
+        with_enabled_backends(Some("microvm-qemu  krun\tpodman-gvisor"), || {
+            assert_eq!(
+                enabled_backends(),
+                vec!["podman-gvisor", "krun", "microvm-qemu"]
+            );
+        });
+        with_enabled_backends(Some("bubblewrap nonsense"), || {
+            assert_eq!(enabled_backends(), vec!["bubblewrap"]);
+        });
+    }
+
+    #[test]
+    fn enable_option_names_the_module_flag_of_every_optin_backend() {
+        // The refusal's hint: every backend that can be disabled maps
+        // to exactly the option that enables it; bubblewrap and nono
+        // are always on and have none.
+        assert_eq!(
+            enable_option("podman-gvisor"),
+            Some("myconfig.ai.dev.mysbx.podman.enable")
+        );
+        assert_eq!(
+            enable_option("podman-krun"),
+            Some("myconfig.ai.dev.mysbx.podman.enable")
+        );
+        assert_eq!(
+            enable_option("krun"),
+            Some("myconfig.ai.dev.mysbx.krun.enable")
+        );
+        assert_eq!(
+            enable_option("microvm-qemu"),
+            Some("myconfig.ai.dev.mysbx.microvm-qemu.enable")
+        );
+        assert_eq!(enable_option("bubblewrap"), None);
+        assert_eq!(enable_option("nono"), None);
+    }
+
+    #[test]
+    fn enabled_backends_covers_every_gate_test_backend() {
+        // Guard against BACKENDS gaining a value the gate helper or
+        // its tests do not know: every backend must either map to an
+        // enable option or be always-on.
+        for b in BACKENDS {
+            assert!(
+                enable_option(b).is_some() || *b == "bubblewrap" || *b == "nono",
+                "backend {b} is neither always-on nor has an enable option"
+            );
+        }
+    }
+
     #[test]
     fn krun_rootfs_check_names_all_three_states() {
         // No pin: a blocker-grade FAIL naming the pin (an unwrapped
