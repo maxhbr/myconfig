@@ -2237,7 +2237,7 @@ fn bind(argv: &mut Vec<String>, ro: bool, src: &str, dest: Option<&str>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Display, Mount};
+    use crate::config::{Display, Mount, Store};
     use std::path::PathBuf;
 
     /// A synthetic repo root. [`bwrap_argv`] is pure: it canonicalizes
@@ -2268,6 +2268,7 @@ mod tests {
             memory: None,
             cpus: None,
             pids_limit: None,
+            store: Store::Host,
             multiplexer: Multiplexer::None,
             display: Display::Off,
         }

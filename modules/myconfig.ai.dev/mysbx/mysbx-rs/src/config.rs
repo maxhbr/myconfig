@@ -292,6 +292,67 @@ impl fmt::Display for Display {
     }
 }
 
+/// Which nix store a run's sandbox sees (docs/design/guest-store.md):
+/// a closed enum on purpose, like [`Display`] — a layer may say WHICH
+/// store, never a path. The VM backends (`krun`, `microvm-qemu`) attach
+/// their own store disk in `Baked` mode: an erofs image the Nix
+/// wrapper bakes at build time from the tools closure, with its
+/// registered db, mounted read-only over `/nix` — writes land on the
+/// scratch overlay as usual. `Host` is backends.md D3's default: the
+/// whole read-only host `/nix/store` through the virtiofs share.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Store {
+    /// The whole read-only host store through the share — the
+    /// behaviour every backend had before the key existed and what an
+    /// undecided configuration resolves to.
+    Host,
+    /// The guest-own store disk (VM backends only): no host store
+    /// path enters the sandbox; the wrapper must pin the image
+    /// (`MYSBX_KRUN_STORE_DISK`) or the run is refused. A non-VM
+    /// backend cannot express it — also refused, never dropped.
+    Baked,
+}
+
+impl Store {
+    /// The accepted spellings, in the order the schema error lists them.
+    pub const NAMES: &'static [&'static str] = &["host", "baked"];
+
+    fn parse(s: &str, at: &str) -> Result<Store, Error> {
+        match s {
+            "host" => Ok(Store::Host),
+            "baked" => Ok(Store::Baked),
+            other => Err(Error::Schema(format!(
+                "{at}: invalid store `{other}`, expected one of {}",
+                Store::NAMES
+                    .iter()
+                    .map(|n| format!("`{n}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ))),
+        }
+    }
+
+    /// The value as written in the configuration — the spelling every
+    /// message and the `--verbose` report use.
+    pub fn name(self) -> &'static str {
+        match self {
+            Store::Host => "host",
+            Store::Baked => "baked",
+        }
+    }
+
+    /// Whether the run asks for the guest-own store disk.
+    pub fn is_baked(self) -> bool {
+        self == Store::Baked
+    }
+}
+
+impl fmt::Display for Store {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 /// One additional host path exposed inside the sandbox.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Mount {
@@ -444,6 +505,16 @@ pub struct Config {
     /// Process limit (`pids-limit`, podman `--pids-limit`). Same
     /// layering as `memory`; only `podman-gvisor` enforces it.
     pub pids_limit: Option<u32>,
+    /// Which nix store the sandbox sees (`store`, docs/design/
+    /// guest-store.md): `None` means "not decided by this layer", like
+    /// `backend` — the [`Store::Host`] default is applied after the
+    /// merge, so a silent layer never counts as an explicit `host`.
+    /// Either layer may decide it and the sidecar wins when both do
+    /// (the key selects a store mysbx itself builds — it grants no
+    /// host access beyond what the mode already carries, so it needs
+    /// no `network`-style narrowing rule); `baked` is refused on
+    /// backends that cannot attach a store disk, never dropped.
+    pub store: Option<Store>,
 }
 
 impl Default for Config {
@@ -465,6 +536,7 @@ impl Default for Config {
             memory: None,
             cpus: None,
             pids_limit: None,
+            store: None,
         }
     }
 }
@@ -515,6 +587,7 @@ impl Config {
         "memory",
         "cpus",
         "pids-limit",
+        "store",
     ];
 
     /// Parse a configuration from TOML text.
@@ -586,6 +659,9 @@ impl Config {
                 "memory" => config.memory = Some(memory(value)?),
                 "cpus" => config.cpus = Some(cpus(value)?),
                 "pids-limit" => config.pids_limit = Some(pids_limit(value)?),
+                "store" => {
+                    config.store = Some(Store::parse(string(value, "store")?, "store")?)
+                }
                 // The config key D22 replaced: the sandbox's own SSH
                 // keypair is ALWAYS generated now, so the key decides
                 // nothing anymore. A config written for the old schema

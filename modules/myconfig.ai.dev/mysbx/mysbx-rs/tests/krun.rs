@@ -47,6 +47,7 @@ fn base(network: bool) -> Merged {
         memory: None,
         cpus: None,
         pids_limit: None,
+        store: mysbx::config::Store::Host,
         multiplexer: Multiplexer::None,
         display: mysbx::config::Display::Off,
     }
@@ -78,6 +79,7 @@ fn params<'a>(
         cpus: None,
         git_trust: None,
         scratch: None,
+        store_disk: None,
         verbose: false,
         detachable: false,
     }
@@ -581,6 +583,138 @@ fn a_scratch_param_renders_the_flag_and_the_announcement() {
 }
 
 #[test]
+fn a_store_disk_param_replaces_the_host_store_share() {
+    // docs/design/guest-store.md: the erofs image the Nix wrapper
+    // bakes REPLACES D3's whole-store share — no store share in the
+    // argv, no store slot in the staging binds (a bind would carry
+    // the host store the run exists to keep out), the flag names the
+    // image and the env announces it (the init mounts it at /nix,
+    // identified by the /sys/block ro flag — never by name).
+    let cfg = base(true);
+    let mut p = params("/synth/rootfs", "/synth/shell", None, Workspace::Live);
+    p.store_disk = Some("/synth/store-disk.img");
+    let argv = run(&cfg, &synth_repo(), &Payload::Shell, &p);
+    assert!(
+        !argv
+            .windows(2)
+            .any(|w| w[0] == "--ro-share" && w[1] == "stage-ro:store@/nix/store ro"),
+        "no host store share in a baked run"
+    );
+    let i = argv
+        .iter()
+        .position(|a| a == "--store-disk")
+        .expect("the --store-disk flag");
+    assert_eq!(argv[i + 1], "/synth/store-disk.img");
+    let j = argv
+        .windows(2)
+        .position(|w| w[0] == "--env" && w[1] == "MYSBX_KRUN_STORE_DISK=1")
+        .expect("the manifest env announcement");
+    assert!(argv[i + 1..j].iter().all(|a| a != "--chdir"));
+    // The staging binds drop the store slot with the share.
+    let binds = mysbx::krun::stage_binds(&cfg, &synth_repo(), &p);
+    assert!(
+        !binds.iter().any(|(_, _, slot)| slot == "store"),
+        "no host store slot in the staging binds"
+    );
+    // Without the param: no flag, no announcement — the pre-key argv.
+    let argv = run(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
+    );
+    assert!(!argv.iter().any(|a| a == "--store-disk"));
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--ro-share" && w[1] == "stage-ro:store@/nix/store ro"),
+        "the host run keeps the whole-store share"
+    );
+    assert!(mysbx::krun::stage_binds(
+        &cfg,
+        &synth_repo(),
+        &params("/synth/rootfs", "/synth/shell", None, Workspace::Live)
+    )
+    .iter()
+    .any(|(_, _, slot)| slot == "store"));
+}
+
+#[test]
+fn a_baked_run_needs_no_host_nix_db_ridealong() {
+    // The j23 ride-along exists because a COPIED host db can diverge
+    // from the LIVE host share (the mxu poison). The baked disk
+    // carries its own REGISTERED db — one image, no divergence, no
+    // reconcile — so neither the share nor its stage bind appears
+    // in a baked run, even with the network and a scratch.
+    let cfg = base(true);
+    let p = Params {
+        scratch: Some("/synth/scratch.img"),
+        store_disk: Some("/synth/store-disk.img"),
+        ..params("/synth/rootfs", "/synth/shell", None, Workspace::Live)
+    };
+    let argv = run(&cfg, &synth_repo(), &Payload::Shell, &p);
+    assert!(
+        !argv
+            .windows(2)
+            .any(|w| w[0] == "--ro-share" && w[1].starts_with("stage-ro:nix-var")),
+        "no nix-var share in a baked run"
+    );
+    assert!(
+        !mysbx::krun::stage_binds(&cfg, &synth_repo(), &p)
+            .iter()
+            .any(|(_, _, slot)| slot == "nix-var"),
+        "no nix-var stage bind in a baked run"
+    );
+    // The host run keeps both halves (the share gate of
+    // the_nix_var_share_rides_only_with_network_and_scratch pins it;
+    // this asserts the baked twin against the same params).
+    let host_p = Params {
+        scratch: Some("/synth/scratch.img"),
+        store_disk: None,
+        ..params("/synth/rootfs", "/synth/shell", None, Workspace::Live)
+    };
+    let argv = run(&cfg, &synth_repo(), &Payload::Shell, &host_p);
+    assert!(argv
+        .windows(2)
+        .any(|w| w[0] == "--ro-share" && w[1] == "stage-ro:nix-var@- ro"));
+}
+
+#[test]
+fn a_mount_never_hides_the_workspace_in_either_store_mode() {
+    // The cover check exempts the STORE share by slot (a mount over
+    // /nix/store is the placement guard's refusal, not a cover
+    // violation). A positional [1..] slice would silently exempt the
+    // WORKSPACE once the baked run drops the store share — pin both
+    // modes: a mount whose dest covers the workspace is refused
+    // either way, naming the workspace as the hidden share.
+    for store_disk in [None, Some("/synth/store-disk.img")] {
+        let mut cfg = base(true);
+        cfg.mounts
+            .push(make_mount("/synth/parent", Some("/home/synth"), Mode::Rw));
+        let mut p = params("/synth/rootfs", "/synth/shell", None, Workspace::Live);
+        p.store_disk = store_disk;
+        let err = krun_argv(&cfg, &synth_repo(), &Payload::Shell, &BTreeMap::new(), &p)
+            .expect_err("a mount covering the workspace is a cover violation");
+        assert!(
+            matches!(&err, mysbx::krun::Error::HiddenMount { hidden, .. }
+                if hidden == "/home/synth/repo"),
+            "the cover refusal fires with store_disk={store_disk:?}: {err}"
+        );
+    }
+}
+
+#[test]
+fn golden_baked_store_disk() {
+    // The full baked argv as a golden: minimal config plus the store
+    // disk — the store share is GONE, everything else is the
+    // minimal.txt twin (the disk changes one section, never the
+    // render shape).
+    let mut p = params("/synth/rootfs", "/synth/shell", None, Workspace::Live);
+    p.store_disk = Some("/synth/store-disk.img");
+    let argv = run(&base(true), &synth_repo(), &Payload::Shell, &p);
+    assert_golden("baked-store.txt", &argv);
+}
+
+#[test]
 fn clone_run_forces_configured_rw_mounts_read_only() {
     // workspace.md D4: in a clone run EVERY configured mount is
     // read-only — the session clone is the only writable bind.
@@ -853,6 +987,7 @@ fn params_owned<'a>(
         cpus: None,
         git_trust: None,
         scratch: None,
+        store_disk: None,
         verbose: false,
         detachable: false,
     }

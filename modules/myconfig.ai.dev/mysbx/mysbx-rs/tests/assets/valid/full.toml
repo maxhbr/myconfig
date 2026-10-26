@@ -49,6 +49,12 @@ memory = "8g"
 cpus = 4
 pids-limit = 512
 
+# The nix store the sandbox sees (docs/design/guest-store.md): `host` is
+# the whole read-only host store (the pre-key behaviour); `baked` would
+# run the VM backends on their own store disk instead and is refused on
+# this backend.
+store = "host"
+
 [[mounts]]
 path = "/home/user/.config/pi"
 mode = "ro"
