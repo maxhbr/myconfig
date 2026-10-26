@@ -14,6 +14,8 @@
 #
 #   virtio_pci / virtio_fs / virtio_blk / virtio_net  the devices
 #   ext4 + overlayfs                                  the scratch + store overlay
+#   erofs                                             the guest-own store disk
+#                                                     (docs/design/guest-store.md)
 #   8250 console                                      already =y, the serial console
 #   tmpfs, proc, sysfs                                 already =y, the init's mounts
 #
@@ -51,6 +53,12 @@ kernelPackages.kernel.override {
     # The scratch (bd myconfig-dak.7) and the store overlay.
     EXT4_FS = yes;
     OVERLAY_FS = yes;
+    # The guest-own nix store disk (docs/design/guest-store.md): the
+    # erofs image the wrapper bakes mounts at /nix, read-only — and
+    # the scratch overlay takes that mount as its lowerdir, so the
+    # format must be built in like ext4 is (libkrunfw's own config
+    # already carries it; the stock nixpkgs default does not).
+    EROFS_FS = yes;
     # VIRTIO_FS=y selects FUSE — the default kernel ships it as a
     # module, and the config generator re-asks VIRTIO_FS when its
     # dependency stays m (the repeated-question refusal).

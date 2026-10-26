@@ -77,6 +77,14 @@ const EXIT_PORT: &str = "mysbx-exit";
 /// attaches with krun_add_disk2).
 const SCRATCH_DRIVE_ID: &str = "scratch";
 
+/// The guest-own nix store disk's BLOCK id (docs/design/
+/// guest-store.md — the same fixed name the krun launcher attaches
+/// with krun_add_disk2). The drive is READ-ONLY: QEMU negotiates
+/// the write protection down to the virtio config (VIRTIO_BLK_F_RO)
+/// and the guest kernel marks the device ro — how the init tells it
+/// from the WRITABLE scratch.
+const STORE_DRIVE_ID: &str = "nixstore";
+
 /// The per-run dir the virtiofsd sockets and the exit-channel
 /// socket live in (the builders.nix chain runs from ONE cwd — the
 /// same isolation here: one dir per launcher pid, swept at exit).
@@ -129,6 +137,7 @@ struct Config {
     network: bool,
     workdir: PathBuf,
     scratch: Option<PathBuf>,
+    store_disk: Option<PathBuf>,
     payload: Vec<String>,
 }
 
@@ -139,7 +148,7 @@ fn usage() -> ! {
          [--ro-device TAG=DIR] [--rw-device TAG=DIR] \
          [--ro-share TAG:SLOT@DEST] [--rw-share TAG:SLOT@DEST] \
          [--manifest FILE] [--network shared|none] \
-         [--scratch FILE] [--env K=V]... \
+         [--scratch FILE] [--store-disk FILE] [--env K=V]... \
          [--krun-overlay TAG@PATH:MODE:B64]... [--chdir DIR] -- CMD [ARGS...]"
     );
     std::process::exit(2);
@@ -225,6 +234,7 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
         network: true,
         workdir: PathBuf::from("/"),
         scratch: None,
+        store_disk: None,
         payload: Vec::new(),
     };
     // The `--` split first: everything after it is the payload, never
@@ -282,6 +292,9 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
                         other => return Err(format!("--network `{other}` is not shared|none")),
                     },
                     "--scratch" => cfg.scratch = Some(PathBuf::from(value_of("--scratch")?)),
+                    "--store-disk" => {
+                        cfg.store_disk = Some(PathBuf::from(value_of("--store-disk")?))
+                    }
                     "--chdir" => cfg.workdir = PathBuf::from(value_of("--chdir")?),
                     other => return Err(format!("unknown argument `{other}`")),
                 }
@@ -574,6 +587,23 @@ fn qemu_argv(
         argv.push("-device".to_owned());
         argv.push(format!("virtio-blk-pci,drive={SCRATCH_DRIVE_ID}"));
     }
+    // The guest-own nix store disk (docs/design/guest-store.md): the
+    // erofs image the wrapper bakes, as a second virtio-blk drive
+    // with QEMU's readonly=on — the write protection rides the
+    // virtio config (VIRTIO_BLK_F_RO) into the guest kernel, which
+    // marks the device ro in /sys/block: the init mounts it at /nix
+    // and tells it from the WRITABLE scratch by exactly that flag.
+    // No --store-disk attaches nothing; the run keeps the ro host
+    // store share (D3's default).
+    if let Some(disk) = &cfg.store_disk {
+        argv.push("-drive".to_owned());
+        argv.push(format!(
+            "id={STORE_DRIVE_ID},format=raw,file={},if=none,readonly=on",
+            disk.display()
+        ));
+        argv.push("-device".to_owned());
+        argv.push(format!("virtio-blk-pci,drive={STORE_DRIVE_ID}"));
+    }
     // The exit channel (D9): the virtio-serial port the guest init
     // writes the payload's exit code to. The launcher connects to
     // the socket AFTER qemu creates it (server=on,wait=off) and
@@ -702,6 +732,7 @@ fn run(cfg: Config, boot_started: Instant) -> i32 {
             if cfg.network { "shared" } else { "none" }
         );
         eprintln!("mysbx-microvm-qemu: scratch: {:?}", cfg.scratch);
+        eprintln!("mysbx-microvm-qemu: store-disk: {:?}", cfg.store_disk);
         eprintln!(
             "mysbx-microvm-qemu: {} env entries, {} overlay files",
             cfg.env.len(),
@@ -998,6 +1029,7 @@ mod tests {
             network: true,
             workdir: PathBuf::from("/home/synth/repo"),
             scratch: None,
+            store_disk: None,
             payload: vec!["/synth/shell".to_owned()],
         }
     }
@@ -1204,6 +1236,38 @@ mod tests {
         );
         assert!(!argv.iter().any(|a| a.starts_with("user,id=")));
         assert!(!argv.iter().any(|a| a.contains("virtio-net")));
+    }
+
+    #[test]
+    fn the_store_disk_attaches_as_a_read_only_virtio_blk_drive() {
+        // docs/design/guest-store.md: the baked store disk is a second
+        // virtio-blk drive beside the scratch, with QEMU's readonly=on
+        // — the write protection the init later reads as the
+        // /sys/block ro flag that tells the two disks apart. Without
+        // the flag no drive appears (the run keeps the host store
+        // share, D3's default).
+        let sockets =
+            |tag: &str| PathBuf::from(format!("/run/sock/{}.sock", tag.replace('/', "-")));
+        let mut cfg = test_cfg();
+        cfg.store_disk = Some(PathBuf::from("/store-disk.img"));
+        let argv = qemu_argv(
+            Path::new("/synth/qemu"),
+            &cfg,
+            &sockets,
+            Some(Path::new("/run/sock/exit.sock")),
+        );
+        assert!(argv
+            .iter()
+            .any(|a| a == "id=nixstore,format=raw,file=/store-disk.img,if=none,readonly=on"));
+        assert!(argv.iter().any(|a| a == "virtio-blk-pci,drive=nixstore"));
+        // Without the flag: no drive, no device.
+        let argv = qemu_argv(
+            Path::new("/synth/qemu"),
+            &test_cfg(),
+            &sockets,
+            Some(Path::new("/run/sock/exit.sock")),
+        );
+        assert!(!argv.iter().any(|a| a.contains("nixstore")));
     }
 
     #[test]
