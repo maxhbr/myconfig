@@ -2112,6 +2112,15 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             );
             return EXIT_INFRASTRUCTURE;
         }
+        // The availability gate (MYSBX_ENABLED_BACKENDS, pinned by the
+        // Nix wrapper from the module's opt-in flags): a disabled
+        // backend is refused HERE — before the session clone and before
+        // the argv — and never reaches the backend arms below. For
+        // `podman-krun` this is load-bearing: its bare-`crun` PATH
+        // fallback would otherwise silently run an ordinary container.
+        if !doctor::enabled_backends().contains(&name.as_str()) {
+            return doctor::refuse_disabled(name);
+        }
         merged.backend = Some(name.clone());
         cli_set_backend = true;
     }
@@ -2311,6 +2320,13 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // echoed it early, this arm is the authoritative one.
     let backend = match merged.backend.as_deref() {
         Some("bubblewrap" | "podman-gvisor" | "nono" | "podman-krun" | "krun" | "microvm-qemu") => {
+            // The authoritative availability gate: the early flag check
+            // above already refused a disabled --backend, this arm covers
+            // the config layers (user layer and sidecar) and the
+            // --<backend> shorthands routed through `doctor::BACKENDS`.
+            if !doctor::enabled_backends().contains(&merged.backend.as_deref().unwrap()) {
+                return doctor::refuse_disabled(merged.backend.as_deref().unwrap());
+            }
             merged.backend.as_deref().unwrap()
         }
         Some(other) => {
@@ -2999,6 +3015,15 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                     "  the Nix wrapper pins MYSBX_PODMAN_IMAGE when the host \
                      builds a gVisor agent image; an unwrapped build sets none"
                 );
+                if !doctor::enabled_backends()
+                    .iter()
+                    .any(|b| *b == "podman-gvisor" || *b == "podman-krun")
+                {
+                    eprintln!(
+                        "  the podman backends are disabled on this host — enable \
+                         myconfig.ai.dev.mysbx.podman.enable and rebuild"
+                    );
+                }
                 eprintln!("  set MYSBX_PODMAN_IMAGE <ref>, or switch backends");
                 return EXIT_INFRASTRUCTURE;
             };

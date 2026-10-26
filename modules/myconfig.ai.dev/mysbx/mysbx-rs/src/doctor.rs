@@ -52,6 +52,48 @@ pub const BACKENDS: &[&str] = &[
     "microvm-qemu",
 ];
 
+/// The module option that enables a backend — the hint the disabled
+/// refusals print. `bubblewrap` and `nono` are always on, so they have
+/// none (and can never be refused).
+fn enable_option(backend: &str) -> Option<&'static str> {
+    match backend {
+        "podman-gvisor" | "podman-krun" => Some("myconfig.ai.dev.mysbx.podman.enable"),
+        "krun" => Some("myconfig.ai.dev.mysbx.krun.enable"),
+        "microvm-qemu" => Some("myconfig.ai.dev.mysbx.microvm-qemu.enable"),
+        _ => None,
+    }
+}
+
+/// The backends THIS host carries: `MYSBX_ENABLED_BACKENDS` (set by the
+/// Nix wrapper from the module's opt-in flags), unset meaning every
+/// backend the crate knows (the unwrapped-build contract).
+///
+/// The gate is load-bearing for `podman-krun`, whose bare-`crun` PATH
+/// fallback would otherwise silently run an ordinary container instead
+/// of a microVM on a host that opted out.
+pub fn enabled_backends() -> Vec<&'static str> {
+    match std::env::var("MYSBX_ENABLED_BACKENDS") {
+        Ok(list) if !list.is_empty() => BACKENDS
+            .iter()
+            .copied()
+            .filter(|b| list.split_whitespace().any(|n| n == *b))
+            .collect(),
+        _ => BACKENDS.to_vec(),
+    }
+}
+
+/// Refuse a backend this host opted out of — the shared refusal of the
+/// run pipeline and doctor. Prints the message, returns the exit code.
+pub fn refuse_disabled(backend: &str) -> i32 {
+    eprintln!("mysbx: backend `{backend}` is disabled on this host");
+    eprintln!(
+        "  enable it with {} and rebuild, or pick one of: {}",
+        enable_option(backend).unwrap_or("(no option)"),
+        enabled_backends().join(", ")
+    );
+    crate::EXIT_INFRASTRUCTURE
+}
+
 /// The variables that name a model endpoint, in lookup order.
 pub const ENDPOINT_VARS: &[&str] = &["OPENAI_BASE_URL", "ANTHROPIC_BASE_URL"];
 
@@ -1416,6 +1458,15 @@ pub fn run(args: &[String]) -> i32 {
                 return 2;
             }
             name if BACKENDS.contains(&name) => {
+                if !crate::doctor::enabled_backends().iter().any(|b| *b == name) {
+                    eprintln!("mysbx doctor: backend `{name}` is disabled on this host");
+                    eprintln!(
+                        "  enable it with {} and rebuild, or check one of: {}",
+                        enable_option(name).unwrap_or("(no option)"),
+                        crate::doctor::enabled_backends().join(", ")
+                    );
+                    return 2;
+                }
                 if !named.iter().any(|n| n == name) {
                     named.push(name.to_owned());
                 }
@@ -1448,8 +1499,25 @@ pub fn run(args: &[String]) -> i32 {
     } else {
         match merged.backend.as_deref() {
             Some(b) if BACKENDS.contains(&b) => {
-                header.push(Check::ok("backend", format!("{b} [configuration]")));
-                vec![b.to_owned()]
+                // The availability gate (MYSBX_ENABLED_BACKENDS): a
+                // configured backend the host opted out of is a fail
+                // naming the option — the same message shape the run
+                // pipeline prints — and probes nothing.
+                if !crate::doctor::enabled_backends().contains(&b) {
+                    header.push(Check::fail(
+                        "backend",
+                        format!("backend `{b}` is disabled on this host"),
+                        format!(
+                            "enable it with {} and rebuild, or pick one of: {}",
+                            enable_option(b).unwrap_or("(no option)"),
+                            crate::doctor::enabled_backends().join(", ")
+                        ),
+                    ));
+                    Vec::new()
+                } else {
+                    header.push(Check::ok("backend", format!("{b} [configuration]")));
+                    vec![b.to_owned()]
+                }
             }
             Some(b) => {
                 header.push(Check::fail(
@@ -1519,6 +1587,16 @@ pub fn run(args: &[String]) -> i32 {
         .filter(|b| !targets.iter().any(|t| t.as_str() == *b))
         .collect();
     if !targets.is_empty() && !others.is_empty() {
+        // Disabled backends are marked in the listing so the absence of
+        // their checks reads as a host decision, not an oversight.
+        let enabled = crate::doctor::enabled_backends();
+        let render_other = |b: &str| {
+            if enabled.contains(&b) {
+                b.to_owned()
+            } else {
+                format!("{b} (disabled)")
+            }
+        };
         sections.push(Section {
             title: "other backends".to_owned(),
             checks: vec![Check::ok(
@@ -1526,12 +1604,20 @@ pub fn run(args: &[String]) -> i32 {
                 if from_command_line {
                     format!(
                         "{} (check one with: mysbx doctor <backend>)",
-                        others.join(", ")
+                        others
+                            .iter()
+                            .map(|b| render_other(b))
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     )
                 } else {
                     format!(
                         "{} (not configured; check one with: mysbx doctor <backend>)",
-                        others.join(", ")
+                        others
+                            .iter()
+                            .map(|b| render_other(b))
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     )
                 },
             )],
