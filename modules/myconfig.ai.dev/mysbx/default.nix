@@ -240,6 +240,22 @@ let
       PLAYWRIGHT_MCP_EXECUTABLE_PATH = lib.getExe browserPackage;
     });
 
+  # The backends this host carries (the wrapper pins the set as
+  # MYSBX_ENABLED_BACKENDS and the CLI refuses everything else with a
+  # message naming the option): `bubblewrap` and `nono` are the always-on
+  # base, the three heavy backends ride their opt-in flag. `podman.enable`
+  # covers BOTH podman backends — they share the image and the host setup.
+  enabledBackends = [
+    "bubblewrap"
+    "nono"
+  ]
+  ++ lib.optionals cfg.podman.enable [
+    "podman-gvisor"
+    "podman-krun"
+  ]
+  ++ lib.optional cfg.krun.enable "krun"
+  ++ lib.optional cfg.microvm-qemu.enable "microvm-qemu";
+
   # `dest` is optional in the schema and there is no TOML null: a
   # `dest = null` key would be a type error in the strict parser, so it is
   # dropped instead of rendered.
@@ -440,47 +456,58 @@ in
       # pinned to store paths.
       # The unwrapped crate build stays reachable as
       # `<package>.passthru.crate` (used by nix/checks.nix).
+      # Backend availability is an opt-in (podman.enable / krun.enable /
+      # microvm-qemu.enable, default off): every backend pin below is
+      # `null` unless its flag is on, so a disabled backend leaves the
+      # wrapper's closure AND the CLI refuses the run (MYSBX_ENABLED_BACKENDS,
+      # passed as `enabledBackends`). `null` pins nothing — the contract
+      # nix/mysbx.nix already documents for a hand-overridden image or a
+      # host that runs `bubblewrap`/`nono` only.
       default = pkgs.callPackage ./nix/mysbx.nix {
         inherit (cfg) extraTools;
-        inherit muxEntries;
+        inherit muxEntries enabledBackends;
         alacritty = cfg.terminal.package;
         shell = cfg.shell.path;
-        podmanImage = cfg.podman.image;
-        podmanShell = cfg.podman.shell;
-        podmanPastaSpec = cfg.podman.pastaSpec;
-        podmanEnv = cfg.podman.env;
-        krunRuntime = cfg.krun.runtime;
+        podmanImage = if cfg.podman.enable then cfg.podman.image else null;
+        podmanShell = if cfg.podman.enable then cfg.podman.shell else null;
+        podmanPastaSpec = if cfg.podman.enable then cfg.podman.pastaSpec else null;
+        podmanEnv = if cfg.podman.enable then cfg.podman.env else { };
+        # The podman-krun runtime (backends.md D2): the backend is
+        # `podman-gvisor` with the runtime swapped, so it rides the
+        # podman flag — the shared image is what makes it runnable.
+        krunRuntime = if cfg.podman.enable then cfg.krun.runtime else null;
         # The per-run scratch disk (bd myconfig-0pi): pinned only
         # when the guest nix wrappers are baked into the image —
         # otherwise nothing in the guest would consume the file.
-        krunScratchSize = if cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null;
+        krunScratchSize =
+          if cfg.podman.enable && cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null;
         # The direct-libkrun backend (bd myconfig-dak.4): the
         # launcher and the guest rootfs, pinned as
         # MYSBX_KRUN_LAUNCHER/MYSBX_KRUN_ROOTFS.
-        krunLauncher = cfg.krun.direct.launcher;
-        krunRootfs = cfg.krun.direct.rootfs;
+        krunLauncher = if cfg.krun.enable then cfg.krun.direct.launcher else null;
+        krunRootfs = if cfg.krun.enable then cfg.krun.direct.rootfs else null;
         # The native-qemu backend (backends.md D9, bd myconfig-2l9b):
         # the launcher, the SHARED guest rootfs and the kernel
         # libkrun bundles, pinned as MYSBX_MICROVM_QEMU_*.
-        microvmQemuLauncher = cfg.microvm-qemu.launcher;
-        microvmQemuRootfs = cfg.microvm-qemu.rootfs;
+        microvmQemuLauncher = if cfg.microvm-qemu.enable then cfg.microvm-qemu.launcher else null;
+        microvmQemuRootfs = if cfg.microvm-qemu.enable then cfg.microvm-qemu.rootfs else null;
         # The IMAGE FILE, not the kernel package: qemu's -kernel
         # reads a file (a directory is EISDIR), and doctor's
         # is-file rule matches only the image (bd myconfig-q3se).
-        microvmQemuKernel = "${cfg.microvm-qemu.kernel}/bzImage";
+        microvmQemuKernel = if cfg.microvm-qemu.enable then "${cfg.microvm-qemu.kernel}/bzImage" else null;
         # Backend-specific env pins (bd myconfig-mzys): the SLiRP
         # guest's model endpoint, the qemu twin of `podmanEnv`.
-        microvmQemuEnv = cfg.microvm-qemu.env;
+        microvmQemuEnv = if cfg.microvm-qemu.enable then cfg.microvm-qemu.env else { };
         waypipe = cfg.display.package;
         # The dtach master of detached runs (docs/design/detach.md
         # B10): pinned so `--detach` needs no host PATH lookup.
         dtach = pkgs.dtach;
-        podmanWaypipe = cfg.podman.waypipe;
-        podmanMuxEntries = cfg.podman.muxEntries;
+        podmanWaypipe = if cfg.podman.enable then cfg.podman.waypipe else null;
+        podmanMuxEntries = if cfg.podman.enable then cfg.podman.muxEntries else { };
         nono = cfg.nono.package;
         ssh-keygen = pkgs.openssh;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries; alacritty = cfg.terminal.package; shell = cfg.shell.path; podmanImage = cfg.podman.image; podmanShell = cfg.podman.shell; podmanPastaSpec = cfg.podman.pastaSpec; podmanEnv = cfg.podman.env; microvmQemuEnv = cfg.microvm-qemu.env; krunRuntime = cfg.krun.runtime; krunScratchSize = if cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null; krunLauncher = cfg.krun.direct.launcher; krunRootfs = cfg.krun.direct.rootfs; waypipe = cfg.display.package; dtach = pkgs.dtach; podmanWaypipe = cfg.podman.waypipe; podmanMuxEntries = cfg.podman.muxEntries; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries enabledBackends; alacritty = cfg.terminal.package; shell = cfg.shell.path; podmanImage = if cfg.podman.enable then cfg.podman.image else null; podmanShell = if cfg.podman.enable then cfg.podman.shell else null; podmanPastaSpec = if cfg.podman.enable then cfg.podman.pastaSpec else null; podmanEnv = if cfg.podman.enable then cfg.podman.env else { }; krunRuntime = if cfg.podman.enable then cfg.krun.runtime else null; krunScratchSize = if cfg.podman.enable && cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null; krunLauncher = if cfg.krun.enable then cfg.krun.direct.launcher else null; krunRootfs = if cfg.krun.enable then cfg.krun.direct.rootfs else null; microvmQemuLauncher = if cfg.microvm-qemu.enable then cfg.microvm-qemu.launcher else null; microvmQemuRootfs = if cfg.microvm-qemu.enable then cfg.microvm-qemu.rootfs else null; microvmQemuKernel = if cfg.microvm-qemu.enable then \"${cfg.microvm-qemu.kernel}/bzImage\" else null; microvmQemuEnv = if cfg.microvm-qemu.enable then cfg.microvm-qemu.env else { }; waypipe = cfg.display.package; dtach = pkgs.dtach; podmanWaypipe = if cfg.podman.enable then cfg.podman.waypipe else null; podmanMuxEntries = if cfg.podman.enable then cfg.podman.muxEntries else { }; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -745,6 +772,23 @@ in
     };
 
     podman = {
+      enable = mkEnableOption ''
+        the podman backends (`podman-gvisor` and `podman-krun`): the
+        agent OCI image (`podman.image`), the host setup of ./podman.nix
+        (rootless podman, gvisor's runsc registration, subuid ranges) and
+        every MYSBX_PODMAN_* pin of the wrapper. Off by default: the image
+        and gvisor are heavy closures (and heavy builds), so a host that
+        only runs `bubblewrap`/`nono` sandboxes carries none of it.
+
+        Off means REFUSED, never absent-pin-by-accident: the wrapper
+        pins `MYSBX_ENABLED_BACKENDS` without the two values and the
+        CLI refuses a `--podman-gvisor`/`--podman-krun` run with a
+        message naming this option. That explicit gate is load-bearing
+        for `podman-krun`, whose crate has a PATH fallback
+        (`MYSBX_KRUN_RUNTIME` defaults to `crun`) — without it a
+        disabled run would silently land in an ordinary container.
+      '';
+
       # The interactive payload shell of the podman-gvisor backend (bd
       # myconfig-cew): the same shell the user logs into on the host,
       # baked into the image by `podman.extraImagePackages` (which
@@ -924,7 +968,24 @@ in
       };
     };
 
+    # The direct-libkrun backend group. The PODMAN-krun variant lives
+    # under `podman.enable` (it is the podman-gvisor argv with the runtime
+    # swapped): only `krun.direct.*` below is this flag's backend.
     krun = {
+      enable = mkEnableOption ''
+        the direct-libkrun backend (`backend = "krun"`): the mysbx-krun
+        launcher and the guest rootfs (bd myconfig-dak) — each run a
+        rootless KVM microVM with its own kernel, the host /nix/store
+        shared read-only over virtiofs. Off by default: libkrun, the
+        rootfs build (static busybox/e2fs/sqlite/store-scan) and the
+        launcher are a heavy closure a host that never runs the backend
+        should not carry.
+
+        Off means REFUSED, never absent-pin-by-accident: the wrapper
+        pins `MYSBX_ENABLED_BACKENDS` without `krun` and the CLI
+        refuses the run with a message naming this option.
+      '';
+
       # The podman-krun backend (mysbx-rs/src/podman_gvisor.rs under a
       # swapped runtime, docs/design/backends.md D2, bd myconfig-6di.5):
       # `backend = "podman-krun"` runs the podman-gvisor argv with the
@@ -932,7 +993,9 @@ in
       # rootless KVM microVM with its own kernel, mounts over
       # virtio-fs. Requires the user to have rw access to `/dev/kvm`
       # (the `kvm` group or the seat udev ACL); a run on a host without
-      # it is refused, never a silent fallback.
+      # it is refused, never a silent fallback. Available with
+      # `podman.enable` (the shared image and host setup), not this
+      # flag.
       runtime = mkOption {
         type = types.nullOr types.package;
         # nixpkgs' crun already defaults `withLibkrun` to
@@ -1175,6 +1238,18 @@ in
     # mode — the launcher's kvm:tcg fallback is a diagnosis, not a
     # supported mode (D9).
     microvm-qemu = {
+      enable = mkEnableOption ''
+        the native-qemu backend (`backend = "microvm-qemu"`): the
+        mysbx-microvm-qemu launcher, the guest rootfs and the
+        microvm kernel (bd myconfig-2l9b). Off by default: qemu,
+        virtiofsd and a rebuilt kernel are a heavy closure a host that
+        never runs the backend should not carry.
+
+        Off means REFUSED, never absent-pin-by-accident: the wrapper
+        pins `MYSBX_ENABLED_BACKENDS` without `microvm-qemu` and the
+        CLI refuses the run with a message naming this option.
+      '';
+
       launcher = mkOption {
         type = types.package;
         default = pkgs.callPackage ./nix/microvm-qemu-launcher.nix {
@@ -1382,10 +1457,12 @@ in
                 "podman-gvisor"
                 "nono"
                 "podman-krun"
+                "krun"
+                "microvm-qemu"
               ]
             );
             default = "bubblewrap";
-            description = "Sandbox backend (`bubblewrap`, `podman-gvisor`, `nono` or `podman-krun`); `null` leaves the choice to the sidecar.";
+            description = "Sandbox backend (`bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`, `krun` or `microvm-qemu`); `null` leaves the choice to the sidecar.";
           };
           network = mkOption {
             type = types.bool;
@@ -1805,6 +1882,35 @@ in
             (docs/design/config.md D18).
           '';
         }
+        {
+          # Availability of the SELECTED backend, checked at eval time —
+          # the same shape as the multiplexer assertion above: a host-wide
+          # default nobody can run is a build error. The runtime refuses a
+          # disabled backend too (that is the guard for a *sidecar* naming
+          # one); the explicit CLI gate is load-bearing for podman-krun,
+          # whose bare-`crun` PATH fallback would otherwise silently run
+          # an ordinary container instead of a microVM.
+          assertion = cfg.config.backend == null || builtins.elem cfg.config.backend enabledBackends;
+          message = ''
+            myconfig.ai.dev.mysbx.config.backend is
+            "${cfg.config.backend}", but that backend is not enabled on
+            this host — set myconfig.ai.dev.mysbx.podman.enable
+            (podman-gvisor, podman-krun), .krun.enable (krun) or
+            .microvm-qemu.enable (microvm-qemu), or select another
+            backend.
+          '';
+        }
+        {
+          # The opt-in must be satisfiable: `podman.enable` with a
+          # hand-nulled image is a refused run nobody asked for.
+          assertion = !cfg.podman.enable || cfg.podman.image != null;
+          message = ''
+            myconfig.ai.dev.mysbx.podman.enable is on, but
+            myconfig.ai.dev.mysbx.podman.image is null — the podman
+            backends need the agent image pinned. Restore the default
+            image or turn the flag off.
+          '';
+        }
       ];
 
     # Baseline mounts; further definitions (from per-agent modules or the
@@ -1813,8 +1919,10 @@ in
 
     # The krun launcher's fd ceiling (`krun.direct.userNofileLimit`):
     # user@.service bounds the user manager itself, user.conf the
-    # units (and so the sessions) it starts.
-    systemd = lib.mkIf (cfg.krun.direct.userNofileLimit != null) (
+    # units (and so the sessions) it starts. Gated on `krun.enable`:
+    # the direct-libkrun backend is the only consumer of the raised
+    # ceiling.
+    systemd = lib.mkIf (cfg.krun.enable && cfg.krun.direct.userNofileLimit != null) (
       let
         limit = "1024:${toString cfg.krun.direct.userNofileLimit}";
       in
@@ -1837,7 +1945,7 @@ in
     # network namespace, where `127.0.0.1:<litellm port>` is the proxy
     # itself.
     myconfig.ai.dev.litellm-forwarder.enable = lib.mkIf (
-      cfg.podman.image != null && config.services.litellm.enable
+      cfg.podman.enable && config.services.litellm.enable
     ) true;
 
     # The endpoint as the CONTAINER sees it, for tools that read
@@ -1845,7 +1953,7 @@ in
     # configuration is a generated file add their own entries from their
     # own modules (../programs/programs.pi-coding-agent,
     # ../programs/programs.opencode).
-    myconfig.ai.dev.mysbx.podman.env = lib.mkIf litellmForwarder.enable {
+    myconfig.ai.dev.mysbx.podman.env = lib.mkIf (cfg.podman.enable && litellmForwarder.enable) {
       OPENAI_BASE_URL = litellmForwarder.endpoint;
     };
 
@@ -1859,9 +1967,11 @@ in
     # `--map-guest-addr`, which maps an address, not a loopback). The
     # same per-agent modules that fill `podman.env` add their own
     # `microvm-qemu.env` entries.
-    myconfig.ai.dev.mysbx.microvm-qemu.env = lib.mkIf config.services.litellm.enable {
-      OPENAI_BASE_URL = "http://10.0.2.2:${toString config.services.litellm.port}/v1";
-    };
+    myconfig.ai.dev.mysbx.microvm-qemu.env =
+      lib.mkIf (cfg.microvm-qemu.enable && config.services.litellm.enable)
+        {
+          OPENAI_BASE_URL = "http://10.0.2.2:${toString config.services.litellm.port}/v1";
+        };
 
     # The selected multiplexer's own tooling, on the sandbox PATH: the
     # entries pin their own copies, but a PANE that runs the tool (the
