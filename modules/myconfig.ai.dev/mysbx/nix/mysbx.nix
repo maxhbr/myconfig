@@ -147,6 +147,21 @@
 #                     wrapper's own closure (`coreutils`); an
 #                     unwrapped build gets no pin and the crate's
 #                     PATH fallback (`env` via env_or) applies.
+#   MYSBX_ENABLED_BACKENDS
+#                     NOT a closure path — the availability gate: the
+#                     space-separated list of backends this host carries
+#                     (the module layer's `enabledBackends`, from
+#                     myconfig.ai.dev.mysbx.podman.enable / krun.enable /
+#                     microvm-qemu.enable; `bubblewrap` and `nono`
+#                     always). The CLI refuses every backend NOT in the
+#                     list with a message naming the module option —
+#                     load-bearing for `podman-krun`, whose bare-`crun`
+#                     PATH fallback would otherwise silently run an
+#                     ordinary container instead of a microVM.
+#                     UNSET (an unwrapped build, or a caller that
+#                     passes `null`) means no gate: every backend the
+#                     crate knows is selectable, the historical
+#                     contract of a hand-run build.
 #
 # All these pins are absolute store paths — nothing is left to host lookup.
 # (MYSBX_NONO_PROFILE is an operator knob among them, like
@@ -302,6 +317,14 @@
   # Values must not contain whitespace — the crate splits the list on
   # it, so a value with a space would be silently truncated.
   microvmQemuEnv ? { },
+  # The availability gate (MYSBX_ENABLED_BACKENDS): the backends this
+  # host carries, space-separated in the wrapper pin — `null` (the
+  # callPackage default, and what the unwrapped stub builds of
+  # nix/checks.nix pass) pins NOTHING and leaves every backend the
+  # crate knows selectable. Non-null values are validated against the
+  # crate's universe at build time, so a typo in the module layer fails
+  # the build instead of a sandbox run.
+  enabledBackends ? null,
   # The podman-krun backend's OCI runtime (backends.md D2, bd
   # myconfig-6di.5.2): crun built against libkrun — nixpkgs' `crun`
   # already defaults `withLibkrun` to `lib.meta.availableOn
@@ -803,6 +826,30 @@ let
   # nothing — the fallback PATH lookup of the unwrapped crate applies.
   sshKeygenPins =
     if ssh-keygen != null then "--set MYSBX_SSH_KEYGEN '${ssh-keygen}/bin/ssh-keygen'" else "";
+  # The availability gate pin (MYSBX_ENABLED_BACKENDS): validated
+  # against the crate's universe BEFORE the wrapper exists, so a bad
+  # name in the module layer is a build error. `null` pins nothing and
+  # the crate treats an unset variable as "everything selectable" —
+  # the unwrapped-build contract the checks' stub builds rely on.
+  enabledBackendsPin =
+    if enabledBackends == null then
+      ""
+    else
+      let
+        universe = [
+          "bubblewrap"
+          "podman-gvisor"
+          "nono"
+          "podman-krun"
+          "krun"
+          "microvm-qemu"
+        ];
+        unknown = builtins.filter (b: !builtins.elem b universe) enabledBackends;
+      in
+      if unknown != [ ] then
+        throw "mysbx: enabledBackends must name only ${toString universe}, got: ${toString unknown}"
+      else
+        "--set MYSBX_ENABLED_BACKENDS '${lib.concatStringsSep " " enabledBackends}'";
   # The direct-libkrun backend's pins (backends.md D3, bd
   # myconfig-dak.4): the launcher binary and the guest rootfs, both
   # absolute store paths (`--set`, the closure-pin idiom of every
@@ -865,7 +912,8 @@ symlinkJoin {
       ${nonoEnvPins} \
       ${sshKeygenPins} \
       ${krunDirectPins} \
-      ${microvmQemuPins}
+      ${microvmQemuPins} \
+      ${enabledBackendsPin}
 
     # Hand-written fish tab completion (../mysbx-rs/completions, kept in
     # sync with the CLI surface by the `mysbx-completions` check in
