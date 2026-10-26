@@ -75,6 +75,8 @@
   }
   "gfx1151:NVIDIA-Nemotron-3-Nano-Omni-Q8_0"
   "gfx1151:NVIDIA-Nemotron-3-Super-120B-A12B-Q5_K_M"
+  "gfx1151:Nanbeige4.3-33B-AD-Q5_K_M"
+  "gfx1151:Nanbeige4.3-33B-AD-Q6_K-Q5_K"
   "gfx1151:Nex-N2.5-mini-Q4_K_L"
   "gfx1151:Nex-N2.5-mini-Q6_K_L"
   "gfx1151:Nex-N2.5-mini-Q6_K_L-mmproj"
@@ -379,6 +381,8 @@
   }
   "gfx1151:ROCm0:NVIDIA-Nemotron-3-Nano-Omni-Q8_0"
   "gfx1151:ROCm0:NVIDIA-Nemotron-3-Super-120B-A12B-Q5_K_M"
+  "gfx1151:ROCm0:Nanbeige4.3-33B-AD-Q5_K_M"
+  "gfx1151:ROCm0:Nanbeige4.3-33B-AD-Q6_K-Q5_K"
   "gfx1151:ROCm0:Nex-N2.5-mini-Q4_K_L"
   "gfx1151:ROCm0:Nex-N2.5-mini-Q6_K_L"
   "gfx1151:ROCm0:Nex-N2.5-mini-Q6_K_L-mmproj"
@@ -747,6 +751,8 @@
     contextWindow = 262144;
     maxOutputTokens = 65536;
   }
+  "rtx5090:Nanbeige4.3-33B-AD-Q5_K_M"
+  "rtx5090:Nanbeige4.3-33B-AD-Q6_K-Q5_K"
   "rtx5090:Nex-N2.5-mini-Q4_K_L"
   "rtx5090:Nex-N2.5-mini-Q4_K_L-mmproj"
   {
@@ -993,10 +999,12 @@
   {
     name = "trustedtokens/Qwen/Qwen3.6-35B-A3B-FP8";
     contextWindow = 262144;
+    maxOutputTokens = 262144;
   }
   {
     name = "trustedtokens/Qwen/Qwen3.8-27B";
     contextWindow = 1000000;
+    maxOutputTokens = 1000000;
   }
   {
     name = "trustedtokens/deepseek-ai/DeepSeek-V4-Flash-0731";
@@ -1021,21 +1029,26 @@
   {
     name = "trustedtokens/openai/gpt-oss-120b";
     contextWindow = 131072;
+    maxOutputTokens = 131072;
   }
   {
     name = "trustedtokens/tngtech/DeepSeek-TNG-R1T2-Chimera";
     contextWindow = 163840;
+    maxOutputTokens = 163840;
   }
   {
     name = "trustedtokens/zai-org/GLM-5.2";
     contextWindow = 1048576;
+    maxOutputTokens = 1048576;
   }
   {
     name = "trustedtokens/zai-org/GLM-5.3";
     contextWindow = 230000;
+    maxOutputTokens = 230000;
   }
   {
     name = "trustedtokens/zai-org/GLM-5.3-Flash";
     contextWindow = 1048576;
+    maxOutputTokens = 1048576;
   }
 ]
