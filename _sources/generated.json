@@ -1,7 +1,7 @@
 {
     "bro-skill": {
         "cargoLock": null,
-        "date": "2026-08-26",
+        "date": "2026-10-12",
         "extract": null,
         "name": "bro-skill",
         "passthru": null,
@@ -13,16 +13,16 @@
             "name": null,
             "owner": "luchasarie",
             "repo": "bro-skill",
-            "rev": "3aa8c40b1241111f73ab5360e770f7512193a20e",
-            "sha256": "sha256-LrkDPQQs/9nBkEf1ozB/oi320FMtin1BZcrTFBiKds0=",
+            "rev": "6c08e7ee5eb8ef8b9bf0588d400170654abc256b",
+            "sha256": "sha256-RUSUah5c2pfWltDdNPaWfc3evSfvieodqOqp+v4Q/Yc=",
             "sparseCheckout": [],
             "type": "github"
         },
-        "version": "3aa8c40b1241111f73ab5360e770f7512193a20e"
+        "version": "6c08e7ee5eb8ef8b9bf0588d400170654abc256b"
     },
     "grafana-skills": {
         "cargoLock": null,
-        "date": "2026-09-22",
+        "date": "2026-10-23",
         "extract": null,
         "name": "grafana-skills",
         "passthru": null,
@@ -34,16 +34,16 @@
             "name": null,
             "owner": "grafana",
             "repo": "skills",
-            "rev": "1ccacf29049fde66637fe01ab93a83a772da323b",
-            "sha256": "sha256-zkgIRXkk4nSmVRKZ+LnJzqjp9fnQZSzLyh7pSwv7Umc=",
+            "rev": "3b653d9b46120c05ec02b27895028e1c31308e18",
+            "sha256": "sha256-0gVYYJb/7PQdEBIWyBPumPRxs8dXIpVouLYdyGXfDUU=",
             "sparseCheckout": [],
             "type": "github"
         },
-        "version": "1ccacf29049fde66637fe01ab93a83a772da323b"
+        "version": "3b653d9b46120c05ec02b27895028e1c31308e18"
     },
     "litellm-grafana-dashboard": {
         "cargoLock": null,
-        "date": "2026-10-12",
+        "date": "2026-10-24",
         "extract": null,
         "name": "litellm-grafana-dashboard",
         "passthru": null,
@@ -52,13 +52,13 @@
             "name": "litellm-grafana-dashboard.json",
             "sha256": "sha256-BepW78CWd6K27AL0nrIamyTESsVKsY/5/kO67QNU6vA=",
             "type": "url",
-            "url": "https://raw.githubusercontent.com/BerriAI/litellm/7efce7f8e05e58fb86e006a6427ab39b6db467fb/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json"
+            "url": "https://raw.githubusercontent.com/BerriAI/litellm/dddbaa803d6e9fcc862ea7a5412f771cb1ae040e/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json"
         },
-        "version": "7efce7f8e05e58fb86e006a6427ab39b6db467fb"
+        "version": "dddbaa803d6e9fcc862ea7a5412f771cb1ae040e"
     },
     "pi-token-speed": {
         "cargoLock": null,
-        "date": "2026-10-03",
+        "date": "2026-10-20",
         "extract": null,
         "name": "pi-token-speed",
         "passthru": null,
@@ -70,12 +70,12 @@
             "name": null,
             "owner": "gsanhueza",
             "repo": "pi-token-speed",
-            "rev": "b708faf217fb139c51cf8f8df0ca9c4050e489c8",
-            "sha256": "sha256-o58k3OJQPVTQ5rSGvpk+bnCdFz6e28IE9lZY949nQa0=",
+            "rev": "46a3dd432d5b9c7493f69ecd464cc3beeef15178",
+            "sha256": "sha256-P6u5Og9SkEY6UQdx8IsV4xl4gBECUXHeofi6FxGDm/Q=",
             "sparseCheckout": [],
             "type": "github"
         },
-        "version": "b708faf217fb139c51cf8f8df0ca9c4050e489c8"
+        "version": "46a3dd432d5b9c7493f69ecd464cc3beeef15178"
     },
     "simple-english": {
         "cargoLock": null,
