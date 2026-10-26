@@ -279,9 +279,13 @@ let
     # The podman-krun backend (docs/design/backends.md D2, bd
     # myconfig-6di.5.2): the selection reaches the generated layer
     # like every other backend, and the package wrapper carries the
-    # crun+libkrun runtime pin.
+    # crun+libkrun runtime pin. It rides `podman.enable` (the shared
+    # image is what makes the backend runnable — bd myconfig-jlam).
     krunBackend = generated [
-      { myconfig.ai.dev.mysbx.config.backend = "podman-krun"; }
+      {
+        myconfig.ai.dev.mysbx.podman.enable = true;
+        myconfig.ai.dev.mysbx.config.backend = "podman-krun";
+      }
     ];
     # The nested-podman provisioning of the krun backend (bd
     # myconfig-6di.5.8): enabling it folds `krun.nestedPodman.packages`
@@ -338,6 +342,24 @@ let
     muxAvailableAsserts = failedAssertions [
       { myconfig.ai.dev.mysbx.config.multiplexer = "herdr"; }
     ];
+    # The backend opt-in gate (bd myconfig-jlam): a host-wide backend
+    # selection naming a backend the host did not opt into fails the
+    # availability assertion naming the module option — and an opted-in
+    # selection passes clean (the gate must not fire on the happy
+    # path). The heavy backends default off, so the `krunBackend`
+    # scenario above needs its flag too.
+    backendKrunDisabled = failedAssertions [
+      { myconfig.ai.dev.mysbx.config.backend = "krun"; }
+    ];
+    backendQemuDisabled = failedAssertions [
+      { myconfig.ai.dev.mysbx.config.backend = "microvm-qemu"; }
+    ];
+    backendPodmanEnabledAsserts = failedAssertions [
+      {
+        myconfig.ai.dev.mysbx.podman.enable = true;
+        myconfig.ai.dev.mysbx.config.backend = "podman-gvisor";
+      }
+    ];
   };
 
   # The eval-time results are checked HERE, while the check derivation
@@ -349,6 +371,9 @@ let
       unavailable = scenarios.muxUnavailable;
       orcaUnavailable = scenarios.muxOrcaUnavailable;
       available = scenarios.muxAvailableAsserts;
+      backendDisabled = scenarios.backendKrunDisabled;
+      qemuDisabled = scenarios.backendQemuDisabled;
+      backendAvailable = scenarios.backendPodmanEnabledAsserts;
       names = builtins.concatStringsSep "\n" unavailable;
       orcaNames = builtins.concatStringsSep "\n" orcaUnavailable;
     in
@@ -358,6 +383,12 @@ let
       throw "mysbx generated-config test: selecting the unavailable `orca` multiplexer did not fail an assertion (failed: ${orcaNames})"
     else if builtins.any (m: lib.hasInfix "multiplexer" m) available then
       throw "mysbx generated-config test: the availability gate fired for an AVAILABLE multiplexer (failed: ${builtins.concatStringsSep "\n" available})"
+    else if !(builtins.any (m: lib.hasInfix "backend is not enabled" m) backendDisabled) then
+      throw "mysbx generated-config test: selecting the opt-out `krun` backend did not fail an assertion (failed: ${builtins.concatStringsSep "\n" backendDisabled})"
+    else if !(builtins.any (m: lib.hasInfix "backend is not enabled" m) qemuDisabled) then
+      throw "mysbx generated-config test: selecting the opt-out `microvm-qemu` backend did not fail an assertion (failed: ${builtins.concatStringsSep "\n" qemuDisabled})"
+    else if builtins.any (m: lib.hasInfix "backend" m) backendAvailable then
+      throw "mysbx generated-config test: the backend gate fired for an OPTED-IN backend (failed: ${builtins.concatStringsSep "\n" backendAvailable})"
     else
       "ok";
   # The podman-gvisor pins that carry the host's LiteLLM endpoint into a
@@ -368,7 +399,26 @@ let
   gvisorPinGate =
     let
       podmanOf = extraModules: (evaluated extraModules).myconfig.ai.dev.mysbx.podman;
+      # Opted in (bd myconfig-jlam): the env seeding is gated on
+      # `podman.enable` — a host that never runs the podman backends
+      # pins nothing, even with the forwarder on.
       on = podmanOf [
+        {
+          myconfig.ai.dev.mysbx.podman.enable = true;
+          myconfig.ai.dev.litellm-forwarder = {
+            enable = true;
+            port = 4000;
+            forwardPort = 14000;
+            address = "10.99.0.1";
+          };
+        }
+      ];
+      # Forwarder on but the podman backend NOT opted in: the flag
+      # gate must hold the env back — the third case below asserts
+      # exactly that. (The pasta SPEC is a plain option default that
+      # only reads the forwarder, so it stays; the ENV is what rides
+      # the image the wrapper pins.)
+      forwarderOnly = podmanOf [
         {
           myconfig.ai.dev.litellm-forwarder = {
             enable = true;
@@ -384,6 +434,8 @@ let
       throw "mysbx generated-config test: the pasta spec does not map the forwarder address (got ${toString on.pastaSpec})"
     else if (on.env.OPENAI_BASE_URL or null) != "http://10.99.0.1:14000/v1" then
       throw "mysbx generated-config test: the backend env does not carry the forwarded endpoint (got ${builtins.toJSON on.env})"
+    else if forwarderOnly.env != { } then
+      throw "mysbx generated-config test: a host without podman.enable pinned backend env (${builtins.toJSON forwarderOnly.env})"
     else if off.pastaSpec != null then
       throw "mysbx generated-config test: a host without the forwarder pinned a pasta spec (${toString off.pastaSpec})"
     else if off.env != { } then
@@ -400,7 +452,21 @@ let
   qemuEnvGate =
     let
       qemuOf = extraModules: (evaluated extraModules).myconfig.ai.dev.mysbx.microvm-qemu;
+      # Opted in (bd myconfig-jlam): the env seeding is gated on the
+      # backend's flag — a host that never runs microvm-qemu pins
+      # nothing, even with litellm on.
       on = qemuOf [
+        {
+          myconfig.ai.dev.mysbx.microvm-qemu.enable = true;
+          services.litellm = {
+            enable = true;
+            port = 4000;
+          };
+        }
+      ];
+      # Not opted in but litellm on: the flag gate must hold the env
+      # back — the third case below asserts exactly that.
+      litellmOnly = qemuOf [
         {
           services.litellm = {
             enable = true;
@@ -413,6 +479,8 @@ let
     in
     if (on.env.OPENAI_BASE_URL or null) != expected then
       throw "mysbx generated-config test: the qemu backend env does not carry the SLiRP-gateway endpoint (got ${builtins.toJSON on.env})"
+    else if litellmOnly.env != { } then
+      throw "mysbx generated-config test: a host without microvm-qemu.enable pinned qemu backend env (${builtins.toJSON litellmOnly.env})"
     else if off.env != { } then
       throw "mysbx generated-config test: a host without litellm pinned qemu backend env (${builtins.toJSON off.env})"
     else
