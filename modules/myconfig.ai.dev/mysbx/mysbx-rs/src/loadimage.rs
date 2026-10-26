@@ -383,6 +383,15 @@ pub fn run(args: &[String]) -> i32 {
                 "  the Nix wrapper pins MYSBX_PODMAN_TARBALL / _IMAGE / _IMAGE_ID \
                  when the host builds a gVisor agent image"
             );
+            if !crate::doctor::enabled_backends()
+                .iter()
+                .any(|b| *b == "podman-gvisor" || *b == "podman-krun")
+            {
+                eprintln!(
+                    "  the podman backends are disabled on this host — enable \
+                     myconfig.ai.dev.mysbx.podman.enable and rebuild"
+                );
+            }
             eprintln!("  pass --image <ref>, or set the variables, to load explicitly");
             eprintln!("{}", USAGE);
             return 2;

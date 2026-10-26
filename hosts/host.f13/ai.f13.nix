@@ -19,6 +19,14 @@
             memory = lib.mkDefault "8g";
             cpus = lib.mkDefault 5;
           };
+          # The heavy backends this host runs (bd myconfig-dq2w): f13 is
+          # the krun validation host (docs/krun-live-validation.md, the
+          # fd-stress runbooks of bd myconfig-jjfy/dgsm) and carries the
+          # podman backends for podman-krun. Off by default everywhere
+          # else — the flags gate the closure inputs.
+          mysbx.podman.enable = true;
+          mysbx.krun.enable = true;
+          mysbx.microvm-qemu.enable = true;
 
           # microvm = {
           #   enable = false;

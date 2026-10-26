@@ -21,6 +21,14 @@
 #                 `--runtime=<that path>` — the runtime swap is the only
 #                 argv difference, so the dry run doubles as the swap proof.
 #
+#   mysbx-disabled-backends-wrapper-test
+#                 the backend opt-in gate's wrapper half (bd
+#                 myconfig-vc8k/jlam): a flags-off host's wrapper pins
+#                 MYSBX_ENABLED_BACKENDS 'bubblewrap nono' and carries
+#                 NONE of the three heavy backends' closure pins — the
+#                 closure goal of the opt-in. The CLI refusal is the
+#                 cargo suite's job (bd myconfig-a551's gate tests).
+#
 #   mysbx-microvm-qemu-wrapper-test
 #                 the native-qemu wrapper pins (backends.md D9, bd
 #                 myconfig-6x9c): the wrapper carries the backend's three
@@ -608,6 +616,94 @@ in
           [ "$pin_line" -lt "$net_line" ] \
             || fail "the env pins must precede the SLiRP NIC marker"
         fi
+
+        touch $out
+      '';
+
+  # The backend opt-in gate (bd myconfig-dq2w, wrapper half bd
+  # myconfig-vc8k): a flags-off host's wrapper carries the availability
+  # pin (MYSBX_ENABLED_BACKENDS 'bubblewrap nono') and NONE of the
+  # three heavy backends' closure pins — the closure goal of the
+  # opt-in. The CLI refusal itself is the cargo suite's job (the gate
+  # tests of bd myconfig-a551); this is the WRAPPER side: what a host
+  # that never opts in ships.
+  mysbx-disabled-backends-wrapper-test =
+    let
+      # The flags-off wrapper: exactly what default.nix builds for a
+      # host with podman.enable/krun.enable/microvm-qemu.enable all
+      # off — every backend argument null, enabledBackends the
+      # always-on pair.
+      pkgDisabled = pkgs.callPackage ../nix/mysbx.nix {
+        enabledBackends = [
+          "bubblewrap"
+          "nono"
+        ];
+        podmanImage = null;
+        podmanShell = null;
+        podmanPastaSpec = null;
+        podmanEnv = { };
+        krunRuntime = null;
+        krunScratchSize = null;
+        krunLauncher = null;
+        krunRootfs = null;
+        microvmQemuLauncher = null;
+        microvmQemuRootfs = null;
+        microvmQemuKernel = null;
+        microvmQemuEnv = { };
+        podmanWaypipe = null;
+        podmanMuxEntries = { };
+        nono = pkgs.nono;
+        ssh-keygen = pkgs.openssh;
+      };
+      content = pkgs.runCommand "mysbx-disabled-backends-content" { } ''
+        cat "${pkgDisabled}/bin/mysbx" > $out
+      '';
+    in
+    pkgs.runCommand "mysbx-disabled-backends-wrapper-test"
+      {
+        nativeBuildInputs = [ pkgs.gnugrep ];
+      }
+      ''
+        fail() {
+          echo "mysbx-disabled-backends-wrapper-test: $*" >&2
+          exit 1
+        }
+
+        wrapped=$(cat ${content})
+
+        # 1. the availability pin: exactly the always-on pair. The
+        #    makeBinaryWrapper result embeds the assignments plainly
+        #    (`MYSBX_ENABLED_BACKENDS=bubblewrap nono`) — match without
+        #    the --set quoting, the krun check's `grep -aq` idiom.
+        echo "$wrapped" | grep -aq "MYSBX_ENABLED_BACKENDS=bubblewrap nono" \
+          || fail "the flags-off wrapper does not pin MYSBX_ENABLED_BACKENDS=bubblewrap nono"
+
+        # 2. no closure pin of the three opt-in backends survives: the
+        #    wrapper must be unable to run them even before the CLI
+        #    gate refuses (belt and suspenders — and the closure goal:
+        #    nothing of gvisor/podman/libkrun/qemu enters the build).
+        #    The krun wrapper check needs the `--set-default`/`--set`
+        #    spelling disambiguated; here the NAMES are enough — a
+        #    disabled backend pins nothing under any spelling.
+        for pin in \
+          MYSBX_PODMAN_TARBALL MYSBX_PODMAN_IMAGE MYSBX_PODMAN_IMAGE_ID \
+          MYSBX_PODMAN_SHELL MYSBX_PODMAN_PASTA_SPEC MYSBX_PODMAN_ENV \
+          MYSBX_PODMAN_WAYPIPE MYSBX_KRUN_RUNTIME MYSBX_KRUN_SCRATCH_SIZE \
+          MYSBX_KRUN_LAUNCHER MYSBX_KRUN_ROOTFS \
+          MYSBX_MICROVM_QEMU_LAUNCHER MYSBX_MICROVM_QEMU_ROOTFS \
+          MYSBX_MICROVM_QEMU_KERNEL MYSBX_MICROVM_QEMU_ENV; do
+          echo "$wrapped" | grep -aq -- "$pin" \
+            && fail "a disabled backend's pin survived: $pin"
+        done
+
+        # 3. the always-on backends keep their pins (the opt-out must
+        #    not have broken the base): bwrap, the tools tree and the
+        #    nono pin (the module default passes `nono =
+        #    cfg.nono.package`, i.e. pkgs.nono).
+        for pin in MYSBX_BWRAP MYSBX_TOOLS_PATH MYSBX_NONO; do
+          echo "$wrapped" | grep -q -- "$pin" \
+            || fail "an always-on pin is missing: $pin"
+        done
 
         touch $out
       '';

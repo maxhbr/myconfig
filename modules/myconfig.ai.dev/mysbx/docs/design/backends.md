@@ -1193,3 +1193,65 @@ PROBES PASSED 2026-10-25 on thing —
 `mysbx-microvm-qemu-wrapper-test` (nix/checks.nix): the wrapper's
 three closure pins and the dry-run flags, on STUB pins — the real
 kernel stays a host build.
+
+### D10: Backend availability is a host opt-in; a disabled backend is refused, never fallen back from (bd myconfig-dq2w)
+
+The three heavy backends — `podman-gvisor`, `podman-krun`, `krun`,
+`microvm-qemu` — are OFF by default and opt-in per host through the
+module:
+
+- `myconfig.ai.dev.mysbx.podman.enable` — BOTH podman backends: the
+  shared agent image, the rootless podman + gvisor host setup
+  (./podman.nix) and every `MYSBX_PODMAN_*` wrapper pin.
+- `myconfig.ai.dev.mysbx.krun.enable` — the DIRECT-libkrun backend
+  only (`krun.direct.*`; the podman-krun runtime and guest-nix
+  features ride `podman.enable` with the image they need).
+- `myconfig.ai.dev.mysbx.microvm-qemu.enable` — the native-qemu
+  backend (launcher, rootfs, kernel, env pins).
+
+`bubblewrap` and `nono` are always on: they are the base of the tier
+and small closures. A host that opts into nothing runs exactly those
+two, and its `mysbx` wrapper carries no gvisor/podman/libkrun/qemu
+input at all — the closure goal of the opt-in.
+
+The wrapper pins the surviving set as `MYSBX_ENABLED_BACKENDS`
+(space-separated; unset means every backend — the unwrapped-build
+contract of a hand `nix-build` of ./nix/mysbx.nix), and the CLI
+refuses everything else BEFORE the session clone and before the argv:
+
+```
+$ mysbx --backend krun -- true
+mysbx: backend `krun` is disabled on this host
+  enable it with myconfig.ai.dev.mysbx.krun.enable and rebuild, or pick one of: bubblewrap, nono
+```
+
+The explicit gate is load-bearing, not cosmetic: `podman-krun` has a
+PATH fallback (`MYSBX_KRUN_RUNTIME` defaults to a bare `crun`), so
+without the gate a host that opted out would silently run an ordinary
+container instead of a microVM — exactly the silent downgrade every
+other refusal in this file exists to prevent. Absent pins alone
+cannot catch it.
+
+The division of labor across the layers:
+
+- EVAL time (../default.nix): a host-wide `config.backend` naming a
+  disabled backend fails the build with an assertion naming the
+  option — the same shape as the multiplexer availability gate. A
+  SIDECAR naming one stays a runtime refusal (trusted layer, D7 of
+  config.md).
+- BUILD time (./nix/mysbx.nix): `enabledBackends` is validated
+  against the crate's universe and pinned; a disabled backend's
+  closure inputs are simply not built.
+- RUN time (../mysbx-rs): both backend validation sites (the early
+  `--backend` flag check and the authoritative merged-config match,
+  which covers the `--krun`/`--podman-krun`/… shorthands) consult
+  `doctor::enabled_backends()` and refuse with the message above,
+  exit 70. `mysbx doctor` marks disabled backends `(disabled)` in its
+  listing and refuses to probe a named disabled one; the podman
+  no-image refusals (`podman-load-image` included) append the
+  `podman.enable` hint when the gate is closed.
+
+The static CI gates are `mysbx-disabled-backends-wrapper-test`
+(nix/checks.nix — the flags-off wrapper pins the always-on pair and
+none of the heavy pins) and the backend scenarios of
+`nix/config-eval-test.nix` (the assertions).

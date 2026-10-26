@@ -122,8 +122,10 @@ in
 
   config = lib.mkMerge [
     # Not gated on `image`: that default reads `pkgs`.
-    (lib.mkIf cfg.enable { nixpkgs.overlays = [ (import ./nix/gvisor-overlay.nix) ]; })
-    (lib.mkIf (cfg.enable && cfg.podman.image != null) {
+    (lib.mkIf (cfg.enable && cfg.podman.enable) {
+      nixpkgs.overlays = [ (import ./nix/gvisor-overlay.nix) ];
+    })
+    (lib.mkIf (cfg.enable && cfg.podman.enable && cfg.podman.image != null) {
       virtualisation.podman.enable = true;
 
       # `--runtime=runsc` of the podman-gvisor backend; other containers

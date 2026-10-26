@@ -39,6 +39,11 @@
           # never implicitly through the broad `myconfig.ai.llmops.enable`; it only
           # puts the CLI on PATH.
           mysbx.enable = true;
+          # The heavy backend this host runs (bd myconfig-dq2w): p14
+          # carries the podman-gvisor tier
+          # (docs/feature-comparison.md); the other heavy backends stay
+          # off — the flags gate the closure inputs.
+          mysbx.podman.enable = true;
         };
       };
     };
