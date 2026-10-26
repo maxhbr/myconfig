@@ -10,6 +10,8 @@ let
     # -*- conf -*-
     # PaperColor Light
     # Palette based on https://github.com/NLKNguyen/papercolor-theme
+    # Note: the bright palette deviates from upstream, which maps bright
+    # green to pink and bright yellow to purple (tuned for vim, not ANSI).
 
     # foot >= 1.28 replaced [colors] with [colors-dark] / [colors-light]
     [colors-light]
@@ -26,12 +28,12 @@ let
     regular7=764e37  # white
     bright0=bcbcbc   # bright black
     bright1=d70000   # bright red
-    bright2=d70087   # bright green
-    bright3=8700af   # bright yellow
-    bright4=d75f00   # bright blue
-    bright5=d75f00   # bright magenta
-    bright6=4c7a5d   # bright cyan
-    bright7=005faf   # bright white
+    bright2=00af00   # bright green
+    bright3=af8700   # bright yellow
+    bright4=005faf   # bright blue
+    bright5=875faf   # bright magenta
+    bright6=0087af   # bright cyan
+    bright7=444444   # bright white
     # selection-foreground=eeeeee
     # selection-background=0087af
   '';
