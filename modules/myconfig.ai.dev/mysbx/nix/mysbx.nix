@@ -923,7 +923,7 @@ let
     lib.optionalString (
       krunLauncher != null
     ) "--set MYSBX_KRUN_LAUNCHER '${krunLauncher}/bin/mysbx-krun' "
-    + lib.optionalString (krunRootfs != null) "--set MYSBX_KRUN_ROOTFS '${krunRootfs}'"
+    + lib.optionalString (krunRootfs != null) "--set MYSBX_KRUN_ROOTFS '${krunRootfs}' "
     # The guest-own store disk pin: ONE pin for both VM backends —
     # the guest side is shared (backends.md D9), so the krun builder
     # and the microvm-qemu renderer consume the same MYSBX_KRUN_*

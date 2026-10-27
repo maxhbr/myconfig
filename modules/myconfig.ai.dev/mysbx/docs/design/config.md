@@ -1541,23 +1541,37 @@ store = "host"            # host | baked
 ```
 
 One top-level string key, resolved like `backend` (the sidecar may
-preselect it, the user config may set a host-wide default, `host` when
-every layer is silent). It decides what backs `/nix` inside the
-sandbox — and only the two VM backends honor it:
+preselect it, the user config may set a host-wide default; the
+built-in default when every layer is silent is below). It decides
+what backs `/nix` inside the sandbox — and only the two VM backends
+honor it:
 
 | value | the run's `/nix` |
 | --- | --- |
-| `"host"` | backends.md D3's whole-store share: the host `/nix/store` read-only over virtiofs, what every run did before the key existed (the default) |
+| `"host"` | backends.md D3's whole-store share: the host `/nix/store` read-only over virtiofs, what every run did before the key existed |
 | `"baked"` | the guest-own store disk (docs/design/guest-store.md): a read-only erofs image of the wrapper's own tool closure — `store/` paths plus a REGISTERED db and gcroots — attached as a second virtio-blk device and mounted at `/nix`; the whole-store share is DROPPED, and the per-run scratch overlay writes new paths on top |
 
+**The built-in default is backend- and pin-shaped.** When every
+layer is silent, a run resolves `baked` on the two VM backends when
+the wrapper pins the disk (`MYSBX_KRUN_STORE_DISK` — the host set
+`myconfig.ai.dev.mysbx.krun.store.enable`), and `host` everywhere
+else: a blanket `baked` default would refuse every silent run on
+the other backends (the key cannot hold there), so the narrowing
+flips only where it can hold its promise. A layer decision always
+wins over the default — a repo sidecar writes `store = "host"` to
+opt a VM run back onto the shared store, and nothing overrides an
+explicit choice.
+
 **Why a config key and not a host option.** The host option
-(`myconfig.ai.dev.mysbx.krun.store.enable`) only BAKES and PINS the
+(`myconfig.ai.dev.mysbx.krun.store.enable`) BAKES and PINS the
 disk (`MYSBX_KRUN_STORE_DISK`, one pin for both VM backends — the
-guest side is shared, backends.md D9); the per-run key decides
-usage, so a host can carry the disk and still run repos against the
-host store, and a repo that wants the narrowing says so where the
-rest of its sandbox is configured. The disk is expensive (a full
-copy of the tool closure); a run should not get it by accident.
+guest side is shared, backends.md D9) and thereby also sets the
+silent default of the two VM backends; an explicit per-run key
+still decides usage, so a host can carry the disk and a repo can
+opt out, and a repo on a VM backend that wants the narrowing gets
+it without writing the key at all. The disk is expensive (a full
+copy of the tool closure) — a host that sets the option pays it
+once per wrapper rebuild, every VM run uses it by default.
 
 **Refused, never degraded.** A `store = "baked"` run without the
 pin — the host did not opt in — is refused with a message naming the

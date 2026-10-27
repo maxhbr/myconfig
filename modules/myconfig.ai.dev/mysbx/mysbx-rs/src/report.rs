@@ -162,9 +162,11 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     // out loud like the network — which store backs the sandbox is a
     // property of every run, and a baked VM is a materially different
     // machine than a shared-store one (no host store path at all).
+    // The resolved value includes the baked DEFAULT of a pinned
+    // host's VM run, so a silent config reports what actually runs.
     p(format!(
         "store:          {}",
-        if r.merged.store.is_baked() {
+        if r.merged.resolved_store().is_baked() {
             "baked — the guest-own store disk (no host store path)"
         } else {
             "host — the whole read-only /nix/store share"
@@ -640,7 +642,7 @@ fn present(exists: bool) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Display, Mount, Multiplexer, Store};
+    use crate::config::{Display, Mount, Multiplexer};
     use std::collections::BTreeMap;
     use std::path::PathBuf;
 
@@ -681,7 +683,7 @@ mod tests {
             memory: None,
             cpus: None,
             pids_limit: None,
-            store: Store::Host,
+            store: None,
             multiplexer: Multiplexer::None,
             display: Display::Off,
         };

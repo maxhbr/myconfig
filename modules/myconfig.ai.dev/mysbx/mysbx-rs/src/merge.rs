@@ -177,15 +177,42 @@ pub struct Merged {
     pub cpus: Option<String>,
     pub pids_limit: Option<u32>,
     /// Which nix store the sandbox sees (`store`, docs/design/
-    /// guest-store.md): resolved once from the layers' tri-state
-    /// values, like `multiplexer` — the sidecar wins when both
-    /// decide, `host` when neither did. Nothing downstream may
-    /// re-decide it; the backend gate in the run pipeline (lib.rs)
-    /// refuses `baked` on a backend that cannot attach a store disk.
-    pub store: Store,
+    /// guest-store.md): the layer decision — the sidecar wins when
+    /// both decide — `None` when neither layer did. The built-in
+    /// default is applied by [`Merged::resolved_store`], never here:
+    /// it depends on the effective backend (only the two VM backends
+    /// can attach a store disk) and the wrapper's
+    /// `MYSBX_KRUN_STORE_DISK` pin, facts the merge does not own.
+    pub store: Option<Store>,
 }
 
 impl Merged {
+    /// The effective store of a run: the layer decision when one
+    /// made it; else the built-in default — `baked` on the two VM
+    /// backends (`krun`, `microvm-qemu`) when the wrapper pins the
+    /// guest-own store disk (`MYSBX_KRUN_STORE_DISK`, baked by the
+    /// Nix wrapper when the host sets
+    /// `myconfig.ai.dev.mysbx.krun.store.enable`), `host` everywhere
+    /// else. The default must stay backend-shaped: a blanket `baked`
+    /// would refuse every silent run on the other backends (the
+    /// pipeline gate refuses `baked` where no disk can attach), so
+    /// the narrowing flips only where it can hold its promise.
+    pub fn resolved_store(&self) -> Store {
+        match self.store {
+            Some(s) => s,
+            None => {
+                let vm = matches!(self.backend.as_deref(), Some("krun") | Some("microvm-qemu"));
+                let pinned =
+                    std::env::var_os("MYSBX_KRUN_STORE_DISK").is_some_and(|v| !v.is_empty());
+                if vm && pinned {
+                    Store::Baked
+                } else {
+                    Store::Host
+                }
+            }
+        }
+    }
+
     /// The merged `[nix]` settings as a `NIX_CONFIG` value — `key =
     /// value` lines, NEWLINE-separated (nix reads the variable IN
     /// ADDITION to its conf files, so on the bwrap backends this
@@ -782,10 +809,11 @@ pub fn merge(
         pids_limit: sidecar.pids_limit.or(user.pids_limit),
         // store (docs/design/guest-store.md): the later layer wins,
         // like `multiplexer` — the key selects a store mysbx itself
-        // builds (or the shared host store the default already
-        // grants) and adds no host access, so it needs no narrowing
-        // rule. Host (the pre-key behaviour) when neither decided.
-        store: sidecar.store.or(user.store).unwrap_or(Store::Host),
+        // builds (or the shared host store) and adds no host access,
+        // so it needs no narrowing rule. `None` when neither layer
+        // decided: the built-in default is resolved per run
+        // (`Merged::resolved_store`), backend- and pin-shaped.
+        store: sidecar.store.or(user.store),
     })
 }
 
@@ -1433,6 +1461,117 @@ mod tests {
         s.backend = Some("microvm".to_owned());
         let merged = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap();
         assert_eq!(merged.backend.as_deref(), Some("microvm"));
+    }
+
+    /// The env is process-global (cargo runs the unit tests in
+    /// threads): every `resolved_store` default test takes the lock
+    /// for its duration, the same serialization idiom doctor.rs's
+    /// `with_enabled_backends` uses, so a save/set/restore triple is
+    /// never interleaved with another test's.
+    static STORE_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Run `f` with `MYSBX_KRUN_STORE_DISK` set to `pinned`, restoring
+    /// the previous value afterwards.
+    fn with_store_disk_pin<T>(pinned: bool, f: impl FnOnce() -> T) -> T {
+        let _guard = STORE_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let old = std::env::var_os("MYSBX_KRUN_STORE_DISK");
+        if pinned {
+            unsafe { std::env::set_var("MYSBX_KRUN_STORE_DISK", "/synth/store-disk.img") };
+        } else {
+            unsafe { std::env::remove_var("MYSBX_KRUN_STORE_DISK") };
+        }
+        let out = f();
+        match old {
+            Some(x) => unsafe { std::env::set_var("MYSBX_KRUN_STORE_DISK", x) },
+            None => unsafe { std::env::remove_var("MYSBX_KRUN_STORE_DISK") },
+        }
+        out
+    }
+
+    #[test]
+    fn store_passes_through_from_either_layer() {
+        // Like `backend`: whichever layer decided wins, the sidecar
+        // over the user layer (D6) — never a default.
+        let mut u = Config::default();
+        u.store = Some(Store::Baked);
+        let merged = merge(
+            u,
+            Config::default(),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert_eq!(merged.store, Some(Store::Baked));
+
+        let mut s = Config::default();
+        s.store = Some(Store::Host);
+        let mut u = Config::default();
+        u.store = Some(Store::Baked);
+        let merged = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap();
+        assert_eq!(merged.store, Some(Store::Host));
+    }
+
+    #[test]
+    fn resolved_store_defaults_baked_only_on_a_pinned_vm_run() {
+        // The built-in default (docs/design/guest-store.md): `baked`
+        // where the run can attach the disk — a VM backend on a host
+        // whose wrapper pins MYSBX_KRUN_STORE_DISK (the
+        // `krun.store.enable` wiring) — `host` everywhere else. A
+        // blanket `baked` would refuse every silent bubblewrap run on
+        // a pinned host (the lib.rs non-VM gate), so the backend and
+        // the pin are both load-bearing.
+        let vm = |backend: &str| {
+            let mut u = Config::default();
+            u.backend = Some(backend.to_owned());
+            merge(
+                u,
+                Config::default(),
+                &user_file(),
+                &sidecar_file(),
+                &no_home(),
+            )
+            .unwrap()
+        };
+        with_store_disk_pin(true, || {
+            assert!(vm("krun").resolved_store().is_baked());
+            assert!(vm("microvm-qemu").resolved_store().is_baked());
+            assert!(!vm("bubblewrap").resolved_store().is_baked());
+            assert!(!vm("podman-gvisor").resolved_store().is_baked());
+        });
+        with_store_disk_pin(false, || {
+            assert!(!vm("krun").resolved_store().is_baked());
+            assert!(!vm("microvm-qemu").resolved_store().is_baked());
+        });
+        // A layer decision bypasses the default entirely: `host` on a
+        // pinned VM run, `baked` on an unpinned bubblewrap merge (the
+        // lib.rs gate refuses the latter AT RUN TIME — resolved here
+        // it must not be silently flipped).
+        with_store_disk_pin(true, || {
+            let mut u = Config::default();
+            u.backend = Some("krun".to_owned());
+            u.store = Some(Store::Host);
+            let merged = merge(
+                u,
+                Config::default(),
+                &user_file(),
+                &sidecar_file(),
+                &no_home(),
+            )
+            .unwrap();
+            assert!(!merged.resolved_store().is_baked());
+        });
+        let mut u = Config::default();
+        u.store = Some(Store::Baked);
+        let merged = merge(
+            u,
+            Config::default(),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert!(merged.resolved_store().is_baked());
     }
 
     #[test]

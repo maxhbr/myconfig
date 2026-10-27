@@ -183,11 +183,12 @@ itself. That is what flipped the cost table to B: `mkfs.erofs
   C keep the rootfs generic and pay the pin instead).
 - **A fallback must exist and be explicit.** Some repos genuinely
   need arbitrary host paths. The config wants an announced choice —
-  a per-run/repo key (`store = "host" | "tools"` in the sandbox
-  config's vocabulary), `host` preserving today's behavior exactly,
-  refuse-or-announce, never a silent switch. Whether the DEFAULT
-  flips is a separate decision, made only after the probes and at
-  least one tier's worth of live runs on a real host.
+  a per-run/repo key (`store = "host" | "baked"` in the sandbox
+  config's vocabulary), `host` preserving the pre-key behavior
+  exactly, refuse-or-announce, never a silent switch. The shipped
+  default resolves `baked` only on a PINNED host's VM run (a layer
+  may always write `host` back); `host` is the default everywhere
+  the disk cannot attach.
 - **Tier inconsistency.** The bwrap/podman tiers still bind the
   whole store. A narrowed VM tier is the first tier that is NARROWER
   than the tier it replaces — allowed (the constraint runs the other
@@ -257,10 +258,14 @@ non-VM backends), the module option
 (`myconfig.ai.dev.mysbx.krun.store.enable`), the doctor line and
 the check (`mysbx-krun-store-disk-test`).
 
-If live runs survive, the follow-up decision — flipping the
-default, or extending the key to the bwrap tier (a ro bind of a
-view instead of the whole store) — is a backends.md/config.md
-change of its own, informed by what the live runs broke.
+If live runs survive, the follow-up decision — extending the key to
+the bwrap tier (a ro bind of a view instead of the whole store) —
+is a backends.md/config.md change of its own, informed by what the
+live runs broke. The default flip on the VM tiers has SHIPPED with
+the key itself: a silent config on a pinned host's VM backend
+resolves `baked` (`Merged::resolved_store`, mysbx-rs/src/merge.rs),
+and `host` everywhere else — the backends.md D3 share stays the
+default exactly where no disk can attach.
 
 ## Handoff: the live validation this sandbox cannot run
 

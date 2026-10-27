@@ -160,6 +160,10 @@
         # else — the flags gate the closure inputs.
         dev.mysbx.podman.enable = true;
         dev.mysbx.microvm-qemu.enable = true;
+        # The guest-own nix store disk (docs/design/guest-store.md):
+        # baked and pinned so runs may opt in per sidecar with
+        # `store = "baked"`.
+        dev.mysbx.krun.store.enable = true;
         dev.lmstudio = {
           enable = true;
         };

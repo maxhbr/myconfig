@@ -220,9 +220,12 @@ pub fn run(args: &[String], dry_run: bool) -> i32 {
     // guest-store.md), right after the network sense: a `baked` VM
     // run is a materially different machine than a shared-store
     // one, and the operator should see that before starting one.
+    // The resolved value includes the baked DEFAULT of a pinned
+    // host's VM run (a silent config still runs it), while a layer
+    // decision keeps full precedence over the default.
     {
         let pinned = std::env::var_os("MYSBX_KRUN_STORE_DISK").is_some();
-        let state = if merged.store.is_baked() {
+        let state = if merged.resolved_store().is_baked() {
             if pinned {
                 "baked — the guest-own store disk (pinned)".to_string()
             } else {

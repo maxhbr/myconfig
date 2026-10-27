@@ -22,6 +22,7 @@
             };
             # podman.enable = true;
             krun.enable = true;
+            krun.store.enable = true;
             # microvm-qemu.enable = true;
           };
 

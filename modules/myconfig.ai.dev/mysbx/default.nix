@@ -1171,10 +1171,13 @@ in
           once per wrapper (not per run) and mounted read-only at
           /nix by a run that opts in via the `store = "baked"`
           config key — a baked run sees its own tools only, no
-          host store paths behind them. Off (the default) pins
-          nothing: every run keeps the host-store share, and a
+          host store paths behind them. With the flag on, `baked`
+          is also the built-in default of the two VM backends' runs
+          (a silent config resolves it; an explicit `store =
+          "host"` opts a run back onto the shared store), and off
+          (the default) every run keeps the host-store share — a
           `store = "baked"` run is refused with a message naming
-          this option — never a silent host-store run.
+          this option, never a silent host-store run.
 
           A heavy addition: the image is a full copy of the tool
           closure (hundreds of MiB for a plain tools set, GiB-scale

@@ -739,8 +739,11 @@ What the guest may read is decided entirely by the SPEC's shares:
   is what the spike validated.
 - **The whole-store share is now OPTIONAL per run (guest-store.md,
   the shipped narrowing).** The `store = "host" | "baked"` config
-  key (either layer, the sidecar wins, `host` when silent) selects
-  per run: `host` is D3's layout above, byte for byte; `baked`
+  key (either layer, the sidecar wins; when both are silent the
+  built-in default resolves `baked` on the VM backends of a pinned
+  host and `host` everywhere else — `Merged::resolved_store`,
+  mysbx-rs) selects per run: `host` is D3's layout above, byte for
+  byte; `baked`
   DROPS the whole-store share and the j23 nix-var ride-along and
   attaches the guest-own store disk the wrapper bakes — a
   read-only erofs image of the wrapper's own tool closure with a

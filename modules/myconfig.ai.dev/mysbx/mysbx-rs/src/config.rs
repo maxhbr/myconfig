@@ -303,8 +303,10 @@ impl fmt::Display for Display {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Store {
     /// The whole read-only host store through the share — the
-    /// behaviour every backend had before the key existed and what an
-    /// undecided configuration resolves to.
+    /// behaviour every backend had before the key existed, and the
+    /// built-in default everywhere a disk cannot attach (an
+    /// undecided configuration resolves it through
+    /// `Merged::resolved_store`).
     Host,
     /// The guest-own store disk (VM backends only): no host store
     /// path enters the sandbox; the wrapper must pin the image

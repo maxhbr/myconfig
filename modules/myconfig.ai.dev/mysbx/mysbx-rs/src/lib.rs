@@ -2440,8 +2440,10 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // keeps the qemu twin on the same guest contract). A backend
     // that cannot attach the disk is refused, never silently run on
     // the host store — that visibility is exactly what the key
-    // exists to deny.
-    if merged.store.is_baked() && backend != "krun" && backend != "microvm-qemu" {
+    // exists to deny. `resolved_store()` never defaults `baked` onto
+    // a non-VM backend, so reaching this gate `baked` means a layer
+    // asked for it (or a VM run took the baked default).
+    if merged.resolved_store().is_baked() && backend != "krun" && backend != "microvm-qemu" {
         eprintln!(
             "mysbx: store = \"baked\" needs a store disk the sandbox owns — only the `krun` and `microvm-qemu` backends attach one; the `{backend}` backend cannot"
         );
@@ -3630,19 +3632,20 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 None => None,
             };
             // The guest-own store disk (docs/design/guest-store.md):
-            // the run's `store = "baked"` resolves to this pin — the
-            // erofs image the Nix wrapper bakes at BUILD time from
-            // the tools closure (rootfs-shaped: store/, var/nix/ db,
-            // gcroots). No fallbacks, like every wrapper pin: an
-            // unwrapped build has no image, and a baked run without
-            // one is refused, never a silent host-store run. The
-            // path is a STORE path, so the launcher's bwrap wrap
-            // already sees it ro (its own runtime's --ro-bind
-            // /nix/store) — no extra bind, unlike the scratch's
-            // fixed-guest-path file. `store = "host"` (the default)
-            // reads no pin and keeps the share; a pinned host with
-            // no per-run `baked` simply leaves the image unused.
-            let krun_store_disk: Option<String> = if merged.store.is_baked() {
+            // the run's `store = "baked"` — the layer decision or
+            // the baked default of a pinned host — resolves to this
+            // pin: the erofs image the Nix wrapper bakes at BUILD
+            // time from the tools closure (rootfs-shaped: store/,
+            // var/nix/ db, gcroots). No fallbacks, like every
+            // wrapper pin: an unwrapped build has no image, and a
+            // baked run without one is refused, never a silent
+            // host-store run. The path is a STORE path, so the
+            // launcher's bwrap wrap already sees it ro (its own
+            // runtime's --ro-bind /nix/store) — no extra bind,
+            // unlike the scratch's fixed-guest-path file.
+            // `store = "host"` (a layer decision, or the default on
+            // an unpinned host) reads no pin and keeps the share.
+            let krun_store_disk: Option<String> = if merged.resolved_store().is_baked() {
                 match env_opt("MYSBX_KRUN_STORE_DISK") {
                     Some(path) => Some(path),
                     None => {
@@ -5770,7 +5773,9 @@ const SIDECAR_TEMPLATE_ROOT: &str = r#"# mysbx sidecar config
 # `baked` runs the VM backends on their own store disk — an image the
 # Nix wrapper bakes, no host store path enters the sandbox; needs
 # `krun` or `microvm-qemu` and the wrapper's MYSBX_KRUN_STORE_DISK
-# pin, and is refused on every other backend.
+# pin, and is refused on every other backend. When both layers are
+# silent the DEFAULT is `baked` on a pinned host's VM run and
+# `host` everywhere else — write the key only to override that.
 #
 # store = "host"                 # host | baked
 #
