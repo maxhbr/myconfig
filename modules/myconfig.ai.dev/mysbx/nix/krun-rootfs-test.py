@@ -129,6 +129,53 @@ class InitTests(unittest.TestCase):
         self.assertNotIn("copied nix db validation complete", result.stdout)
         self.assertNotIn("mysbx-test: overlay boundary reached", result.stdout)
 
+    def make_block_devs(self, *ro_flags):
+        # A faked /sys/block: one vd* per flag value, each with the
+        # ro file the scans cat. The init's /sys/block is absolute
+        # in the guest, so the extraction substitutes this tree.
+        sys_block = self.base / "sys/block"
+        for n, ro in enumerate(ro_flags):
+            dev = sys_block / ("vd" + chr(ord("a") + n))
+            dev.mkdir(parents=True, exist_ok=True)
+            (dev / "ro").write_text(str(ro))
+        return sys_block
+
+    def run_init_block(self, block, sys_block):
+        script = (
+            "set -eu\n"
+            f"BB={shlex.quote(str(ROOTFS / 'bin/busybox'))}\n"
+            'fail() { echo "mysbx-init: $*" >&2; exit 125; }\n'
+            'step() { echo "mysbx-init: $*"; }\n'
+            + block.replace("/sys/block", shlex.quote(str(sys_block)))
+        )
+        return subprocess.run(
+            [str(ROOTFS / "bin/busybox"), "sh", "-c", script],
+            capture_output=True,
+            text=True,
+            env={"PATH": ""},
+            timeout=20,
+        )
+
+    def run_pick_vd(self, ro_flags, want, role):
+        # The extracted pick_vd, EXECUTED against the faked /sys/block:
+        # the single-match pick, the ambiguity refusal and the empty
+        # case are behavior here, not strings pinned in the source.
+        start = INIT.index("pick_vd() {")
+        end = INIT.index("\n}\n", start) + len("\n}\n")
+        call = "\npick_vd %s %s\n" % (shlex.quote(str(want)), shlex.quote(role))
+        return self.run_init_block(INIT[start:end] + call, self.make_block_devs(*ro_flags))
+
+    def run_unannounced_scan(self, ro_flags):
+        # The else arm's refusal scan (a read-only vd* the env never
+        # announced), likewise executed: with a read-only disk
+        # present it must refuse, with writable disks only it passes.
+        start = INIT.index(
+            "for d in /sys/block/vd*; do",
+            INIT.index("# manifest forgot"),
+        )
+        end = INIT.index("\n    done\n", start) + len("\n    done\n")
+        return self.run_init_block(INIT[start:end], self.make_block_devs(*ro_flags))
+
     def test_init_parses(self):
         result = subprocess.run(
             [str(ROOTFS / "bin/busybox"), "sh", "-n"],
@@ -245,9 +292,9 @@ class InitTests(unittest.TestCase):
     def test_store_disk_section(self):
         # docs/design/guest-store.md: the guest-own store disk. The erofs
         # mounts BEFORE the scratch section (the db copy reads /nix/var/nix
-        # off it), read-only at the device level; the two disks identify
-        # by their /sys/block/*/ro flag — the old "the scratch is the only
-        # /dev/vd*" assumption died with the second disk.
+        # off it), read-only at the device level; both disks identify
+        # through the one shared pick_vd scan, by their /sys/block/*/ro
+        # flag — never by name.
         erofs = INIT.index('"$BB" mount -t erofs -o ro "$store_dev" /nix')
         announce = INIT.index('if [ "${MYSBX_KRUN_STORE_DISK:-}" = "1" ]; then')
         scratch = INIT.index('if [ "${MYSBX_KRUN_SCRATCH:-}" = "1" ]; then')
@@ -257,23 +304,51 @@ class InitTests(unittest.TestCase):
         self.assertLess(erofs, scratch)
         self.assertLess(scratch, db_copy)
         self.assertLess(db_copy, baked_overlay)
-        self.assertIn('store_dev="/dev/${d##*/}"', INIT)
-        self.assertIn('scratch_dev="/dev/${d##*/}"', INIT)
-        # Exactly one disk per mode: two read-only or two writable vd*
-        # devices are an AMBIGUOUS attach the init refuses — never a
-        # silent last-one-wins mount (the /sys/block ro flag is the
-        # discriminator, but it is only unique while one disk per mode
-        # attaches).
-        self.assertIn("read-only /dev/vd* devices", INIT)
-        self.assertIn("writable /dev/vd* devices", INIT)
-        self.assertIn("ambiguous, refusing to guess", INIT)
-        # The refusal side of the announce-or-refuse rule: a read-only vd*
-        # without the env marker is a disk the manifest forgot — never a
-        # silent store the payload could see unmounted.
-        self.assertIn(
-            "exists but MYSBX_KRUN_STORE_DISK is unset",
-            INIT,
+        # The two picks route through the one shared scan — the ro
+        # flag 1 picks the store disk, 0 the scratch (the executed
+        # behavior, both picks and refusals, is the pick_vd tests
+        # below; these asserts only pin the wiring of the calls).
+        self.assertIn('store_dev=$(pick_vd 1 "the store disk")', INIT)
+        self.assertIn('scratch_dev=$(pick_vd 0 "the scratch")', INIT)
+
+    def test_pick_vd_finds_the_single_matching_disk(self):
+        # One disk per mode attached: the store pick finds the
+        # read-only vd*, the scratch pick the writable one, and a
+        # pick whose mode has no disk comes back empty (the caller
+        # refuses that with its own message).
+        result = self.run_pick_vd((1, 0), 1, "the store disk")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "/dev/vda")
+        result = self.run_pick_vd((1, 0), 0, "the scratch")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "/dev/vdb")
+        result = self.run_pick_vd((0,), 1, "the store disk")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_pick_vd_refuses_an_ambiguous_attach(self):
+        # Two disks of one mode are an ambiguous attach the pick
+        # refuses — never a silent last-one-wins mount.
+        result = self.run_pick_vd((1, 1, 0), 1, "the store disk")
+        self.assert_failed(
+            result,
+            "2 read-only /dev/vd* devices — the store disk is ambiguous, refusing to guess",
         )
+        result = self.run_pick_vd((0, 0, 1), 0, "the scratch")
+        self.assert_failed(
+            result,
+            "2 writable /dev/vd* devices — the scratch is ambiguous, refusing to guess",
+        )
+
+    def test_unannounced_read_only_disk_refuses(self):
+        # The refusal side of the announce-or-refuse rule: a
+        # read-only vd* without the env marker is a disk the
+        # manifest forgot — never a silent store the payload could
+        # see unmounted. Writable disks only: nothing to refuse.
+        result = self.run_unannounced_scan((1, 0))
+        self.assert_failed(result, "exists but MYSBX_KRUN_STORE_DISK is unset")
+        result = self.run_unannounced_scan((0,))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_trace_phases(self):
         # The traced step names of the db reconcile: the split of the
@@ -509,15 +584,13 @@ class InitTests(unittest.TestCase):
     def test_baked_mode_copies_the_disk_own_db(self):
         # The baked branch of the db copy (docs/design/guest-store.md):
         # db_src is the erofs's OWN /nix/var/nix/db, and the copy loop
-        # must follow $db_src — iterating the host-share spelling here
-        # copies nothing while the step still logs "copying", a
-        # silently empty db on the scratch. The host-share fixture
-        # stays EMPTY: in the guest that path is absent in baked mode
-        # (no share mounted), and a seeded fixture would hide a loop
-        # that ignores $db_src — the exact bug this test exists for.
-        # big-lock/reserved are skipped in both modes; the reconcile
-        # gate is closed by the env marker, so the db arrives exactly
-        # as baked.
+        # must follow $db_src. The host-share fixture stays EMPTY —
+        # the baked guest has no share mounted at that path, and a
+        # seeded fixture would let a loop that ignores $db_src pass:
+        # here such a loop copies nothing and the db.sqlite assert
+        # fails. big-lock/reserved are skipped in both modes; the
+        # reconcile gate is closed by the env marker, so the db
+        # arrives exactly as baked.
         baked = self.base / "baked-db"
         baked.mkdir()
         with sqlite3.connect(baked / "db.sqlite") as db:

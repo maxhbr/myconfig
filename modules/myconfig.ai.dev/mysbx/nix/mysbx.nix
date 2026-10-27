@@ -536,6 +536,8 @@ let
   ++ krunStoreExtraRoots;
   storeDisk =
     if krunStoreBaked then
+      # The recipe's inputs are all callPackage defaults; rootPaths is
+      # the one override.
       callPackage ./krun-store-image.nix { } { rootPaths = storeRootPaths; }
     else
       null;
@@ -1016,14 +1018,13 @@ symlinkJoin {
     # (null otherwise), for the checks.nix build-and-inspect gate of
     # the image.
     krunStoreDisk = storeDisk;
-    # Whether the wrapper pins the disk at all, for the checks.nix
-    # EVAL-time wiring gate (the module's `krun.store.enable` feeds
-    # `krunStoreBaked` — asserted through this flag, never through a
-    # source grep a reformat could break).
+    # Whether the wrapper pins the disk at all — the module's
+    # `krun.store.enable` feeds it; the checks.nix wiring gate reads
+    # it at eval time.
     krunStoreBaked = krunStoreBaked;
-    # The disk's closure roots as store paths, for the same eval-time
-    # gate: `krunStoreExtraRoots` (the guest nix wrappers) must appear
-    # here when the module enables them.
+    # The disk's closure roots as store paths, for the same gate:
+    # `krunStoreExtraRoots` (the guest nix wrappers) must appear here
+    # when the module enables them.
     krunStoreRoots = map toString storeRootPaths;
   };
 }

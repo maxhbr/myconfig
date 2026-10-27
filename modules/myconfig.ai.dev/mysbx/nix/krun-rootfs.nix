@@ -229,6 +229,39 @@ let
     }
     _step_t0=0
 
+    # The shared vd* pick (docs/design/guest-store.md): the ONE
+    # /dev/vd* whose /sys/block ro flag matches WANT — 1 for the
+    # read-only store disk, 0 for the writable scratch — never a
+    # name (the launcher's block_id names an MMIO slot host-side,
+    # no serial the guest reads). Exactly one match may exist: two
+    # read-only or two writable vd* devices are an ambiguous attach
+    # the init refuses rather than guess at — a silently wrong mount
+    # is the worst outcome. Prints the single match, empty when
+    # none attached; the CALLER refuses the empty case with its own
+    # announcement-specific message.
+    pick_vd() {
+        want_ro=$1
+        role=$2
+        if [ "$want_ro" = "1" ]; then
+            mode_word="read-only"
+        else
+            mode_word="writable"
+        fi
+        dev=
+        count=0
+        for d in /sys/block/vd*; do
+            [ -d "$d" ] || continue
+            if [ "$("$BB" cat "$d/ro")" = "$want_ro" ]; then
+                dev="/dev/''${d##*/}"
+                count=$((count + 1))
+            fi
+        done
+        if [ "$count" -gt 1 ]; then
+            fail "$count $mode_word /dev/vd* devices — $role is ambiguous, refusing to guess"
+        fi
+        printf '%s' "$dev"
+    }
+
     # The guest's writable scratch: the root is a READ-ONLY virtiofs
     # share, so nothing below / may change — /tmp is where every
     # writable thing lives, the share mounts included (finding 9:
@@ -631,25 +664,11 @@ let
     # no store record in this mode), its var/nix/ carries the
     # REGISTERED db the image baked (the includeNixDB recipe), so
     # the scratch half below needs NO reconcile: db and store match
-    # by construction, both baked in one image. Device identification:
-    # the store disk is the /dev/vd* whose /sys/block/*/ro reads 1 —
-    # the scratch is the WRITABLE one. Exactly ONE such disk may
-    # exist; two read-only vd* devices are an ambiguous attach the
-    # init refuses rather than guess at (the refuse-or-announce
-    # rule: a silently wrong mount is the worst outcome).
+    # by construction, both baked in one image. Device
+    # identification is the shared pick_vd scan above: the store
+    # disk is the read-only vd*, the scratch the writable one.
     if [ "''${MYSBX_KRUN_STORE_DISK:-}" = "1" ]; then
-        store_dev=
-        store_count=0
-        for d in /sys/block/vd*; do
-            [ -d "$d" ] || continue
-            if [ "$("$BB" cat "$d/ro")" = "1" ]; then
-                store_dev="/dev/''${d##*/}"
-                store_count=$((store_count + 1))
-            fi
-        done
-        if [ "$store_count" -gt 1 ]; then
-            fail "$store_count read-only /dev/vd* devices — the store disk is ambiguous, refusing to guess"
-        fi
+        store_dev=$(pick_vd 1 "the store disk")
         [ -n "$store_dev" ] \
             || fail "MYSBX_KRUN_STORE_DISK=1 but no read-only /dev/vd* device — the store disk did not attach"
         step "mounting the guest-own nix store ($store_dev, erofs, read-only) at /nix"
@@ -686,23 +705,10 @@ let
     # xattrs work natively, nothing over the virtiofs xattr
     # surface). The overlay mounts at /nix/store itself.
     if [ "''${MYSBX_KRUN_SCRATCH:-}" = "1" ]; then
-        # The device: the WRITABLE /dev/vd* (the root is virtiofs,
-        # not blk; the store disk above is read-only). Exactly ONE
-        # such disk may exist — two writable vd* devices are an
-        # ambiguous attach the init refuses, never a silent
-        # last-one-wins mount.
-        scratch_dev=
-        scratch_count=0
-        for d in /sys/block/vd*; do
-            [ -d "$d" ] || continue
-            if [ "$("$BB" cat "$d/ro")" = "0" ]; then
-                scratch_dev="/dev/''${d##*/}"
-                scratch_count=$((scratch_count + 1))
-            fi
-        done
-        if [ "$scratch_count" -gt 1 ]; then
-            fail "$scratch_count writable /dev/vd* devices — the scratch is ambiguous, refusing to guess"
-        fi
+        # The device: the WRITABLE /dev/vd* through the shared
+        # pick_vd scan above (the root is virtiofs, not blk; the
+        # store disk above is the read-only one).
+        scratch_dev=$(pick_vd 0 "the scratch")
         [ -n "$scratch_dev" ] \
             || fail "MYSBX_KRUN_SCRATCH=1 but no writable /dev/vd* device — the disk did not attach"
         dev=$scratch_dev

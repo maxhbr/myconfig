@@ -260,7 +260,9 @@ pub struct Params<'a> {
 impl<'a> Params<'a> {
     /// The run's store mode, from the one field that decides it
     /// (docs/design/guest-store.md): a pinned store disk IS the
-    /// baked mode. Every gate that switches on the mode — the
+    /// baked mode — the launcher-side spelling of the config-side
+    /// [`crate::config::Store::is_baked`]; the two doc comments
+    /// stay in sync. Every gate that switches on the mode — the
     /// whole-store share, the nix-var db ride-along, the cover
     /// check's exempt slot — reads THIS accessor, never the field,
     /// so a future gate cannot miss half the mode.

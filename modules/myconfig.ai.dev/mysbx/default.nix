@@ -1177,7 +1177,8 @@ in
           this option — never a silent host-store run.
 
           A heavy addition: the image is a full copy of the tool
-          closure (hundreds of MiB). Needs a VM backend enabled
+          closure (hundreds of MiB for a plain tools set, GiB-scale
+          for a kitchen-sink one). Needs a VM backend enabled
           (`krun.enable` or `microvm-qemu.enable`) — the disk is
           attached by their launchers only.
         '';

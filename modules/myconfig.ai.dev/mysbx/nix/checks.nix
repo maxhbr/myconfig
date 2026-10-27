@@ -152,15 +152,16 @@ in
   # superblock carries the FIXED UUID the determinism block pins
   # (dump.erofs -s prints it verbatim). The store/, var/nix/db and
   # gcroots members follow the dockerTools recipe the guest nix
-  # reads. The WRAPPER side is pinned by source greps: the --set
-  # spelling and the module wiring; the negative (a flags-off host
-  # pins nothing) is the disabled-backends check's list.
+  # reads. The WRAPPER side pins the pin itself: the --set spelling
+  # (a string literal, reflow-proof) plus the marker agreement across
+  # the crate, the wrapper and the init; the module WIRING is the
+  # eval-time block below; the negative (a flags-off host pins
+  # nothing) is the disabled-backends check's list.
   mysbx-krun-store-disk-test =
     let
       storeImage = pkgs.callPackage ../nix/krun-store-image.nix { };
       img = storeImage { rootPaths = [ pkgs.hello ]; };
-      # The module wiring, pinned at EVAL time (a source grep of
-      # default.nix would break on any reformat): a host with
+      # The module wiring, pinned at EVAL time: a host with
       # krun.store.enable must bake and pin the disk, the guest nix
       # wrappers must ride along while krun.nix.enable is on, and
       # must drop out when it is off. test-f13 enables krun.nix by
@@ -235,12 +236,10 @@ in
         # read-only modes (dr-xr-xr-x) and the builder sandbox sweeps
         # the tempdir anyway.
 
-        # 4. the module wiring, pinned at EVAL time (the env vars
-        #    above) — never by a source grep of default.nix, which a
-        #    reformat could silently break. On: the wrapper bakes and
-        #    pins the disk, and the krun.nix guest wrappers ride
-        #    along as extra roots (their store paths a baked run has
-        #    no host-store share to resolve through). Off: nothing.
+        # 4. the module wiring (the env vars above). On: the wrapper
+        #    bakes and pins the disk, and the krun.nix guest wrappers
+        #    ride along as extra roots (their store paths a baked run
+        #    has no host-store share to resolve through). Off: nothing.
         [ "$storeWiredOn" = 1 ] \
           || fail "krun.store.enable does not bake the disk (the default.nix krunStoreBaked wiring is broken)"
         [ "$storeWiredOff" = 0 ] \
@@ -256,9 +255,17 @@ in
         esac
         # The --set SPELLING the crate reads is a string literal in
         # mysbx.nix (a reformat never splits literals, so this grep
-        # is reflow-proof — the one source pin worth keeping).
+        # is reflow-proof).
         grep -q -- '--set MYSBX_KRUN_STORE_DISK' ${../nix/mysbx.nix} \
           || fail "the wrapper lost the MYSBX_KRUN_STORE_DISK pin"
+        # The marker AGREEMENT: the crate's record, the wrapper's
+        # --set and the init's gate must spell the same name, or a
+        # baked run announces a disk the guest never looks for.
+        grep -q 'STORE_DISK_ENV_RECORD: &str = "MYSBX_KRUN_STORE_DISK=1"' \
+          ${../mysbx-rs/src/lib.rs} \
+          || fail "the crate's store-disk env record changed"
+        grep -qF 'MYSBX_KRUN_STORE_DISK' ${../nix/krun-rootfs.nix} \
+          || fail "the guest init lost the MYSBX_KRUN_STORE_DISK gate"
 
         touch $out
       '';

@@ -341,7 +341,10 @@ impl Store {
         }
     }
 
-    /// Whether the run asks for the guest-own store disk.
+    /// Whether the run asks for the guest-own store disk — the
+    /// config-side spelling of the mode the launcher-side
+    /// `krun::Params::baked()` decides from the pinned disk; the
+    /// two doc comments stay in sync.
     pub fn is_baked(self) -> bool {
         self == Store::Baked
     }
