@@ -633,16 +633,23 @@ let
     # the scratch half below needs NO reconcile: db and store match
     # by construction, both baked in one image. Device identification:
     # the store disk is the /dev/vd* whose /sys/block/*/ro reads 1 —
-    # the scratch is the WRITABLE one; the old "the scratch is the
-    # only /dev/vd*" assumption died with this second disk.
+    # the scratch is the WRITABLE one. Exactly ONE such disk may
+    # exist; two read-only vd* devices are an ambiguous attach the
+    # init refuses rather than guess at (the refuse-or-announce
+    # rule: a silently wrong mount is the worst outcome).
     if [ "''${MYSBX_KRUN_STORE_DISK:-}" = "1" ]; then
         store_dev=
+        store_count=0
         for d in /sys/block/vd*; do
             [ -d "$d" ] || continue
             if [ "$("$BB" cat "$d/ro")" = "1" ]; then
                 store_dev="/dev/''${d##*/}"
+                store_count=$((store_count + 1))
             fi
         done
+        if [ "$store_count" -gt 1 ]; then
+            fail "$store_count read-only /dev/vd* devices — the store disk is ambiguous, refusing to guess"
+        fi
         [ -n "$store_dev" ] \
             || fail "MYSBX_KRUN_STORE_DISK=1 but no read-only /dev/vd* device — the store disk did not attach"
         step "mounting the guest-own nix store ($store_dev, erofs, read-only) at /nix"
@@ -680,14 +687,22 @@ let
     # surface). The overlay mounts at /nix/store itself.
     if [ "''${MYSBX_KRUN_SCRATCH:-}" = "1" ]; then
         # The device: the WRITABLE /dev/vd* (the root is virtiofs,
-        # not blk; the store disk above is read-only).
+        # not blk; the store disk above is read-only). Exactly ONE
+        # such disk may exist — two writable vd* devices are an
+        # ambiguous attach the init refuses, never a silent
+        # last-one-wins mount.
         scratch_dev=
+        scratch_count=0
         for d in /sys/block/vd*; do
             [ -d "$d" ] || continue
             if [ "$("$BB" cat "$d/ro")" = "0" ]; then
                 scratch_dev="/dev/''${d##*/}"
+                scratch_count=$((scratch_count + 1))
             fi
         done
+        if [ "$scratch_count" -gt 1 ]; then
+            fail "$scratch_count writable /dev/vd* devices — the scratch is ambiguous, refusing to guess"
+        fi
         [ -n "$scratch_dev" ] \
             || fail "MYSBX_KRUN_SCRATCH=1 but no writable /dev/vd* device — the disk did not attach"
         dev=$scratch_dev
@@ -710,8 +725,8 @@ let
         # network gate's twin of the bwrap tier's /nix/var/nix bind)
         # holding the HOST's db — copying it registers every shared
         # store path as valid, so the guest's single-user nix never
-        # re-adds — the live fchmodat2 crash was exactly a re-add
-        # deleting a lower-layer entry through the overlay. In both
+        # re-adds (a re-add deletes a lower-layer entry through the
+        # overlay and crashes in fchmodat2). In both
         # modes ONLY the db: the source tree may carry more, but a
         # HOST's live var also carries builds/ (0700 per-build log
         # dirs owned by root/nixbld, unreadable through the share)
@@ -728,7 +743,10 @@ let
             step "copying the nix db ($db_src) to the scratch"
             "$BB" mkdir -p /mysbx-nix/state/db \
                 || fail "cannot create the nix state dir on the scratch"
-            for f in /tmp/mysbx-shares/stage-ro/nix-var/db/*; do
+            # The SOURCE is $db_src in BOTH modes — the host-share
+            # spelling only in the share mode, the erofs's own
+            # /nix/var/nix/db in the baked mode.
+            for f in "$db_src"/*; do
                 [ -e "$f" ] || continue
                 case "''${f##*/}" in
                     big-lock | reserved) continue ;;

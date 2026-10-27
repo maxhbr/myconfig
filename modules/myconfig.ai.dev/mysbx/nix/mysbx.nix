@@ -382,7 +382,7 @@
   # layer's guest-side packages the disk must carry beyond the
   # wrapper's own closure — `krun.nix.packages`, the in-guest nix
   # wrappers of the direct backend, whose store paths a baked run
-  # can no longer resolve through a host-store share).
+  # has no host-store share to resolve through).
   krunStoreExtraRoots ? [ ],
   # The waypipe binary of the HOST side of the display channel
   # (../docs/design/config.md D18, `display = "waypipe"`): the wrapper

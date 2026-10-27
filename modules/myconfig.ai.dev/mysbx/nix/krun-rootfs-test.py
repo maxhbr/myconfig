@@ -9,6 +9,7 @@ import os
 import pty
 from pathlib import Path
 import shlex
+import shutil
 import sqlite3
 import stat
 import subprocess
@@ -52,13 +53,15 @@ class InitTests(unittest.TestCase):
             )
             db.executemany("INSERT INTO Refs VALUES (?, ?)", refs)
 
-    def run_reconcile(self, fail_query=None):
+    def run_reconcile(self, fail_query=None, store_disk=False, baked_db=None):
         # Extract the init's complete copy/reconcile block, not a SQL replica.
         # The block opens at the db_src pick (the store mode selects the
         # source db: the baked disk's own or the host share's) so the
         # extraction is self-contained; with the env unset the harness
         # exercises the HOST branch, the one with a live share to diverge
-        # from the db snapshot.
+        # from the db snapshot. store_disk=True runs the BAKED branch:
+        # the erofs's own /nix/var/nix/db maps to the baked_db fixture,
+        # the reconcile gate is closed by the env marker.
         start = INIT.index(
             '    if [ "${MYSBX_KRUN_STORE_DISK:-}" = "1" ]; then\n'
             "        db_src=/nix/var/nix/db"
@@ -79,6 +82,8 @@ class InitTests(unittest.TestCase):
             ("/nix/store", str(self.store)),
         ):
             block = block.replace(guest, local)
+        if store_disk:
+            block = block.replace("/nix/var/nix/db", str(baked_db))
         sqlite = ROOTFS / "bin/sqlite3"
         if fail_query:
             shim = self.base / "sqlite-failure"
@@ -107,7 +112,7 @@ class InitTests(unittest.TestCase):
             [str(ROOTFS / "bin/busybox"), "sh", "-c", script],
             capture_output=True,
             text=True,
-            env={"PATH": ""},
+            env={"PATH": "", **({"MYSBX_KRUN_STORE_DISK": "1"} if store_disk else {})},
             timeout=20,
         )
 
@@ -254,6 +259,14 @@ class InitTests(unittest.TestCase):
         self.assertLess(db_copy, baked_overlay)
         self.assertIn('store_dev="/dev/${d##*/}"', INIT)
         self.assertIn('scratch_dev="/dev/${d##*/}"', INIT)
+        # Exactly one disk per mode: two read-only or two writable vd*
+        # devices are an AMBIGUOUS attach the init refuses — never a
+        # silent last-one-wins mount (the /sys/block ro flag is the
+        # discriminator, but it is only unique while one disk per mode
+        # attaches).
+        self.assertIn("read-only /dev/vd* devices", INIT)
+        self.assertIn("writable /dev/vd* devices", INIT)
+        self.assertIn("ambiguous, refusing to guess", INIT)
         # The refusal side of the announce-or-refuse rule: a read-only vd*
         # without the env marker is a disk the manifest forgot — never a
         # silent store the payload could see unmounted.
@@ -492,6 +505,42 @@ class InitTests(unittest.TestCase):
             self.assertFalse((self.scratch / name).exists())
         self.assertTrue((self.store / "live-link").is_symlink())
         self.assertTrue((self.store / "broken-link").is_symlink())
+
+    def test_baked_mode_copies_the_disk_own_db(self):
+        # The baked branch of the db copy (docs/design/guest-store.md):
+        # db_src is the erofs's OWN /nix/var/nix/db, and the copy loop
+        # must follow $db_src — iterating the host-share spelling here
+        # copies nothing while the step still logs "copying", a
+        # silently empty db on the scratch. The host-share fixture
+        # stays EMPTY: in the guest that path is absent in baked mode
+        # (no share mounted), and a seeded fixture would hide a loop
+        # that ignores $db_src — the exact bug this test exists for.
+        # big-lock/reserved are skipped in both modes; the reconcile
+        # gate is closed by the env marker, so the db arrives exactly
+        # as baked.
+        baked = self.base / "baked-db"
+        baked.mkdir()
+        with sqlite3.connect(baked / "db.sqlite") as db:
+            db.executescript(SCHEMA)
+            db.execute("INSERT INTO ValidPaths VALUES (1, '/nix/store/aaaa-valid-path')")
+        (baked / "big-lock").write_text("lock")
+        (baked / "reserved").write_text("space")
+        result = self.run_reconcile(store_disk=True, baked_db=baked)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("copying the nix db", result.stdout)
+        self.assertNotIn("no nix-var db", result.stdout)
+        copied = self.scratch / "state/db"
+        self.assertTrue(
+            (copied / "db.sqlite").is_file(),
+            "the baked db never reached the scratch",
+        )
+        self.assertFalse((copied / "big-lock").exists())
+        self.assertFalse((copied / "reserved").exists())
+        with sqlite3.connect(copied / "db.sqlite") as db:
+            self.assertEqual(
+                db.execute("SELECT count(*) FROM ValidPaths").fetchone()[0], 1
+            )
+        self.assertNotIn("enumerating the registered store paths", result.stdout)
 
     def test_valid_rows_need_no_delete_transaction(self):
         (self.store / "directory").mkdir()
