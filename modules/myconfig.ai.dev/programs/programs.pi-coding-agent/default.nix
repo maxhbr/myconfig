@@ -1142,17 +1142,21 @@ let
   # source tree is deployed as-is - no `npm install` required.
   #
   # Deployed as a multi-file global extension at
-  # `~/.pi/agent/extensions/pi-token-speed/` (pi loads `*/index.ts`; the
-  # sibling `./src/...` imports resolve via relative specifiers). Vendor
-  # files upstream does not need at runtime (tests, package.json,
-  # tsconfig) are dropped for a clean read-only extension directory.
-  # Upstream targets pi >= 0.85.1 (peerDependencies), matching the pinned
+  # `~/.pi/agent/extensions/pi-token-speed/`: pi loads `*/index.ts`, and
+  # upstream 0.12.0 (`46a3dd4`) keeps it at `src/index.ts` (its package
+  # manifest declares `"pi": { "extensions": ["./src/index.ts"] }`), so a
+  # thin loader re-exports the real entry while the sibling `./src/...`
+  # imports keep resolving via relative specifiers. Vendor files upstream
+  # does not need at runtime (tests, package.json, tsconfig) are dropped
+  # for a clean read-only extension directory. Upstream targets
+  # pi >= 0.85.1 (peerDependencies), matching the pinned
   # `pkgs.nixos-unstable.pi-coding-agent` here.
   tokenSpeedSrc = (pkgs.callPackage ../../../../_sources/generated.nix { }).pi-token-speed.src;
 
   tokenSpeedExtension = pkgs.runCommand "pi-token-speed-extension" { } ''
     mkdir -p $out
-    cp -r ${tokenSpeedSrc}/index.ts ${tokenSpeedSrc}/src $out/
+    cp -r ${tokenSpeedSrc}/src $out/src
+    printf 'export { default } from "./src/index.ts";\n' > $out/index.ts
   '';
 
   piBwrap = callLib ../../fns/bubblewrap-simple-app.nix {
