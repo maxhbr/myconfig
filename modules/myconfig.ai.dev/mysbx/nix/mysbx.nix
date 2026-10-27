@@ -179,6 +179,7 @@
 # MYSBX_PODMAN_PASTA_SPEC.)
 {
   lib,
+  callPackage,
   rustPlatform,
   makeBinaryWrapper,
   symlinkJoin,
@@ -526,29 +527,16 @@ let
   # the terminal) stay OUT — they never exec in the guest. `null`
   # when disabled, so the wrapper's closure pulls the image in only
   # on a host that opted in.
+  storeRootPaths = [
+    toolsEnv
+  ]
+  ++ lib.optionals (shell != null) [ shell ]
+  ++ lib.optionals (muxEntries != null) (lib.attrValues muxEntries)
+  ++ lib.optionals (waypipe != null) [ waypipe ]
+  ++ krunStoreExtraRoots;
   storeDisk =
     if krunStoreBaked then
-      import ./krun-store-image.nix
-        {
-          inherit
-            lib
-            runCommand
-            closureInfo
-            erofs-utils
-            gnutar
-            nix
-            sqlite
-            ;
-        }
-        {
-          rootPaths = [
-            toolsEnv
-          ]
-          ++ lib.optionals (shell != null) [ shell ]
-          ++ lib.optionals (muxEntries != null) (lib.attrValues muxEntries)
-          ++ lib.optionals (waypipe != null) [ waypipe ]
-          ++ krunStoreExtraRoots;
-        }
+      callPackage ./krun-store-image.nix { } { rootPaths = storeRootPaths; }
     else
       null;
 
@@ -1028,5 +1016,14 @@ symlinkJoin {
     # (null otherwise), for the checks.nix build-and-inspect gate of
     # the image.
     krunStoreDisk = storeDisk;
+    # Whether the wrapper pins the disk at all, for the checks.nix
+    # EVAL-time wiring gate (the module's `krun.store.enable` feeds
+    # `krunStoreBaked` — asserted through this flag, never through a
+    # source grep a reformat could break).
+    krunStoreBaked = krunStoreBaked;
+    # The disk's closure roots as store paths, for the same eval-time
+    # gate: `krunStoreExtraRoots` (the guest nix wrappers) must appear
+    # here when the module enables them.
+    krunStoreRoots = map toString storeRootPaths;
   };
 }

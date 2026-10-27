@@ -162,6 +162,20 @@ itself. That is what flipped the cost table to B: `mkfs.erofs
   baked view and say "not in the sandbox store: add it to the tools
   or rebuild it in-guest" instead of a bare ENOENT. (c) is the
   direct answer to the recorded rejection reason.
+
+  **What shipped and what did not (the honest ledger).** (a) shipped
+  HOST-side only: `krunStoreExtraRoots` lets the module declare
+  extra roots (`krun.nix.packages` ride along when `krun.nix.enable`
+  bakes the guest wrappers), but there is no PER-REPO declaration —
+  a repo cannot name its own roots; that is a future config key (the
+  `extraTools`-style extension). (b) is NOT wired: nothing refuses
+  or announces a baked run lacking network or `krun.nix.enable` —
+  an operator must know an in-guest rebuild needs both; a refusal
+  or a warning line is future work. (c) is NOT wired: a baked ENOENT
+  is today a bare shell error; the diagnosing diff is future work.
+  Until they land, `store = "baked"` is for runs whose tools are
+  complete in the closure — and this ledger stays here so nobody
+  has to rediscover which third of the mitigation shipped.
 - **Rebuild coupling.** The view pin changes on every
   `toolsEnv`/`extraTools` change — the same cadence the wrapper's
   own closure already has, but it trades away D3's "one rootfs
@@ -272,3 +286,9 @@ goldens). What still needs a real KVM host — the probe-5 half:
 The harnesses exist (`nix/krun-live-validation.sh`,
 `nix/microvm-qemu-live-validation.sh`); the store-disk cases are
 the addition a KVM host runs.
+
+Follow-ups this file owes the design (the honest-costs ledger
+above, in merge order): the per-repo extra-roots key (a), the
+network/nix honesty for in-guest rebuilds (b), and the ENOENT
+diagnosis (c). None blocks the merge — `host` stays the default —
+but each should land before a host flips a default.

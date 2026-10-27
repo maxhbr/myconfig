@@ -1148,17 +1148,21 @@ in
       };
       # The guest-own nix store of the VM backends
       # (docs/design/guest-store.md): an erofs image of THIS
-      # wrapper's own tool closure - the shell, the mux-entry
+      # wrapper's own tool closure — the shell, the mux-entry
       # closures, every `extraTools` package, and with
-      # `krun.nix.enable` the guest nix wrappers - built
+      # `krun.nix.enable` the guest nix wrappers — built
       # read-only and pinned as MYSBX_KRUN_STORE_DISK, ONE pin for
-      # both VM backends (the guest side is shared, backends.md D9:
-      # the krun launcher's krun_add_disk2 and the qemu drive both
-      # negotiate the write protection into the guest, the init
-      # tells the disk from the writable scratch by the /sys/block
-      # ro flag and mounts it at /nix). A run opts in per config
-      # layer (`store = "baked"`); a run that does not keeps the
-      # host-store share (D3), byte for byte.
+      # both VM backends. It lives under the krun tree for the
+      # same reason `microvm-qemu.rootfs` consumes
+      # `krun.direct.rootfs`: the guest side is SHARED (backends.md
+      # D9 — the krun launcher's krun_add_disk2 and the qemu drive
+      # both negotiate the write protection into the guest, the
+      # init tells the disk from the writable scratch by the
+      # /sys/block ro flag and mounts it at /nix), so its knobs
+      # sit with the krun backend that owns the shared rootfs. A
+      # run opts in per config layer (`store = "baked"`); a run
+      # that does not keeps the host-store share (D3), byte for
+      # byte.
       store = {
         enable = mkEnableOption ''
           the guest-own nix store disk of the VM backends
@@ -1166,15 +1170,15 @@ in
           the erofs image of this wrapper's own tool closure, built
           once per wrapper (not per run) and mounted read-only at
           /nix by a run that opts in via the `store = "baked"`
-          config key - a baked run sees its own tools only, no
+          config key — a baked run sees its own tools only, no
           host store paths behind them. Off (the default) pins
           nothing: every run keeps the host-store share, and a
           `store = "baked"` run is refused with a message naming
-          this option - never a silent host-store run.
+          this option — never a silent host-store run.
 
           A heavy addition: the image is a full copy of the tool
           closure (hundreds of MiB). Needs a VM backend enabled
-          (`krun.enable` or `microvm-qemu.enable`) - the disk is
+          (`krun.enable` or `microvm-qemu.enable`) — the disk is
           attached by their launchers only.
         '';
       };

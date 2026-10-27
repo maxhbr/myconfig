@@ -159,6 +159,28 @@ in
     let
       storeImage = pkgs.callPackage ../nix/krun-store-image.nix { };
       img = storeImage { rootPaths = [ pkgs.hello ]; };
+      # The module wiring, pinned at EVAL time (a source grep of
+      # default.nix would break on any reformat): a host with
+      # krun.store.enable must bake and pin the disk, the guest nix
+      # wrappers must ride along while krun.nix.enable is on, and
+      # must drop out when it is off. test-f13 enables krun.nix by
+      # default, so the nix arm compares against an extension that
+      # FORCES it off — the plain host cannot discriminate it. Forcing
+      # the package passthrus evaluates the wrapper, nothing builds
+      # here (the image build is the fixture arm above).
+      storeHost = self.nixosConfigurations.test-f13.extendModules {
+        modules = [ { myconfig.ai.dev.mysbx.krun.store.enable = true; } ];
+      };
+      storeNoNixHost = self.nixosConfigurations.test-f13.extendModules {
+        modules = [
+          {
+            myconfig.ai.dev.mysbx.krun.store.enable = true;
+            myconfig.ai.dev.mysbx.krun.nix.enable = lib.mkForce false;
+          }
+        ];
+      };
+      plainHost = self.nixosConfigurations.test-f13;
+      pkgOf = host: host.config.myconfig.ai.dev.mysbx.package;
     in
     pkgs.runCommand "mysbx-krun-store-disk-test"
       {
@@ -166,6 +188,12 @@ in
           pkgs.erofs-utils
           pkgs.sqlite
         ];
+        # The eval results, injected as plain strings the shell
+        # asserts on (a bool and two path lists).
+        storeWiredOn = if (pkgOf storeHost).passthru.krunStoreBaked then "1" else "0";
+        storeWiredOff = if (pkgOf plainHost).passthru.krunStoreBaked then "1" else "0";
+        storeRootsOn = lib.concatStringsSep " " (pkgOf storeHost).passthru.krunStoreRoots;
+        storeRootsNoNix = lib.concatStringsSep " " (pkgOf storeNoNixHost).passthru.krunStoreRoots;
       }
       ''
         fail() {
@@ -207,15 +235,30 @@ in
         # read-only modes (dr-xr-xr-x) and the builder sandbox sweeps
         # the tempdir anyway.
 
-        # 4. the wrapper side, pinned by source: the --set spelling
-        #    the crate reads as MYSBX_KRUN_STORE_DISK, and the module
-        #    wiring that opts a host in.
+        # 4. the module wiring, pinned at EVAL time (the env vars
+        #    above) — never by a source grep of default.nix, which a
+        #    reformat could silently break. On: the wrapper bakes and
+        #    pins the disk, and the krun.nix guest wrappers ride
+        #    along as extra roots (their store paths a baked run has
+        #    no host-store share to resolve through). Off: nothing.
+        [ "$storeWiredOn" = 1 ] \
+          || fail "krun.store.enable does not bake the disk (the default.nix krunStoreBaked wiring is broken)"
+        [ "$storeWiredOff" = 0 ] \
+          || fail "the wrapper bakes the disk without krun.store.enable (a stock host must keep the host-store share)"
+        [ "$storeRootsOn" != "$storeRootsNoNix" ] \
+          || fail "krun.nix.enable did not add the guest nix wrappers to the disk roots (the krunStoreExtraRoots wiring is broken)"
+        case "$storeRootsOn" in
+          *krun-guest-nix*) ;;
+          *) fail "the disk roots do not carry the guest nix wrappers: $storeRootsOn" ;;
+        esac
+        case "$storeRootsNoNix" in
+          *krun-guest-nix*) fail "the disk roots carry the guest nix wrappers with krun.nix.enable off: $storeRootsNoNix" ;;
+        esac
+        # The --set SPELLING the crate reads is a string literal in
+        # mysbx.nix (a reformat never splits literals, so this grep
+        # is reflow-proof — the one source pin worth keeping).
         grep -q -- '--set MYSBX_KRUN_STORE_DISK' ${../nix/mysbx.nix} \
           || fail "the wrapper lost the MYSBX_KRUN_STORE_DISK pin"
-        grep -q 'krunStoreBaked = cfg.krun.store.enable' ${../default.nix} \
-          || fail "the module wiring (default.nix krunStoreBaked) is gone"
-        grep -q 'krunStoreExtraRoots = lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages' ${../default.nix} \
-          || fail "the module wiring (default.nix krunStoreExtraRoots) is gone"
 
         touch $out
       '';

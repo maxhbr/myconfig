@@ -178,7 +178,7 @@ pub fn microvm_qemu_argv(
         argv.push("--store-disk".to_owned());
         argv.push(disk.clone());
         argv.push("--env".to_owned());
-        argv.push("MYSBX_KRUN_STORE_DISK=1".to_owned());
+        argv.push(crate::STORE_DISK_ENV_RECORD.to_owned());
     }
     argv.push("--chdir".to_owned());
     argv.push(spec.workdir.clone());

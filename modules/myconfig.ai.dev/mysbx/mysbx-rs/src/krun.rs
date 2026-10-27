@@ -257,6 +257,18 @@ pub struct Params<'a> {
     pub detachable: bool,
 }
 
+impl<'a> Params<'a> {
+    /// The run's store mode, from the one field that decides it
+    /// (docs/design/guest-store.md): a pinned store disk IS the
+    /// baked mode. Every gate that switches on the mode — the
+    /// whole-store share, the nix-var db ride-along, the cover
+    /// check's exempt slot — reads THIS accessor, never the field,
+    /// so a future gate cannot miss half the mode.
+    pub fn baked(&self) -> bool {
+        self.store_disk.is_some()
+    }
+}
+
 /// The two trust TEXTS of a run's git trust (bd myconfig-dak.8):
 /// the global config (`git_trust_text`'s exact-path entries plus the
 /// in-sandbox user-config includes) and the libgit2 system config
@@ -590,7 +602,7 @@ pub fn stage_binds(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Vec<(Strin
     // SKIPPED in a baked-store run (docs/design/guest-store.md):
     // the disk replaces the share, and the slot would bind a
     // host store the run must not see.
-    if params.store_disk.is_none() {
+    if !params.baked() {
         binds.push(("/nix/store".to_owned(), true, "store".to_owned()));
     }
     let workspace_dir = match &params.workspace {
@@ -656,7 +668,7 @@ pub fn stage_binds(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Vec<(Strin
     // needs no host db either: the image carries its own REGISTERED
     // db (the includeNixDB recipe), one that cannot diverge from
     // its store — the mxu reconcile never runs there.
-    if cfg.network && params.scratch.is_some() && params.store_disk.is_none() {
+    if cfg.network && params.scratch.is_some() && !params.baked() {
         binds.push(("/nix/var/nix".to_owned(), true, "nix-var".to_owned()));
     }
     binds
@@ -675,7 +687,7 @@ fn krun_shares(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Result<Vec<Sha
     // baked /nix/store link targeted the share's mount; the baked
     // disk hides the link entirely, its /nix/store is real).
     let mut shares: Vec<Share> = Vec::new();
-    if params.store_disk.is_none() {
+    if !params.baked() {
         shares.push(Share {
             slot: "store".to_owned(),
             sandbox_path: "/nix/store".to_owned(),
@@ -760,7 +772,7 @@ fn krun_shares(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Result<Vec<Sha
     // of the stage_binds entry, same gate, LINKLESS (NOLINK_DEST).
     // The baked-store run skips it with the same extra gate: its db
     // rides inside the image, registered against its own store.
-    if cfg.network && params.scratch.is_some() && params.store_disk.is_none() {
+    if cfg.network && params.scratch.is_some() && !params.baked() {
         shares.push(Share {
             slot: "nix-var".to_owned(),
             sandbox_path: NOLINK_DEST.to_owned(),
@@ -1356,7 +1368,7 @@ fn render(spec: &Spec) -> Vec<String> {
         argv.push("--store-disk".to_owned());
         argv.push(disk.clone());
         argv.push("--env".to_owned());
-        argv.push("MYSBX_KRUN_STORE_DISK=1".to_owned());
+        argv.push(crate::STORE_DISK_ENV_RECORD.to_owned());
     }
     // 5. the working directory (bwrap's --chdir equivalent:
     // `krun_set_workdir`)

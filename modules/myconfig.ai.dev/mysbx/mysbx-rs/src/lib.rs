@@ -62,6 +62,14 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// hand-copied number.
 pub const EXIT_INFRASTRUCTURE: i32 = 70;
 
+/// The manifest env record that announces the guest-own store disk
+/// to the shared guest init (docs/design/guest-store.md): BOTH VM
+/// renderers — krun and microvm-qemu — attach the erofs image and
+/// must announce it with the IDENTICAL record, so the string lives
+/// here once. The init reads it as the disk's announce-or-refuse
+/// contract: an unannounced read-only vd* is a refused boot.
+pub(crate) const STORE_DISK_ENV_RECORD: &str = "MYSBX_KRUN_STORE_DISK=1";
+
 /// Print the usage to stdout.
 pub fn usage() {
     print!("{USAGE}");
