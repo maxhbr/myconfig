@@ -158,6 +158,19 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         }
     ));
 
+    // The nix store this run sees (docs/design/guest-store.md): said
+    // out loud like the network — which store backs the sandbox is a
+    // property of every run, and a baked VM is a materially different
+    // machine than a shared-store one (no host store path at all).
+    p(format!(
+        "store:          {}",
+        if r.merged.store.is_baked() {
+            "baked — the guest-own store disk (no host store path)"
+        } else {
+            "host — the whole read-only /nix/store share"
+        }
+    ));
+
     // The workspace of this run (workspace.md D1): the live repo —
     // the default, said out loud like the multiplexer is, because
     // "which tree does this run write" is a property of every run —
@@ -627,7 +640,7 @@ fn present(exists: bool) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Display, Mount, Multiplexer};
+    use crate::config::{Display, Mount, Multiplexer, Store};
     use std::collections::BTreeMap;
     use std::path::PathBuf;
 
@@ -668,6 +681,7 @@ mod tests {
             memory: None,
             cpus: None,
             pids_limit: None,
+            store: Store::Host,
             multiplexer: Multiplexer::None,
             display: Display::Off,
         };
@@ -737,6 +751,7 @@ mod tests {
         );
         assert!(joined.contains("backend:        bubblewrap"), "{joined}");
         assert!(joined.contains("network:        denied"), "{joined}");
+        assert!(joined.contains("store:          host"), "{joined}");
         // The implicit repo mount plus both configured ones, attributed
         // to their layer, in declaration order.
         assert!(

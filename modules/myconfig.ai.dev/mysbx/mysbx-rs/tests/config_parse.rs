@@ -68,6 +68,8 @@ fn every_asset_is_exercised() {
         "invalid/schema-multiplexer-wrong-type.toml",
         "invalid/schema-display-unknown-value.toml",
         "invalid/schema-display-wrong-type.toml",
+        "invalid/schema-store-unknown-value.toml",
+        "invalid/schema-store-wrong-type.toml",
         "invalid/schema-workmux-key-removed.toml",
         "invalid/schema-wrong-type.toml",
         "invalid/syntax-duplicate-key.toml",
@@ -275,6 +277,14 @@ fn invalid_schema_is_reported_with_the_offending_key() {
         (
             "invalid/schema-display-wrong-type.toml",
             "display: expected a string",
+        ),
+        (
+            "invalid/schema-store-unknown-value.toml",
+            "invalid store `vm`",
+        ),
+        (
+            "invalid/schema-store-wrong-type.toml",
+            "store: expected a string",
         ),
         (
             // The migration message of D17: it must name the key that

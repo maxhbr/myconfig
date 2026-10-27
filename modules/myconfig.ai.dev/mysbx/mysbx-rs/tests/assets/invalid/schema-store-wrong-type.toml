@@ -1,0 +1,3 @@
+# `store` is a closed string enum, like `display` (config.md D18): a
+# non-string value is a type error, not a run-time surprise.
+store = 1

@@ -77,7 +77,7 @@
 //! item 4 (the argv builder) accepts. `Config` values are layer *inputs*
 //! and never leave this module's boundary as effective configuration.
 
-use crate::config::{Config, Display, Mount, Multiplexer};
+use crate::config::{Config, Display, Mount, Multiplexer, Store};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -176,6 +176,13 @@ pub struct Merged {
     pub memory: Option<String>,
     pub cpus: Option<String>,
     pub pids_limit: Option<u32>,
+    /// Which nix store the sandbox sees (`store`, docs/design/
+    /// guest-store.md): resolved once from the layers' tri-state
+    /// values, like `multiplexer` — the sidecar wins when both
+    /// decide, `host` when neither did. Nothing downstream may
+    /// re-decide it; the backend gate in the run pipeline (lib.rs)
+    /// refuses `baked` on a backend that cannot attach a store disk.
+    pub store: Store,
 }
 
 impl Merged {
@@ -773,6 +780,12 @@ pub fn merge(
         memory: sidecar.memory.or(user.memory),
         cpus: sidecar.cpus.or(user.cpus),
         pids_limit: sidecar.pids_limit.or(user.pids_limit),
+        // store (docs/design/guest-store.md): the later layer wins,
+        // like `multiplexer` — the key selects a store mysbx itself
+        // builds (or the shared host store the default already
+        // grants) and adds no host access, so it needs no narrowing
+        // rule. Host (the pre-key behaviour) when neither decided.
+        store: sidecar.store.or(user.store).unwrap_or(Store::Host),
     })
 }
 

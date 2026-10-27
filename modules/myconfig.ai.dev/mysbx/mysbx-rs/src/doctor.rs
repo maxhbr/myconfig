@@ -506,6 +506,31 @@ pub fn krun_rootfs_check(rootfs: Option<PathBuf>) -> Check {
     }
 }
 
+/// The guest-own store disk check (docs/design/guest-store.md):
+/// `None` is the DEFAULT — no disk baked, every run keeps the
+/// host-store share (backends.md D3), a green "host" line, not a
+/// failure. A pin that is not a readable file is a fail with the
+/// option that bakes the disk in the hint. Both VM backends share
+/// the one pin (the guest side is shared, D9).
+pub fn krun_store_disk_check(disk: Option<PathBuf>) -> Check {
+    match disk {
+        None => Check::ok("store", "host — the shared host store (no disk baked)"),
+        Some(path) if path.is_file() => {
+            Check::ok("store", format!("baked disk pinned ({})", path.display()))
+        }
+        Some(path) => Check::fail(
+            "store",
+            format!(
+                "`{}` is not a readable file (MYSBX_KRUN_STORE_DISK)",
+                path.display()
+            ),
+            "the Nix wrapper pins it when the host opts in \
+             (myconfig.ai.dev.mysbx.krun.store.enable), or fix the \
+             MYSBX_KRUN_STORE_DISK pin",
+        ),
+    }
+}
+
 /// The Landlock check of the nono backend; `abi` is the kernel's
 /// Landlock ABI version, `None` when Landlock is unavailable.
 pub fn landlock_check(abi: Option<i64>) -> Check {
@@ -964,6 +989,13 @@ fn krun_checks(checks: &mut Vec<Check>) {
     // The rootfs pin: a directory, not a binary.
     let rootfs = crate::env_opt("MYSBX_KRUN_ROOTFS").map(PathBuf::from);
     checks.push(krun_rootfs_check(rootfs));
+    // The guest-own store disk pin (docs/design/guest-store.md):
+    // absent pins are the host-store DEFAULT, so this never fails a
+    // stock host — it only names the mode a `store = "baked"` run
+    // would find.
+    checks.push(krun_store_disk_check(
+        crate::env_opt("MYSBX_KRUN_STORE_DISK").map(PathBuf::from),
+    ));
     // The launcher self-probe: an invalid flag makes the launcher
     // print its usage — proof the binary loads and reaches argument
     // parsing. The probe FAILS BY DESIGN (the launcher exits 2 on
@@ -1032,6 +1064,11 @@ fn microvm_qemu_checks(checks: &mut Vec<Check>) {
     };
     let rootfs = crate::env_opt("MYSBX_MICROVM_QEMU_ROOTFS").map(PathBuf::from);
     checks.push(krun_rootfs_check(rootfs));
+    // The shared store disk pin (the guest side is shared, D9 —
+    // the SAME MYSBX_KRUN_* variable, like the rootfs above).
+    checks.push(krun_store_disk_check(
+        crate::env_opt("MYSBX_KRUN_STORE_DISK").map(PathBuf::from),
+    ));
     // The one qemu-only pin: the kernel image. A file, not a dir —
     // the bzImage the wrapper pins.
     match crate::env_opt("MYSBX_MICROVM_QEMU_KERNEL") {
@@ -1780,6 +1817,37 @@ mod tests {
         );
         std::fs::remove_dir_all(tmp).unwrap();
         std::fs::remove_dir_all(&bare).unwrap();
+    }
+
+    #[test]
+    fn krun_store_disk_check_names_all_three_states() {
+        // No pin: the host-store DEFAULT, an OK line (unlike the
+        // rootfs: nothing about a stock host needs the disk).
+        let no_pin = krun_store_disk_check(None);
+        assert_eq!(
+            no_pin.level,
+            Level::Ok,
+            "no MYSBX_KRUN_STORE_DISK pin is the default"
+        );
+        assert!(no_pin.detail.contains("host"));
+        // A file-shaped pin: OK, naming the disk.
+        let suffix = std::process::id();
+        let disk = std::env::temp_dir().join(format!("mysbx-doctor-store-disk-{suffix}"));
+        std::fs::write(&disk, b"erofs").unwrap();
+        assert_eq!(
+            krun_store_disk_check(Some(disk.clone())).level,
+            Level::Ok,
+            "a readable file pin must pass"
+        );
+        // Present but the wrong shape (a directory, say): FAIL with
+        // the option that bakes the disk in the hint.
+        let dir = std::env::temp_dir().join(format!("mysbx-doctor-store-dir-{suffix}"));
+        std::fs::create_dir_all(&dir).unwrap();
+        let fail = krun_store_disk_check(Some(dir.clone()));
+        assert_eq!(fail.level, Level::Fail, "a non-file pin must fail");
+        assert!(fail.hint.unwrap().contains("krun.store.enable"));
+        std::fs::remove_file(disk).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

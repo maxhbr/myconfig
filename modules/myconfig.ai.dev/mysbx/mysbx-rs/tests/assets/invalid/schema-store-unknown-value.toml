@@ -1,0 +1,5 @@
+# The `store` enum is closed (docs/design/guest-store.md): a value
+# mysbx does not carry is a schema error naming the accepted values,
+# never a silently ignored key — an ignored `store` would leave a run
+# on a store the operator did not choose.
+store = "vm"

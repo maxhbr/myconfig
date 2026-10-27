@@ -229,6 +229,18 @@ pub struct Params<'a> {
     /// shape as the git trust files). `None` attaches no disk: the
     /// run keeps the plain ro store share, no silent RAM fallback.
     pub scratch: Option<&'a str>,
+    /// The guest-own nix store disk (docs/design/guest-store.md): the
+    /// STORE-VIEW path of the erofs image the Nix wrapper baked from
+    /// the tools closure (lib.rs reads it from the
+    /// `MYSBX_KRUN_STORE_DISK` pin — a store path, so the launcher's
+    /// bwrap wrap already sees it ro, no extra bind). PRESENCE IS THE
+    /// MODE: the run attaches the disk as a second read-only
+    /// virtio-blk device and carries NO host store share — the
+    /// whole spec follows it (`krun_shares` drops the store slot,
+    /// the nix-var ride-along, and the init mounts the image at /nix).
+    /// `None` is the `store = "host"` run, byte-identical to the
+    /// pre-key argv.
+    pub store_disk: Option<&'a str>,
     /// Whether the caller passed `--verbose` (cli.md D10): the argv
     /// forwards it to the launcher, which then logs its phase
     /// timings and setup detail (the dlopen'd lib, the manifest,
@@ -243,6 +255,20 @@ pub struct Params<'a> {
     /// bwrap::Params::detachable. Foreground runs pass `false` and
     /// their argv stays byte-identical.
     pub detachable: bool,
+}
+
+impl<'a> Params<'a> {
+    /// The run's store mode, from the one field that decides it
+    /// (docs/design/guest-store.md): a pinned store disk IS the
+    /// baked mode — the launcher-side spelling of the config-side
+    /// [`crate::config::Store::is_baked`]; the two doc comments
+    /// stay in sync. Every gate that switches on the mode — the
+    /// whole-store share, the nix-var db ride-along, the cover
+    /// check's exempt slot — reads THIS accessor, never the field,
+    /// so a future gate cannot miss half the mode.
+    pub fn baked(&self) -> bool {
+        self.store_disk.is_some()
+    }
 }
 
 /// The two trust TEXTS of a run's git trust (bd myconfig-dak.8):
@@ -545,6 +571,12 @@ pub(crate) struct Spec {
     /// the launcher attaches the file with krun_add_disk2 and
     /// announces the disk in the manifest env so the init finds it.
     pub(crate) scratch: Option<String>,
+    /// The guest-own store disk's path (docs/design/guest-store.md):
+    /// the launcher attaches the erofs image READ-ONLY
+    /// (`krun_add_disk2` with the read-only feature, a second
+    /// virtio-blk device) and announces it (`MYSBX_KRUN_STORE_DISK=1`)
+    /// so the init mounts it at /nix. `None` is a host-store run.
+    pub(crate) store_disk: Option<String>,
     /// The in-memory overlay files (bd myconfig-dak.8): (guest path,
     /// octal file mode, b64 content) triples the launcher registers
     /// on the ROOT device. The git trust is the first consumer — no
@@ -569,7 +601,12 @@ pub fn stage_binds(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Vec<(Strin
     // The store share's slot: a ro bind of /nix/store into the ro
     // tree — the same source the wrap's own --ro-bind /nix/store
     // serves, so this adds no new visibility, only the slot view.
-    binds.push(("/nix/store".to_owned(), true, "store".to_owned()));
+    // SKIPPED in a baked-store run (docs/design/guest-store.md):
+    // the disk replaces the share, and the slot would bind a
+    // host store the run must not see.
+    if !params.baked() {
+        binds.push(("/nix/store".to_owned(), true, "store".to_owned()));
+    }
     let workspace_dir = match &params.workspace {
         Workspace::Live => repo.root.clone(),
         Workspace::Clone { clone, .. } => clone.to_path_buf(),
@@ -629,8 +666,11 @@ pub fn stage_binds(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Vec<(Strin
     // itself: the network (the bwrap tier binds /nix/var/nix only
     // when shared — review-2 item 3's daemon-socket reasoning) and
     // the scratch (the db copy needs a writable surface; without
-    // one there is no guest nix state at all).
-    if cfg.network && params.scratch.is_some() {
+    // one there is no guest nix state at all). A baked-store run
+    // needs no host db either: the image carries its own REGISTERED
+    // db (the includeNixDB recipe), one that cannot diverge from
+    // its store — the mxu reconcile never runs there.
+    if cfg.network && params.scratch.is_some() && !params.baked() {
         binds.push(("/nix/var/nix".to_owned(), true, "nix-var".to_owned()));
     }
     binds
@@ -642,11 +682,20 @@ pub fn stage_binds(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Vec<(Strin
 /// the trust computation can map a SANDBOX path to its BACKING path
 /// without re-deriving the layout (bd myconfig-n4b).
 fn krun_shares(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Result<Vec<Share>, Error> {
-    let mut shares: Vec<Share> = vec![Share {
-        slot: "store".to_owned(),
-        sandbox_path: "/nix/store".to_owned(),
-        read_only: true,
-    }];
+    // The ro host store share (backends.md D3's default) — DROPPED
+    // in a baked-store run (docs/design/guest-store.md): the erofs
+    // disk replaces it, and no host store path may enter the guest.
+    // The device count drops from 3 to 2 with it (the rootfs's
+    // baked /nix/store link targeted the share's mount; the baked
+    // disk hides the link entirely, its /nix/store is real).
+    let mut shares: Vec<Share> = Vec::new();
+    if !params.baked() {
+        shares.push(Share {
+            slot: "store".to_owned(),
+            sandbox_path: "/nix/store".to_owned(),
+            read_only: true,
+        });
+    }
     // The workspace share runs the first-component half of the dest
     // check too: the init places the SANDBOX path (the repo's own
     // path — the clone remap binds the clone there), so a repo
@@ -698,6 +747,10 @@ fn krun_shares(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Result<Vec<Sha
     }
     // Each mount's own placement checks first (root-level, protected,
     // unbaked roots), then the cover check against the implicit shares.
+    // The store share is exempt in both modes (a mount over /nix/store
+    // is the placement guard's own refusal, not a cover violation) —
+    // a positional slice would exempt the WORKSPACE once the store
+    // share is gone, so the exemption is by SLOT.
     let mount_shares = cfg
         .mounts
         .iter()
@@ -705,8 +758,9 @@ fn krun_shares(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Result<Vec<Sha
         .collect::<Result<Vec<_>, _>>()?;
     for mount in &cfg.mounts {
         let dest = crate::bwrap::normalize(mount.dest.as_deref().unwrap_or(&mount.path));
-        if let Some(hidden) = shares[1..]
+        if let Some(hidden) = shares
             .iter()
+            .filter(|s| s.slot != "store")
             .find(|s| crate::bwrap::normalize(&s.sandbox_path).starts_with(&dest))
         {
             return Err(Error::HiddenMount {
@@ -718,7 +772,9 @@ fn krun_shares(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Result<Vec<Sha
     shares.extend(mount_shares);
     // The host nix db ride-along (bd myconfig-j23) — the argv twin
     // of the stage_binds entry, same gate, LINKLESS (NOLINK_DEST).
-    if cfg.network && params.scratch.is_some() {
+    // The baked-store run skips it with the same extra gate: its db
+    // rides inside the image, registered against its own store.
+    if cfg.network && params.scratch.is_some() && !params.baked() {
         shares.push(Share {
             slot: "nix-var".to_owned(),
             sandbox_path: NOLINK_DEST.to_owned(),
@@ -873,7 +929,10 @@ pub(crate) fn spec_of(
     // the implicit binds of every backend):
     //
     // - the ro host store (D3's default: the whole /nix/store, the
-    //   same visibility the bwrap tier grants with --ro-bind),
+    //   same visibility the bwrap tier grants with --ro-bind) —
+    //   unless the run carries a store disk (docs/design/
+    //   guest-store.md): the erofs image replaces the share, and no
+    //   host store path enters the guest;
     // - the workspace (live: the repo root; clone: the session
     //   clone, seen at the repo's own path — the same remap the
     //   other backends bind),
@@ -891,7 +950,8 @@ pub(crate) fn spec_of(
     // /nix/store link targets it); every other share is a SLOT in
     // one of the two staging devices (the slot budget — see
     // STAGE_RO_TAG), so the device count is a constant 3 regardless
-    // of how many mounts a config carries.
+    // of how many mounts a config carries — 2 in a baked-store run,
+    // where the disk replaces the store device.
     let shares = krun_shares(cfg, repo, params)?;
 
     // 5. the payload: the mux entry of a session, else the shell of
@@ -922,6 +982,11 @@ pub(crate) fn spec_of(
         payload: payload_argv,
         network: cfg.network,
         scratch: params.scratch.map(str::to_owned),
+        // The store disk rides the same route as the scratch: the
+        // flag names the image, the env announces it, the init mounts
+        // it (and the share list above already dropped the host
+        // store slot for this run).
+        store_disk: params.store_disk.map(str::to_owned),
         overlays: params.git_trust.map(trust_overlays).unwrap_or_default(),
         verbose: params.verbose,
     })
@@ -1213,7 +1278,17 @@ fn render(spec: &Spec) -> Vec<String> {
     // launcher's INPUT; nothing about the argv interface changes.
     let ro_slots = spec.shares.iter().filter(|s| s.read_only).count();
     let rw_slots = spec.shares.iter().filter(|s| !s.read_only).count();
-    if ro_slots > 0 {
+    // The manifest's device: the ro stage tree carries the SHARE
+    // slots, and a baked-store run can leave it without a single ro
+    // one (the store share was its only mandatory slot, the disk
+    // replaces it) — but the MANIFEST itself still needs the device:
+    // every env record rides it, and the no-manifest fallback is the
+    // kernel cmdline, a route that exists only for cmdline-sized
+    // debug runs (the 2048-byte finding). So the device + pointer
+    // are emitted whenever the manifest has records to carry — env
+    // is never empty in a real run — even with zero ro slots.
+    let manifest_needed = ro_slots > 0 || !spec.env.is_empty();
+    if manifest_needed {
         argv.push("--ro-device".to_owned());
         argv.push(format!("{STAGE_RO_TAG}={}/ro", STAGE_ROOT));
     }
@@ -1221,7 +1296,7 @@ fn render(spec: &Spec) -> Vec<String> {
         argv.push("--rw-device".to_owned());
         argv.push(format!("{STAGE_RW_TAG}={}/rw", STAGE_ROOT));
     }
-    if ro_slots > 0 {
+    if manifest_needed {
         argv.push("--manifest".to_owned());
         argv.push(format!("{STAGE_ROOT}/ro/{}", MANIFEST_SLOT));
     }
@@ -1280,6 +1355,22 @@ fn render(spec: &Spec) -> Vec<String> {
         argv.push(scratch.clone());
         argv.push("--env".to_owned());
         argv.push("MYSBX_KRUN_SCRATCH=1".to_owned());
+    }
+    // 4d. the guest-own store disk (docs/design/guest-store.md): the
+    // launcher attaches the erofs image as a SECOND virtio-blk
+    // device — READ-ONLY (the ro feature flag; the init identifies
+    // this disk by its /sys/block ro flag, the scratch stays the
+    // writable vd*). The flag takes the STORE-VIEW path (a store
+    // path the wrap already binds ro for the launcher's own
+    // runtime, no extra bind); the PRESENCE announcement
+    // (`MYSBX_KRUN_STORE_DISK=1`) rides the manifest env like the
+    // scratch's. The share list of this argv carries no store slot
+    // — the disk replaces D3's whole-store share for this run.
+    if let Some(disk) = &spec.store_disk {
+        argv.push("--store-disk".to_owned());
+        argv.push(disk.clone());
+        argv.push("--env".to_owned());
+        argv.push(crate::STORE_DISK_ENV_RECORD.to_owned());
     }
     // 5. the working directory (bwrap's --chdir equivalent:
     // `krun_set_workdir`)

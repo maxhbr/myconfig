@@ -216,6 +216,25 @@ pub fn run(args: &[String], dry_run: bool) -> i32 {
             "denied (--unshare-all, no --share-net)"
         }
     ));
+    // The nix store a run of this repo would see (docs/design/
+    // guest-store.md), right after the network sense: a `baked` VM
+    // run is a materially different machine than a shared-store
+    // one, and the operator should see that before starting one.
+    {
+        let pinned = std::env::var_os("MYSBX_KRUN_STORE_DISK").is_some();
+        let state = if merged.store.is_baked() {
+            if pinned {
+                "baked — the guest-own store disk (pinned)".to_string()
+            } else {
+                "baked — NO store image pinned (a VM run would be refused: \
+MYSBX_KRUN_STORE_DISK)"
+                    .to_owned()
+            }
+        } else {
+            "host — the whole read-only /nix/store share".to_string()
+        };
+        p(format!("store:           {state}"));
+    }
     // The sandbox's own ssh keypair (config.md D22), right after the
     // network sense: whether a run generates one, and whether the
     // keypair already exists in the sidecar state (an operator can

@@ -75,6 +75,9 @@ config that can execute is config that can escape.
   tree
 - the backend and its resource limits (`memory`, `cpus`, `pids-limit`,
   see D23)
+- the store a VM run mounts at `/nix` (`store`, see D26): the host
+  store shared read-only, or the guest-own baked disk — the narrowing
+  the sidecar may preselect for a repo, exactly like `backend`
 - network policy (`network = false` is the deny switch; the network is
   shared by default; the per-domain/port allowlist keys of D21;
   `egress = "proxy-only"` is the stricter profile in D20, off unless a
@@ -1530,3 +1533,46 @@ the rendering rather than being a hand-kept list, so a change to what
 the config names changes the closure with it. Rendering the config
 without them was a live regression: the sandbox had the exact right
 fish configuration and none of the tools it calls.
+
+### D26: `store` — which nix store a VM run sees, the host's share or the guest's own disk
+
+```toml
+store = "host"            # host | baked
+```
+
+One top-level string key, resolved like `backend` (the sidecar may
+preselect it, the user config may set a host-wide default, `host` when
+every layer is silent). It decides what backs `/nix` inside the
+sandbox — and only the two VM backends honor it:
+
+| value | the run's `/nix` |
+| --- | --- |
+| `"host"` | backends.md D3's whole-store share: the host `/nix/store` read-only over virtiofs, what every run did before the key existed (the default) |
+| `"baked"` | the guest-own store disk (docs/design/guest-store.md): a read-only erofs image of the wrapper's own tool closure — `store/` paths plus a REGISTERED db and gcroots — attached as a second virtio-blk device and mounted at `/nix`; the whole-store share is DROPPED, and the per-run scratch overlay writes new paths on top |
+
+**Why a config key and not a host option.** The host option
+(`myconfig.ai.dev.mysbx.krun.store.enable`) only BAKES and PINS the
+disk (`MYSBX_KRUN_STORE_DISK`, one pin for both VM backends — the
+guest side is shared, backends.md D9); the per-run key decides
+usage, so a host can carry the disk and still run repos against the
+host store, and a repo that wants the narrowing says so where the
+rest of its sandbox is configured. The disk is expensive (a full
+copy of the tool closure); a run should not get it by accident.
+
+**Refused, never degraded.** A `store = "baked"` run without the
+pin — the host did not opt in — is refused with a message naming the
+option; so is a `baked` run on any non-VM backend (`bubblewrap`
+would mount nothing at all: the erofs needs a VM's block device).
+There is no fallback to the host store: a run that asked for the
+narrowing silently getting the whole store would be the exact
+inversion of the refuse-or-announce rule.
+
+**What a baked run no longer sees.** Everything reachable only
+through the host store share: a tool resolved by a host store path
+that is not in the wrapper's closure is a runtime ENOENT — the
+narrowing is the point, and `store = "host"` stays the honest
+default for a run that needs the host's store. The wrapper's own
+tools (the shell, the multiplexer entries, `extraTools`) and, when
+`krun.nix.enable`, the guest nix wrappers are baked in; the guest
+db is registered, so no host-db copy, no reconcile and no
+`store-scan` pass runs in a baked guest.

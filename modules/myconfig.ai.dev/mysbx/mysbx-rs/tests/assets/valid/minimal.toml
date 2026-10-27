@@ -17,6 +17,11 @@
 #                                # it; a sidecar may deny, never re-enable (D7)
 # display = "off"                # off | waypipe, a Wayland channel (D18)
 #
+# Which nix store the sandbox sees (docs/design/guest-store.md): `baked`
+# runs the VM backends on their own store disk, no host store path enters
+# the sandbox; needs krun or microvm-qemu, refused elsewhere.
+# store = "host"                 # host | baked
+#
 # The network allowlist (D21): backend-agnostic, enforced by `nono` and
 # refused by a backend that cannot enforce it.
 #

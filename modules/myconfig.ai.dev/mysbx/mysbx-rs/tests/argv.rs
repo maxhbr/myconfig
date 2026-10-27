@@ -18,7 +18,7 @@ use mysbx::bwrap::{
     bwrap_argv, HostEnv, Inner, Params, Payload, Workspace, MUX_SOCKET_DIR, NONO_STATE,
     SANDBOX_HOME,
 };
-use mysbx::config::{Display, Mode, Mount, Multiplexer};
+use mysbx::config::{Display, Mode, Mount, Multiplexer, Store};
 use mysbx::merge::Merged;
 use mysbx::nono::Error as NonoError;
 use mysbx::nono::{nono_run_argv, Params as NonoParams};
@@ -68,6 +68,7 @@ fn base(network: bool) -> Merged {
         memory: None,
         cpus: None,
         pids_limit: None,
+        store: Store::Host,
         multiplexer: Multiplexer::None,
         display: Display::Off,
     }
@@ -1076,6 +1077,7 @@ fn golden_both_layers_contribute_mounts() {
         memory: None,
         cpus: None,
         pids_limit: None,
+        store: Store::Host,
         multiplexer: Multiplexer::None,
         display: Display::Off,
     };
@@ -1451,6 +1453,7 @@ fn mount_order_is_preserved() {
         memory: None,
         cpus: None,
         pids_limit: None,
+        store: Store::Host,
         multiplexer: Multiplexer::None,
         display: Display::Off,
     };
@@ -3907,6 +3910,7 @@ fn podman_base(network: bool) -> Merged {
         memory: None,
         cpus: None,
         pids_limit: None,
+        store: Store::Host,
         multiplexer: Multiplexer::None,
         display: Display::Off,
     }
@@ -4423,6 +4427,7 @@ fn podman_mount_order_is_preserved() {
         memory: None,
         cpus: None,
         pids_limit: None,
+        store: Store::Host,
         multiplexer: Multiplexer::None,
         display: Display::Off,
     };
@@ -5628,6 +5633,7 @@ fn nono_base(network: bool) -> Merged {
         memory: None,
         cpus: None,
         pids_limit: None,
+        store: Store::Host,
         multiplexer: Multiplexer::None,
         display: Display::Off,
     }

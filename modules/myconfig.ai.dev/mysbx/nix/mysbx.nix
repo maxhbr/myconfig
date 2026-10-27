@@ -78,6 +78,17 @@
 #                     --runtime`. Pinned with `--set-default`, an
 #                     operator knob like MYSBX_PODMAN_PASTA_SPEC;
 #                     absent = the crate's bare `crun` PATH fallback.
+#   MYSBX_KRUN_STORE_DISK
+#                     the guest-own nix store disk of the VM
+#                     backends (docs/design/guest-store.md): an
+#                     erofs image carrying the tools closure plus
+#                     a registered nix db, attached as a second
+#                     virtio-blk device and mounted read-only at
+#                     /nix — the host store is then NOT shared at
+#                     all. Pinned by this wrapper when
+#                     `krunStoreBaked` (../default.nix wires it to
+#                     `krun.store.enable`); absent = the host-store
+#                     share of backends.md D3, unchanged.
 #   MYSBX_WAYPIPE_SECCTX
 #                     NOT a wrapper pin — a deliberate operator
 #                     override: the security-context application ID
@@ -168,6 +179,7 @@
 # MYSBX_PODMAN_PASTA_SPEC.)
 {
   lib,
+  callPackage,
   rustPlatform,
   makeBinaryWrapper,
   symlinkJoin,
@@ -239,6 +251,13 @@
   gnutar,
   gzip,
   unzip,
+  # The guest-own store disk's build inputs (./krun-store-image.nix,
+  # the `krunStoreBaked` pin): the closure dumper, the erofs packer
+  # and the db writer — injected by `callPackage`, consumed only when
+  # the disk is built.
+  closureInfo,
+  erofs-utils,
+  sqlite,
   # Extra packages appended to the dev-tool closure by feature modules
   # (`myconfig.ai.dev.mysbx.extraTools`), e.g. the `pi` coding agent from
   # ../../programs/programs.pi-coding-agent. Same security note as the hardcoded
@@ -347,6 +366,25 @@
   # when `krun.nix.enable` (the same host that bakes the loop-mounting
   # wrapper into the image).
   krunScratchSize ? null,
+  # The guest-own nix store disk of the VM backends (docs/design/
+  # guest-store.md): when true, this wrapper builds the erofs
+  # store image (./krun-store-image.nix) from the SAME tool closure
+  # the sandbox `PATH` carries (`toolsEnv` below — the shell, the
+  # mux-entry closures and every `extraTools` package included) and
+  # pins it as MYSBX_KRUN_STORE_DISK. A run then attaches it as a
+  # second virtio-blk device and mounts it read-only at /nix instead
+  # of sharing the host store (backends.md D3's whole-store share) —
+  # the first tier NARROWER than the store it replaces. Absent (the
+  # default, and what an unwrapped `nix-build` of this file gets)
+  # pins nothing and every run keeps the host-store share, byte for
+  # byte. ../default.nix wires this to `krun.store.enable`.
+  krunStoreBaked ? false,
+  # Extra store roots for the guest-own store disk (the module
+  # layer's guest-side packages the disk must carry beyond the
+  # wrapper's own closure — `krun.nix.packages`, the in-guest nix
+  # wrappers of the direct backend, whose store paths a baked run
+  # has no host-store share to resolve through).
+  krunStoreExtraRoots ? [ ],
   # The waypipe binary of the HOST side of the display channel
   # (../docs/design/config.md D18, `display = "waypipe"`): the wrapper
   # pins it as `MYSBX_WAYPIPE`, and a run that selects waypipe without
@@ -478,6 +516,31 @@ let
     ]
     ++ extraTools;
   };
+
+  # The guest-own nix store disk (docs/design/guest-store.md), built
+  # when `krunStoreBaked` from THIS wrapper's own closure — the
+  # sandbox `PATH` (`toolsEnv`), the host shell a session's payload
+  # runs (`shell`), every multiplexer entry script and the waypipe
+  # of the display channel: everything a run resolves INSIDE the
+  # guest, so the baked store and the pins can never name different
+  # builds. Host-side binaries (bwrap, nono, the launchers, dtach,
+  # the terminal) stay OUT — they never exec in the guest. `null`
+  # when disabled, so the wrapper's closure pulls the image in only
+  # on a host that opted in.
+  storeRootPaths = [
+    toolsEnv
+  ]
+  ++ lib.optionals (shell != null) [ shell ]
+  ++ lib.optionals (muxEntries != null) (lib.attrValues muxEntries)
+  ++ lib.optionals (waypipe != null) [ waypipe ]
+  ++ krunStoreExtraRoots;
+  storeDisk =
+    if krunStoreBaked then
+      # The recipe's inputs are all callPackage defaults; rootPaths is
+      # the one override.
+      callPackage ./krun-store-image.nix { } { rootPaths = storeRootPaths; }
+    else
+      null;
 
   # The bare Rust crate, without the wrapper. Exposed as
   # `mysbx.passthru.crate` so the `nix/checks.nix` check (mvp-6) can run
@@ -860,7 +923,13 @@ let
     lib.optionalString (
       krunLauncher != null
     ) "--set MYSBX_KRUN_LAUNCHER '${krunLauncher}/bin/mysbx-krun' "
-    + lib.optionalString (krunRootfs != null) "--set MYSBX_KRUN_ROOTFS '${krunRootfs}'";
+    + lib.optionalString (krunRootfs != null) "--set MYSBX_KRUN_ROOTFS '${krunRootfs}'"
+    # The guest-own store disk pin: ONE pin for both VM backends —
+    # the guest side is shared (backends.md D9), so the krun builder
+    # and the microvm-qemu renderer consume the same MYSBX_KRUN_*
+    # variable, like every guest-side switch (MYSBX_KRUN_SCRATCH,
+    # the manifest).
+    + lib.optionalString krunStoreBaked "--set MYSBX_KRUN_STORE_DISK '${storeDisk}'";
   # The native-qemu backend's pins (backends.md D9, bd myconfig-2l9b):
   # the same closure-pin idiom — absolute store paths, no PATH
   # fallback. A `microvm-qemu` run without them is refused by the
@@ -945,5 +1014,17 @@ symlinkJoin {
     editor = neovim;
     caBundle = caBundle;
     completions = completions;
+    # The guest-own store disk the wrapper pins when `krunStoreBaked`
+    # (null otherwise), for the checks.nix build-and-inspect gate of
+    # the image.
+    krunStoreDisk = storeDisk;
+    # Whether the wrapper pins the disk at all — the module's
+    # `krun.store.enable` feeds it; the checks.nix wiring gate reads
+    # it at eval time.
+    krunStoreBaked = krunStoreBaked;
+    # The disk's closure roots as store paths, for the same gate:
+    # `krunStoreExtraRoots` (the guest nix wrappers) must appear here
+    # when the module enables them.
+    krunStoreRoots = map toString storeRootPaths;
   };
 }

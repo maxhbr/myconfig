@@ -229,6 +229,42 @@ let
     }
     _step_t0=0
 
+    # The shared vd* pick (docs/design/guest-store.md): the ONE
+    # /dev/vd* whose /sys/block ro flag matches WANT — 1 for the
+    # read-only store disk, 0 for the writable scratch — never a
+    # name (the launcher's block_id names an MMIO slot host-side,
+    # no serial the guest reads). Exactly one match may exist: two
+    # read-only or two writable vd* devices are an ambiguous attach
+    # the init refuses rather than guess at — a silently wrong mount
+    # is the worst outcome. Prints the single match, empty when
+    # none attached; the CALLER refuses the empty case with its own
+    # announcement-specific message.
+    pick_vd() {
+        # ash-local: a caller must not collide with the scan's
+        # working names.
+        local want_ro role mode_word dev count d
+        want_ro=$1
+        role=$2
+        if [ "$want_ro" = "1" ]; then
+            mode_word="read-only"
+        else
+            mode_word="writable"
+        fi
+        dev=
+        count=0
+        for d in /sys/block/vd*; do
+            [ -d "$d" ] || continue
+            if [ "$("$BB" cat "$d/ro")" = "$want_ro" ]; then
+                dev="/dev/''${d##*/}"
+                count=$((count + 1))
+            fi
+        done
+        if [ "$count" -gt 1 ]; then
+            fail "$count $mode_word /dev/vd* devices — $role is ambiguous, refusing to guess"
+        fi
+        printf '%s' "$dev"
+    }
+
     # The guest's writable scratch: the root is a READ-ONLY virtiofs
     # share, so nothing below / may change — /tmp is where every
     # writable thing lives, the share mounts included (finding 9:
@@ -620,29 +656,65 @@ let
         fi
     fi
 
+    # The guest-own nix store disk (docs/design/guest-store.md): the
+    # erofs image the launcher attached as a SECOND virtio-blk
+    # device, READ-ONLY at the device level (VIRTIO_BLK_F_RO — the
+    # launcher passed read_only=true, so the guest kernel refuses
+    # writes before any mount flag even applies). Mounted over the
+    # rootfs's baked /nix dir: its store/ is a REAL directory (the
+    # baked /nix/store SYMLINK is hidden under the mount and the
+    # host-store share it targets is absent — the manifest carries
+    # no store record in this mode), its var/nix/ carries the
+    # REGISTERED db the image baked (the includeNixDB recipe), so
+    # the scratch half below needs NO reconcile: db and store match
+    # by construction, both baked in one image. Device
+    # identification is the shared pick_vd scan above: the store
+    # disk is the read-only vd*, the scratch the writable one.
+    if [ "''${MYSBX_KRUN_STORE_DISK:-}" = "1" ]; then
+        store_dev=$(pick_vd 1 "the store disk")
+        [ -n "$store_dev" ] \
+            || fail "MYSBX_KRUN_STORE_DISK=1 but no read-only /dev/vd* device — the store disk did not attach"
+        step "mounting the guest-own nix store ($store_dev, erofs, read-only) at /nix"
+        "$BB" mount -t erofs -o ro "$store_dev" /nix \
+            || fail "cannot mount the store disk $store_dev as erofs at /nix"
+    else
+        # Refuse-or-announce (the house rule): a read-only vd* the
+        # env never announced means a disk attached that the
+        # manifest forgot — seeing it without a mount the init
+        # controls would be exactly the silent switch the contract
+        # forbids.
+        for d in /sys/block/vd*; do
+            [ -d "$d" ] || continue
+            if [ "$("$BB" cat "$d/ro")" = "1" ]; then
+                fail "a read-only /dev/vd*''${d##*/} exists but MYSBX_KRUN_STORE_DISK is unset — the disk attached without its announcement"
+            fi
+        done
+    fi
+
     # The scratch disk (bd myconfig-dak.7, backends.md D7): a REAL
     # virtio-blk device the launcher attached (krun_add_disk2), the
     # per-run raw file — no stale fs ever survives to be probed.
-    # Identified by PRESENCE, never by name: the block_id names the
-    # MMIO slot host-side, it is no serial the guest reads; the
-    # scratch is the ONLY /dev/vd*. The manifest env announces it
-    # (MYSBX_KRUN_SCRATCH=1); a run without it keeps the plain ro
-    # store share — no silent RAM fallback.
+    # Identified by its READ-ONLY FLAG, never by name: the block_id
+    # names the MMIO slot host-side, it is no serial the guest reads;
+    # the scratch is the WRITABLE /dev/vd* (the store disk above is
+    # the read-only one). The manifest env announces it
+    # (MYSBX_KRUN_SCRATCH=1); a run without it attaches no scratch —
+    # no silent RAM fallback.
     #
     # The disk becomes the nix scratch: the ext4 carries the overlay
-    # upper/work over the ro store share, nix state, logs, cache and
+    # upper/work over the ro store (the baked erofs above or the ro
+    # host share), nix state, logs, cache and
     # TMPDIR — the guest kernel's OWN filesystem (chown and overlay
     # xattrs work natively, nothing over the virtiofs xattr
-    # surface). The overlay mounts at /nix/store itself. Until db
-    # validation finishes, the baked /nix/store link exposes the
-    # bare read-only share; a tmpfs then supplies a real mountpoint.
+    # surface). The overlay mounts at /nix/store itself.
     if [ "''${MYSBX_KRUN_SCRATCH:-}" = "1" ]; then
-        # The device: the only /dev/vd* (the root is virtiofs, not
-        # blk; no other disk ever attaches).
-        dev=$(  "$BB" ls /dev/vd* 2>/dev/null) \
-            || fail "MYSBX_KRUN_SCRATCH=1 but no /dev/vd* device — the disk did not attach"
-        [ "$(  printf '%s\n' "$dev" | "$BB" wc -l)" -eq 1 ] \
-            || fail "MYSBX_KRUN_SCRATCH=1 but more than one /dev/vd* device: $dev"
+        # The device: the WRITABLE /dev/vd* through the shared
+        # pick_vd scan above (the root is virtiofs, not blk; the
+        # store disk above is the read-only one).
+        scratch_dev=$(pick_vd 0 "the scratch")
+        [ -n "$scratch_dev" ] \
+            || fail "MYSBX_KRUN_SCRATCH=1 but no writable /dev/vd* device — the disk did not attach"
+        dev=$scratch_dev
         step "formatting $dev as the nix scratch (ext4)"
         /bin/mkfs.ext4 -q -F "$dev" \
             || fail "cannot mkfs.ext4 the scratch device $dev"
@@ -654,24 +726,36 @@ let
 
         # The guest nix state (bd myconfig-j23): the db copy the
         # podman image bakes via includeNixDB, done here because the
-        # direct rootfs carries none. The LINKLESS nix-var share
-        # (stage-ro, the network gate's twin of the bwrap tier's
-        # /nix/var/nix bind) holds the HOST's db; copying it
-        # registers every shared store path as valid, so the guest's
-        # single-user nix never re-adds — the live fchmodat2 crash
-        # was exactly a re-add deleting a lower-layer entry through
-        # the overlay. ONLY the db: the image's var copy may take the
-        # whole tree, but a HOST's live var also carries builds/
-        # (0700 per-build log dirs owned by root/nixbld, unreadable
-        # through the share) and profiles/gcroots/temproots session
-        # state the guest never needs — the single-user nix creates
-        # its own. big-lock/reserved are 0600 root-owned and carry
-        # no data (a lock and reserved space); nix recreates both.
-        if [ -d /tmp/mysbx-shares/stage-ro/nix-var/db ]; then
-            step "copying the host nix db to the scratch"
+        # direct rootfs carries none. The SOURCE follows the store
+        # mode: the baked disk's own REGISTERED db (/nix/var/nix of
+        # the erofs above — it matches its store by construction,
+        # the image baked both, so the RECONCILE below never runs in
+        # that mode) or the LINKLESS nix-var share (stage-ro, the
+        # network gate's twin of the bwrap tier's /nix/var/nix bind)
+        # holding the HOST's db — copying it registers every shared
+        # store path as valid, so the guest's single-user nix never
+        # re-adds (a re-add deletes a lower-layer entry through the
+        # overlay and crashes in fchmodat2). In both
+        # modes ONLY the db: the source tree may carry more, but a
+        # HOST's live var also carries builds/ (0700 per-build log
+        # dirs owned by root/nixbld, unreadable through the share)
+        # and profiles/gcroots/temproots session state the guest
+        # never needs — the single-user nix creates its own.
+        # big-lock/reserved are 0600 root-owned and carry no data (a
+        # lock and reserved space); nix recreates both.
+        if [ "''${MYSBX_KRUN_STORE_DISK:-}" = "1" ]; then
+            db_src=/nix/var/nix/db
+        else
+            db_src=/tmp/mysbx-shares/stage-ro/nix-var/db
+        fi
+        if [ -d "$db_src" ]; then
+            step "copying the nix db ($db_src) to the scratch"
             "$BB" mkdir -p /mysbx-nix/state/db \
                 || fail "cannot create the nix state dir on the scratch"
-            for f in /tmp/mysbx-shares/stage-ro/nix-var/db/*; do
+            # The SOURCE is $db_src in BOTH modes — the host-share
+            # spelling only in the share mode, the erofs's own
+            # /nix/var/nix/db in the baked mode.
+            for f in "$db_src"/*; do
                 [ -e "$f" ] || continue
                 case "''${f##*/}" in
                     big-lock | reserved) continue ;;
@@ -683,26 +767,28 @@ let
             step "no nix-var db — the guest nix db starts empty"
         fi
         # The db reconcile (bd myconfig-mxu, the direct twin of the
-        # podman setup wrapper's step): the copied db is a SNAPSHOT
-        # of host state, the staged store share is LIVE — a host
-        # rebuild restaging the share leaves rows for paths the
-        # share no longer carries, and an in-session fetch once
-        # registered a flake source as a store SYMLINK
-        # (doc/TODOs/krun-guest-flake-source-symlink.md). Both
-        # divergences break every later eval that trusts the row
-        # ("is a symlink" / "Stale file handle") and nix's re-add
+        # podman setup wrapper's step) — HOST-SHARE MODE ONLY: the
+        # copied db is a SNAPSHOT of host state, the staged store
+        # share is LIVE — a host rebuild restaging the share leaves
+        # rows for paths the share no longer carries, and an
+        # in-session fetch once registered a flake source as a store
+        # SYMLINK (doc/TODOs/krun-guest-flake-source-symlink.md).
+        # Both divergences break every later eval that trusts the
+        # row ("is a symlink" / "Stale file handle") and nix's re-add
         # of the lower-layer entry crashes (fchmodat2). Prune the
         # rows the share cannot keep against the bare mounted ro
         # share, before overlay dentries can retain its inodes.
         # The freshly formatted scratch has no upper entries, so
-        # the baked /nix/store link sees the same paths. POSIX sh +
+        # the baked /nix/store link sees the same paths. The baked
+        # disk's db needs NONE of this: store and db are one image,
+        # they cannot diverge. POSIX sh +
         # the baked static sqlite3 (a real copy like busybox):
         # [ -e ] is FALSE for a dangling symlink, so both poison
         # shapes (dangling and live-target) prune, as does a plain
         # missing path. `nix store delete` cannot do this job
         # (liveness semantics, plus its store-tree unlink is
         # exactly the lower-layer crash).
-        if [ -f /mysbx-nix/state/db/db.sqlite ]; then
+        if [ "''${MYSBX_KRUN_STORE_DISK:-}" != "1" ] && [ -f /mysbx-nix/state/db/db.sqlite ]; then
             registered_file=/mysbx-nix/registered-paths.txt
             scan_file=/mysbx-nix/store-scan.txt
             recheck_file=/mysbx-nix/recheck-paths.txt
@@ -784,24 +870,39 @@ let
 
         "$BB" mkdir -p /mysbx-nix/store-upper /mysbx-nix/store-work \
             || fail "cannot create the overlay dirs on the scratch"
-        # /nix/store is a baked SYMLINK into the stage tree, and a
-        # mount THROUGH a symlink lands at the link's TARGET — on
-        # the share mount that shadows the whole stage device's
-        # tree. The overlay needs a REAL mountpoint at the link's
-        # PATH. The tmpfs at /nix SHADOWS the baked link — nothing
-        # of the ro root is visible under it, no removal needed;
-        # the real dir lives on the tmpfs, then the overlay mounts
-        # at the link's own path. The lowerdir names the SHARE's
-        # backing path directly.
-        "$BB" mount -t tmpfs tmpfs /nix \
-            || fail "cannot mount the tmpfs for /nix (the overlay's mountpoint root)"
-        "$BB" mkdir -p /nix/store \
-            || fail "cannot create the real /nix/store mountpoint"
-        step "mounting the store overlay (fresh scratch upper)"
-        "$BB" mount -t overlay overlay \
-            -o lowerdir=/tmp/mysbx-shares/stage-ro/store,upperdir=/mysbx-nix/store-upper,workdir=/mysbx-nix/store-work \
-            /nix/store \
-            || fail "cannot mount the store overlay (scratch upper)"
+        if [ "''${MYSBX_KRUN_STORE_DISK:-}" = "1" ]; then
+            # The baked disk's /nix/store is a REAL directory of the
+            # erofs mounted at /nix (the baked rootfs SYMLINK is
+            # hidden under that mount) — the overlay mounts directly
+            # on it, no tmpfs mountpoint trick needed (that exists
+            # only for the share mode, where /nix/store is a baked
+            # SYMLINK into the stage tree and a mount THROUGH a
+            # symlink lands at the link's TARGET).
+            step "mounting the store overlay (erofs lower, scratch upper)"
+            "$BB" mount -t overlay overlay \
+                -o lowerdir=/nix/store,upperdir=/mysbx-nix/store-upper,workdir=/mysbx-nix/store-work \
+                /nix/store \
+                || fail "cannot mount the store overlay (erofs lower, scratch upper)"
+        else
+            # /nix/store is a baked SYMLINK into the stage tree, and a
+            # mount THROUGH a symlink lands at the link's TARGET — on
+            # the share mount that shadows the whole stage device's
+            # tree. The overlay needs a REAL mountpoint at the link's
+            # PATH. The tmpfs at /nix SHADOWS the baked link — nothing
+            # of the ro root is visible under it, no removal needed;
+            # the real dir lives on the tmpfs, then the overlay mounts
+            # at the link's own path. The lowerdir names the SHARE's
+            # backing path directly.
+            "$BB" mount -t tmpfs tmpfs /nix \
+                || fail "cannot mount the tmpfs for /nix (the overlay's mountpoint root)"
+            "$BB" mkdir -p /nix/store \
+                || fail "cannot create the real /nix/store mountpoint"
+            step "mounting the store overlay (fresh scratch upper)"
+            "$BB" mount -t overlay overlay \
+                -o lowerdir=/tmp/mysbx-shares/stage-ro/store,upperdir=/mysbx-nix/store-upper,workdir=/mysbx-nix/store-work \
+                /nix/store \
+                || fail "cannot mount the store overlay (scratch upper)"
+        fi
 
         "$BB" mkdir -p /mysbx-nix/log /mysbx-nix/cache /mysbx-nix/tmp \
             || fail "cannot create the nix log/cache/tmp dirs on the scratch"

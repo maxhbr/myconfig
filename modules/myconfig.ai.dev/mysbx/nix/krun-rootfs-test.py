@@ -9,6 +9,7 @@ import os
 import pty
 from pathlib import Path
 import shlex
+import shutil
 import sqlite3
 import stat
 import subprocess
@@ -52,10 +53,24 @@ class InitTests(unittest.TestCase):
             )
             db.executemany("INSERT INTO Refs VALUES (?, ?)", refs)
 
-    def run_reconcile(self, fail_query=None):
+    def run_reconcile(self, fail_query=None, store_disk=False, baked_db=None):
         # Extract the init's complete copy/reconcile block, not a SQL replica.
-        start = INIT.index("    if [ -d /tmp/mysbx-shares/stage-ro/nix-var/db ]; then")
-        reconcile = INIT.index("    if [ -f /mysbx-nix/state/db/db.sqlite ]; then", start)
+        # The block opens at the db_src pick (the store mode selects the
+        # source db: the baked disk's own or the host share's) so the
+        # extraction is self-contained; with the env unset the harness
+        # exercises the HOST branch, the one with a live share to diverge
+        # from the db snapshot. store_disk=True runs the BAKED branch:
+        # the erofs's own /nix/var/nix/db maps to the baked_db fixture,
+        # the reconcile gate is closed by the env marker.
+        start = INIT.index(
+            '    if [ "${MYSBX_KRUN_STORE_DISK:-}" = "1" ]; then\n'
+            "        db_src=/nix/var/nix/db"
+        )
+        reconcile = INIT.index(
+            '    if [ "${MYSBX_KRUN_STORE_DISK:-}" != "1" ]'
+            " && [ -f /mysbx-nix/state/db/db.sqlite ]; then",
+            start,
+        )
         end = INIT.index("\n    fi\n", reconcile) + len("\n    fi\n")
         block = INIT[start:end]
         self.assertNotRegex(block, r'"\$BB"\s+(?:mount|umount|chroot)\b|/bin/mkfs')
@@ -67,6 +82,8 @@ class InitTests(unittest.TestCase):
             ("/nix/store", str(self.store)),
         ):
             block = block.replace(guest, local)
+        if store_disk:
+            block = block.replace("/nix/var/nix/db", str(baked_db))
         sqlite = ROOTFS / "bin/sqlite3"
         if fail_query:
             shim = self.base / "sqlite-failure"
@@ -95,7 +112,7 @@ class InitTests(unittest.TestCase):
             [str(ROOTFS / "bin/busybox"), "sh", "-c", script],
             capture_output=True,
             text=True,
-            env={"PATH": ""},
+            env={"PATH": "", **({"MYSBX_KRUN_STORE_DISK": "1"} if store_disk else {})},
             timeout=20,
         )
 
@@ -111,6 +128,53 @@ class InitTests(unittest.TestCase):
         self.assertIn(message, result.stderr)
         self.assertNotIn("copied nix db validation complete", result.stdout)
         self.assertNotIn("mysbx-test: overlay boundary reached", result.stdout)
+
+    def make_block_devs(self, *ro_flags):
+        # A faked /sys/block: one vd* per flag value, each with the
+        # ro file the scans cat. The init's /sys/block is absolute
+        # in the guest, so the extraction substitutes this tree.
+        sys_block = self.base / "sys/block"
+        for n, ro in enumerate(ro_flags):
+            dev = sys_block / ("vd" + chr(ord("a") + n))
+            dev.mkdir(parents=True, exist_ok=True)
+            (dev / "ro").write_text(str(ro))
+        return sys_block
+
+    def run_init_block(self, block, sys_block):
+        script = (
+            "set -eu\n"
+            f"BB={shlex.quote(str(ROOTFS / 'bin/busybox'))}\n"
+            'fail() { echo "mysbx-init: $*" >&2; exit 125; }\n'
+            'step() { echo "mysbx-init: $*"; }\n'
+            + block.replace("/sys/block", shlex.quote(str(sys_block)))
+        )
+        return subprocess.run(
+            [str(ROOTFS / "bin/busybox"), "sh", "-c", script],
+            capture_output=True,
+            text=True,
+            env={"PATH": ""},
+            timeout=20,
+        )
+
+    def run_pick_vd(self, ro_flags, want, role):
+        # The extracted pick_vd, EXECUTED against the faked /sys/block:
+        # the single-match pick, the ambiguity refusal and the empty
+        # case are behavior here, not strings pinned in the source.
+        start = INIT.index("pick_vd() {")
+        end = INIT.index("\n}\n", start) + len("\n}\n")
+        call = "\npick_vd %s %s\n" % (shlex.quote(str(want)), shlex.quote(role))
+        return self.run_init_block(INIT[start:end] + call, self.make_block_devs(*ro_flags))
+
+    def run_unannounced_scan(self, ro_flags):
+        # The else arm's refusal scan (a read-only vd* the env never
+        # announced), likewise executed: with a read-only disk
+        # present it must refuse, with writable disks only it passes.
+        start = INIT.index(
+            "for d in /sys/block/vd*; do",
+            INIT.index("# manifest forgot"),
+        )
+        end = INIT.index("\n    done\n", start) + len("\n    done\n")
+        return self.run_init_block(INIT[start:end], self.make_block_devs(*ro_flags))
 
     def test_init_parses(self):
         result = subprocess.run(
@@ -199,30 +263,107 @@ class InitTests(unittest.TestCase):
             '"$BB" mkdir -p /mysbx-nix/store-upper /mysbx-nix/store-work',
             '"$BB" mount -t tmpfs tmpfs /nix \\\n',
             '"$BB" mkdir -p /nix/store',
-            '"$BB" mount -t overlay overlay',
+            '-o lowerdir=/tmp/mysbx-shares/stage-ro/store,upperdir=/mysbx-nix/store-upper',
             'exec "$@"',
         ]
         offsets = [INIT.index(phase) for phase in phases]
         self.assertEqual(offsets, sorted(offsets), "DB validation must precede /nix shadowing and the overlay")
-        self.assertEqual(INIT.count('"$BB" mount -t overlay overlay'), 1)
+        # Both store modes mount exactly one store overlay (the baked
+        # erofs lower and the host-share lower), and only the SHARE mode
+        # needs the tmpfs mountpoint trick — /nix/store is a baked symlink
+        # there, a real erofs directory in the baked mode.
+        self.assertEqual(INIT.count('"$BB" mount -t overlay overlay'), 2)
+        self.assertEqual(
+            INIT.count('-o lowerdir=/nix/store,upperdir=/mysbx-nix/store-upper'), 1
+        )
+        self.assertEqual(
+            INIT.count(
+                '-o lowerdir=/tmp/mysbx-shares/stage-ro/store,'
+                "upperdir=/mysbx-nix/store-upper"
+            ),
+            1,
+        )
         self.assertEqual(INIT.count('"$BB" mount -t tmpfs tmpfs /nix \\\n'), 1)
         self.assertEqual(
             os.readlink(ROOTFS / "nix/store"),
             "/tmp/mysbx-shares/stage-ro/store",
         )
 
+    def test_store_disk_section(self):
+        # docs/design/guest-store.md: the guest-own store disk. The erofs
+        # mounts BEFORE the scratch section (the db copy reads /nix/var/nix
+        # off it), read-only at the device level; both disks identify
+        # through the one shared pick_vd scan, by their /sys/block/*/ro
+        # flag — never by name.
+        erofs = INIT.index('"$BB" mount -t erofs -o ro "$store_dev" /nix')
+        announce = INIT.index('if [ "${MYSBX_KRUN_STORE_DISK:-}" = "1" ]; then')
+        scratch = INIT.index('if [ "${MYSBX_KRUN_SCRATCH:-}" = "1" ]; then')
+        db_copy = INIT.index('db_src=/nix/var/nix/db')
+        baked_overlay = INIT.index('-o lowerdir=/nix/store,upperdir=/mysbx-nix/store-upper')
+        self.assertLess(announce, erofs)
+        self.assertLess(erofs, scratch)
+        self.assertLess(scratch, db_copy)
+        self.assertLess(db_copy, baked_overlay)
+        # The two picks route through the one shared scan — the ro
+        # flag 1 picks the store disk, 0 the scratch (the executed
+        # behavior, both picks and refusals, is the pick_vd tests
+        # below; these asserts only pin the wiring of the calls).
+        self.assertIn('store_dev=$(pick_vd 1 "the store disk")', INIT)
+        self.assertIn('scratch_dev=$(pick_vd 0 "the scratch")', INIT)
+
+    def test_pick_vd_finds_the_single_matching_disk(self):
+        # One disk per mode attached: the store pick finds the
+        # read-only vd*, the scratch pick the writable one, and a
+        # pick whose mode has no disk comes back empty (the caller
+        # refuses that with its own message).
+        result = self.run_pick_vd((1, 0), 1, "the store disk")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "/dev/vda")
+        result = self.run_pick_vd((1, 0), 0, "the scratch")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "/dev/vdb")
+        result = self.run_pick_vd((0,), 1, "the store disk")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_pick_vd_refuses_an_ambiguous_attach(self):
+        # Two disks of one mode are an ambiguous attach the pick
+        # refuses — never a silent last-one-wins mount.
+        result = self.run_pick_vd((1, 1, 0), 1, "the store disk")
+        self.assert_failed(
+            result,
+            "2 read-only /dev/vd* devices — the store disk is ambiguous, refusing to guess",
+        )
+        result = self.run_pick_vd((0, 0, 1), 0, "the scratch")
+        self.assert_failed(
+            result,
+            "2 writable /dev/vd* devices — the scratch is ambiguous, refusing to guess",
+        )
+
+    def test_unannounced_read_only_disk_refuses(self):
+        # The refusal side of the announce-or-refuse rule: a
+        # read-only vd* without the env marker is a disk the
+        # manifest forgot — never a silent store the payload could
+        # see unmounted. Writable disks only: nothing to refuse.
+        result = self.run_unannounced_scan((1, 0))
+        self.assert_failed(result, "exists but MYSBX_KRUN_STORE_DISK is unset")
+        result = self.run_unannounced_scan((0,))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_trace_phases(self):
         # The traced step names of the db reconcile: the split of the
         # old single "validating" step into enumerate + check (each
         # with its own timing) must keep the ORDER and the completion
-        # marker the live validation greps for.
+        # marker the live validation greps for. The overlay phase anchors
+        # the SHARE branch's mount (the baked branch's overlay mounts on
+        # the erofs /nix/store directly, earlier in the file).
         phases = [
             'step "enumerating the registered store paths from the copied nix db"',
             "SELECT path FROM ValidPaths WHERE path LIKE",
             'fail "foreign-key violations remain in the copied nix database"',
             'step "copied nix db validation complete"',
             'step "mounting the store overlay (fresh scratch upper)"',
-            '"$BB" mount -t overlay overlay',
+            '-o lowerdir=/tmp/mysbx-shares/stage-ro/store,upperdir=/mysbx-nix/store-upper',
         ]
         offsets = [INIT.index(phase) for phase in phases]
         self.assertEqual(offsets, sorted(offsets))
@@ -439,6 +580,40 @@ class InitTests(unittest.TestCase):
             self.assertFalse((self.scratch / name).exists())
         self.assertTrue((self.store / "live-link").is_symlink())
         self.assertTrue((self.store / "broken-link").is_symlink())
+
+    def test_baked_mode_copies_the_disk_own_db(self):
+        # The baked branch of the db copy (docs/design/guest-store.md):
+        # db_src is the erofs's OWN /nix/var/nix/db, and the copy loop
+        # must follow $db_src. The host-share fixture stays EMPTY —
+        # the baked guest has no share mounted at that path, and a
+        # seeded fixture would let a loop that ignores $db_src pass:
+        # here such a loop copies nothing and the db.sqlite assert
+        # fails. big-lock/reserved are skipped in both modes; the
+        # reconcile gate is closed by the env marker, so the db
+        # arrives exactly as baked.
+        baked = self.base / "baked-db"
+        baked.mkdir()
+        with sqlite3.connect(baked / "db.sqlite") as db:
+            db.executescript(SCHEMA)
+            db.execute("INSERT INTO ValidPaths VALUES (1, '/nix/store/aaaa-valid-path')")
+        (baked / "big-lock").write_text("lock")
+        (baked / "reserved").write_text("space")
+        result = self.run_reconcile(store_disk=True, baked_db=baked)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("copying the nix db", result.stdout)
+        self.assertNotIn("no nix-var db", result.stdout)
+        copied = self.scratch / "state/db"
+        self.assertTrue(
+            (copied / "db.sqlite").is_file(),
+            "the baked db never reached the scratch",
+        )
+        self.assertFalse((copied / "big-lock").exists())
+        self.assertFalse((copied / "reserved").exists())
+        with sqlite3.connect(copied / "db.sqlite") as db:
+            self.assertEqual(
+                db.execute("SELECT count(*) FROM ValidPaths").fetchone()[0], 1
+            )
+        self.assertNotIn("enumerating the registered store paths", result.stdout)
 
     def test_valid_rows_need_no_delete_transaction(self):
         (self.store / "directory").mkdir()

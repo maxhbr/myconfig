@@ -75,7 +75,17 @@ pub fn microvm_qemu_argv(
     argv.push(spec.init.clone());
     let ro_slots = spec.shares.iter().filter(|s| s.read_only).count();
     let rw_slots = spec.shares.iter().filter(|s| !s.read_only).count();
-    if ro_slots > 0 {
+    // The manifest's device: the ro stage tree carries the SHARE
+    // slots, and a baked-store run can leave it without a single ro
+    // one (the store share was its only mandatory slot, the disk
+    // replaces it) — but the MANIFEST itself still needs the device:
+    // every env record rides it, and the no-manifest fallback is the
+    // kernel cmdline, a route that exists only for cmdline-sized
+    // debug runs (the 2048-byte finding). So the device + pointer
+    // are emitted whenever the manifest has records to carry — env
+    // is never empty in a real run — even with zero ro slots.
+    let manifest_needed = ro_slots > 0 || !spec.env.is_empty();
+    if manifest_needed {
         argv.push("--ro-device".to_owned());
         argv.push(format!("{}={}/ro", krun::STAGE_RO_TAG, krun::STAGE_ROOT));
     }
@@ -83,7 +93,7 @@ pub fn microvm_qemu_argv(
         argv.push("--rw-device".to_owned());
         argv.push(format!("{}={}/rw", krun::STAGE_RW_TAG, krun::STAGE_ROOT));
     }
-    if ro_slots > 0 {
+    if manifest_needed {
         argv.push("--manifest".to_owned());
         argv.push(format!("{}/ro/{}", krun::STAGE_ROOT, krun::MANIFEST_SLOT));
     }
@@ -158,6 +168,17 @@ pub fn microvm_qemu_argv(
         argv.push(scratch.clone());
         argv.push("--env".to_owned());
         argv.push("MYSBX_KRUN_SCRATCH=1".to_owned());
+    }
+    // The guest-own store disk (docs/design/guest-store.md): the SAME
+    // emission the krun renderer makes (D9: the spec is shared, the
+    // guest side is shared) — the qemu launcher attaches the erofs
+    // image as a second read-only virtio-blk device and the init
+    // mounts it at /nix; the run's shares carry no host store slot.
+    if let Some(disk) = &spec.store_disk {
+        argv.push("--store-disk".to_owned());
+        argv.push(disk.clone());
+        argv.push("--env".to_owned());
+        argv.push(crate::STORE_DISK_ENV_RECORD.to_owned());
     }
     argv.push("--chdir".to_owned());
     argv.push(spec.workdir.clone());

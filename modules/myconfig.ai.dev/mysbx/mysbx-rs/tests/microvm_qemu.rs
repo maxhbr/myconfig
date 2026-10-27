@@ -55,6 +55,7 @@ fn base(network: bool) -> Merged {
         memory: None,
         cpus: None,
         pids_limit: None,
+        store: mysbx::config::Store::Host,
         multiplexer: Multiplexer::None,
         display: mysbx::config::Display::Off,
     }
@@ -86,6 +87,7 @@ fn params<'a>(
         cpus: None,
         git_trust: None,
         scratch: None,
+        store_disk: None,
         verbose: false,
         detachable: false,
     }
@@ -170,6 +172,32 @@ fn golden_git_trust_rides_the_stage_tree_not_overlay_flags() {
         "no trustfs device exists on qemu: {text}"
     );
     assert_golden("git-trust.txt", &argv);
+}
+
+#[test]
+fn a_store_disk_param_replaces_the_host_store_share() {
+    // docs/design/guest-store.md, D9's shared core: the baked run
+    // carries NO store share (the erofs disk replaces it) and the
+    // SAME --store-disk flag and announcement the krun renderer
+    // emits — the guest side is one contract, two launchers.
+    let mut p = params("/synth/rootfs", "/synth/shell", None, Workspace::Live);
+    p.store_disk = Some("/synth/store-disk.img");
+    let argv = run(&base(true), &synth_repo(), &Payload::Shell, &p);
+    assert!(
+        !argv
+            .windows(2)
+            .any(|w| w[0] == "--ro-share" && w[1] == "stage-ro:store@/nix/store ro"),
+        "no host store share in a baked run"
+    );
+    let i = argv
+        .iter()
+        .position(|a| a == "--store-disk")
+        .expect("the --store-disk flag");
+    assert_eq!(argv[i + 1], "/synth/store-disk.img");
+    assert!(argv
+        .windows(2)
+        .any(|w| w[0] == "--env" && w[1] == "MYSBX_KRUN_STORE_DISK=1"));
+    assert_golden("baked-store.txt", &argv);
 }
 
 #[test]
