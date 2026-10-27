@@ -149,21 +149,16 @@
 
         dev.enable = true;
         dev.mysbx.enable = true;
-        dev.mysbx.config = {
-          memory = lib.mkDefault "8g";
-          cpus = lib.mkDefault 8;
+        dev.mysbx = {
+          config = {
+            memory = lib.mkDefault "8g";
+            cpus = lib.mkDefault 8;
+          };
+          podman.enable = true;
+          krun.enable = true;
+          krun.store.enable = true;
+          microvm-qemu.enable = true;
         };
-        # The heavy backends this host runs (bd myconfig-dq2w): thing
-        # is the microvm-qemu validation host
-        # (docs/microvm-qemu-validation-log.md, bd myconfig-26z4) and
-        # runs podman-gvisor sandboxes. Off by default everywhere
-        # else — the flags gate the closure inputs.
-        dev.mysbx.podman.enable = true;
-        dev.mysbx.microvm-qemu.enable = true;
-        # The guest-own nix store disk (docs/design/guest-store.md):
-        # baked and pinned so runs may opt in per sidecar with
-        # `store = "baked"`.
-        dev.mysbx.krun.store.enable = true;
         dev.lmstudio = {
           enable = true;
         };
