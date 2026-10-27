@@ -284,6 +284,15 @@ in
         case "$storeRootsNoDifftastic" in
           *mysbx-git-default-diff*) fail "the disk roots carry the git-default-diff wrapper without the difftastic external git mode: $storeRootsNoDifftastic" ;;
         esac
+        # The CA bundle root: the wrapper ALWAYS pins MYSBX_CA_BUNDLE
+        # and every guest run sets the three TLS env variables to it,
+        # so every disk variant must carry `cacert` — unlike the
+        # nix wrappers and the diff wrapper this root has no flag to
+        # drop it under.
+        case "$storeRootsOn $storeRootsNoNix $storeRootsNoDifftastic" in
+          *-nss-cacert-*) ;;
+          *) fail "the disk roots do not carry the CA bundle: $storeRootsOn / $storeRootsNoNix / $storeRootsNoDifftastic" ;;
+        esac
         # The --set SPELLING the crate reads is a string literal in
         # mysbx.nix (a reformat never splits literals, so this grep
         # is reflow-proof).
