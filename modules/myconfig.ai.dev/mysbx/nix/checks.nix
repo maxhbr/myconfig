@@ -260,8 +260,10 @@ in
           || fail "the wrapper lost the MYSBX_KRUN_STORE_DISK pin"
         # The marker AGREEMENT: the crate's record, the wrapper's
         # --set and the init's gate must spell the same name, or a
-        # baked run announces a disk the guest never looks for.
-        grep -q 'STORE_DISK_ENV_RECORD: &str = "MYSBX_KRUN_STORE_DISK=1"' \
+        # baked run announces a disk the guest never looks for. The
+        # crate anchor is the record VALUE itself — a string literal
+        # rustfmt never splits, wherever the declaration reflows to.
+        grep -qF '"MYSBX_KRUN_STORE_DISK=1"' \
           ${../mysbx-rs/src/lib.rs} \
           || fail "the crate's store-disk env record changed"
         grep -qF 'MYSBX_KRUN_STORE_DISK' ${../nix/krun-rootfs.nix} \

@@ -240,6 +240,9 @@ let
     # none attached; the CALLER refuses the empty case with its own
     # announcement-specific message.
     pick_vd() {
+        # ash-local: a caller must not collide with the scan's
+        # working names.
+        local want_ro role mode_word dev count d
         want_ro=$1
         role=$2
         if [ "$want_ro" = "1" ]; then
