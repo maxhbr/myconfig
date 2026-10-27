@@ -493,7 +493,14 @@ in
         # bakes them (their store paths are invisible to a baked run
         # otherwise — no host-store share to resolve through).
         krunStoreBaked = cfg.krun.store.enable;
-        krunStoreExtraRoots = lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages;
+        # `gitDefaultDiff` (bd myconfig-w4zc): the wrapper pins it as
+        # GIT_EXTERNAL_DIFF whenever Home Manager's difftastic runs in
+        # external/both git mode, so the baked disk must carry its
+        # store path too — a run with the guest-own store has no
+        # host-store share to resolve it through.
+        krunStoreExtraRoots =
+          lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages
+          ++ lib.optionals hmDifftasticExternal [ gitDefaultDiff ];
         # The native-qemu backend (backends.md D9, bd myconfig-2l9b):
         # the launcher, the SHARED guest rootfs and the kernel
         # libkrun bundles, pinned as MYSBX_MICROVM_QEMU_*.
@@ -515,7 +522,7 @@ in
         nono = cfg.nono.package;
         ssh-keygen = pkgs.openssh;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries enabledBackends; alacritty = cfg.terminal.package; shell = cfg.shell.path; podmanImage = if cfg.podman.enable then cfg.podman.image else null; podmanShell = if cfg.podman.enable then cfg.podman.shell else null; podmanPastaSpec = if cfg.podman.enable then cfg.podman.pastaSpec else null; podmanEnv = if cfg.podman.enable then cfg.podman.env else { }; krunRuntime = if cfg.podman.enable then cfg.krun.runtime else null; krunScratchSize = if cfg.podman.enable && cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null; krunLauncher = if cfg.krun.enable then cfg.krun.direct.launcher else null; krunRootfs = if cfg.krun.enable then cfg.krun.direct.rootfs else null; krunStoreBaked = cfg.krun.store.enable; krunStoreExtraRoots = lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages; microvmQemuLauncher = if cfg.microvm-qemu.enable then cfg.microvm-qemu.launcher else null; microvmQemuRootfs = if cfg.microvm-qemu.enable then cfg.microvm-qemu.rootfs else null; microvmQemuKernel = if cfg.microvm-qemu.enable then \"${cfg.microvm-qemu.kernel}/bzImage\" else null; microvmQemuEnv = if cfg.microvm-qemu.enable then cfg.microvm-qemu.env else { }; waypipe = cfg.display.package; dtach = pkgs.dtach; podmanWaypipe = if cfg.podman.enable then cfg.podman.waypipe else null; podmanMuxEntries = if cfg.podman.enable then cfg.podman.muxEntries else { }; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries enabledBackends; alacritty = cfg.terminal.package; shell = cfg.shell.path; podmanImage = if cfg.podman.enable then cfg.podman.image else null; podmanShell = if cfg.podman.enable then cfg.podman.shell else null; podmanPastaSpec = if cfg.podman.enable then cfg.podman.pastaSpec else null; podmanEnv = if cfg.podman.enable then cfg.podman.env else { }; krunRuntime = if cfg.podman.enable then cfg.krun.runtime else null; krunScratchSize = if cfg.podman.enable && cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null; krunLauncher = if cfg.krun.enable then cfg.krun.direct.launcher else null; krunRootfs = if cfg.krun.enable then cfg.krun.direct.rootfs else null; krunStoreBaked = cfg.krun.store.enable; krunStoreExtraRoots = lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages ++ lib.optionals hmDifftasticExternal [ gitDefaultDiff ]; microvmQemuLauncher = if cfg.microvm-qemu.enable then cfg.microvm-qemu.launcher else null; microvmQemuRootfs = if cfg.microvm-qemu.enable then cfg.microvm-qemu.rootfs else null; microvmQemuKernel = if cfg.microvm-qemu.enable then \"${cfg.microvm-qemu.kernel}/bzImage\" else null; microvmQemuEnv = if cfg.microvm-qemu.enable then cfg.microvm-qemu.env else { }; waypipe = cfg.display.package; dtach = pkgs.dtach; podmanWaypipe = if cfg.podman.enable then cfg.podman.waypipe else null; podmanMuxEntries = if cfg.podman.enable then cfg.podman.muxEntries else { }; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
