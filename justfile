@@ -5,6 +5,15 @@
 default:
     @just --list
 
+# Runs `nvfetcher` to regenerate `_sources/generated.{nix,json}` from
+# `nvfetcher.toml` (the weekly CI counterpart is
+# .github/workflows/update-sources.yml).
+# Review the git diff afterwards — a changed rev/hash is the point of the run.
+[linux]
+[macos]
+sources:
+    nix run nixpkgs#nvfetcher
+
 # Validate a `test-<hostname>` NixOS configuration of this flake without
 # modifying the system (runs `nix flake check` + a toplevel build).
 # Takes a short host name (without the `test-` prefix); defaults to the

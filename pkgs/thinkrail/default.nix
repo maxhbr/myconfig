@@ -13,13 +13,20 @@
 # (`bun --help`). On Linux the binary hardcodes the FHS interpreter
 # /lib64/ld-linux-x86-64.so.2, so it ships unmodified and runs inside an
 # FHS bubblewrap env; on macOS it is a plain Mach-O executable.
+#
+# The version and the per-platform fetchurl hashes are not hardcoded here:
+# they come from the nvfetcher-pinned entries in `_sources/generated.nix`
+# (see `nvfetcher.toml`, regenerated with `nix run nixpkgs#nvfetcher`), so
+# the weekly update-sources CI job bumps this package automatically.
 {
   lib,
   stdenvNoCC,
-  fetchurl,
+  pkgs,
   buildFHSEnv,
   makeWrapper,
-  version ? "0.2.0",
+  # nvfetcher-pinned ThinkRail release assets; `src` of each entry is a
+  # `fetchurl` store path for the prebuilt binary of one platform.
+  sources ? pkgs.callPackage ../../_sources/generated.nix { },
 }:
 
 let
@@ -35,15 +42,11 @@ let
   };
   platform = platformMap.${hostPlatform.system} or throwSystem;
 
-  src = fetchurl {
-    url = "https://github.com/JetBrains/thinkrail/releases/download/v${version}/thinkrail-${platform}";
-    # sha256 per platform, cross-checked against the release's SHA256SUMS asset.
-    sha256 = {
-      x86_64-linux = "sha256-VA99RiWEkWExin2wU3GbGbQgHrf86vTdVWykx+CIAQw=";
-      aarch64-linux = "sha256-tH8P9mM3RVtUTpYfXL7cTCtaCPQZbmpBvqJO0xWaYVQ=";
-      aarch64-darwin = "sha256-8Qf1PaVBZjvaUcbA7UE2yQs3gCYXsl/PSuWinSb1gwg=";
-    }.${hostPlatform.system} or throwSystem;
-  };
+  # nvfetcher tracks the latest release tag (`v0.2.0`, ...); the package
+  # version drops the leading `v`.
+  release = sources."thinkrail-${platform}";
+  version = lib.removePrefix "v" release.version;
+  src = release.src;
 
   # FHS env providing /lib64/ld-linux-x86-64.so.2 for the unmodified binary.
   # `runScript = ""` makes /init `exec "$@"`, so the wrapper decides what to

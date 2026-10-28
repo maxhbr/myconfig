@@ -20,25 +20,25 @@
   };
   grafana-skills = {
     pname = "grafana-skills";
-    version = "3b653d9b46120c05ec02b27895028e1c31308e18";
+    version = "8fb72a527961f05e708f53d2a0500709e12d7970";
     src = fetchFromGitHub {
       owner = "grafana";
       repo = "skills";
-      rev = "3b653d9b46120c05ec02b27895028e1c31308e18";
+      rev = "8fb72a527961f05e708f53d2a0500709e12d7970";
       fetchSubmodules = false;
-      sha256 = "sha256-0gVYYJb/7PQdEBIWyBPumPRxs8dXIpVouLYdyGXfDUU=";
+      sha256 = "sha256-PAeYV+ZJWO6eoz+w2v0TsD3TYbkfWnvVrx3yHXmtkNU=";
     };
-    date = "2026-10-23";
+    date = "2026-10-27";
   };
   litellm-grafana-dashboard = {
     pname = "litellm-grafana-dashboard";
-    version = "dddbaa803d6e9fcc862ea7a5412f771cb1ae040e";
+    version = "1176e608b199c4a6572c22490839147a9f134ece";
     src = fetchurl {
-      url = "https://raw.githubusercontent.com/BerriAI/litellm/dddbaa803d6e9fcc862ea7a5412f771cb1ae040e/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json";
+      url = "https://raw.githubusercontent.com/BerriAI/litellm/1176e608b199c4a6572c22490839147a9f134ece/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json";
       name = "litellm-grafana-dashboard.json";
       sha256 = "sha256-BepW78CWd6K27AL0nrIamyTESsVKsY/5/kO67QNU6vA=";
     };
-    date = "2026-10-24";
+    date = "2026-10-28";
   };
   pi-token-speed = {
     pname = "pi-token-speed";
@@ -63,5 +63,29 @@
       sha256 = "sha256-p1ffLp/3Yg1yBfCikBwua3ieVBCNyZfTZH6GBAxNREA=";
     };
     date = "2026-10-05";
+  };
+  thinkrail-darwin-arm64 = {
+    pname = "thinkrail-darwin-arm64";
+    version = "v0.2.0";
+    src = fetchurl {
+      url = "https://github.com/JetBrains/thinkrail/releases/download/v0.2.0/thinkrail-darwin-arm64";
+      sha256 = "sha256-8Qf1PaVBZjvaUcbA7UE2yQs3gCYXsl/PSuWinSb1gwg=";
+    };
+  };
+  thinkrail-linux-arm64 = {
+    pname = "thinkrail-linux-arm64";
+    version = "v0.2.0";
+    src = fetchurl {
+      url = "https://github.com/JetBrains/thinkrail/releases/download/v0.2.0/thinkrail-linux-arm64";
+      sha256 = "sha256-tH8P9mM3RVtUTpYfXL7cTCtaCPQZbmpBvqJO0xWaYVQ=";
+    };
+  };
+  thinkrail-linux-x64 = {
+    pname = "thinkrail-linux-x64";
+    version = "v0.2.0";
+    src = fetchurl {
+      url = "https://github.com/JetBrains/thinkrail/releases/download/v0.2.0/thinkrail-linux-x64";
+      sha256 = "sha256-VA99RiWEkWExin2wU3GbGbQgHrf86vTdVWykx+CIAQw=";
+    };
   };
 }

@@ -22,7 +22,7 @@
     },
     "grafana-skills": {
         "cargoLock": null,
-        "date": "2026-10-23",
+        "date": "2026-10-27",
         "extract": null,
         "name": "grafana-skills",
         "passthru": null,
@@ -34,16 +34,16 @@
             "name": null,
             "owner": "grafana",
             "repo": "skills",
-            "rev": "3b653d9b46120c05ec02b27895028e1c31308e18",
-            "sha256": "sha256-0gVYYJb/7PQdEBIWyBPumPRxs8dXIpVouLYdyGXfDUU=",
+            "rev": "8fb72a527961f05e708f53d2a0500709e12d7970",
+            "sha256": "sha256-PAeYV+ZJWO6eoz+w2v0TsD3TYbkfWnvVrx3yHXmtkNU=",
             "sparseCheckout": [],
             "type": "github"
         },
-        "version": "3b653d9b46120c05ec02b27895028e1c31308e18"
+        "version": "8fb72a527961f05e708f53d2a0500709e12d7970"
     },
     "litellm-grafana-dashboard": {
         "cargoLock": null,
-        "date": "2026-10-24",
+        "date": "2026-10-28",
         "extract": null,
         "name": "litellm-grafana-dashboard",
         "passthru": null,
@@ -52,9 +52,9 @@
             "name": "litellm-grafana-dashboard.json",
             "sha256": "sha256-BepW78CWd6K27AL0nrIamyTESsVKsY/5/kO67QNU6vA=",
             "type": "url",
-            "url": "https://raw.githubusercontent.com/BerriAI/litellm/dddbaa803d6e9fcc862ea7a5412f771cb1ae040e/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json"
+            "url": "https://raw.githubusercontent.com/BerriAI/litellm/1176e608b199c4a6572c22490839147a9f134ece/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json"
         },
-        "version": "dddbaa803d6e9fcc862ea7a5412f771cb1ae040e"
+        "version": "1176e608b199c4a6572c22490839147a9f134ece"
     },
     "pi-token-speed": {
         "cargoLock": null,
@@ -97,5 +97,50 @@
             "type": "github"
         },
         "version": "a6fcb4fde098b33617cc1578d151ebf58774b883"
+    },
+    "thinkrail-darwin-arm64": {
+        "cargoLock": null,
+        "date": null,
+        "extract": null,
+        "name": "thinkrail-darwin-arm64",
+        "passthru": null,
+        "pinned": false,
+        "src": {
+            "name": null,
+            "sha256": "sha256-8Qf1PaVBZjvaUcbA7UE2yQs3gCYXsl/PSuWinSb1gwg=",
+            "type": "url",
+            "url": "https://github.com/JetBrains/thinkrail/releases/download/v0.2.0/thinkrail-darwin-arm64"
+        },
+        "version": "v0.2.0"
+    },
+    "thinkrail-linux-arm64": {
+        "cargoLock": null,
+        "date": null,
+        "extract": null,
+        "name": "thinkrail-linux-arm64",
+        "passthru": null,
+        "pinned": false,
+        "src": {
+            "name": null,
+            "sha256": "sha256-tH8P9mM3RVtUTpYfXL7cTCtaCPQZbmpBvqJO0xWaYVQ=",
+            "type": "url",
+            "url": "https://github.com/JetBrains/thinkrail/releases/download/v0.2.0/thinkrail-linux-arm64"
+        },
+        "version": "v0.2.0"
+    },
+    "thinkrail-linux-x64": {
+        "cargoLock": null,
+        "date": null,
+        "extract": null,
+        "name": "thinkrail-linux-x64",
+        "passthru": null,
+        "pinned": false,
+        "src": {
+            "name": null,
+            "sha256": "sha256-VA99RiWEkWExin2wU3GbGbQgHrf86vTdVWykx+CIAQw=",
+            "type": "url",
+            "url": "https://github.com/JetBrains/thinkrail/releases/download/v0.2.0/thinkrail-linux-x64"
+        },
+        "version": "v0.2.0"
     }
 }

@@ -60,3 +60,22 @@ src.git = "https://github.com/BerriAI/litellm"
 src.branch = "main"
 fetch.url = "https://raw.githubusercontent.com/BerriAI/litellm/$ver/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json"
 url.name = "litellm-grafana-dashboard.json"
+
+# ThinkRail (https://github.com/JetBrains/thinkrail) prebuilt release
+# binaries, consumed by pkgs/thinkrail. `src.github_tag` tracks the latest
+# release tag, so `$ver` (e.g. `v0.2.0`) points at the immutable release
+# asset URL. One entry per upstream platform asset; the package maps its
+# host platform onto these entries and takes `version` and the fetchurl
+# hashes from `_sources/generated.nix`, so the weekly update-sources CI job
+# bumps ThinkRail along with the other pinned sources.
+[thinkrail-linux-x64]
+src.github_tag = "JetBrains/thinkrail"
+fetch.url = "https://github.com/JetBrains/thinkrail/releases/download/$ver/thinkrail-linux-x64"
+
+[thinkrail-linux-arm64]
+src.github_tag = "JetBrains/thinkrail"
+fetch.url = "https://github.com/JetBrains/thinkrail/releases/download/$ver/thinkrail-linux-arm64"
+
+[thinkrail-darwin-arm64]
+src.github_tag = "JetBrains/thinkrail"
+fetch.url = "https://github.com/JetBrains/thinkrail/releases/download/$ver/thinkrail-darwin-arm64"
