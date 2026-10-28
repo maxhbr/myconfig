@@ -619,7 +619,15 @@ in
             # }
           ]
           ++ (lib.optionals config.virtualisation.containers.enable [
-            config.virtualisation.containers.storage.settings.storage.graphroot
+            # nixpkgs 26.11 (podman 6) split virtualisation.containers.storage
+            # into rootful/rootless drop-ins with no graphroot default; rootful
+            # podman then stores under its built-in default.
+            (lib.attrByPath [
+              "rootful"
+              "settings"
+              "storage"
+              "graphroot"
+            ] "/var/lib/containers/storage" config.virtualisation.containers.storage)
           ]);
         };
         "${persistentOtherDir}" = {
