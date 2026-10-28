@@ -1,19 +1,18 @@
 // Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 // SPDX-License-Identifier: MIT
-//! The bubblewrap argv (docs/TODOs/mvp-4-bwrap-argv.md).
+//! The bubblewrap argv (docs/design/backends.md, the bubblewrap backend).
 //!
 //! One pure function and one payload type — no I/O, no environment reads,
 //! no path canonicalization (the merge already did that, docs/design/
 //! config.md D8). [`bwrap_argv`] is the **single source** of every bwrap
-//! invocation: item 5 (the CLI `--dry-run`) prints this vector and item 6
+//! invocation: the CLI `--dry-run` prints this vector and the run path
 //! executes it, and nothing else may construct a `bwrap` call.
 //!
-//! This item carries the MVP's security claim
-//! (docs/TODOs/mvp-4-bwrap-argv.md): review every decision here against the
-//! base table in `docs/plan.md` ("The base"). The argv order is semantic —
-//! bubblewrap applies binds in order, so a later narrower bind wins over an
-//! earlier wider one and a refactor must not reorder sections 3–5
-//! ("Watch out" in the spec). Nesting a later bind inside an earlier
+//! This carries the MVP's security claim: review every decision here
+//! against the base table in `docs/plan.md` ("The base"). The argv order is
+//! semantic — bubblewrap applies binds in order, so a later narrower bind
+//! wins over an earlier wider one and a refactor must not reorder sections 3–5.
+//! Nesting a later bind inside an earlier
 //! one is nevertheless refused when the outer content is writable —
 //! see [`check_symlinkable_dests`].
 

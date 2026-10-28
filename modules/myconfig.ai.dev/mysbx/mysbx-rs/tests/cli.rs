@@ -1,6 +1,6 @@
 // Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 // SPDX-License-Identifier: MIT
-//! End-to-end CLI tests (docs/TODOs/mvp-5-cli-and-dry-run.md).
+//! End-to-end CLI tests (docs/design/cli.md, the surface under test).
 //!
 //! These drive the *built binary* (`env!("CARGO_BIN_EXE_mysbx")`) as a
 //! subprocess, with `HOME`, `XDG_CONFIG_HOME` and the `MYSBX_*` parameters

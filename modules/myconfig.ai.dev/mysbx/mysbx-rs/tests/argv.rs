@@ -1,6 +1,6 @@
 // Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 // SPDX-License-Identifier: MIT
-//! Golden argv tests (docs/TODOs/mvp-4-bwrap-argv.md).
+//! Golden argv tests (bwrap.rs; fixtures under tests/assets/argv/).
 //!
 //! Every fixture under `tests/assets/argv/*.txt` is the *expected* argv of
 //! [`bwrap_argv`] for one case, one argument per line, compared byte for
@@ -1050,7 +1050,7 @@ fn golden_git_external_diff_activation() {
 
 #[test]
 fn golden_both_layers_contribute_mounts() {
-    // docs/TODOs/mvp-3-layer-merge.md end state, hand-built (a `Merged`
+    // The two-layer merge end state, hand-built (a `Merged`
     // merge.rs would have produced and the argv builder alone sees): the
     // user config declares two mounts; the sidecar adds a third (below
     // one of them) and introduces a sidecar-only variable. User mounts

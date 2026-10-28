@@ -1,7 +1,6 @@
 // Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 // SPDX-License-Identifier: MIT
-//! The `mysbx` CLI surface (docs/TODOs/mvp-5-cli-and-dry-run.md,
-//! docs/design/cli.md):
+//! The `mysbx` CLI surface (docs/design/cli.md):
 //!
 //! ```text
 //! mysbx [FLAGS]                     enter an interactive sandbox shell
@@ -2025,7 +2024,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     } else {
         None
     };
-    // 1. repo resolution and guards (docs/TODOs/mvp-2-repo-discovery.md).
+    // 1. repo resolution and guards (repo.rs, docs/design/workspace.md).
     // The guard runs BEFORE anything is created, so a `$HOME`-resolved run
     // never even creates a sidecar on disk.
     let mut repo = match repo::resolve_cwd() {
@@ -2057,7 +2056,7 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // the report keeps describing what the run FOUND.
     let sidecar_existed = repo.sidecar.is_dir();
 
-    // 3. both layers, merged (docs/TODOs/mvp-3-layer-merge.md). Merge
+    // 3. both layers, merged (merge.rs, docs/design/config.md D7). Merge
     // errors (broken paths, unparseable files, an `[env]` override) are
     // runtime failures: the full validation still runs under --dry-run —
     // a dry run that skipped it would exercise the wrong function.
@@ -4840,7 +4839,7 @@ fn env_or(name: &str, fallback: &str) -> String {
     }
 }
 
-/// `mysbx init` — resolve the repository (docs/TODOs/mvp-2-repo-discovery.md)
+/// `mysbx init` — resolve the repository (repo.rs, docs/design/workspace.md)
 /// and create its sidecar directory `<repo>.mysbx/` with a default
 /// `config.toml`.
 fn init(args: &[String]) -> i32 {
@@ -7077,8 +7076,7 @@ mod tests {
         // depends on the repo (pinned end-to-end by the CLI tests).
     }
 
-    // The guard-ordering property of the bare form (docs/TODOs/
-    // mvp-2-repo-discovery.md): resolve-and-guard BEFORE anything
+    // The guard-ordering property of the bare form (repo.rs): resolve-and-guard BEFORE anything
     // touches the filesystem, so a `$HOME`-resolved run never creates a
     // sidecar (`init`/`edit`) nor even reports a missing one (D13).
     // `run()` uses the real CWD and `$HOME`, so run it *from* a temp dir by

@@ -1,7 +1,7 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# CI checks for the Rust `mysbx` CLI (../docs/TODOs/mvp-6-packaging.md):
+# CI checks for the Rust `mysbx` CLI:
 #
 #   mysbx-tests   cargo test — the full behavioural suite in
 #                 ../mysbx-rs/tests/ (golden argv tests, layer merge,

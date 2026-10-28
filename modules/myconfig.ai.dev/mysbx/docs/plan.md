@@ -24,9 +24,11 @@ acceptance remains unrecorded. `egress` (including `"proxy-only"`) is
 still a proposal rejected by strict parsing on every backend.
 
 This is the **historical phase plan**, not the current feature matrix.
-Each MVP work item has its original checklist in [`TODOs/`](./TODOs).
 The phase-1 scope and acceptance criteria below record the original cut;
 its exclusions are not claims that those features are still absent.
+The per-item checklists were deleted after completion; the decisions
+live in [`design/cli.md`](./design/cli.md), [`design/config.md`](./design/config.md)
+and the git history of the six `work item` commits (2026-09-05).
 Phase-2 entries distinguish their sketches from the current outcome.
 
 Vocabulary is fixed in [`../CONTEXT.md`](../CONTEXT.md) (repo, sidecar, user
@@ -142,12 +144,13 @@ trade; the update rule at the end of this file applies.
 
 Ordered; each is independently reviewable.
 
-1. [`TODOs/mvp-1-schema-and-design-docs.md`](./TODOs/mvp-1-schema-and-design-docs.md) — schema change + design docs, no behaviour
-2. [`TODOs/mvp-2-repo-discovery.md`](./TODOs/mvp-2-repo-discovery.md) — repo/sidecar resolution, guard, init (the implicit init it describes was later dropped: `cli.md` D13)
-3. [`TODOs/mvp-3-layer-merge.md`](./TODOs/mvp-3-layer-merge.md) — the two layers, D7, canonicalization
-4. [`TODOs/mvp-4-bwrap-argv.md`](./TODOs/mvp-4-bwrap-argv.md) — the pure argv function and its golden tests
-5. [`TODOs/mvp-5-cli-and-dry-run.md`](./TODOs/mvp-5-cli-and-dry-run.md) — the CLI surface
-6. [`TODOs/mvp-6-packaging.md`](./TODOs/mvp-6-packaging.md) — Nix packaging and checks
+1. `work item 1` (schema change + design docs, no behaviour) — `318ac3cd2e`
+2. `work item 2` (repo/sidecar resolution, guard, init; the implicit
+   init it describes was later dropped: `cli.md` D13) — `5ed9bd7ea7`
+3. `work item 3` (the two layers, D7, canonicalization) — `1a9bd2350d`
+4. `work item 4` (the pure argv function and its golden tests) — `8a7398c766`
+5. `work item 5` (the CLI surface) — `157a7a4834`
+6. `work item 6` (Nix packaging and checks) — `8688d3a28c`
 
 Item 4 carries the security claim; review it against the base table above.
 All six items are done; the MVP is complete.
@@ -286,8 +289,7 @@ Not needed until a real repo needs it.
 
 ## Updating this file
 
-- When a work item lands, tick it in its `TODOs/` file; delete the file only
-  when the item is fully done and the design docs reflect it.
+- Work items land as commits; record their hash in the list above.
 - When a phase-2 sketch turns into work, it gets its own decision in
   `design/` first, then work items.
 - Keep the security claim above honest: if the base or the network default

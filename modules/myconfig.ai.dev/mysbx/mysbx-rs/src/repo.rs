@@ -1,6 +1,6 @@
 // Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 // SPDX-License-Identifier: MIT
-//! Repository discovery (docs/TODOs/mvp-2-repo-discovery.md).
+//! Repository discovery (docs/design/workspace.md, the live repo default).
 //!
 //! From a starting directory the repository is resolved in three steps:
 //!
@@ -493,7 +493,7 @@ pub fn ensure_worktrees(repo: &mut Repo) -> Result<Option<PathBuf>, Error> {
 
 /// The guard: never operate on `$HOME`, on a directory CONTAINING
 /// `$HOME` (review-4 item 2) or on `/`
-/// (docs/TODOs/mvp-2-repo-discovery.md). Canonicalize before comparing,
+/// (docs/design/workspace.md). Canonicalize before comparing,
 /// otherwise a symlinked home slips past. Also guards the git metadata
 /// targets a repo-writable `.git` FILE points at (review-2 item 1):
 /// `/`, the home directory, and any ancestor of either — or of the repo
@@ -781,9 +781,8 @@ mod tests {
 
     #[test]
     fn sidecar_beats_closer_git() {
-        // docs/TODOs/mvp-2-repo-discovery.md "Watch out": step 1 beats step 2
-        // on purpose — a nested repo or submodule must not shadow the
-        // sidecar the user wrote next to the outer repo.
+        // The step-1-beats-step-2 "Watch out": a nested repo or submodule
+        // must not shadow the sidecar the user wrote next to the outer repo.
         let base = tmpdir("sidecar-beats-git");
         let outer = base.join("outer");
         touch_dir(&outer.join("inner").join("sub"));

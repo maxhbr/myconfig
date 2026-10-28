@@ -456,9 +456,9 @@
 }:
 
 let
-  # The dev-tool `PATH` value the argv builder uses (../docs/TODOs/
-  # mvp-4-bwrap-argv.md section 6): a single store tree whose /bin is the
-  # union of the tools' bins, so `toolsPath` stays one absolute path.
+  # The dev-tool `PATH` value the argv builder uses (bwrap.rs):
+  # a single store tree whose /bin is the union of the tools' bins,
+  # so `toolsPath` stays one absolute path.
   #
   # This is the MVP's hardcoded dev-tool closure, mirroring
   # ../fns/bubblewrap-app.nix `devTools` minus the package-management
