@@ -5,7 +5,14 @@ SPDX-License-Identifier: MIT
 
 # Design: detached runs — a sandbox that keeps running without a terminal
 
-Status: agreed (bd myconfig-7ioq; acceptance: myconfig-7ioq.1).
+Status: agreed design (bd myconfig-7ioq; acceptance: myconfig-7ioq.1).
+Current dispatch accepts detach on bubblewrap, nono, direct krun and
+microvm-qemu, and refuses both modes on both Podman backends. The
+required live matrix has not been recorded; acceptance by the CLI is
+not completed live validation. See the
+[current backend comparison](../backend-comparison.md) and
+[validation log](../detach-validation-log.md).
+
 This is the decision record for running a mysbx sandbox in the
 background and attaching a terminal to it later — the workflow aoe and
 workmux give on the host, where the tmux server lives outside any
@@ -27,7 +34,8 @@ Vocabulary, on top of [`../../CONTEXT.md`](../../CONTEXT.md):
 
 ## The problem
 
-Today the sandbox lives exactly as long as the foreground process:
+Without the detached-run path, the sandbox lives as long as the
+foreground process:
 
 - `lib.rs` ends a run in `exec` of the backend (bubblewrap,
   `podman run --rm`, the krun launcher).
@@ -36,10 +44,12 @@ Today the sandbox lives exactly as long as the foreground process:
 - So a multiplexer detach ends the client, the payload, the sandbox and
   with it the multiplexer server. Closing the terminal does the same
   through `SIGHUP`.
-- The multiplexer sockets live in the sandbox home tmpfs
-  (`/mysbx-home/.mysbx-tmux`, config.md D16/D17). The host cannot reach
-  them, by design; on podman-gvisor and the krun backends a socket
-  cannot cross the host/guest boundary at all (backends.md).
+- Default multiplexer sockets are guest/sandbox local. Tmux normally
+  uses `/mysbx-home/.mysbx-tmux`; Podman-krun uses `/dev/shm/mysbx-tmux`.
+  Herdr has a separate API directory that trusted state/mount settings
+  can persist (config.md D17). Direct VM virtiofs shares do not forward
+  host-to-guest Unix sockets. This is not a blanket ban on socket-bearing
+  custom mounts on every backend.
 
 ## Decisions
 
@@ -51,14 +61,16 @@ sandbox is started inside it exactly as it is started from a terminal.
 
 Why this layer, and not another:
 
-- **Backend-independent.** The pty is outside the sandbox, so bubblewrap,
-  nono, podman-gvisor, podman-krun and krun all behave the same. Nothing
-  crosses the sandbox boundary that does not cross it already (the
-  terminal).
+- **Shared host-side mechanism.** The pty is outside the sandbox, so
+  the same orchestration can wrap each backend without exposing an
+  inner multiplexer socket. This does not establish identical backend
+  lifecycle behavior: Podman detach remains refused, and the accepted
+  backends still lack the recorded live matrix.
 - **Multiplexer-independent.** It works for every `multiplexer` value,
   including `none`: a plain shell becomes detachable too.
-- **The D16/D17 socket isolation stays.** No multiplexer socket is
-  exposed to the host.
+- **No new inner-socket exposure.** Detach uses the host dtach socket,
+  not a bind of the inner multiplexer socket. D17's existing trusted
+  configuration exceptions still apply.
 - **`dtach`, not tmux/screen.** dtach has no prefix key, no windows and
   no scrollback, so it does not clash with a tmux, workmux, aoe or herdr
   inside. It takes an explicit socket path, so mysbx owns the location
@@ -101,7 +113,7 @@ Where the flags are valid:
 
 | Form | `--detach` / `--detachable` |
 | --- | --- |
-| bare form, with or without `--session` | accepted |
+| bare form, with or without `--session` | accepted on bubblewrap, nono, krun and microvm-qemu; refused on both Podman backends |
 | `run -- CMD` | refused, usage error `2`. A detached one-shot is the batch form of bd myconfig-dys; it composes with `--result` and must force `--session` (workspace.md D8). It is not decided here. |
 | `gui` | refused, usage error `2`. `gui` already detaches its window (cli.md D15). |
 | `init`, `edit`, `status`, `doctor`, the session/worktree/handoff verbs, `attach` | refused, usage error `2`, the shared rejection arm of the run-scoped flags |
@@ -132,7 +144,8 @@ $XDG_RUNTIME_DIR/mysbx/<fnv1a10(repo root)>/
   workspace.md D2. There is no index file.
 - **One detached run per workspace.** A second `--detach` for the same
   workspace is refused (`70`) and names `mysbx attach`. Foreground runs
-  are not registered and are not affected (but see B9 for podman).
+  are not registered and are not affected. Both Podman detach modes
+  remain refused (B9).
 - **Why not the sidecar.** Unix socket paths are limited to 107 bytes.
   A worktree sidecar plus a 64-character session name exceeds that;
   `/run/user/<uid>/mysbx/<10 hex>/s.<64>.sock` stays below it. A
@@ -369,14 +382,18 @@ repos with other grants. So:
 - **`doctor` (cli.md D20)** checks the `MYSBX_DTACH` pin and the runtime
   root (set, absolute, owned, `0700`) in a host section. Problems there
   are `WARN`, not `FAIL`: they disable detached runs, not runs.
-- **podman backends (bd myconfig-cad).** The container name is per repo
-  root and the argv carries `--replace`, so any later podman run in the
-  same checkout kills a detached one. `--detach` on `podman-gvisor` and
-  `podman-krun` is refused (`70`, naming the bead) until per-run
-  container names land.
+- **Podman backends (bd myconfig-cad).** Both `--detach` and
+  `--detachable` remain refused (`70`). Container names already include
+  the run ID, and parallel-name tests cover that distinction. The older
+  per-repository-name/`--replace` explanation in the refusal is stale;
+  unique names alone do not establish safe detached lifecycle behavior.
 - **Parallel runs per backend.** A detached run plus a foreground run
-  in one checkout is two parallel runs. Each backend is enabled for
-  `--detach` only after that combination is validated live.
+  in one checkout is two parallel runs and is allowed by the registry
+  design. Live validation before backend enablement is an acceptance
+  requirement. Current code already accepts bubblewrap, nono, krun and
+  microvm-qemu, but the validation log contains no completed matrix.
+  That requirement remains unmet, rather than being evidence that the
+  enabled paths were tested.
 - **Non-goals of cli.md.** "No daemon, no background state beyond the
   sidecar directory" changes to: no mysbx daemon — the dtach master is
   per run and ends with it — and no background state beyond the
@@ -411,7 +428,8 @@ blocked by myconfig-cad for podman.
 
 ## Non-goals
 
-- No multiplexer socket on the host (B1).
+- No new exposure of inner multiplexer sockets for attachment (B1).
+  Existing trusted-config persistence exceptions are described in D17.
 - No more than one detached run per workspace (B3).
 - No scrollback or output log of a detached run: the inner multiplexer
   has the scrollback, dtach has none.

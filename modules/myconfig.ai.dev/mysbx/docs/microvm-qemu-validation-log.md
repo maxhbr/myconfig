@@ -1,5 +1,15 @@
 # mysbx microvm-qemu live-validation log
 
+> **Scope / current status:** The eleven probes and manual interactive
+> observations below are historical KVM evidence for the configuration
+> tested, not baked-store, scratch-stress, nested-Podman or detach
+> acceptance. Complete baked-store live acceptance remains unrecorded.
+> Console-size coverage is the initial snapshot only; mid-session resize
+> does not propagate. Normal mysbx QEMU runs require KVM, with no supported
+> TCG fallback. See the canonical current six-backend
+> [`backend-comparison.md`](./backend-comparison.md); the dated entry and
+> its timings are preserved, not a current cross-backend benchmark.
+
 The runbook (../nix/microvm-qemu-live-validation.sh, the krun twin's
 scripted half of bd myconfig-26z4) appends one block per host run:
 host, date, kernel, PASS/FAIL per probe. A FAIL invalidates the

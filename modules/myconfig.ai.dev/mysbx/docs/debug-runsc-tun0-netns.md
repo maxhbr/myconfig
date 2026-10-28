@@ -1,5 +1,18 @@
 # Debug: `runsc start` fails with `EADDRNOTAVAIL` on a `tun0` address
 
+Status: historical incident record for the removed `agent-gvisor` tier.
+The commands, paths, source behavior and build output below describe
+that investigation. Do not use its `agent-gvisor` commands as current
+mysbx instructions. The shared image/runtime setup now lives in
+[`../podman.nix`](../podman.nix). Current mysbx uses
+`MYSBX_GVISOR_RUNTIME_FLAGS`, not `AGENT_GVISOR_PODMAN_RUNTIME_FLAGS`.
+See the [backend comparison](backend-comparison.md) and
+[Podman guide](podman-load-image.md) for current configuration.
+
+This record does not establish the current upstream patch status or a
+new live acceptance result. It preserves the distinction between a
+cloned interface address and exposure of the host network namespace.
+
 ## Symptom
 
 On a host running OpenVPN (or WireGuard — anything creating a point-to-point

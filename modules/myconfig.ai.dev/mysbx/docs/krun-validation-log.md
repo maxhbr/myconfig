@@ -1,5 +1,18 @@
 # mysbx krun live-validation log
 
+> **Scope / current status:** The dated entries below are historical
+> host-store evidence for the configurations/workloads named, not acceptance of
+> every current backend/store combination. Use
+> [`backend-comparison.md`](./backend-comparison.md) for the current
+> six-backend guide. Complete baked-store live acceptance and the accepted
+> detach paths' live matrix remain unrecorded.
+>
+> The 25 min 42 s direct / 12.7 s Podman-krun figures are smoke-suite
+> totals, not isolated boot timings or a current speed ranking. The later
+> silent store-walk failure's fd-retention explanation is an unconfirmed
+> hypothesis: no host-side fd/limit snapshot was collected before restart.
+> Dated observations and their original interpretations are preserved below.
+
 The runbook (krun-live-validation.md §3) appends one block per
 host run: host, date, kernel, PASS/FAIL per section. A FAIL
 invalidates the decision row — a bead goes against the decision

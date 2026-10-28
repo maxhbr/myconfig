@@ -1,8 +1,9 @@
 # Design: the `mysbx` CLI
 
-Status: draft. This file is the authoritative place for CLI design
-decisions. Implementation lives in `mysbx-rs/src/` (`lib.rs` dispatcher,
-`usage.txt` help text).
+Status: CLI decision record. Implementation lives in `mysbx-rs/src/`
+(`lib.rs` dispatcher, `usage.txt` help text). For current backend support
+and validation limits, see the
+[backend comparison](../backend-comparison.md).
 
 ## Scope
 
@@ -74,7 +75,7 @@ host-side, no sandbox started), the host-side overview verb `status`
 (D19), the host health check `doctor [BACKEND...]` (D20), the
 host-side keypair verb `ssh-pubkey`
 ([config.md](./config.md) D22 — prints the public half of the sandbox's
-generated ssh keypair, generating it when enabled and missing), the
+generated ssh keypair, generating it when missing), the
 global flag `--session <name>` ([workspace.md](./workspace.md) D1-D5 —
 the clone run mode), the global flags `--dry-run` (D9),
 `--verbose` (D10), `--result`/`--timeout` (D17), `--multiplexer`
@@ -287,7 +288,7 @@ outside the repo (config.md D2) and the sandbox cannot write it. The
 host-wide user config is generated on myconfig hosts — a symlink into
 the immutable `/nix/store` — so an editor pointed at it either fails or
 replaces the symlink and silently detaches the layer from Home Manager.
-Editing that layer means editing `myconfig.ai.mysbx.config` and
+Editing that layer means editing `myconfig.ai.dev.mysbx.config` and
 rebuilding. A `--user` flag would have to know the difference between
 those two worlds; the verb stays about the file mysbx itself owns.
 
@@ -438,7 +439,7 @@ D5/D8), and the error names the accepted set.
 ### D15: `mysbx gui` opens a terminal window with an interactive run in it
 
 `mysbx gui ARG...` starts the terminal emulator (alacritty, pinned by the
-Nix wrapper as `MYSBX_TERMINAL` from `myconfig.ai.mysbx.terminal.package`)
+Nix wrapper as `MYSBX_TERMINAL` from `myconfig.ai.dev.mysbx.terminal.package`)
 with `--working-directory` on the current directory, `--hold` (so the
 window stays open after the inner mysbx exits and its log remains
 readable) and `--command` on a shell that runs
@@ -739,6 +740,11 @@ rejection arm, which lists `status` among its verbs.
 
 ### D20: `mysbx doctor` checks that the backend can start
 
+These are prerequisite and limited startup probes, not a policy or
+lifecycle certification. A green result does not establish that the
+payload's exact mounts, resources, allowlist, scratch or endpoint access
+work. The direct VM probes do not boot a VM.
+
 `mysbx doctor [BACKEND...]` is the host health check. `status` (D19)
 lists the configuration; `doctor` probes it. It checks the configured
 backend (the merged `backend` of the layers of the repo the cwd
@@ -762,6 +768,14 @@ never uses detached runs may have neither.
 | `nono` | the bubblewrap checks, the `MYSBX_NONO` pin, the `MYSBX_NONO_PROFILE` file (when it is a path), the kernel Landlock ABI |
 | `podman-gvisor` | the `MYSBX_PODMAN` binary, runsc registered with podman (`podman --runtime=runsc info`), the `MYSBX_PODMAN_IMAGE` image in the store and its ID against `MYSBX_PODMAN_IMAGE_ID`, a throwaway `podman run --rm --pull=never --network none` with the run's runtime, runtime flags and cgroup manager, the model endpoint by `curl` inside a container on the run's network (`MYSBX_PODMAN_PASTA_SPEC`) |
 | `podman-krun` | the podman checks with the `MYSBX_KRUN_RUNTIME` pin, or `crun` on PATH (executable, `--version` lists `+LIBKRUN`), `/dev/kvm` rw access (`kvm_available`), and the probes with the krun annotation and `--group-add=keep-groups` |
+| `krun` | KVM access, launcher and rootfs pins/shape, optional store-disk file, and a non-booting launcher argument-parser probe |
+| `microvm-qemu` | the direct VM prerequisite checks plus the independent kernel-file pin; the launcher self-probe does not boot QEMU |
+
+Nono's startup probe is the bubblewrap probe, not a payload under the
+selected nono policy. Its endpoint TCP probe runs on the host, outside
+the allowlist. Podman's throwaway containers do not reproduce the run's
+full mount/state/resource configuration. Successful probes therefore
+have narrower scope than a successful configured workload.
 
 **Output.** Stdout, `== section ==` headers, one line per check:
 `OK`, `WARN`, `FAIL` or `SKIP`, the check name, the detail and, for `WARN` and
@@ -807,11 +821,14 @@ computes for a run.
 
 `mysbx --detach`, `mysbx --detachable` and `mysbx attach` run the bare
 form in the background under a host-side `dtach` and reattach to it.
-The decisions live in [detach.md](./detach.md) (B1–B10). They are
-accepted and implemented (the `status detached:` section, the
-`session destroy` guard and the `doctor` checks of B9 follow with the
-remaining implementation beads); the changes to D19, D20 and the
-non-goals below land with them (detach.md B9).
+The decisions live in [detach.md](./detach.md) (B1–B10). Current code
+accepts these modes on bubblewrap, nono, direct krun and microvm-qemu,
+and refuses both modes on both Podman backends. Unique per-run Podman
+names already exist; they do not lift that refusal. The registry,
+`status`, `session destroy` guard and `doctor` prerequisites are
+implemented. The required live parallel-run matrix is still
+[unrecorded](../detach-validation-log.md), so CLI acceptance is not
+live lifecycle validation.
 
 ## Non-goals
 

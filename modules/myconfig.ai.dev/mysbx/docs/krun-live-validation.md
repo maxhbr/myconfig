@@ -1,5 +1,18 @@
 # mysbx podman-krun live validation runbook
 
+This runbook contains procedures, not completed acceptance results. Use
+the [current backend comparison](backend-comparison.md) for implemented
+support and the [validation log](krun-validation-log.md) for recorded
+runs. Sections 2.2 and 2.3 target the OCI-image guest. Their nested-Podman
+provisioning and tmpfs fallback do not apply to direct VM init.
+
+Run the relative `./nix/` commands from `modules/myconfig.ai.dev/mysbx/`.
+For direct host-store probes, explicitly select `store = "host"` and
+make sure that the dry-run share records include `store@/nix/store`,
+not `--store-disk`. A pinned baked image changes the silent VM default.
+Probe-generated sidecars can omit `store`, so do not count a baked run
+as host-store or host-database validation.
+
 The scripted smoke + manual probes that validate the `podman-krun`
 backend on a host with real `/dev/kvm` (f13). Everything here was
 designed, source-verified and statically gated in bd myconfig-6di.5.1
@@ -27,7 +40,7 @@ mysbx podman-load-image  # the shared agent image, once per rebuild
 
 The probes below assume the repo is a git checkout with a sidecar
 (`mysbx init` already run) and `backend = "podman-krun"` set in
-`.mysbx/config.toml` or the user layer.
+`<repo>.mysbx/config.toml` or the user layer.
 
 ## 1. The scripted smoke (automated)
 
@@ -69,9 +82,9 @@ git status                       # bd myconfig-zj2: NO dubious-ownership
 nix flake metadata .             # bd myconfig-jn0: NO "not owned by
                                  # current user" — libgit2 reads the
                                  # exact-path /etc/gitconfig
-touch /synth-marker && echo hi > $HOME/.cache/marker
+touch synth-marker && echo hi > $HOME/.cache/marker
 # from the HOST while the run is up:
-ls -l <repo>/.mysbx/state        # the state-dirs sidecar backing
+ls -l <repo>.mysbx/state        # the state-dirs sidecar backing
 cat <repo>/synth-marker          # the live-repo bind is rw
 ```
 
@@ -249,12 +262,17 @@ backend's nix scratch — the virtio-blk half this agent sandbox could
 not mount (host policy refuses ext4/overlay in the sandbox; the
 guest kernel carries `EXT4_FS`/`OVERLAY_FS`/`VIRTIO_BLK` all `=y`).
 
-Preconditions: the host pins `MYSBX_KRUN_SCRATCH_SIZE` (the Nix
-wrapper sets it with `krun.nix.enable` — the SAME knob drives the
-podman image's guest nix and the direct backend's scratch file; a
-direct-only host sets the flag and the podman image is merely
-passed, never built) and the direct launcher pin builds `withBlk`
-(the default since bd myconfig-dak.7's first commit).
+Preconditions: select `store = "host"` for this host-share procedure.
+Make sure that the dry-run launcher has `--scratch`. The current
+module pins `MYSBX_KRUN_SCRATCH_SIZE` only when both `podman.enable`
+and `krun.nix.enable` are true. A direct-only guest-Nix opt-in does not
+satisfy that condition. Direct init has no managed tmpfs fallback when
+the scratch disk is absent. The launcher also needs block support
+(`withBlk`, enabled by default).
+
+For baked-store validation, use the separate
+[acceptance procedure](design/guest-store.md). A baked run has an
+additional read-only block device and does not copy the host database.
 
 1. The announcement round-trip:
 
@@ -278,11 +296,14 @@ passed, never built) and the direct launcher pin builds `withBlk`
 
 ## 5. The direct backend's guest nix (bd myconfig-j23, live on 'thing')
 
-The chain this section validates was driven END TO END by a real
-`nix flake check` of a large flake inside the direct-krun guest —
-each stage below was a live failure first, then a fix, then live
-evidence. The host-side setup: a sidecar (or user-layer) `[nix]`
-table carrying at least
+This section describes the host-store chain recorded on 'thing' on
+2026-10-02. The sandbox reached the same genuine flake error as the
+host. That was an infrastructure result, not a successful flake check
+or proof that later store-walk failures were resolved.
+
+Select `store = "host"`, enable networking and make sure that scratch
+is attached. The host-side setup also needs a sidecar or user-layer
+`[nix]` table with at least
 
 ```toml
 [nix]
@@ -317,9 +338,10 @@ experimental-features = "nix-command flakes"
    the failure shape was `fchmodat2 ...: Operation not supported`
    on a lower-layer store entry.
 
-4. **The single-user environment:** inside the guest, `nix flake
-   check` runs to completion and reports the SAME findings the host
-   reports — infrastructure-transparent. `NIX_STATE_DIR` etc. live
+4. **The single-user environment:** compare the guest's `nix flake
+   check` result with the host's result. A matching genuine flake error
+   is distinct from a sandbox infrastructure failure and from a green
+   flake check. `NIX_STATE_DIR` etc. live
    on the scratch (`/mysbx-nix`), `NIX_CONFIG` composes the init's
    defaults (build-users-group/sandbox=false/experimental-features)
    FIRST so a `[nix]` layer overrides them.
@@ -357,8 +379,10 @@ It samples the launcher's host fd count every 0.1 seconds.
 It stops the test if a sample exceeds 8192 fds or the guest fails.
 It does not walk `/nix/store` or clear guest caches.
 
-Keep scratch and networking enabled for the normal startup test (`myconfig-8u0`).
-The launcher shares the host Nix database only when both are enabled.
+For the host-database startup test (`myconfig-8u0`), use host-store mode,
+scratch and networking. The launcher shares the host Nix database only
+when all three conditions hold. Make sure that a probe's generated
+configuration does not silently select the baked store.
 The shared database must contain `db.sqlite` to exercise reconciliation.
 With `MYSBX_KRUN_TRACE=1`, expect these init markers before the guest start marker:
 `enumerating the registered store paths from the copied nix db`,
@@ -381,6 +405,11 @@ Exit 77 means that the host lacks access to `/dev/kvm`, not that the probe passe
 A `PASS` result reports the largest fd sample for this workload.
 Record the result, host, kernel, and library version on `myconfig-dj4`.
 Repeat normal long-lived agent workloads before closing the issue.
+
+The later silent failure in the [validation log](krun-validation-log.md)
+is not a confirmed fd-exhaustion diagnosis. Capture host limits, fd
+samples and kernel logs before attributing a new failure to retention.
+A passing fixture probe does not establish a bound for all store walks.
 
 ### 6.1 Triaging a wedged sandbox: `mysbx-krun-inspect-and-collect`
 

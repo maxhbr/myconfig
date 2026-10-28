@@ -1,7 +1,9 @@
 # Design: configuration and the sidecar directory
 
-Status: draft. This file is the authoritative place for configuration
-design decisions. See [cli.md](./cli.md) for the command-line surface.
+Status: configuration decision record. Sections marked proposed are not
+implemented configuration. See [cli.md](./cli.md) for the command-line
+surface and the [current backend comparison](../backend-comparison.md)
+for implemented support, known gaps and validation limits.
 
 ## Vocabulary
 
@@ -11,9 +13,9 @@ design decisions. See [cli.md](./cli.md) for the command-line surface.
   holding per-repo configuration and state.
 - **user config** — `$XDG_CONFIG_HOME/mysbx/config.toml`, host-wide
   defaults.
-- **backend** — the sandbox technology that actually confines the process
-  (bubblewrap, podman+gVisor, podman+crun/libkrun, nono, qemu,
-  microvm).
+- **backend** — one of the six implemented execution paths:
+  `bubblewrap`, `nono`, `podman-gvisor`, `podman-krun`, `krun`, or
+  `microvm-qemu`.
 
 ## Decisions
 
@@ -78,10 +80,10 @@ config that can execute is config that can escape.
 - the store a VM run mounts at `/nix` (`store`, see D26): the host
   store shared read-only, or the guest-own baked disk — the narrowing
   the sidecar may preselect for a repo, exactly like `backend`
-- network policy (`network = false` is the deny switch; the network is
-  shared by default; the per-domain/port allowlist keys of D21;
-  `egress = "proxy-only"` is the stricter profile in D20, off unless a
-  layer sets it)
+- network policy (`network = false` is the deny switch; networking is
+  enabled by default through the backend's transport; D21's allowlist
+  keys are enforced only on nono). D20's proposed `egress` key is not
+  accepted by the parser.
 - environment forwarded into the sandbox (`[env]`)
 - nix settings forwarded into the sandbox (`[nix]`, D24): rendered as
   the sandbox's `NIX_CONFIG`
@@ -103,7 +105,7 @@ so they are there in every sandbox, whatever a sidecar says (see D7).
 
 On myconfig hosts the user config is not hand-written: the NixOS module
 (`../../default.nix`) generates `~/.config/mysbx/config.toml` from the
-`myconfig.ai.mysbx.config` option, with a read-only baseline for the
+`myconfig.ai.dev.mysbx.config` option, with a read-only baseline for the
 host tool config this repo manages, written with the `~/` prefix
 (`~/.config/{git,ripgrep,bat,fish}`) so the generated file needs no
 home-directory lookup at build time — mysbx expands it at run time (D8).
@@ -132,7 +134,7 @@ so `git diff` inside the sandbox behaves like a stock git. It is set
 exactly when Home Manager activates difftastic's `diff.external`
 (`programs.difftastic.enable` + `git.enable` with the `external`/`both`
 mode), so a host whose git already uses the default diff gets no entry.
-Other modules extend it by appending to `myconfig.ai.mysbx.config.mounts`.
+Other modules extend it by appending to `myconfig.ai.dev.mysbx.config.mounts`.
 Outside myconfig the file stays an ordinary hand-written file; mysbx itself
 knows nothing about where it came from.
 
@@ -159,8 +161,9 @@ caller states.
 
 The sidecar `config.toml` is **trusted**, at the same level as the user
 config. Rationale: it is not repo content. It lives *outside* the repo
-(D2), is never mounted into the sandbox and can therefore never be
-written by the payload; the person who wrote it is the operator who
+(D2), is not exposed by default, and writable mounts covering its
+policy path are refused. An explicit read-only mount remains allowed.
+The person who wrote it is the operator who
 chose to clone this repo and work on it — the same person the user
 config belongs to. A plain file in the operator's own filesystem does
 not need a second file in the same filesystem to bless it.
@@ -209,9 +212,8 @@ What the sidecar still may **not** do:
   `false`. `network` is a host-wide policy switch with no per-entry
   granularity: a user who denied the network host-wide means it for
   every sandbox, and a repo re-enabling it is exactly the thing that
-  switch exists to prevent. The same widening rule applies to `egress`
-  (D20): a sidecar may tighten `shared` to `proxy-only`, and may not
-  set `shared` over a user-config `proxy-only`.
+  switch exists to prevent. D20 proposes a similar merge rule for
+  `egress`, but that key is not implemented.
 
 `backend` passes through from whichever layer named it (the sidecar
 wins when both do, per the layer precedence of D6); it is not an access
@@ -279,7 +281,7 @@ The canonicalization also records the source KIND (bd myconfig-2pv):
 directory versus single regular file. bubblewrap binds both the same
 way, but nono's Landlock grants differ — a file dest needs
 `--allow-file`/`--read-file`, a directory grant on a file path is
-refused by nono 0.74.0. The kind never widens anything: it is
+refused by nono (the original probe used 0.74.0). The kind never widens anything: it is
 metadata of the resolved source, re-derived on every load.
 
 Resolution and canonicalization happen when the config is loaded, before
@@ -335,19 +337,24 @@ state it should not touch, and an attacker inside the sandbox does not
 trivially escape — but the shared network and the permissive base are real
 exposure, and the doc says so instead of overstating the confinement.
 
-What does hold in every backend, without exception: **nothing from the host
-filesystem is available unless it is declared** — the repo itself (D13),
-the git metadata directories its `.git` file points at when the repo is a
-linked worktree or submodule (D13: they are part of the repo's own git
-data, discovered with it and shown in the report), the `<repo>__worktrees`
-sibling when it exists (D13: operator state beside the repo, like the
-sidecar — a run never creates it, so its existence is the operator's
-declaration), and the explicit `[[mounts]]` entries. New backends must
-uphold this even when the backend's own default is permissive.
+The filesystem view consists of the backend's fixed infrastructure plus
+approved workspace, Git metadata, worktrees, state and configured
+mounts. The fixed infrastructure is significant: bubblewrap/nono expose
+the whole host store read-only; Podman uses an image-owned store; direct
+VMs select host or baked store (D26). The enclosing VM launcher still
+sees the whole host store for runtime dependencies. These are not
+per-path grants in `[[mounts]]`.
+
+Additional host paths must come from trusted configuration or the
+workspace rules: the repo itself (D13), approved external Git metadata,
+the `<repo>__worktrees` sibling and explicit mounts. An interactive run
+can create the worktrees sibling under the narrow rule in D13; a
+one-shot or dry run does not. New backends must preserve these rules.
 
 "Declared" means: written in one of the two **trusted** configuration
-files (D7) — the user config and the repo's sidecar, both outside the
-repo work tree and both unreachable from inside the sandbox. The claim
+files (D7): the user config and the repo's sidecar, both outside the
+repo work tree and guarded against writable exposure. An explicit
+read-only view can be declared. The claim
 is *not* that a per-repo file can only reach what a host-wide file
 pre-approved; it is that the sandbox contains nothing the operator did
 not write down, and that the base table itself (tmpfs `/tmp`, no
@@ -765,7 +772,7 @@ a symlink whatever created it. It is NOT a policy file: the sidecar's
 payload data, trusted exactly as much as the work tree.
 
 On myconfig hosts the NixOS module (`../../default.nix`) writes
-`myconfig.ai.mysbx.config.stateDirs` into the generated user layer —
+`myconfig.ai.dev.mysbx.config.stateDirs` into the generated user layer —
 per-agent modules append the state directories of their tool (today
 opencode's `~/.local/{share,state}/opencode`).
 
@@ -775,7 +782,8 @@ opencode's `~/.local/{share,state}/opencode`).
 schema; the multiplexer is now *chosen by name*
 (`multiplexer = "workmux"`). Everything below still describes what the
 `workmux` choice does and why its socket lives where it does — D17 only
-generalizes the switch and lifts the socket rule to every multiplexer.
+generalizes the switch. Its default socket-isolation intent has the
+trusted-configuration exception described in D17.
 The key itself is rejected with a migration message naming its
 replacement (`config.rs`), so an old hand-written sidecar fails loudly
 instead of silently losing its session.
@@ -796,10 +804,11 @@ expressed here as *configuration* instead of a Nix call site.
 `mysbx run -- CMD` is unaffected (cli.md D11).
 
 **The tmux socket lives inside the sandbox, and that is not
-configurable.** It is always `/mysbx-home/.mysbx-tmux/socket`: a path
-in the sandbox home tmpfs (D14), created by the entry inside the
-sandbox, exported as `TMUX_TMPDIR` so a bare `tmux` in any pane finds
-the same server, and gone when the run ends.
+configurable.** Its directory is normally `/mysbx-home/.mysbx-tmux`,
+in the sandbox home tmpfs (D14); `podman-krun` uses the guest-native
+`/dev/shm/mysbx-tmux` instead. The entry creates the socket inside the
+sandbox, and `TMUX_TMPDIR` points clients at the same private directory.
+The socket disappears when the run ends.
 
 Why not the jail tier's repo-local socket (`<repo>__worktrees/.agent-bubblewrap/socket`)?
 Because that is a HOST path, and under mysbx it would be reachable from
@@ -853,14 +862,13 @@ way — only `workmux add` needs the sibling. A sidecar `[[mounts]]`
 entry remains the way to bind a worktrees directory that lives at a
 different path.
 
-On myconfig hosts none of this is hand-written: `myconfig.ai.mysbx.workmux`
-(`../../default.nix`) generates `workmux = true`, the in-sandbox
-`~/.config/workmux/config.yaml` (with the *plain* agent binaries, since
-the sandbox is already the sandbox), the `tmux`/`workmux` entries of the
-tool closure and the `MYSBX_WORKMUX_ENTRY` pin. The wiring that decides
-*whether* a host gets it lives with the other workmux tiers
-(../../myconfig.ai.workmux/mysbx.nix), next to `jail.nix` and
-`sandbox.nix`.
+On myconfig hosts `myconfig.ai.dev.mysbx.workmux.enable`
+(`../../default.nix`) selects the generated `multiplexer = "workmux"`
+default when the integration is enabled. The module supplies the
+in-sandbox `~/.config/workmux/config.yaml`, plain agent binaries, and
+`MYSBX_MUX_ENTRY_WORKMUX`. The integration lives in
+`../../myconfig.ai.workmux/mysbx.nix`. The obsolete `workmux = true`
+key is not generated or accepted.
 
 ### D17: `multiplexer` — which terminal multiplexer the interactive payload is
 
@@ -879,7 +887,7 @@ agent-oriented multiplexers side by side.
 | `"workmux"` | the workmux session of D16 (sidebar + dashboard) |
 | `"herdr"` | [herdr](https://herdr.dev), the agent multiplexer (`../../../../programs/programs.herdr.nix`) |
 | `"aoe"` | Agent of Empires (`../../../../programs/programs.agent-of-empires/`), a tmux-based agent session manager |
-| `"orca"` | [Orca](https://onorca.dev) (`../../../../services.orca.nix`), the agent orchestrator — its payload is the Orca **runtime server** (`orca serve`) started inside the sandbox, reached from the Orca desktop/mobile client over the pairing endpoint (the headless-server form of the upstream guide); see the entry script `../../../../nix/orca-entry.nix` for the display/network/state decisions — **bubblewrap only**, refused on `nono`/`podman-gvisor` (bd myconfig-2m8) |
+| `"orca"` | [Orca](https://onorca.dev) (`../../../../services.orca.nix`), the agent orchestrator — its payload is the Orca **runtime server** (`orca serve`) started inside the sandbox, reached from the Orca desktop/mobile client over the pairing endpoint (the headless-server form of the upstream guide); see the entry script `../../../../nix/orca-entry.nix` for the display/network/state decisions — **bubblewrap only**, refused on every other backend (bd myconfig-2m8) |
 | `"none"` | a plain interactive shell — the pre-D16 behaviour |
 
 **A string enum, not a table, and not a command.** A `[multiplexer]`
@@ -929,29 +937,32 @@ mid-startup (its grants cover the mux socket dirs, not the
 Electron/X11 socket and syscall surface — the waypipe audit of bd
 myconfig-6di.4.6 covered waypipe's syscalls, never Electron's), and
 the gvisor image ships no AppImage/Xvfb runtime at all. So
-`multiplexer = "orca"` with `backend = "nono"` or `"podman-gvisor"`
+`multiplexer = "orca"` with any backend other than `"bubblewrap"`
 is a **refused run** (exit `70`, before the session clone and audited
 by `--dry-run`), the same accepted-never-ignored rule the D21
 allowlist follows — never a broken half-run discovered after the fact.
 
-**The socket/state isolation of D16 holds for every value.**
+**The tmux socket guards do not protect every multiplexer API directory.**
 `/mysbx-home/.mysbx-tmux` (`bwrap.rs::MUX_SOCKET_DIR`) is exported as
-`TMUX_TMPDIR` for every non-`none` choice — emitted after `[env]`, like
-`HOME` and `PATH`, so no layer can repoint it — and the D16 guards
-(`bwrap.rs::check_mux_socket`) apply unchanged: no mount `dest` at or
-below it, no `state-dirs` entry backing it. tmux, workmux and aoe are
-tmux servers and put their socket there; herdr is its own multiplexer
-and keeps its own socket and state in the sandbox-home tmpfs
-(`~/.config/herdr` inside the sandbox), which is per-run and
-per-sandbox by construction (D14). (Older herdr versions ran
-monolithic via a `--no-session` flag for exactly this reason; current
-ones removed it, and the tmpfs `HOME` makes it unnecessary.) Orca
-keeps its profile in `$HOME/.config/{orca,Orca}` — the same per-run,
-per-sandbox tmpfs isolation, persistable with a `state-dirs` entry —
-and needs no terminal socket at all. The variable is set for herdr
-and orca too, uniformly: one code path, and a pane running plain
-`tmux` inside a herdr or orca session lands
-on the same private socket rather than on `/tmp/tmux-<uid>`.
+`TMUX_TMPDIR` for every non-`none` choice, except for the Podman-krun
+path below. It is emitted after `[env]`, so configuration cannot repoint
+it. D16's guards reject mounts and state entries backing that directory.
+Tmux, workmux and aoe use private tmux sockets.
+
+Herdr instead keeps its API sockets and state in `~/.config/herdr`.
+That directory is private by default, but
+`state-dirs = [".config/herdr"]` is accepted and persists it on
+bubblewrap/nono. Podman also suppresses its herdr tmpfs when a configured
+mount or state entry covers the directory. Therefore the implementation
+does not enforce a blanket per-run API-socket isolation invariant.
+This is an exception available to trusted configuration, not an
+untrusted-repository escape. Cross-VM host-socket usability is a separate
+question.
+
+Orca needs no terminal socket and can persist its profile in
+`$HOME/.config/{orca,Orca}` with state entries. `TMUX_TMPDIR` is set for
+herdr and Orca too, so plain tmux in their panes uses the guarded socket
+directory.
 
 The podman backends run the same entry scripts, baked into the image
 (`podman.muxEntries` → `MYSBX_PODMAN_MUX_ENTRY_<VALUE>`, bd
@@ -1007,13 +1018,13 @@ template leaves the key commented out rather than guess a value that
 would override it.
 
 On myconfig hosts the value is generated:
-`myconfig.ai.mysbx.config.multiplexer` (`../../default.nix`) writes it
+`myconfig.ai.dev.mysbx.config.multiplexer` (`../../default.nix`) writes it
 into the user layer and defaults to `"workmux"` where the workmux integration is
-wired (`myconfig.ai.mysbx.workmux.enable`, set by
+wired (`myconfig.ai.dev.mysbx.workmux.enable`, set by
 `../../myconfig.ai.workmux/mysbx.nix`) and to `"none"` otherwise —
 the behaviour-preserving default. The module also pins the entries of
 the multiplexers whose package the host has
-(`myconfig.ai.mysbx.{workmux,herdr,aoe,orca}.package`; tmux always) and adds
+(`myconfig.ai.dev.mysbx.{workmux,herdr,aoe,orca}.package`; tmux always) and adds
 the selected one's binaries to the sandbox `PATH` via `extraTools`, so
 the panes find the tool they are running in.
 
@@ -1060,7 +1071,8 @@ The sandbox is headless by construction: no compositor socket is
 bound, `$XDG_RUNTIME_DIR` is not mounted, `$DISPLAY` and
 `$WAYLAND_DISPLAY` are not forwarded — a graphical payload simply has
 nothing to draw on. `display` is the opt-in that opens one channel,
-and there is exactly one channel to open today:
+and the implemented channel is available on bubblewrap, nono and
+podman-gvisor:
 
 | value | channel |
 | --- | --- |
@@ -1141,7 +1153,14 @@ among payloads mysbx itself carries). The user config is the default
 and the sidecar the decision, including `display = "off"` for a repo
 that wants a headless run on a graphical host.
 
-**Availability is checked, never fallen back on.** `waypipe` needs a
+**Availability checks have a direct-krun gap.** `podman-krun` and
+`microvm-qemu` refuse waypipe. Direct `krun` currently accepts it but
+builds neither a guest server wrapper nor a guest transport; the host
+client alone cannot provide display output. Do not treat that acceptance
+as support. The channel description above applies only to bubblewrap,
+nono and podman-gvisor.
+
+On those implemented paths, `waypipe` needs a
 pin from mysbx's own closure — `MYSBX_WAYPIPE` (the host-side client
 binary; on the podman-gvisor backend, `MYSBX_PODMAN_WAYPIPE` for the
 in-image server end), set by the wrapper (`../../nix/mysbx.nix`) from
@@ -1177,54 +1196,37 @@ same store path, baked in via `podman.imagePackages`), and adds it to
 the sandbox `PATH` via `extraTools` so a payload can inspect the
 channel.
 
-**The other backends (a note).** The channel is a plain byte
-stream, so it crosses whatever boundary a backend has: `microvm`/
-`qemu` would later carry it over vsock or an explicitly forwarded TCP
-port instead of a unix socket bind. Under the layered `nono` backend
-the audit the note asked for came out clean (bd myconfig-6di.4.6 —
-see backends.md "nono's own inputs" for the filter tables and the
-live probe): waypipe runs with two `--allow-unix-socket-dir-bind`
-grants, one for the fake compositor socket the guest server creates
-(below the sandbox home, D14) and one for the per-run channel
-directory.
+**VM transport remains unimplemented.** A future VM channel could use
+vsock or an explicitly forwarded TCP port; the existing host Unix-socket
+bind is not sufficient. The layered nono path has grants for the fake
+compositor socket and the per-run channel directory. Its recorded live
+probe used nono 0.74.0 (bd myconfig-6di.4.6); it is not a fresh 0.80.0
+acceptance run.
 
 ### D20: `egress = "proxy-only"` is a profile, not an allowlist
 
-```toml
-egress = "proxy-only"   # shared | proxy-only; omit for shared
-```
+**Proposed, not implemented.** `egress` is absent from `Config::KEYS`.
+Any `egress = "proxy-only"` or `egress = "shared"` assignment fails
+strict parsing on every backend, before backend-specific enforcement.
+The existing controls are `network` and D21's nono allowlists.
 
-`network` stays the on/off switch of D5. This key does not replace it,
-and it is not the domain/port allowlist (bd myconfig-mo3.1). An omitted
-key is `shared`: the sandbox shares the host stack unless
-`network = false`. Existing configs do not change.
+The proposed profile (bd myconfig-mo3.2, myconfig-t24) would permit
+only the host LiteLLM endpoint while keeping its model credential on
+the host. It would retain `network = false` as a stronger deny switch
+and allow a sidecar to tighten, not widen, a user-layer profile.
+These merge and credential rules are requirements, not shipped checks.
 
-`proxy-only` means the payload can open a connection to the host
-LiteLLM proxy and to nothing else. The model credential stays on the
-host proxy. No layer may place that credential in `[env]` or in any
-other config key when this profile is set (bd myconfig-t24). The
-profile is not a way to turn `network = false` back on: a user-config
-`network = false` still denies the network, and a sidecar may not set
-`egress = "shared"` over a user-config `proxy-only` (D7).
+The proposed bubblewrap transport is an isolated network namespace,
+one Unix socket to a host forwarder, and an in-sandbox loopback relay.
+It has not been implemented. Podman's current pasta gateway mapping
+provides reachability, not a default-deny route policy, so it cannot
+alone enforce the proposed profile. VM transports would also need
+explicit enforcement.
 
-Enforcement is per backend, and a backend that cannot enforce the
-profile refuses the run rather than starting with a shared stack:
-
-- **bubblewrap** can enforce it: `--unshare-net` (no route, no
-  resolver, no `/nix/var/nix`), one Unix socket to a host forwarder
-  that dials the loopback LiteLLM port, and an in-sandbox relay of
-  that socket onto `127.0.0.1` so clients use a normal base URL. If
-  the forwarder is not configured, the run refuses. This is the first
-  implementation (bd myconfig-mo3.2).
-- **podman-gvisor** cannot enforce it with the current pasta spec.
-  `pasta:--map-guest-addr` adds a path to the forwarder; it does not
-  remove the container's default route. Until that spec is
-  default-deny, this backend refuses `proxy-only` (bd myconfig-6di.3).
-
-`proxy-only` and a mo3.1 allowlist are different mechanisms. Setting
-both is a schema error until a backend can enforce both. `orca` still
-needs the shared stack (D17); `egress = "proxy-only"` does not satisfy
-that.
+The profile is distinct from D21's hostname/port policy. Mutual
+exclusion with that policy is a design requirement, not a dedicated
+parser rule today: the parser simply rejects the unknown `egress` key.
+Orca's shared-network requirement would remain unsatisfied.
 
 ### D21: the network allowlist keys are backend-agnostic; enforcement is per backend
 
@@ -1233,15 +1235,20 @@ the mo3.1 allowlist (bd myconfig-mo3.1), decided as *schema* on every
 backend and as *enforcement* per backend:
 
 ```toml
-allow-domains  = ["proxy.internal", "github.com"]
-connect-ports  = [443, 22]
-listen-ports   = [8080]
+# Hostname-proxy policy:
+allow-domains = ["proxy.internal", "github.com"]
+
+# Alternative: ports-only policy, without destination-host restrictions.
+# connect-ports = [443, 22]
+
+# Optional listen grants; listen-ports alone is refused.
+# listen-ports = [8080]
 ```
 
 - `allow-domains` — an array of non-empty strings; domains the sandbox
-  may connect to.
-- `connect-ports` — an array of integers `1`–`65535`; ports outbound
-  connections may target.
+  may connect to through nono's hostname proxy.
+- `connect-ports` — an array of integers `1`–`65535`; destination-port
+  grants, not a port restriction intersected with `allow-domains`.
 - `listen-ports` — the same shape; ports the sandbox may listen on.
 
 Strict schema (D11): wrong types, empty domain strings and out-of-range
@@ -1267,40 +1274,49 @@ a security bug:
 | `bubblewrap` | refused — bubblewrap shares or unshares the whole network namespace (`--share-net`/nothing), it cannot filter per domain or port |
 | `podman-gvisor` | refused — pasta does not filter by domain (bd myconfig-6di.3) |
 | `podman-krun` | refused — libkrun's TSI is an UNFILTERED proxy: the VMM dials whatever the guest connects to, from the container's own netns (pasta by default, the empty netns under `network = false`); no per-domain or per-port hook exists in the muxer (verified against the sources, bd myconfig-6di.5.5) |
+| `krun` | refused — direct libkrun TSI has no implemented allowlist hook |
+| `microvm-qemu` | refused — the SLiRP network path has no implemented allowlist enforcement |
 
 The first enforcement is the nono backend (bd myconfig-6di.2). The
 refusal fires while the argv is laid out, BEFORE the `--dry-run` early
 return, so a dry run audits it too.
 
-**Superseded by [backends.md D1](./backends.md)** (bd myconfig-6di.4,
-bd myconfig-6di.4.4): the layered backend maps the shared default onto
-bubblewrap's `--share-net` without nono network flags (nono allows
-outbound traffic by default — the next paragraph's premise was
-wrong). What REMAINS on `backend = "nono"`: `listen-ports` alone is
-refused (with only listen ports nono reports "outbound allowed" — an
-allowlist that does not restrict outbound is a lie, bd
-myconfig-a14), and an `allow-domains` entry in URL/path form is
-refused (nono tunnels plain host names with CONNECT and injects no CA
-certificate; URLs would need its TLS interception).
+**Pinned nono 0.80.0 distinguishes policy layers.** With ports only,
+listed destination ports have no destination-host restriction and no
+implicit DNS grant. With domains, the default `Auto` policy runs a
+hostname-filtering proxy and denies direct remote connections.
+Combining domains and ports is not an intersection: the Landlock port
+grants are independent, but the proxy supervisor still blocks direct
+remote connections, so those grants do not establish an effective
+arbitrary-host bypass. Port-derived `NO_PROXY` entries can instead
+conflict with that supervisor and break allowed-host connectivity.
+The hostname proxy itself is not constrained to `connect-ports`.
+The mixed combination needs live acceptance testing before it is
+recommended. See [backends.md D1](./backends.md).
+
+The shared default maps to bubblewrap's `--share-net` without nono IP
+network flags. Pathname Unix-socket mediation still installs seccomp
+in this mode. URL/path-form domains are refused; mysbx emits plain
+host-name grants, not a URL-filtering configuration.
 
 **`network = false` plus any allowlist key is a contradiction refused on
 every backend**: the switch denies the network, the allowlist names what
 may be reached through it — both cannot hold at once.
 
-`egress = "proxy-only"` stays a different mechanism (D20): setting a
-D21 allowlist next to it is already a schema error (trivially today:
-`egress` is not yet a key, so both cannot be set at once), and D20
-keeps owning that mutual exclusion.
+`egress = "proxy-only"` remains an unimplemented proposal (D20).
+Any assignment to `egress` is an unknown-key error, with or without
+an allowlist.
 
 ### D22: the sandbox's own SSH keypair, generated into the sidecar state
 
-Every sandbox gets its own git-over-SSH credential — WITHOUT
-forwarding any host credential: no host `~/.ssh` is ever mounted, no
-`SSH_AUTH_SOCK` is forwarded, and the key never existed on the host
-before the first run. The keypair is UNCONDITIONAL: there is no
-config key for it, and a `ssh-key = …` line in either layer is a hard
-schema error naming the key as obsolete (the same treatment as the
-replaced `workmux` key).
+Every live-workspace run gets the repository's git-over-SSH credential
+without forwarding the host's ordinary SSH credential: no host
+`~/.ssh` is mounted implicitly and no `SSH_AUTH_SOCK` is forwarded.
+Mysbx generates the sidecar key if it is missing; an operator can also
+supply a pair there. There is no config key to disable it in a live
+run: `ssh-key = …` is a schema error naming the key as obsolete.
+Clone sessions neither generate nor bind the repository key
+(workspace.md D4).
 
 **Where the key lives**: in the D15 state tree, as an implicit `.ssh`
 entry. The keypair is generated at
@@ -1317,7 +1333,7 @@ the state tree must not redirect the keypair out of the sidecar, and a
 key file that IS a symlink is refused.
 
 **Lifecycle — create-if-missing, recreate-if-deleted-or-invalid,
-never overwrite**: every run (and `mysbx ssh-pubkey`) must END with a
+never overwrite**: every live run (and `mysbx ssh-pubkey`) must END with a
 usable keypair, so the step is idempotent per run:
 
 - both files present → left untouched, whatever created them — an
@@ -1356,16 +1372,16 @@ Per backend:
 | `bubblewrap` | `~/.ssh` = `/mysbx-home/.ssh` (the default identity lookup finds the key) |
 | `podman-gvisor` | `~/.ssh` = `/mysbx-home/.ssh` (same remap as every state entry) |
 | `nono` | `~/.ssh` = `/mysbx-home/.ssh` (the layered backend remaps like the bubblewrap row, backends.md D1) |
+| `podman-krun`, `krun`, `microvm-qemu` | Same sandbox-home path, backed by the live repository's sidecar state |
 
 **UX — the public key is printed when created**, as a `## `-prefixed
 line on stdout (and the report names the bind: `ssh key: <dest> <->
 <sidecar>/state/.ssh [generated, ed25519]`). The `mysbx ssh-pubkey`
 verb prints the public key on demand — unprefixed, exactly the value
 to paste into a GitHub deploy-key form or a gitolite keydir entry —
-and enforces the same lifecycle a run does (generate the missing,
-repair the incomplete, never touch the valid). With the key disabled
-it still prints an existing pair but refuses to invent one. The
-private key never leaves the sidecar/sandbox.
+and enforces the same lifecycle a live run does (generate the missing,
+repair the incomplete, never touch the valid). The private key is
+stored in the sidecar and exposed through the sandbox bind.
 
 **Merge**: not a config key at all — nothing to merge, nothing for
 a layer to decide.
@@ -1373,7 +1389,9 @@ a layer to decide.
 In a CLONE run the key is not handled (workspace.md D4): no
 generation, no bind — a session clone starts without the repo's key.
 
-### D23: resource limits are config keys; a backend that cannot enforce one warns
+<a id="d23-resource-limits-are-config-keys-a-backend-that-cannot-enforce-one-warns"></a>
+
+### D23: resource limits are config keys; unsupported limits warn or refuse
 
 Three top-level keys (bd myconfig-91j):
 
@@ -1389,21 +1407,24 @@ so there is no narrowing rule. The `MYSBX_PODMAN_MEMORY`/`_CPUS`/
 `_PIDS_LIMIT` environment pins override the merged value for one
 invocation.
 
-**Enforcement** is per backend. A key the backend cannot enforce is a
-WARNING on stderr (`the <backend> backend does not enforce …;
-ignored`), not a refusal: the user layer sets limits host-wide, and a
-bubblewrap run must not fail over a limit meant for the podman
-backends. The dry run prints the same warning.
+**Enforcement** is per backend. Bubblewrap/nono warn and ignore these
+keys so a host-wide setting does not prevent those runs. Rootless
+gVisor normally also warns and drops them. The VM paths size the guest
+CPU/RAM but do not implement a guest PID controller. Podman-krun drops
+a configured PID limit, whereas direct krun and QEMU refuse it.
+Dry runs expose the same decisions. The generic direct-VM warning can
+misleadingly say the PID limit is ignored before the builder refuses.
 
 | backend | `memory` | `cpus` | `pids-limit` |
 | --- | --- | --- | --- |
 | `podman-krun` | VM size (`krun.ram_mib`, > 128 MiB) | whole vCPUs (`krun.cpus`; a fraction is refused) | warned, dropped |
-| `podman-gvisor` | `--memory` | `--cpus` | `--pids-limit` |
-| `bubblewrap`, `nono` | warned | warned | warned |
+| `podman-gvisor` | `--memory` only with cgroups enabled | `--cpus` only with cgroups enabled | `--pids-limit` only with cgroups enabled |
+| `krun`, `microvm-qemu` | VM size, whole MiB > 128 | whole vCPUs >= 1 | refused |
+| `bubblewrap`, `nono` | warned, ignored | warned, ignored | warned, ignored |
 
 Under rootless podman-gvisor, runsc runs with `ignore-cgroups` by
-default and the existing "limits not enforced, the runtime ignores
-cgroups" warning applies. A `MYSBX_PODMAN_PIDS_LIMIT` pin on
+default: it emits the "limits not enforced, the runtime ignores
+cgroups" warning and omits all three limit flags. A `MYSBX_PODMAN_PIDS_LIMIT` pin on
 podman-krun is still refused (backends.md D2): an explicit
 per-invocation request is not silently dropped.
 
@@ -1543,8 +1564,8 @@ store = "host"            # host | baked
 One top-level string key, resolved like `backend` (the sidecar may
 preselect it, the user config may set a host-wide default; the
 built-in default when every layer is silent is below). It decides
-what backs `/nix` inside the sandbox — and only the two VM backends
-honor it:
+what backs `/nix` inside the sandbox. Only the two direct VM backends,
+`krun` and `microvm-qemu`, implement the store choice:
 
 | value | the run's `/nix` |
 | --- | --- |
@@ -1575,18 +1596,37 @@ once per wrapper rebuild, every VM run uses it by default.
 
 **Refused, never degraded.** A `store = "baked"` run without the
 pin — the host did not opt in — is refused with a message naming the
-option; so is a `baked` run on any non-VM backend (`bubblewrap`
-would mount nothing at all: the erofs needs a VM's block device).
+option. Every other backend also refuses `baked`, including
+`podman-krun`, whose image-owned store is not this disk mechanism.
 There is no fallback to the host store: a run that asked for the
 narrowing silently getting the whole store would be the exact
 inversion of the refuse-or-announce rule.
 
 **What a baked run no longer sees.** Everything reachable only
 through the host store share: a tool resolved by a host store path
-that is not in the wrapper's closure is a runtime ENOENT — the
-narrowing is the point, and `store = "host"` stays the honest
-default for a run that needs the host's store. The wrapper's own
-tools (the shell, the multiplexer entries, `extraTools`) and, when
-`krun.nix.enable`, the guest nix wrappers are baked in; the guest
-db is registered, so no host-db copy, no reconcile and no
-`store-scan` pass runs in a baked guest.
+outside the baked closure fails with a runtime ENOENT. Set
+`store = "host"` explicitly when that visibility is required; it is
+not the silent default on a disk-pinned VM wrapper. The image includes
+the wrapper's tool closure and configured extra roots. Plain Nix is
+always in the direct VM tools; `krun.nix.enable` does not control its
+presence. The baked database is registered at image build time, so
+baked guests skip host-database reconciliation.
+
+**Writable Nix is a separate axis.** With scratch, either store mode
+gets a private writable overlay and Nix state. EROFS is read-only, but
+writes in the merged guest store can copy up into scratch. Without
+scratch, direct guest init provides no managed writable setup or RAM
+fallback. The separate OCI-image guest-Nix wrapper has its own tmpfs
+fallback; that is not direct VM behavior.
+
+The current module supplies `MYSBX_KRUN_SCRATCH_SIZE` only under
+`podman.enable && krun.nix.enable` (`../../default.nix`). Thus a
+direct-only or QEMU-only host can opt into guest Nix without receiving
+the scratch pin. Scratch is per-run disposable storage, not a
+persistent store cache. See the
+[store/scratch matrix](../backend-comparison.md#direct-vm-store-and-writable-nix-choices).
+
+The narrowing describes the guest view, not an escaped VMM's view:
+the host-side bubblewrap still exposes the host store for launcher
+runtime dependencies. Complete baked-store live acceptance remains
+unrecorded; see [guest-store.md](./guest-store.md).
