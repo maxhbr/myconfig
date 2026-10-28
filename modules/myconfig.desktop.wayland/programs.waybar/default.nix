@@ -182,6 +182,65 @@ let
           run_waybar_once "$@"
         fi
       '';
+      # Externally controllable idle inhibitor. waybar's own idle_inhibitor
+      # module (0.15.0) has no IPC, so it cannot be driven from a script.
+      # Instead this service holds a logind "idle" inhibitor, which swayidle
+      # watches (logind BlockInhibited) — while it runs, swayidle suspends
+      # its lock timeouts. `set-idle-inhibitor` is the single source of truth;
+      # after a state change it pokes waybar (SIGRTMIN+8) so the
+      # custom/idle_inhibitor module reflects it.
+      idleInhibitorUnit = "idle-inhibitor.service";
+      idleInhibitorStatus = pkgs.writeShellScriptBin "idle-inhibitor-status" ''
+        set -euo pipefail
+        if ${pkgs.systemd}/bin/systemctl --user is-active --quiet ${idleInhibitorUnit}; then
+          echo '{"text":"\uf06e","class":"activated","tooltip":"idle inhibitor on (screen will not lock)"}'
+        else
+          echo '{"text":"\uf070","class":"deactivated","tooltip":"idle inhibitor off"}'
+        fi
+      '';
+      setIdleInhibitor = pkgs.writeShellScriptBin "set-idle-inhibitor" ''
+        set -euo pipefail
+        usage() {
+          echo "usage: set-idle-inhibitor on|off|toggle|status" >&2
+          exit 2
+        }
+        systemctl=${pkgs.systemd}/bin/systemctl
+        is_active() {
+          "$systemctl" --user is-active --quiet ${idleInhibitorUnit}
+        }
+        refresh_waybar() {
+          # waybar custom modules default to signal = 8 (SIGRTMIN+8)
+          ${pkgs.psmisc}/bin/pkill -SIGRTMIN+8 waybar 2> /dev/null || true
+        }
+        cmd="''${1:-}"
+        [ $# -le 1 ] || usage
+        case "$cmd" in
+          on)
+            "$systemctl" --user start ${idleInhibitorUnit}
+            refresh_waybar
+            ;;
+          off)
+            "$systemctl" --user stop ${idleInhibitorUnit}
+            refresh_waybar
+            ;;
+          toggle)
+            if is_active; then
+              "$systemctl" --user stop ${idleInhibitorUnit}
+            else
+              "$systemctl" --user start ${idleInhibitorUnit}
+            fi
+            refresh_waybar
+            ;;
+          status)
+            if is_active; then
+              echo "on"
+            else
+              echo "off"
+            fi
+            ;;
+          *) usage ;;
+        esac
+      '';
       toggleLight = pkgs.writeShellScriptBin "toggleLight" ''
         set -x
         current=$(${pkgs.brightnessctl}/bin/brightnessctl get)
@@ -225,7 +284,18 @@ let
           home.packages = [
             waybarOnce
             waybarDevelop
+            setIdleInhibitor
+            idleInhibitorStatus
           ];
+          systemd.user.services.idle-inhibitor = {
+            Unit = {
+              Description = "Hold a logind idle inhibitor (screen locking is prevented while active)";
+              PartOf = [ "graphical-session.target" ];
+            };
+            Service = {
+              ExecStart = "${pkgs.systemd}/bin/systemd-inhibit --what=idle --who=${user} --why=set-idle-inhibitor ${pkgs.coreutils}/bin/sleep infinity";
+            };
+          };
           programs.waybar = {
             package = waybarPackage;
             systemd.enable = false;
@@ -240,7 +310,7 @@ let
                     spacing = 4;
                     modules-left = [ ];
                     modules-center = [
-                      "idle_inhibitor"
+                      "custom/idle_inhibitor"
                       "custom/test_for_missing_tb_changing"
                       # "custom/audio_idle_inhibitor"
                       "clock#time"
@@ -468,12 +538,14 @@ let
                       on-click = "pavucontrol";
                       rotate = 90;
                     };
-                    idle_inhibitor = {
-                      format = "{icon}";
-                      format-icons = {
-                        activated = "";
-                        deactivated = "";
-                      };
+                    "custom/idle_inhibitor" = {
+                      format = "{}";
+                      exec = "${idleInhibitorStatus}/bin/idle-inhibitor-status";
+                      return-type = "json";
+                      on-click = "${setIdleInhibitor}/bin/set-idle-inhibitor toggle";
+                      interval = 10;
+                      tooltip = true;
+                      rotate = 90;
                     };
                     "custom/audio_idle_inhibitor".rotate = 90;
                   }

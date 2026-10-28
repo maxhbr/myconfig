@@ -92,7 +92,7 @@ button,
 #workspaces button,
 #custom-dwl_tag,
 #taskbar button,
-#idle_inhibitor,
+#custom-idle_inhibitor,
 #battery,
 #systemd-failed-units,
 #power-profiles-daemon {
@@ -126,7 +126,7 @@ button {
 }
 
 #custom-isvpn,
-#idle_inhibitor,
+#custom-idle_inhibitor,
 #systemd-failed-units {
     font-size: 0.7em;
     padding-top: 0.2em;
@@ -161,7 +161,7 @@ button {
 #battery.warning:not(.charging),
 #custom-platform_profile.balanced,
 #power-profiles-daemon.balanced,
-#idle_inhibitor.activated,
+#custom-idle_inhibitor.activated,
 #custom-isvpn,
 .warning {
     background: @highlight;
