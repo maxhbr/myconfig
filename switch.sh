@@ -578,6 +578,7 @@ main() {
     mkdir -p "$logsDir"
     local logfile
     logfile="$logsDir/$(date +%Y-%m-%d)-myconfig-${target}.log"
+    ln -sfn "$(basename "$logfile")" "$logsDir/latest-myconfig-${target}.log"
     echo -e "\n\n\n\n\n\n\n" >>"$logfile"
     exec &> >(tee -a "$logfile")
     log_info "starting with...\nMODE=$MODE\nCOMMAND=$COMMAND\ntarget=$target\nverbose=$verbose\n"
