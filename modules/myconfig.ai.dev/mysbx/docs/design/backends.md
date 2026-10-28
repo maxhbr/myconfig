@@ -818,8 +818,9 @@ The spec's shares and selected store disk determine the guest view:
   from the writable scratch by the `/sys/block` ro flag), gated on
   the host's opt-in (`krun.store.enable` bakes and pins
   `MYSBX_KRUN_STORE_DISK`; a baked run without the pin is refused,
-  never a silent host-store run) and refused on every non-VM
-  backend. This narrows the GUEST view, not the VMM's host-side
+  never a silent host-store run). Every backend other than `krun`
+  and `microvm-qemu` refuses `baked`, including `podman-krun`.
+  This narrows the GUEST view, not the VMM's host-side
   view: outer bwrap still binds the WHOLE host `/nix/store` for
   runtime dependencies. Other workspace/state/configured shares
   remain. The payload is guest root; the VMM/file server runs as

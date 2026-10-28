@@ -272,8 +272,9 @@ launcher flag (`--store-disk`, `krun-rs`), the qemu twin
 arm (`nix/krun-rootfs.nix` — erofs at `/nix`, the `/sys/block`
 ro-flag discrimination, the announced-refusal of unannounced ro
 devices), the spec wiring (`mysbx-rs` — the `store` key, the share
-drop, the manifest gate, the refusal on unpinned baked runs and on
-non-VM backends), the module option
+drop, the manifest gate, and refusal of unpinned baked runs or baked
+runs on any backend other than `krun` and `microvm-qemu`, including
+`podman-krun`), the module option
 (`myconfig.ai.dev.mysbx.krun.store.enable`), the doctor line and
 the check (`mysbx-krun-store-disk-test`).
 
