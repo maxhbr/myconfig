@@ -1665,7 +1665,24 @@ in
     # genuinely un-sandboxed sessions (plain `pi`/`piBwrap`).
     myconfig.ai.dev.mysbx = lib.mkIf config.myconfig.ai.dev.mysbx.enable {
       extraTools = [ pi-coding-agent-pkg ];
-      config.mounts = mysbxPiMounts;
+      config.mounts = mysbxPiMounts ++ [
+        {
+          # pi's managed-binaries dir (`~/.pi/agent/bin`, upstream's fd/rg
+          # pinning, pi-mono #470): pi PREPENDS it to its shell tool PATH on
+          # every run, so a sandbox without it runs every command against
+          # a missing first PATH entry. Not home-manager-deployed — pi
+          # creates and populates it at runtime — so this is a plain `~/…`
+          # ro mount (the `home.activation` in the sharedModules below
+          # keeps the dir existing on hosts that enabled pi but never ran
+          # it yet; a missing mount source is a hard error on every run,
+          # config.md D8). No nesting conflict: `.pi/agent/sessions`
+          # (the state dir) is a SIBLING below `.pi/agent`, never below
+          # `.pi/agent/bin`.
+          path = "~/.pi/agent/bin";
+          dest = "/mysbx-home/.pi/agent/bin";
+          mode = "ro";
+        }
+      ];
       config.env.PI_JAIL_MARKER = "1";
       # The litellm endpoint of the podman-gvisor backend: pi's mounted
       # configuration names the host loopback, which inside a container
@@ -1695,6 +1712,13 @@ in
     home-manager.sharedModules = [
       {
         myconfig.persistence.directories = [ ".pi" ];
+        # The managed-binaries dir the mysbx mounts above binds read-only
+        # (bd myconfig-dqq0): pi creates it on first run, but the mount
+        # source must exist on EVERY run — including a sandbox started on
+        # a freshly deployed host that never ran pi yet.
+        home.activation.piAgentBinDir = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+          mkdir -p "$HOME/.pi/agent/bin"
+        '';
         # Deploy the generated extensions/theme plus the subagent example
         # extension (multi-file, plus sample agents and workflow prompts) and
         # the handoff single-file extension. `mkMerge` is required because the
