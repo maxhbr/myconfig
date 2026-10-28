@@ -1,6 +1,10 @@
 # mysbx podman-load-image
 
-Load the agent container image into the caller's Podman store.
+Load the shared agent image into the caller's Podman image storage.
+Both `podman-gvisor` and `podman-krun` use it. Direct `krun` and
+`microvm-qemu` do not need this command. See the
+[current backend comparison](backend-comparison.md) for the different
+store views, provisioning and validation limits.
 
 ## Synopsis
 
@@ -32,7 +36,7 @@ Without options, the command:
 
 ## Environment Variables
 
-The Nix wrapper pins all three when the host builds a gVisor agent image (`myconfig.ai.dev.mysbx.podman.image`, built by [`../podman.nix`](../podman.nix) unless set to `null`):
+The Nix wrapper pins the first three when the host builds the shared agent image (`myconfig.ai.dev.mysbx.podman.image`, built by [`../podman.nix`](../podman.nix) unless set to `null`):
 
 - `MYSBX_PODMAN_TARBALL`: the docker-archive tarball to `podman load`
 - `MYSBX_PODMAN_IMAGE`: the image reference the runs use
@@ -41,84 +45,75 @@ The Nix wrapper pins all three when the host builds a gVisor agent image (`mycon
 
 `--image` overrides the reference alone. With **no** pin and no `--image`, the command is a usage error (exit 2) instead of inventing a `localhost/...` reference: no registry serves the Nix-built image, so a `podman pull` fallback can never work.
 
-### Run-only variables (not set by the wrapper)
+### Run-only variables
 
-`backend = "podman-gvisor"` **runs** additionally read (empty/unset falls
-back to the built-in defaults):
+These variables configure runs, not image loading. Some are wrapper
+pins; others are per-invocation overrides.
 
-- `MYSBX_GVISOR_CGROUP_MANAGER`: the podman `--cgroup-manager` value.
-  Rootless default: `cgroupfs`; root default: flag omitted.
-- `MYSBX_GVISOR_RUNTIME_FLAGS`: space-separated runsc runtime flags
-  (`--runtime-flag` each). Rootless default: `ignore-cgroups` (a
-  rootless runsc cannot write its pod's cgroup — without it, `run`
-  fails with `cannot set up cgroup for root`); root default: none.
-  The flag `ignore-cgroups` also disables the `--pids-limit` /
-  `--memory` / `--cpus` argv entries: runsc would not enforce them.
-- `MYSBX_PODMAN_PIDS_LIMIT` / `MYSBX_PODMAN_MEMORY` / `MYSBX_PODMAN_CPUS`:
-  resource limits, only applied while cgroups are not ignored.
-- `MYSBX_PODMAN_PASTA_SPEC`: the pasta network spec used instead of the
-  default shared network (`network = false` still forces `none`).
-  Pinned by the Nix wrapper with `--set-default` (so an invocation can
-  still override it) as `pasta:--map-guest-addr,<address>` whenever the
-  host runs the shared LiteLLM forwarder
-  (`myconfig.ai.dev.litellm-forwarder`): that translation is what makes
-  the host's loopback-only proxy reachable from inside the container,
-  which the container's own `127.0.0.1` is not. The option behind the
-  pin is `myconfig.ai.dev.mysbx.podman.pastaSpec`.
+#### Shared by both Podman backends
 
-`backend = "podman-krun"` (backends.md D2 — the same builder under a
-libkrun runtime) **runs** additionally read its OWN flag pins:
-
-- `MYSBX_KRUN_RUNTIME`: the OCI runtime binary (crun built against
-  libkrun, pinned by the Nix wrapper; the option is
-  `myconfig.ai.dev.mysbx.krun.runtime`).
-- `MYSBX_KRUN_CGROUP_MANAGER` / `MYSBX_KRUN_RUNTIME_FLAGS`: the krun
-  variants of the two flags above, defaulting to NO runtime flags —
-  crun has no `ignore-cgroups` option (that is a runsc flag), so the
-  gvisor default would make crun die on an unknown flag. They are
-  separate pins so an operator can configure one variant without
-  breaking the other.
-- `MYSBX_PODMAN_PIDS_LIMIT` / `MYSBX_PODMAN_MEMORY` / `MYSBX_PODMAN_CPUS`:
-  SHARED with the gvisor variant (one "resource limits of the
-  sandbox" setting per host) but mapped differently: the krun run
-  turns them into the VM annotations `krun.cpus=<n>` / `krun.ram_mib=<m>`
-  (crun's krun handler sizes the microVM from them, no cgroup
-  dependency). What the annotation cannot express is REFUSED, not
-  silently degraded: a pids limit (no pids controller is wired for a
-  whole-VM "container"), a fractional CPU count (`krun.cpus` is a
-  whole number of vCPUs, never rounded), a memory value below 128 MiB
-  (crun silently defaults `krun.ram_mib <= 128`) or not a whole MiB.
-- `MYSBX_PODMAN_ENV`: space-separated `KEY=VALUE` environment pins for
-  this backend alone, emitted as `--env` after the config layers' `[env]`
-  (a pin wins over a configured value) and before the sandbox's own
-  `HOME`/`PATH`/XDG variables (which no pin can repoint). Entries
-  without a `=` are ignored. The wrapper pins the model endpoint of the
-  LiteLLM forwarder here (`OPENAI_BASE_URL` plus the per-agent variables
-  the generated pi/opencode configurations read), because that URL is
-  correct only inside a container. The option behind the pin is
+- `MYSBX_PODMAN_PASTA_SPEC` selects the Podman network specification.
+  `network = false` still forces `none`. The wrapper uses
+  `--set-default`, so an invocation can override it. When the host runs
+  `myconfig.ai.dev.litellm-forwarder`, the default is
+  `pasta:--map-guest-addr,<address>`. This maps the host's loopback
+  forwarder into the container network. The option is
+  `myconfig.ai.dev.mysbx.podman.pastaSpec`.
+- `MYSBX_PODMAN_ENV` carries space-separated `KEY=VALUE` entries for
+  both variants. They override configuration-layer `[env]` values,
+  but infrastructure variables such as `HOME`, `PATH` and XDG paths
+  override them. Entries without `=` are ignored. The wrapper pins
+  LiteLLM endpoint variables here, including `OPENAI_BASE_URL` and
+  per-agent endpoint variables. The option is
   `myconfig.ai.dev.mysbx.podman.env`.
-- `MYSBX_PODMAN_SHELL` / `MYSBX_PODMAN_TOOLS_PATH`: the payload shell
-  and the tool `PATH` — **paths inside the container image**, not
-  host store paths (the backend mounts nothing from the host
-  `/nix/store`, so the bwrap pins `MYSBX_SHELL`/`MYSBX_TOOLS_PATH`
-  must not and do not reach this backend's argv; bd myconfig-wao).
-  Defaults: `/bin/bash` and `/bin:/usr/bin`, the gVisor agent image's
-  own OCI config (`Cmd` / `Env`) — the same userland the agent-gvisor
-  sessions run against. The Nix wrapper pins `MYSBX_PODMAN_SHELL` on
-  fish hosts to the fish binary as it exists inside the image (bd
-  myconfig-cew: the image is provisioned with the host user's fish
-  world, so an interactive session lands in the same shell, aliases
-  and configuration, via the rendered, individually mounted
-  `~/.config/fish` paths of `nix/shell-config.nix` — config.md D25);
-  the tool
-  `PATH` stays the image's own — `buildEnv` links every baked
-  package's `bin` into the image `/bin`, which the OCI `PATH` already
-  covers.
-- `MYSBX_PODMAN`: the podman binary (fallback: `podman`).
+- `MYSBX_PODMAN_PIDS_LIMIT`, `MYSBX_PODMAN_MEMORY` and
+  `MYSBX_PODMAN_CPUS` override merged resource configuration. Their
+  enforcement differs by runtime, as described below.
+- `MYSBX_PODMAN_SHELL` and `MYSBX_PODMAN_TOOLS_PATH` name the payload
+  shell and tools inside the image. Defaults are `/bin/bash` and
+  `/bin:/usr/bin`. The wrapper pins the image's fish binary on fish
+  hosts. Rendered fish configuration comes from `nix/shell-config.nix`
+  (config.md D25). The tool path stays image-owned; `/bin` links the
+  packages included in the image. There is no implicit host-store
+  bind, so host paths outside the image do not become executable just
+  because the host can resolve them.
+- `MYSBX_PODMAN` selects the Podman binary, with `podman` on `PATH`
+  as the fallback.
+
+Both variants consume these endpoint/network pins. This source-level
+wiring is not a live reachability result. Direct krun and QEMU have
+different transports and do not consume the Podman endpoint pins.
+
+#### `podman-gvisor` runtime variables
+
+`MYSBX_GVISOR_CGROUP_MANAGER` selects `--cgroup-manager`. The rootless
+default is `cgroupfs`; root omits the flag.
+
+`MYSBX_GVISOR_RUNTIME_FLAGS` supplies space-separated runsc flags.
+The rootless default is `ignore-cgroups`, because runsc cannot write
+its pod's cgroup. With that flag, mysbx warns and omits all three
+resource-limit flags. With cgroups enabled, it passes `--memory`,
+`--cpus` and `--pids-limit`. Root defaults to no runtime flags.
+
+#### `podman-krun` runtime variables
+
+`MYSBX_KRUN_RUNTIME` selects crun built against libkrun. The wrapper
+pins it from `myconfig.ai.dev.mysbx.krun.runtime`.
+`MYSBX_KRUN_CGROUP_MANAGER` and `MYSBX_KRUN_RUNTIME_FLAGS` are separate
+from the gVisor variables. The default runtime-flag list is empty;
+`ignore-cgroups` is a runsc flag, not a crun flag.
+
+CPU and RAM become the VM annotations `krun.cpus` and `krun.ram_mib`,
+independent of cgroups. CPUs must be whole vCPUs, at least one. Memory
+must resolve to whole MiB and be greater than 128 MiB. Invalid VM sizes
+and an explicit `MYSBX_PODMAN_PIDS_LIMIT` override are refused.
+A configured `pids-limit` instead warns and is dropped before the
+builder. The claim that every unsupported request is refused is not
+true for that configuration input.
 
 ### Stdio wiring
 
-Every podman-gvisor run execs podman with mysbx's own
+Both Podman backends run with mysbx's own
 stdin/stdout/stderr, so the container is attached the same way
 (`bd myconfig-jho`): `--interactive` is always passed — without it
 podman closes the container's stdin, an interactive shell payload
@@ -141,10 +136,15 @@ private socket dir is `/mysbx-home/.mysbx-tmux` under podman-gvisor and
 the guest's `/dev/shm/mysbx-tmux` under podman-krun. The TLS trust anchors come from the image itself (its
 OCI env pins `SSL_CERT_FILE` & co.), not from a host CA-bundle bind.
 
-**No writable nix store under `podman-gvisor`**: neither the host
-daemon socket (the daemon-dir guard refuses it under a denied network,
-like bwrap) nor a writable in-container store. Payloads that need nix
-run under `podman-krun` (`krun.nix`, `design/backends.md` D2) or bwrap.
+The default `podman-gvisor` layout has an image-owned store, no
+writable-Nix overlay and no implicit host Nix-daemon bind. The dedicated
+daemon-source guard rejects custom mounts exposing `/nix/var/nix`
+when networking is denied; it is not a universal socket-mount ban.
+Managed guest Nix is available through the provisioned `podman-krun`
+image wrapper. Bubblewrap can use the host daemon with networking.
+Direct VM writable Nix requires actual scratch provisioning, as the
+[current guide](backend-comparison.md#direct-vm-store-and-writable-nix-choices)
+explains.
 
 ## Image Sources
 
@@ -211,7 +211,7 @@ $ mysbx podman-load-image --force
 ### Use custom image reference
 
 ```bash
-$ MYSBX_PODMAN_IMAGE=localhost/my-agent:dev mysbx podman-load-image
+$ mysbx podman-load-image --image localhost/my-agent:dev
 ```
 
 ## Integration and Workflow

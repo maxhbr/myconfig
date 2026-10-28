@@ -5,31 +5,38 @@ SPDX-License-Identifier: MIT
 
 # Implementation plan
 
-Status: the phase-1 MVP is complete — `mysbx` has the full CLI
-(`--dry-run`, `--ro`/`--rw`, run forms), the two-layer config merge
-(`cli.md` D16, `config.md` D7), the bubblewrap backend with its golden
-argv tests, and NixOS packaging with the `mysbx-tests` /
-`mysbx-completions` / `mysbx-generated-config-test` checks. The podman +
-gVisor (`runsc`) backend (bd myconfig-6di.1) and the nono backend
-(Landlock + seccomp, bd myconfig-6di.2) have since landed on top of the
-same seam, and the per-domain/port network allowlist with them (bd
-myconfig-mo3.1, `config.md` D21). The remaining open work is tracked as
-beads: myconfig-t24 (credentials), myconfig-mo3.2 (proxy-only egress),
-myconfig-6di (qemu/microvm backends), myconfig-o6z (2e workspace model,
-decided), myconfig-91j, and myconfig-dys (unattended runs).
+Status: the phase-1 MVP is complete, and implementation has moved well
+beyond it. There are **six implemented backends**: `bubblewrap`, `nono`,
+`podman-gvisor`, `podman-krun`, direct `krun`, and `microvm-qemu`.
+Backend selection is explicit; heavier backends require host opt-in.
+The canonical current inventory, option semantics and evidence limits
+are in [`backend-comparison.md`](./backend-comparison.md).
 
-This file is the phase plan. Each MVP work item has its own file in
-[`TODOs/`](./TODOs) with the concrete checklist; this file states *what* the
-phases are, *why* the MVP is cut where it is cut, and what is explicitly not
-designed yet.
+Clone sessions and handoff verbs, resource-limit keys, `run --result`,
+and detached interactive paths have landed. That is not universal
+support or live acceptance: rootless gVisor's default `ignore-cgroups`
+warns and drops all limit flags; VM CPU/RAM settings size the guest;
+Podman-krun drops configured PID limits but refuses an explicit env
+pin, and direct VM PID limits are refused. Both Podman variants still
+refuse detach despite already having unique per-run names. All accepted
+detach paths lack a recorded live matrix, and complete baked-store live
+acceptance remains unrecorded. `egress` (including `"proxy-only"`) is
+still a proposal rejected by strict parsing on every backend.
+
+This is the **historical phase plan**, not the current feature matrix.
+Each MVP work item has its original checklist in [`TODOs/`](./TODOs).
+The phase-1 scope and acceptance criteria below record the original cut;
+its exclusions are not claims that those features are still absent.
+Phase-2 entries distinguish their sketches from the current outcome.
 
 Vocabulary is fixed in [`../CONTEXT.md`](../CONTEXT.md) (repo, sidecar, user
 config, layer, backend, payload, base, mount). Design decisions live in
 [`design/cli.md`](./design/cli.md) and [`design/config.md`](./design/config.md);
-the comparison against the existing tiers is
-[`feature-comparison.md`](./feature-comparison.md).
+the comparison against the older tiers is
+[`feature-comparison.md`](./feature-comparison.md), whose non-mysbx rows
+are labeled historical snapshots, including removed tiers.
 
-## Phase 1 — the MVP
+## Phase 1 — the MVP (historical scope)
 
 **Goal**: `cd <repo> && mysbx` drops you into a bubblewrap sandbox, and
 `mysbx run -- <cmd>` runs one command in it. Both are fully determined by the
@@ -89,21 +96,24 @@ every knob is a decision:
 | `/etc/localtime` | yes | timestamps |
 | tmpfs `/tmp` | yes | **not** the host-backed `/tmp/<name>` |
 | tmpfs `$HOME` (`/mysbx-home`) | yes | an in-sandbox home so `cd ~`, `~/.bash_history`, git & co. work; empty, writable, outside `/home` (`config.md` D14) |
-| multiplexer socket dir (`/mysbx-home/.mysbx-tmux`) | only on an interactive run with a `multiplexer`, and only as `TMUX_TMPDIR` | no bind and no tmpfs of its own: the selected multiplexer's entry creates it inside the home tmpfs, so its server is reachable from this sandbox alone — never from the host's `/tmp/tmux-<uid>` (`/tmp` is a fresh tmpfs) and never from another sandbox (nothing may bind or persist the path, `config.md` D16/D17) |
+| tmux socket dir (`/mysbx-home/.mysbx-tmux`) | only on an interactive run with a `multiplexer`, and only as `TMUX_TMPDIR` | the entry creates it in the home tmpfs; the tmux path is guarded against mounts/state persistence (`config.md` D16/D17). This is not a blanket guarantee for every multiplexer API directory: `state-dirs = [".config/herdr"]` is accepted and persists herdr's API dir on bwrap/nono. Podman-krun uses `/dev/shm/mysbx-tmux` instead |
 | host `$HOME` bind | **no** | the host home stays unreachable; its *value* is not forwarded either — exposing parts of it is an explicit `[[mounts]]` entry of a trusted layer (`config.md` D6/D7) |
 | `~/tmp` rw | no | agent-session convenience, not a sandbox essential |
 | `/run` | no | D-Bus, PipeWire, agent sockets; the nix-daemon socket arrives via the `/nix/var/nix` row above (and only with a shared network); the resolver exception is the only `/run` path bound |
-| dev-tool closure on `PATH` | yes, as-is | git, tig, neovim, ripgrep, fd, jq, nix, python3, coreutils, … — the exact shipped list lives in [`nix/mysbx.nix`](./nix/mysbx.nix) (`toolsEnv`; see mvp-6 for what was dropped from the `bubblewrap-app.nix` base list), plus the shared `myconfig.ai.dev.sandboxTools.extraPackages` (phase 2d) and whatever belongs in mysbx alone via `myconfig.ai.mysbx.extraTools` (today: `pi`, `opencode`, `rtk`, the selected multiplexer) |
-| `OPENAI_API_KEY` auto-forward | **no, not by default** — the built-in allowlist (`FORWARDED_ENV_VARS`, lib.rs) is technical only, so no secret is inherited by accident; credentials live only in the host environment, never in a store path, so an `[env]` entry cannot forward them either. A deployment names the key, token and URL variables in `forward-env` (the private flake does this via `myconfig.ai.dev.mysbx.forwardedEnvVars`) and they forward when set, reaching the jail/nono tiers' behaviour by declaration rather than by hard-coded default (bd myconfig-20j) |
+| dev-tool closure on `PATH` | yes, as-is | git, tig, neovim, ripgrep, fd, jq, nix, python3, coreutils, … — the exact shipped list lives in [`nix/mysbx.nix`](../nix/mysbx.nix) (`toolsEnv`; see mvp-6 for what was dropped from the `bubblewrap-app.nix` base list), plus the shared `myconfig.ai.dev.sandboxTools.extraPackages` (phase 2d) and whatever belongs in mysbx alone via `myconfig.ai.dev.mysbx.extraTools` (today: `pi`, `opencode`, `rtk`, the selected multiplexer) |
+| `OPENAI_API_KEY` auto-forward | **no, not by default** | the built-in allowlist (`FORWARDED_ENV_VARS`, lib.rs) is technical only, so no secret is inherited by accident; credentials live only in the host environment, never in a store path, so an `[env]` entry cannot forward them either. A deployment names the key, token and URL variables in `forward-env` (the private flake does this via `myconfig.ai.dev.mysbx.forwardedEnvVars`) and they forward when set, reaching the jail/nono tiers' behaviour by declaration rather than by hard-coded default (bd myconfig-20j) |
 
 ### Honest security claim
 
-With a permissive base and network on by default, the MVP is **not** the
-"default deny" tool `config.md` D9 currently describes. Its claim is the one
-`../../docs/README.md` makes for `agent-bubblewrap-pi`: *a strong accident
-barrier and a moderate malice barrier*. Rewriting D9 to say so is part of
-work item 1 — a design doc that overstates the confinement is worse than no
-doc.
+With a permissive base and network on by default, the MVP was **not** a
+"default deny" tool. Its accepted claim, now recorded in `config.md` D9,
+is the historical bubblewrap tier's *strong accident barrier and moderate
+malice barrier*. The whole host store is read-only on bubblewrap/nono;
+Podman has an image-owned store, while direct krun/QEMU can select a host
+or baked store. Baked mode narrows the **guest-visible** store, not the
+outer VM bubblewrap runtime view, which still includes the whole host
+store. See the current guide rather than treating the MVP base as every
+backend's exact layout.
 
 What the MVP does buy over the existing `agent-bubblewrap-*` wrappers: the
 confinement is **data** (two TOML files) instead of Nix call sites, it is
@@ -113,15 +123,20 @@ confinement is **data** (two TOML files) instead of Nix call sites, it is
 
 The confinement level the shipped backends reach is the intended level and
 must be kept — it is a floor, not a snapshot. For the VM-level backends
-(`podman-krun`, `krun`) that means concretely: the payload runs under its
-own guest kernel (no kernel shared with the host), every host path reaches
-the guest only as a virtio-fs share whose `ro`/`rw` flag the host side
-enforces (the guest cannot widen it), and no host device is passed through
-— the guest has no `/dev/kvm` and exposes no virtualization extensions, so
-a payload cannot nest a further VM. A nested `mysbx` inside a krun guest is
-therefore a container backend (`bubblewrap`, `nono`, `podman-gvisor`),
-never a VM backend. A change that weakens any of the above is a regression,
-not an acceptable trade; the update rule at the end of this file applies.
+(`podman-krun`, direct `krun`, `microvm-qemu`), the payload runs under its
+own guest kernel, not the host kernel. Host directory shares preserve
+host-enforced `ro`/`rw` access; generated baked-store and per-run scratch
+disks are explicit additional inputs, not arbitrary host-device grants.
+The guest has no host `/dev/kvm` or exposed virtualization extensions, so
+nesting a further VM is not supported. Normal mysbx QEMU runs require
+host KVM; the launcher's `kvm:tcg` argument is not a supported fallback.
+
+Kernel compatibility alone does not provision a nested runtime:
+`krun.nestedPodman.enable` populates the OCI image for `podman-krun`,
+not either direct VM's rootfs/PATH. No blanket direct-krun feature-parity
+or stronger-than-gVisor claim follows from fewer layers. A change that
+weakens the documented boundary is a regression, not an acceptable
+trade; the update rule at the end of this file applies.
 
 ### Work items
 
@@ -152,49 +167,57 @@ All six items are done; the MVP is complete.
   user-config counterpart (`config.md` D7).
 - No `myconfig.ai` module outside `mysbx/` changes.
 - Manual acceptance (operator, not CI): the sandbox shows only the declared
-  mounts, and `~/.ssh` is unreachable (the host's — every sandbox gets its
-  OWN generated keypair under `~/.ssh`, config.md D22:
-  create-if-missing, recreate-if-deleted, never any host credential).
+  mounts, and host `~/.ssh` is unreachable. Current live runs get their own
+  per-repo keypair under sandbox `~/.ssh` (`config.md` D22:
+  create-if-missing, recreate-if-deleted); clone sessions omit that key and
+  persisted state.
 
-## Phase 2 and later — sketches, not designs
+## Phase 2 and later — original sketches and current outcomes
 
-Each item below was a sketch when the MVP was cut; several have since
-been decided or landed (2c/2d/2e/2f). The remaining sketches are
-recorded so the MVP is
-visibly not a dead end, and because they were raised and deferred while the
-MVP was cut.
+Each item below began as a sketch when the MVP was cut; 2a/2c/2d/2e/2f
+have since landed. Historical tier examples explain the original choices,
+not a current inventory.
 
-**2a — a generated user config.** Seed
-`$XDG_CONFIG_HOME/mysbx/config.toml` from home-manager, derived from the same
-`myconfig.ai.<agent>.enable` flags the other tiers use. This is the layer that
-decides which host credentials are exposed (`config.md` D6), so a generated
-allow-list nobody reviewed would undermine D7. First item of phase 2.
+**2a — a generated user config.** LANDED: the module generates
+`$XDG_CONFIG_HOME/mysbx/config.toml` via Home Manager. Agent integrations
+add their declared configuration/state. The two trusted layers still own
+exposure (`config.md` D6/D7); generation does not make a credential safe
+to expose by default.
 
-**2b — credentials and the model API.** Every existing tier answers this
-differently: the host key in the environment (`bwrap-jail`, `nono`), over the
-SSH session (`qemu`), rewritten endpoints (`gvisor`), or never in the guest at
-all (`microvm`). `config.md` leaves it open. The answer interacts with 2c.
+**2b — credentials and the model API.** The original tier comparison
+contrasted host-key forwarding, SSH seeding, endpoint rewrites and a
+host-held proxy key. Current mysbx forwards credential variables only
+when declared in `forward-env`; a keyless proxy is usable, but a
+proxy-only egress profile remains unimplemented. Transport is backend
+specific: host namespace for bwrap/nono, pasta for Podman (TSI from the
+container namespace on Podman-krun), host-namespace TSI for direct krun,
+and SLiRP for QEMU. `MYSBX_PODMAN_ENV` and
+`MYSBX_PODMAN_PASTA_SPEC` are consumed by **both** Podman variants.
 
-**2c — network policy.** Bring back something finer than the MVP's on/off
-switch — `nono`'s `--allow-domain` / `--allow-connect-port` model is the
-closest existing precedent, and it is what makes "the sandbox may reach the
-model proxy and nothing else" expressible.
+**2c — network policy.** The finer-than-on/off sketch became nono's
+`--allow-domain` / `--allow-connect-port` policy. It is not the separate
+proxy-only egress proposal, and is not a domain-and-port conjunction.
 
-DECIDED and LANDED. The allowlist schema (bd myconfig-mo3.1) is
-`allow-domains`/`connect-ports`/`listen-ports` on every backend
-(`config.md` D21): both layers concatenate, user layer first, deduped
-keeping the first occurrence. Enforcement is per backend — a backend
-that cannot enforce the keys refuses the run, never accepts and ignores
-them: the nono backend enforces them (bd myconfig-6di.2, mapping onto
-`--allow-domain`/`--allow-connect-port`/`--listen-port`), bubblewrap
-refuses (whole-net-namespace only), podman-gvisor refuses (pasta does
-not filter by domain, bd myconfig-6di.3). Proxy-only egress
-(bd myconfig-mo3.2) stays a separate profile and is not this
-allowlist. That profile is `egress = "proxy-only"` (`config.md` D20):
-the `network` bool is unchanged when the key is omitted. Bubblewrap
-enforces it with `--unshare-net` plus one socket to the host LiteLLM
-forwarder. podman-gvisor refuses it until its pasta spec is
-default-deny (bd myconfig-6di.3).
+LANDED. The allowlist schema (bd myconfig-mo3.1) is
+`allow-domains`/`connect-ports`/`listen-ports` (`config.md` D21): both
+layers concatenate, user first, deduped keeping the first occurrence.
+Only nono supports these keys; the other five backends refuse them.
+`listen-ports` alone, URL-form domains, and allowlists combined with
+`network = false` are refused.
+
+Pinned nono is **0.80.0**. Its pathname AF_UNIX mediation installs
+seccomp even under unrestricted IP networking (`AllowAll`); the older
+0.74.0 no-filter and rate-limit claims are not current guarantees.
+Domain policy uses a proxy, while port grants are independent. In mixed
+policy the default supervisor still denies direct remote connections;
+independent grants are not proof of an arbitrary-host bypass, and
+proxy-bypass variables can instead create connectivity conflicts. Exact
+combined policies need live testing; see the current guide.
+
+PROPOSED, NOT LANDED: `egress = "proxy-only"` (`config.md` D20, bd
+myconfig-mo3.2). The strict parser rejects `egress` on **every** backend,
+including bubblewrap. The isolated namespace plus LiteLLM socket relay
+is a design proposal, not a shipped enforcement path.
 
 **2d — the toolchain and `myconfig.ai.sandboxTools`.** DONE (bd
 myconfig-9mw): `mysbx` consumes
@@ -206,41 +229,55 @@ extension ON TOP of the hook (selected-multiplexer payload, per-agent
 CLIs like `pi`), never as a parallel copy of it: tooling wanted in
 EVERY tier goes through the hook exactly once.
 
-**2e — the workspace model.** DECIDED (bd myconfig-o6z):
+**2e — the workspace model.** LANDED (bd myconfig-o6z):
 [`design/workspace.md`](./design/workspace.md) — `live` stays the
-default and unchanged (config.md D13); clone sessions are opt-in per
-run via `--session NAME` (isolated clone at
-`<repo>.mysbx/clones/NAME`, per-session branch `agent/mysbx/NAME`,
-every other mount forced `ro`, no `__worktrees` bind, no state binds,
-per-session result file), with host-side `fetch` / `merge` / `push` /
-`diff` handoff and `session list` / `session destroy` verbs; unattended
-runs will force clone mode. The implementation is filed as follow-up
-beads. Historical sketch: `bwrap`/`nono`/`qemu` edit the live repo;
-`gvisor` and `microvm` use an isolated clone plus an explicit handoff
-(`merge` / `fetch` / `push`, branch import). The MVP edits the live repo.
-A clone mode is the prerequisite for unattended runs.
+default (`config.md` D13). `--session NAME` selects an isolated clone at
+`<repo>.mysbx/clones/NAME`, branch `agent/mysbx/NAME`, with its own
+worktrees and result file. Configured mounts are forced `ro`, `--rw` is
+refused, and host repo/git metadata/worktrees, persisted state and the
+per-repo SSH key are omitted. Host-side `fetch` / `merge` / `push` /
+`diff` and `session list` / `destroy` / `hunk` provide the handoff.
+`run --result` and detached interactive runs do **not** automatically
+force clone mode; a clone is still opt-in via `--session`.
 
-**2f — further backends.** `README.md` names podman+gVisor and `nono` next,
-qemu and microvm long-term. The MVP's `bwrap_argv` boundary is the seam: a
-backend is a function from merged config + payload to a process invocation.
-Both named next backends are done: podman+gVisor (bd myconfig-6di.1) maps
-the merged config onto a rootless `podman run --runtime=runsc`; nono
-(bd myconfig-6di.2) started as a plain `nono run` and is the LAYERED
-backend now (bd myconfig-6di.4, `docs/design/backends.md` D1):
-bubblewrap builds the view, `nono run` confines the payload inside
-it — no first-cut refusals remain (clone remap, mount `dest` remap,
-the network default, multiplexer sessions and the waypipe display all
-work or map like the bubblewrap backend). The VM-level backend is
-DECIDED too (bd myconfig-6di.5, `docs/design/backends.md` D2):
-`backend = "podman-krun"` is podman-gvisor with the OCI runtime
-swapped to crun built against libkrun (nixpkgs `crun` withLibkrun) —
-a runtime variant, not a new argv builder; each run is a rootless
-KVM microVM with the stock libkrunfw kernel, mounts over virtio-fs.
-Honest boundary statement: krun is NOT stronger than gVisor — the VMM
-and the guest share one security context; the gains are
-host-kernel-bug isolation and full kernel compatibility (which the
-required nested podman needs). Remaining:
-qemu and microvm, long-term.
+**2f — further backends.** LANDED: all six backends in the
+[current guide](./backend-comparison.md), not a pending QEMU/microVM
+roadmap. The MVP's pure argv boundary remains the seam, with backend
+builders and golden tests:
+
+- `bubblewrap`: the host-kernel namespace base.
+- `nono`: bubblewrap's view followed by Landlock, seccomp and optional
+  port/proxy policy. Orca is still refused; bwrap-like layout support is
+  not blanket feature parity.
+- `podman-gvisor`: rootless Podman with runsc and an image-owned store.
+- `podman-krun`: the shared Podman builder with crun/libkrun, an
+  image-owned store and optional in-image guest Nix/nested Podman.
+- Direct `krun`: bubblewrap plus the libkrun launcher, no OCI image.
+- `microvm-qemu`: bubblewrap plus QEMU and separate rootless virtiofsd
+  processes, using the shared direct guest init and a pinned kernel.
+
+The direct VMs choose `store = "host" | "baked"`; explicit configuration
+wins, otherwise a nonempty `MYSBX_KRUN_STORE_DISK` pin selects baked,
+and no pin selects host. Their Nix binary is always in the tools, but
+the direct init needs scratch for managed writable Nix and has no tmpfs
+fallback. Current wiring incorrectly pins scratch only with
+`podman.enable && krun.nix.enable`, so direct-only hosts can miss it.
+
+Waypipe works on bwrap/nono and provisioned gVisor; Podman-krun and QEMU
+refuse it. Direct krun currently **accepts it in error without a guest
+implementation**. VM compatibility is not a proven stronger boundary
+than gVisor, nor proof of every provisioned Podman-krun feature on the
+direct path.
+
+Evidence is historical and workload-specific. The 282 ms direct spike
+is not a current benchmark; the later 25 min 42 s direct / 12.7 s
+Podman-krun figures are smoke-suite totals, not isolated boot timings.
+The later silent direct store-walk failure has no confirmed fd root
+cause. QEMU's eleven KVM probes prove their listed scope, including
+initial terminal size, not mid-session resize, baked-store acceptance,
+scratch stress, nested Podman or detach. See
+[`krun-validation-log.md`](./krun-validation-log.md) and
+[`microvm-qemu-validation-log.md`](./microvm-qemu-validation-log.md).
 
 **2g — per-repo opt-out of user mounts.** `config.md` D7 settled the other
 direction (a sidecar declares its own mounts), but leaves open how a user

@@ -1,9 +1,17 @@
 # Design: backends
 
-Status: draft. This file holds decisions about how a backend confines
-the payload. Configuration keys stay in [config.md](./config.md); the
-command-line surface stays in [cli.md](./cli.md). Backend selection
-itself is cli.md D7/D18.
+Status: decision record, reconciled with the completed source audit at
+`7846d39c36` and pinned nono **0.80.0**. This audit launched no live
+sandboxes. **Shipped** below means implemented, not live-validated for
+every combination; **proposed** marks unimplemented plans. Historical
+0.74.0 audits and live logs remain evidence for their recorded versions
+and workloads, not acceptance of today's full matrix.
+
+This file holds decisions and their rationale about backend confinement.
+Use the [current six-backend comparison](../backend-comparison.md) for
+the implemented option matrix and known gaps. Configuration keys stay in
+[config.md](./config.md); the command-line surface stays in
+[cli.md](./cli.md). Backend selection itself is cli.md D7/D18.
 
 ## Decisions
 
@@ -36,8 +44,8 @@ so configs and `--backend nono` keep working.
 | Read-only versus read-write | bubblewrap | read-only binds; the kernel returns `EROFS` |
 | Network namespace | bubblewrap | `--unshare-all`, then `--share-net` or not |
 | Filesystem access inside the view | nono | Landlock grants (second layer) |
-| System calls | nono | nono's seccomp filter, in the restricted network modes only |
-| Egress per domain and port | nono | nono's proxy on `127.0.0.1` in the shared netns |
+| System calls | nono | network-mode filters plus the generated pathname AF_UNIX mediation filter, including with unrestricted IP networking |
+| Egress policy | nono | independent port grants and, for domains, a proxy on `127.0.0.1` plus supervision; not a domain/port conjunction |
 | Payload environment | mysbx | a pinned `env` between nono and the payload |
 
 All layout checks of the bubblewrap backend apply unchanged. These are
@@ -75,12 +83,12 @@ from the raw config:
 Filesystem-wise, nono adds little over bubblewrap. The view is
 already minimal, and the grants come from the same layout, so a
 layout bug would produce a matching grant. The value of this backend
-is the egress filter and its seccomp filter. The bubblewrap backend
-has neither. nono installs a seccomp filter only with `--block-net`
-or an allowlist. With the shared network it installs none (tested
-with nono 0.74.0: `Seccomp: 0` in the payload), so there this backend
-adds only the Landlock layer. nono still runs in that case, so the
-backend has one shape for every network mode.
+is the egress policy and seccomp mediation. The bubblewrap backend
+has neither. **Shipped in pinned 0.80.0:** the generated profile's
+pathname AF_UNIX mediation installs seccomp even with unrestricted
+IP networking. The earlier nono 0.74.0 `Seccomp: 0` observation was
+historical, not the current generated-profile behavior. nono runs in
+every network mode, so the backend still has one process-chain shape.
 
 #### Network
 
@@ -90,11 +98,26 @@ backend has one shape for every network mode.
 | `network = true`, no allowlist | `--share-net` | no network flag (nono's default is outbound allowed) |
 | `network = true`, allowlist (config.md D21) | `--share-net` | `--allow-domain`, `--allow-connect-port`, `--listen-port` per merged entry |
 
+**Shipped policy semantics (nono 0.80.0):** the default `Auto`
+execution strategy installs proxy supervision for domain policy.
+`allow-domains` and `connect-ports` are NOT a conjunction:
+
+| Entries | Effective mechanism |
+| --- | --- |
+| Ports without domains | Independent destination-port grants, not host restrictions; DNS is not added automatically |
+| Domains without connect ports | Hostname-filtering CONNECT proxy; a domain entry alone does not restrict the upstream port; the supervisor denies direct remote connections |
+| Domains and connect ports | Landlock installs independent port grants, but the proxy supervisor still denies direct remote connections; neither a domain-and-port intersection nor a demonstrated ANYHOST port bypass |
+
+Mixed settings can derive `NO_PROXY`/direct-connect choices from the
+ports while the supervisor denies those connections. This connectivity
+conflict needs **live acceptance of the exact policy** before recommending
+mixed profiles; inspecting Landlock grants alone does not establish an
+effective bypass.
+
 Rules for the allowlist case:
 
 - An allowlist must restrict outbound traffic. `listen-ports` alone
-  must either produce a restricted invocation or be refused (bd
-  myconfig-a14).
+  is refused (bd myconfig-a14); it is not a standalone egress policy.
 - The Nix daemon builds fixed-output derivations with network access
   that nono does not filter. Under an allowlist, bubblewrap does not
   bind `/nix/var/nix`, and nono grants no daemon socket (bd
@@ -121,7 +144,7 @@ must not pass through nono:
   Nothing from a config layer, from `forward-env` or from the host
   reaches nono. A layer can therefore never widen the policy through
   a `NONO_*` variable or redirect nono's config lookup.
-- **The payload environment** is exactly the bubblewrap backend's:
+- **The payload environment assignments** follow the bubblewrap backend:
   forwarded variables, then `[env]`, then the `HOME`, `PATH` and CA
   pins of config.md D14. A pinned `env` from mysbx's closure applies
   it as nono's child. It unsets every variable of nono's environment
@@ -131,14 +154,17 @@ must not pass through nono:
   values sit in the argv of `env`. This is the same exposure as
   bubblewrap's `--setenv` argv today.
 
-In allowlist mode nono injects its proxy variables: `HTTP_PROXY`,
-`HTTPS_PROXY`, `NO_PROXY`, their lower-case forms, `NONO_PROXY_TOKEN`,
-`NONO_NO_PROXY` and `NODE_USE_ENV_PROXY`. These are infrastructure.
-mysbx drops entries with these names from the payload environment,
-and `--verbose` marks them `[config, ignored — set by nono]`, the same
-treatment config.md D14 gives `HOME`. Overriding them could only
-break connectivity, because direct connections are blocked. It could
-never widen access, so the entry is ignored rather than refused.
+In domain-allowlist mode nono injects its proxy variables:
+`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, their lower-case forms,
+`NONO_PROXY_TOKEN`, `NONO_NO_PROXY` and `NODE_USE_ENV_PROXY`.
+**Documented protection, not implemented:** reserving these names,
+dropping payload overrides and marking them `[config, ignored — set by nono]`.
+The current payload builder instead restores configured AND forwarded
+proxy variables through the pinned `env`, after nono's injection. They
+can overwrite that environment and break connectivity. The already
+installed Landlock/seccomp/supervisor policy still applies; this is not
+a demonstrated policy bypass, nor grounds for promising that all
+possible overrides are harmless.
 
 #### Naming-service probes and the IPC-denial block (bd myconfig-7ov)
 
@@ -147,64 +173,58 @@ The pathname AF_UNIX mediation filter traps every pathname
 before every user/group lookup. The path is not in the view, so no
 capability covers it and each probe is denied — benign (glibc falls
 back to files/DNS) but loud: the run footer's "IPC denial:" block
-lists the probes. nono 0.74.0 exposes no knob to quieten it —
-`diagnostics.suppress_system_services` hides only profile-prompt
-entries, and `--no-diagnostics` gates only the failure footer, not
-the denial block of a successful session — so mysbx documents the
-block as known-benign: name operations against paths the view
-deliberately does not carry (nscd, dbus) are expected, everything
-else in the block is worth reading.
+lists the probes. The historical nono 0.74.0 audit found no knob to
+quieten it — `diagnostics.suppress_system_services` hid only
+profile-prompt entries, and `--no-diagnostics` gated only the failure
+footer, not the successful session's denial block. This explains the
+known-benign nscd/dbus observations in that log, not a fresh live test
+of 0.80.0. Current denial reporting has its own budget (below), so the
+footer need not enumerate every denial. Name operations against paths
+the view deliberately does not carry are expected; other entries are
+worth reading.
 
-#### Pathname mediation turns connect-ENOENT into EPERM (bd myconfig-bk2)
+#### Pathname mediation replaces connect-ENOENT with a policy denial (bd myconfig-bk2)
 
 Under `linux.af_unix_mediation = "pathname"` the supervisor resolves
 a CONNECT's target child-relative and `canonicalize()`s it
-(nono 0.74.0, `crates/nono-cli/src/exec_strategy/supervisor_linux.rs`,
-`decide_af_unix_pathname`); a socket file that does not exist yet does
-not canonicalize, and the connect is DENIED with EPERM before the
-kernel could answer ENOENT — the denial footer names it "target could
-not be canonicalized" (`ipc_denial_details`). The consequence for
-entry scripts: **connect-to-a-nonexistent-socket is EPERM, not
-ENOENT, and no payload may rely on ENOENT-retry semantics.** herdr's
-TUI spawns its background server and immediately connects, so the
-first connect races the server's `bind()`; herdr retries ENOENT but
-treats EPERM as fatal. The herdr entry therefore pre-starts the
-server itself (`herdr server`, gated on the socket file — herdr 0.9.1's
-`status server` exits 0 even when nothing runs) and polls the API for
-a real answer before the client runs — `exec herdr` in a foreground
-run, the reattach loop of detach.md B7 in a detached one
-(./nix/herdr-entry.nix). tmux does
-NOT need the same treatment: its client falls into `server_start`,
-forks the server through `proc_fork_and_daemon` and connects on the
-fd the server hands back after binding (tmux 3.7c `client.c` /
-`proc.c`), so its attach connect never targets an unbound pathname.
+(`crates/nono-cli/src/exec_strategy/supervisor_linux.rs`,
+`decide_af_unix_pathname`). A nonexistent socket target cannot
+canonicalize and is denied before the kernel can answer ENOENT.
+**Shipped in 0.80.0:** normal policy denials return **EACCES, not
+EPERM**; a nonexistent target still does NOT preserve ENOENT-retry
+semantics. The earlier EPERM observation belongs to nono 0.74.0.
 
-#### The mediation supervisor rate-limits every bind/connect (bd myconfig-27o)
+The historical herdr race and workaround remain relevant rationale:
+its TUI spawned the background server and immediately connected;
+herdr retried ENOENT but treated the observed EPERM as fatal. The
+entry pre-starts `herdr server` (gated on the socket file — herdr
+0.9.1's `status server` exited 0 even when nothing ran), then polls
+for a real API answer before `exec herdr` in a foreground run or the
+reattach loop of detach.md B7 in a detached one
+(./nix/herdr-entry.nix). This avoids depending on ENOENT today too.
+tmux does NOT need the same treatment: its client falls into
+`server_start`, forks through `proc_fork_and_daemon` and connects on
+the fd handed back after binding (tmux 3.7c `client.c` / `proc.c`),
+so its attach connect never targets an unbound pathname.
 
-Every pathname bind()/connect() the filter traps is a seccomp
-notification the supervisor answers, and the supervisor prices them
-with a token bucket — nono 0.74.0, `supervisor_linux.rs`
-`RateLimiter::new(10, 5)`: 10 tokens/s refill, burst 5. The decisive
-property: an exhausted bucket denies with EPERM and the denial is
-NOT recorded in the run's IPC-denial footer (the rate-limit branch
-returns before `record_af_unix_ipc_denial`; the message is
-debug-only), so a rate-limited failure looks exactly like a grant
-failure — except the footer stays quiet about it. Live cost on f13:
-herdr's server startup alone spends most of the burst (two binds,
-two nscd probes), and every `herdr` CLI costs several tokens more
-(NSS probes plus two API connects), so a poll loop faster than ~1/s
-against the herdr API can NEVER succeed — it outruns the refill and
-denies itself forever (the pre-start's original 10Hz poll failed
-150/150 probes, which is the f13 "server did not become ready"
-symptom of bd myconfig-27o). The herdr entry's wait is therefore
-SHAPED by the bucket (./nix/herdr-entry.nix): a free 10Hz stat()
-wait for the socket file, a fixed 1s grace (bootstrap + refill), and
-API probes at a 1s cadence; the workspace relocation retries its
-create/close once per second, because a rate-limited attempt is
-transient by construction. The consequence for every future
-nono-backend payload: **no AF_UNIX poll loop under this backend may
-run faster than 1Hz, and a denial at burst time is not evidence of a
-missing grant.**
+#### Pathname policy and denial-reporting budgets are separate (bd myconfig-27o)
+
+**Shipped in pinned 0.80.0:** allowed pathname bind/connect operations
+no longer consume the old 10/s, burst-5 limiter. Denial reporting has
+a separate **20/s, burst-50** budget. Exhausting that reporting budget
+suppresses reports, not operations: it does not change an allow/deny
+decision or turn an allowed operation into a denial. Normal policy
+denials use EACCES. A quiet footer is not proof that no denial occurred.
+
+**Historical rationale (nono 0.74.0):** `supervisor_linux.rs` used
+`RateLimiter::new(10, 5)` for trapped operations. Exhaustion denied
+with EPERM before `record_af_unix_ipc_denial`, leaving only a debug
+message. On f13, herdr's binds/NSS probes/API connects exhausted that
+budget; the original 10Hz readiness poll failed 150/150 times (bd
+myconfig-27o). That explains the shipped entry's socket stat wait,
+1s grace and 1s API/relocation retries (./nix/herdr-entry.nix), but
+it is NOT a current requirement that every AF_UNIX poll run at most
+1Hz, nor evidence that allowed operations are still rate-limited.
 
 #### nono's own inputs
 
@@ -225,8 +245,9 @@ missing grant.**
   the legacy `$HOME/.nono`). Both resolve below `/mysbx-nono`, so the
   `/mysbx-home` grant does not collide with them.
 - **No network use by the launcher**: `NONO_NO_UPDATE_CHECK=1`.
-- **Waypipe display**: audited against nono 0.74.0 (bd
-  myconfig-6di.4.6) and LIFTED. Source-audit of the filter tables
+- **Waypipe display**: shipped; the refusal was lifted after the
+  historical nono 0.74.0 audit (bd myconfig-6di.4.6).
+  Source-audit of that version's filter tables
   (`crates/nono/src/sandbox/linux.rs`): the block-all and TCP-only
   static baselines trap socket()/socketpair()/io_uring only — AF_UNIX
   socket and socketpair pass; the pathname AF_UNIX mediation filter
@@ -234,15 +255,16 @@ missing grant.**
   sendmsg/sendmmsg and its supervisor explicitly CONTINUES `sendmsg`
   with a NULL `msg_name` (fd passing over an established connection,
   `SCM_RIGHTS`); `memfd_create` is trapped by no filter. Live probe
-  under the real pinned profile inside a hand-built bwrap view: the
+  under the then-pinned profile inside a hand-built bwrap view: the
   waypipe server binds the fake compositor socket (`wayland-0`, a
   direct child of the sandbox home) and connects to the host client
   (`<socket_dir>/waypipe.sock`) end to end under `--block-net` with
   the two `--allow-unix-socket-dir-bind` grants; without the home
   grant the run reports `bind ... (no matching unix_socket
   capability)` — the refusal dies exactly where the grant boundary
-  is. Under the shared default no seccomp filter installs at all
-  (nono 0.74.0, `NetworkMode::AllowAll`).
+  is. That historical probe does not establish all current network
+  combinations. In pinned 0.80.0 the generated pathname mediation
+  filter also installs under the shared, unrestricted-IP default.
 - **Unused nono features**: credential injection, TLS interception,
   rollbacks and audit sessions.
 
@@ -254,8 +276,8 @@ bubblewrap backend (config.md D15). The sandbox SSH key is at
 pin. The multiplexer socket directory `/mysbx-home/.mysbx-tmux`
 (config.md D16/D17) exists again. The multiplexer also needs nono's
 unix-socket grant: `--allow-unix-socket-dir-bind` on the socket dir
-(bd myconfig-6di.4.5, nono 0.74.0 — connect AND bind on any
-direct-child socket, exactly the entry scripts' `$TMUX_TMPDIR/socket`
+(bd myconfig-6di.4.5, historical nono 0.74.0 audit — connect AND bind
+on any direct-child socket, exactly the entry scripts' `$TMUX_TMPDIR/socket`
 shape), emitted when a session starts. The grant follows the selected
 entry ([`Multiplexer::unix_socket_dirs`]): herdr's API dir
 `/mysbx-home/.config/herdr` (bd myconfig-7ov), and workmux's second
@@ -266,11 +288,13 @@ the payload env carries no TMPDIR, so that dir is the private tmpfs
 denied and `workmux sidebar` dies with "Sidebar daemon failed to
 start". The filesystem side needs no new grant — every dir lies below
 the rw home grant or the payload-writable tmpfs `/tmp`. The mysbx profile
-ships `linux.af_unix_mediation = "pathname"`: without it, nono's
-default leaves pathname sockets reachable through ANY filesystem
-grant, and the isolation claim of D16/D17 ("the socket never leaves
-this sandbox") would rest on the binder's goodwill instead of the
-filter.
+ships `linux.af_unix_mediation = "pathname"` to require Unix-socket
+capabilities rather than filesystem access alone. This mediation does
+not establish that every granted directory is private per run.
+`state-dirs = [".config/herdr"]` is accepted and persists herdr's API
+directory on bubblewrap/nono. The tmux guards do not cover that separate
+directory (config.md D17). This is an exception available to trusted
+configuration, not an untrusted-repository escape.
 
 #### Refusals
 
@@ -289,12 +313,15 @@ filter.
 
 #### Rationale
 
-- nono 0.74.0 is Landlock and seccomp only. It has no mount namespace
-  and no path remap. Its own documentation rejects mount namespaces
-  for portability ("Why not mount namespaces?" in
+- The original nono 0.74.0 audit established the layering rationale:
+  nono has no mount namespace or path remap of its own; it adds
+  Landlock, seccomp and its proxy/supervisor policy. This remains
+  the architecture with pinned 0.80.0. Its own documentation rejects
+  mount namespaces for portability ("Why not mount namespaces?" in
   `docs/cli/internals/security-model.mdx`).
-- The chain was tested with nono 0.74.0 inside a mysbx bubblewrap
-  sandbox. Landlock applies inside the user namespace. nono resolves
+- Historical live evidence: the chain was tested with nono 0.74.0
+  inside a mysbx bubblewrap sandbox. Landlock applies inside the
+  user namespace. nono resolves
   its paths in bubblewrap's mount namespace: a remapped
   `/mysbx-home/.config/git` is readable, a write to it fails with
   `EROFS`, and an ungranted path fails with `EACCES`. `--block-net`
@@ -344,7 +371,16 @@ separate enum value swapping `--runtime=runsc` for
 `--runtime=<the crun+libkrun store path>` PLUS an exactly enumerated
 set of differences that exist because the krun execution model
 enforces different things — each verified against the crun/libkrun
-sources (bd myconfig-6di.5.4):
+sources (bd myconfig-6di.5.4). Both Podman variants use an
+**image-owned store**, with no implicit whole-host `/nix/store` bind.
+Tools must be present in the loaded image or explicitly supplied by
+configuration; do not transfer D3's host-store premise to this tier.
+The shared dispatch consumes `MYSBX_PODMAN_ENV` and
+`MYSBX_PODMAN_PASTA_SPEC` for **both** variants. Endpoint environment
+and network pins are not gVisor-only, though actual reachability still
+depends on the selected network transport and policy.
+
+The enumerated krun differences are:
 
 - `--annotation run.oci.handler=krun` — crun runs the libkrun VM
   handler ONLY with this annotation (src/libcrun/custom-handler.c
@@ -372,9 +408,13 @@ sources (bd myconfig-6di.5.4):
   enforcement that does not exist. `--read-only` stays: crun remounts
   the prepared root read-only host-side and virtiofs hands the guest
   exactly that tree.
-- resource limits as `--annotation krun.cpus=…`/`krun.ram_mib=…`
-  instead of the cgroup flags (bd myconfig-6di.5.6) — with refusals
-  for what the annotations cannot express.
+- CPU/RAM limits as `--annotation krun.cpus=…`/`krun.ram_mib=…`
+  instead of cgroup flags (bd myconfig-6di.5.6), enforced as VM sizing.
+  An unrepresentable CPU/RAM value is refused. A configured PID
+  limit warns and is dropped; an explicit `MYSBX_PODMAN_PIDS_LIMIT`
+  pin is refused. By contrast, rootless podman-gvisor's default
+  `ignore-cgroups` warns and omits ALL memory/CPU/PID limit flags,
+  including environment overrides; flags require cgroups enabled.
 - `--userns=keep-id` stays but means something different: it maps the
   HOST-SIDE rootfs preparation (the bind sources are prepared under
   the host user's uid so the virtiofs server can share them), while
@@ -422,9 +462,10 @@ sources (bd myconfig-6di.5.4):
   `XDG_CONFIG_HOME` are not redirected because nix reads its own
   config and cache through them.
 - the per-run scratch disk (bd myconfig-0pi) — opt-in per build
-  (the wrapper pins `MYSBX_KRUN_SCRATCH_SIZE` when
-  `krun.nix.enable`): the host truncates one SPARSE file per run
-  under `<repo>.mysbx/scratch/<pid>.img` to the cap, binds it rw at
+  (the module pins `MYSBX_KRUN_SCRATCH_SIZE` only when BOTH
+  `podman.enable` and `krun.nix.enable` are true): the host truncates
+  one SPARSE file per run under `<repo>.mysbx/scratch/<pid>.img`
+  to the cap, binds it rw at
   `/run/mysbx-scratch.img` and exports
   `MYSBX_KRUN_SCRATCH_IMG=/run/mysbx-scratch.img` (the LAST `--env`,
   after every config `[env]` — no layer can repoint the scratch at a
@@ -452,11 +493,11 @@ krun variant buys instead:
   payload attacks the GUEST kernel (libkrunfw's stock kernel), not the
   host kernel. gVisor's Sentry reimplements the syscall surface
   instead — a different, partial kernel; krun runs a real one.
-- **Full kernel compatibility**: everything a real kernel does works —
-  cgroup namespaces, overlayfs inside user namespaces, FUSE, netfilter,
-  tun — which is what the REQUIRED scope decision below needs (nested
-  rootless podman). gVisor's Sentry would have to emulate each of
-  those.
+- **Guest-kernel compatibility**: cgroup namespaces, overlayfs inside
+  user namespaces, FUSE, netfilter and tun are the features the
+  original nested-Podman goal needed (now an opt-in image feature
+  below). This is not proof of every kernel feature or workload;
+  gVisor's Sentry would have to emulate the required surface.
 
 The docs never claim krun is stronger than gVisor: the gain is host
 kernel bug isolation and kernel compatibility, not a second boundary
@@ -466,7 +507,7 @@ between guest and VMM.
 
 | Alternative | Why rejected |
 | --- | --- |
-| qemu + virtiofsd + passt, native | a second full argv builder: qemu machine flags, virtiofsd daemons, passt wiring — all the things podman already owns for rootless containers; kept as the deferred fallback (its own bead) only in case crun/libkrun fails in practice |
+| qemu + virtiofsd + passt, native | originally deferred to avoid a second argv builder and daemon/network wiring; D9 later shipped the native QEMU fallback with SLiRP, NOT passt |
 | cloud-hypervisor directly | no user-mode networking — it needs a TAP device on a bridge, and a bridge/tap is a root-owned host device, which this design refuses |
 | firecracker | disks only, no virtio-fs — no live repo mounts, which the whole mysbx workspace model (`live` repo bind) depends on |
 | reusing the `myconfig.ai.microvm` slots | root-owned prebuilt slot pool whose mounts are fixed at NixOS eval time — incompatible with the runtime TOML config merge that decides mounts per run; also far heavier than a per-run microVM |
@@ -475,22 +516,25 @@ between guest and VMM.
 
 #### Refusals of the first cut
 
-Everything the krun variant cannot enforce is REFUSED, never accepted
-and silently ignored — the same rule as every backend:
+The first-cut intent was to refuse anything unenforceable. **Shipped
+exception (config.md D23):** unsupported configured resource limits may
+warn and be dropped, never silently; the PID environment pin still
+refuses. The table retains first-cut rationale and names current behavior
+where it differs.
 
-| Feature | First-cut status |
+| Feature | First-cut rationale / shipped status |
 | --- | --- |
 | `network = false` | enforced, and VERIFIED against the crun/libkrun sources (bd myconfig-6di.5.5): `--network none` gives the container an empty netns, the VMM (the rootless podman process) is created INSIDE it, and every guest egress is a TSI proxy connection the VMM dials from that netns — no route, no resolver, exactly the gvisor semantics. See the network model below |
 | `allow-domains`/`connect-ports`/`listen-ports` | refused (config.md D21's table stays: krun's egress is libkrun's TSI proxy — an UNFILTERED dial from the container netns, no per-domain/port hook in the muxer — verified, see the network model below; same gap as podman-gvisor's pasta) |
-| `egress = "proxy-only"` | refused until verified (config.md D20: pasta's `--map-guest-addr` adds a path to the forwarder, it does not remove the default route — same fix to share with bd myconfig-6di.3 / myconfig-jq2) |
-| `display = "waypipe"` | refused in the first cut (the waypipe channel needs an AF_UNIX socket crossing virtio-fs, which passes inodes, not live socket objects — bd myconfig-6di.5.4 verified the gap against the libkrun sources; lifting needs an in-image entry with a guest-tmpfs socket dir, live-validated under bd myconfig-6di.5.7) |
+| `egress = "proxy-only"` | not a shipped schema key; strict parsing rejects it on every backend. A future implementation needs default-deny networking: pasta's `--map-guest-addr` only adds a forwarder path (config.md D20; bd myconfig-6di.3 / myconfig-jq2) |
+| `display = "waypipe"` | still refused: AF_UNIX socket objects do not cross virtiofs (source audit bd myconfig-6di.5.4). A guest server/transport and live acceptance would be required to lift it; that work is proposed, not validated |
 | multiplexer sessions | supported (bd myconfig-55u): the entry scripts are baked into the shared image (`podman.muxEntries`, pinned as `MYSBX_PODMAN_MUX_ENTRY_*`), and `TMUX_TMPDIR` is the guest-native `/dev/shm/mysbx-tmux` (`podman_gvisor.rs::KRUN_MUX_SOCKET_DIR`) — virtio-fs files are host-uid-owned while the payload is guest root, so tmux refuses a socket dir there. Sockets stay guest-internal (a guest bind()/connect() pair on virtio-fs works; only host↔guest crossing does not). A mount at, below or above that dir is refused. An unpinned multiplexer is still refused (`MultiplexerUnavailable`) |
 | host AF_UNIX sockets across virtio-fs | refused where a feature needs them (verified: the virtiofs server forwards stat/read/write/mknod over host inodes, libkrun passthrough.rs — a socket file reaches the guest as a dead inode and a guest bind()/connect() has no host socket object to reach; any feature built on a host socket crossing the mount is refused, not best-effort) |
 | `--cap-drop=ALL` / `no-new-privileges` | NOT emitted on krun (bd myconfig-6di.5.4): crun's krun handler never execs the OCI process — the guest init runs the payload as guest root, reading only Env/args/WorkingDir from the OCI config (libkrun init/init.c) — so the flags would advertise enforcement that does not exist. `--read-only` stays (crun remounts the prepared root read-only host-side; virtiofs hands the guest that exact tree) |
 | mounts / state-dirs / dest remap / clone sessions | the shared podman mount model, UNCHANGED: crun applies every OCI mount host-side on the container rootfs (container.c/linux.c — binds, tmpfses, ro remount), and libkrun shares the prepared tree as the virtiofs root. The gvisor layout survives verbatim: the home tmpfs, the state-parent tmpfses, the workspace bind, the state binds and the configured mounts all land on the tree the guest sees. Verified against the crun sources in bd myconfig-6di.5.4; live validation bd myconfig-6di.5.7 |
 | uid mapping | `--userns=keep-id` stays but maps the HOST-SIDE preparation only: inside the guest the payload runs as guest root (the init never setuids) and the virtiofs server maps guest-root accesses to the host user's own uid unchanged (passthrough.rs `set_creds`; chown to any OTHER uid is EPERM unless the server holds CAP_SETUID). Files the payload writes in the shared mounts are host-uid-owned, as on the other backends; the nested-podman setuid story is bd myconfig-6di.5.8's risk |
-| `/dev/kvm` availability | a doctor-style eval-time check: the wrapper asserts the user has rw access to `/dev/kvm` (the `kvm` group) — a host without it gets a refused run, never a silent fallback to another runtime |
-| resource limits | mapped onto the krun VM annotations `krun.cpus` / `krun.ram_mib` (crun's krun handler, bd myconfig-6di.5.6) — the first mysbx limit mechanism with no cgroup dependency; `--pids-limit` refused (no pids controller is wired for a whole-VM "container"), fractional vCPUs and sub-128-MiB memory refused (crun silently defaults `ram_mib <= 128`) — never accepted and silently ignored |
+| `/dev/kvm` availability | checked by doctor and before runtime launch: the user needs rw access (normally the `kvm` group); unavailable KVM refuses, never silently selects a different runtime |
+| resource limits | CPU/RAM enforced by `krun.cpus` / `krun.ram_mib`, independent of cgroups (bd myconfig-6di.5.6). Configured `pids-limit` warns and is dropped; explicit `MYSBX_PODMAN_PIDS_LIMIT` refuses (no whole-VM PID controller). Fractional vCPUs and memory <= 128 MiB refuse rather than taking crun's silent default |
 
 #### The network model, verified (bd myconfig-6di.5.5)
 
@@ -537,8 +581,12 @@ Consequences, stated honestly:
 
 #### Scope decisions (from the epic, bd myconfig-6di.5)
 
-- **Required: nested rootless podman inside the guest** (bd
-  myconfig-6di.5.8). The guest kernel (libkrunfw) has user namespaces,
+- **Original goal: nested rootless podman inside the guest; shipped
+  as an opt-in OCI-image feature** (bd myconfig-6di.5.8).
+  `krun.nestedPodman.enable` provisions the shared Podman image only,
+  NOT the direct krun/QEMU rootfs or PATH. Kernel compatibility alone
+  does not give the direct backends successor parity. The guest
+  kernel (libkrunfw) has user namespaces,
   overlayfs, FUSE, tun and nftables. The "rootless" of the nested
   podman is the VM boundary itself, NOT a guest-uid story: the
   payload runs as GUEST ROOT (verified, bd myconfig-6di.5.4), so the
@@ -589,8 +637,8 @@ Consequences, stated honestly:
   myconfig-6di.5.7's runbook (the agent sandbox has no /dev/kvm).
 - **Opt-in: Nix inside the guest** (bd myconfig-pz6,
   `krun.nix.enable`; live-validated on f13 by the probes of that
-  bead). The argv is unchanged, and no host store is involved. The
-  shared image carries guest-root `bin/nix*` wrappers
+  bead). This tier uses the image-owned store, not an implicit host
+  store bind. The shared image carries guest-root `bin/nix*` wrappers
   (`krun-guest-nix.nix`, through the `podman.imagePackages` seam).
   The gvisor tier builds that image with its closure registered in
   `/nix/var/nix` (`imageIncludeNixDB`, dockerTools `includeNixDB`).
@@ -605,17 +653,18 @@ Consequences, stated honestly:
     image's OWN store, and the upper layer is on the scratch.
 
   Nix then runs single-user: `NIX_REMOTE=local`, state, logs,
-  `NIX_CACHE_HOME` and `TMPDIR` on the tmpfs, and `NIX_CONFIG` with
+  `NIX_CACHE_HOME` and `TMPDIR` on scratch (disk or tmpfs), and `NIX_CONFIG` with
   `build-users-group =`, `sandbox = false` and the host-mirrored
   caches. Nothing is mounted before boot, so the image closure
   resolves throughout. That is the wall that stopped the earlier
   host-store design. Consequences:
-  - Image paths are immutable. Overlay copy-up of a lower entry fails
-    because virtiofs has no fileattr support (`EOPNOTSUPP`, logged
-    as `failed to retrieve lower fileattr`). The registered database
-    keeps nix from replacing them, and `nix store optimise` cannot
-    work. GC is safe: the copied gcroots keep the image closure, and
-    only upper-layer paths are deleted.
+  - Historical Podman-image probes found lower-entry copy-up failing
+    on virtiofs fileattr support (`EOPNOTSUPP`, logged as
+    `failed to retrieve lower fileattr`), including `nix store optimise`.
+    The registered database/gcroots keep the image closure; new paths
+    and GC operate on the upper. This observed limitation is NOT a
+    general guarantee that a read-only lower makes the merged store
+    immutable, especially with D3's native EROFS lower.
   - Nix state cannot live on virtio-fs. The server forwards chown
     unchanged (EPERM), and libgit2 refuses the host-uid-owned home
     cache.
@@ -624,8 +673,9 @@ Consequences, stated honestly:
     dev shells, so the wrapper warns below 4 GiB. Set
     `MYSBX_PODMAN_MEMORY` (8g or more for `nix develop`). Every run
     substitutes again. The RAM cost is REMOVED by the per-run
-    scratch disk (bd myconfig-0pi, `krun.nix.scratchSize`, on by
-    default with `krun.nix.enable`): the host truncates one SPARSE
+    scratch disk when its pin is present (bd myconfig-0pi,
+    `krun.nix.scratchSize`, normally pinned with `podman.enable`
+    AND `krun.nix.enable`): the host truncates one SPARSE
     file per run under `<repo>.mysbx/scratch/<pid>.img` to the size
     cap (`MYSBX_KRUN_SCRATCH_SIZE`, a podman `--memory`-shaped
     value, default 32g — creation costs no disk space, only the
@@ -694,34 +744,41 @@ Consequences, stated honestly:
 
 #### Live validation (bd myconfig-6di.5.7)
 
-Everything above is source-verified and statically gated; what
-needs a booting microVM is collected in one runbook,
-../krun-live-validation.md, with the scripted half at
-../../nix/krun-live-validation.sh (boot, guest kernel, exit codes,
-live-repo edit, ro rootfs, network=false) and the manual probes
-the script cannot see (mounts/state-dirs/uid over virtio-fs,
-nested podman, guest nix, the VM annotations as nproc/MemTotal, DNS over
-TSI). The agent sandbox has no /dev/kvm — the runbook is the
-handoff.
+Source checks and static gates are not a full live acceptance matrix.
+The [runbook](../krun-live-validation.md), scripted by
+`nix/krun-live-validation.sh`, covers boot, guest kernel, exit codes,
+live-repo edit, ro rootfs and network=false; manual probes cover
+mounts/state/uid, nested Podman, guest Nix, nproc/MemTotal and DNS.
+The [historical log](../krun-validation-log.md) records smoke and
+Nix runs, including both variants' 2026-10-14 smoke pass; do not read
+that as completion of every manual probe or current option combination.
+No new VM acceptance was performed in the source audit.
 
 ### D3: The direct `krun` backend shares the whole host store read-only; the rootfs bakes nothing but the guest init (bd myconfig-dak.2)
 
-`backend = "krun"` (bd myconfig-dak, spike bd myconfig-dak.1 —
-live-proven on f13: bwrap → mysbx-krun → VM, boot 282 ms warm)
-drives libkrun DIRECTLY, with no podman, no crun, no OCI image:
+**Status:** the original title records the host-store design and its
+rationale; the shipped baked-store amendment below is an alternative.
+The early bd myconfig-dak.1 spike on f13 recorded 282 ms warm for
+bwrap → mysbx-krun → VM. That small spike is NOT comparable to later
+wrapped runs or a current performance ranking (D8).
+
+`backend = "krun"` (bd myconfig-dak) drives libkrun DIRECTLY,
+with no podman, no crun, no OCI image:
 mysbx builds a KrunSpec, a small launcher binary (dlopen of the
 pinned libkrun, `MYSBX_KRUN_LIB` — the spike's `krun-rs`) runs
 under bwrap so the host-side virtiofs server can only open what
 the bwrap argv left visible, and a Nix-built PLAIN DIRECTORY is
 the rootfs (read-only via `krun_add_virtiofs3(KRUN_FS_ROOT_TAG)`).
-What the guest may read is decided entirely by the SPEC's shares:
+The spec's shares and selected store disk determine the guest view:
 
 - **The host store, whole, read-only (option (a) of the epic).** One
   `--ro-share` of `/nix/store` gives the guest every store path;
   the bwrap backends already grant exactly this visibility
-  (`--ro-bind /nix/store /nix/store`), so the direct backend is
-  no more permissive than the tier it replaces — the virtiofs
-  server enforces the ro flag, the guest kernel cannot remount it.
+  (`--ro-bind /nix/store /nix/store`), so host mode has the same
+  guest store visibility as that tier. The virtiofs server enforces
+  the lower share's ro flag; the guest cannot make that backing
+  share writable. With scratch the merged overlay is writable:
+  read-only backing does not forbid writes in the private upper.
   Per-run toolchains therefore need NO config surface at all:
   whatever the host builds is already visible; a repo that wants a
   specific toolchain just runs its store path. This is also the
@@ -735,62 +792,75 @@ What the guest may read is decided entirely by the SPEC's shares:
   not actually improved (the whole store is already readable).
   A per-run `[tools]` list (option (c)) remains a FUTURE config
   key: it can only NARROW (bind specific closures when a host
-  wants the store hidden), never widen — the whole-store default
-  is what the spike validated.
+  wants the store hidden), never widen — the whole-store host mode
+  is what the spike validated, not today's pin-dependent default.
 - **The whole-store share is now OPTIONAL per run (guest-store.md,
   the shipped narrowing).** The `store = "host" | "baked"` config
   key (either layer, the sidecar wins; when both are silent the
-  built-in default resolves `baked` on the VM backends of a pinned
-  host and `host` everywhere else — `Merged::resolved_store`,
-  mysbx-rs) selects per run: `host` is D3's layout above, byte for
-  byte; `baked`
+  built-in default resolves `baked` ONLY for `krun`/`microvm-qemu`
+  with a NONEMPTY `MYSBX_KRUN_STORE_DISK`, otherwise `host` —
+  `Merged::resolved_store`, mysbx-rs; an explicit choice always
+  wins) selects per run: `host` is D3's layout above; `baked`
   DROPS the whole-store share and the j23 nix-var ride-along and
   attaches the guest-own store disk the wrapper bakes — a
   read-only erofs image of the wrapper's own tool closure with a
   REGISTERED db (the dockerTools recipe, no host-db copy and no
-  reconcile), mounted at `/nix` by the init, the per-run scratch
-  overlay writing on top exactly as on the podman tier's image
-  store. The first tier NARROWER than the store it replaces: a
-  baked run sees its own tools only. The disk is attached by the
-  launchers (`--store-disk`, krun's `krun_add_disk2` with
+  reconcile), mounted at `/nix` by the init. With scratch, the
+  private overlay writes on top; without scratch, there is no
+  managed writable-Nix setup. The EROFS lower stays immutable, but
+  writes to existing paths in the merged view can copy up: do not
+  promise that every write to a baked guest-visible path fails.
+  The guest's store view narrows to its baked tool closure and
+  configured extra roots, not arbitrary host-built tools. The disk is
+  attached by the launchers (`--store-disk`, krun's `krun_add_disk2` with
   read_only=true and qemu's `readonly=on` — the write protection
   rides the virtio config into the guest, the init tells the disk
   from the writable scratch by the `/sys/block` ro flag), gated on
   the host's opt-in (`krun.store.enable` bakes and pins
   `MYSBX_KRUN_STORE_DISK`; a baked run without the pin is refused,
   never a silent host-store run) and refused on every non-VM
-  backend. `baked` still sees nothing host-side beyond its
-  workspace and configured mounts — the D3 share set minus the
-  store slot.
+  backend. This narrows the GUEST view, not the VMM's host-side
+  view: outer bwrap still binds the WHOLE host `/nix/store` for
+  runtime dependencies. Other workspace/state/configured shares
+  remain. The payload is guest root; the VMM/file server runs as
+  the invoking host uid, not a separate host security principal.
 - **Rootfs contents (what is baked vs. shared):** the rootfs bakes
-  ONLY what must exist before any share is mounted — the static
-  busybox of the guest entry (shebang + applet invocation: the
-  store share is not mounted yet when the init starts, so a
-  store-symlinked shell dangles — spike finding 10), the guest
-  init itself (bd myconfig-dak.5), `/bin/sh` + `/bin/bash` store
-  symlinks valid once the store share is up, empty mountpoints
-  (`dev`, `proc`, `sys`, `tmp`), and a `/nix/store` SYMLINK into
-  the share mount on the guest tmpfs (spike finding 9: a second
-  virtiofs device nested below the root virtiofs returns EBUSY —
-  `/tmp/mysbx-shares/store` is the only working placement, the
-  rootfs symlink keeps `/nix/store` paths resolving). NO
-  toolchain, NO image userland: everything else resolves through
-  the read-only store share. The rootfs derivation is therefore
-  host-independent — one rootfs serves every repo and every
-  toolchain set, built once by the Nix wrapper (dak.4).
-- **In-guest nix on top:** the same overlay-on-scratch model as the
-  podman-krun guest (`krun-guest-nix.nix`, backends.md D2's scope
-  decision): the guest nix wrapper overlays the (now host-shared,
-  read-only) `/nix/store` with an upper layer on the per-run
-  scratch — dak.7's virtio-blk disk when enabled, the guest tmpfs
-  otherwise (the same announced-fallback contract as the
-  podman-krun variant). New store paths cost scratch space, not
-  host store writes: the host share is ro and stays ro.
-- **The host nix daemon socket is NEVER shared.** The direct backend
-  keeps the gvisor/krun refusal: a shared daemon socket would
-  let the guest write the HOST store and read every path the
-  daemon can see — strictly more than the ro share grants. In-guest
-  nix (above) is the only nix story.
+  the guest init (bd myconfig-dak.5), bootstrap/filesystem helpers
+  (static busybox, mkfs.ext4, sqlite3 and store-scan), shell symlinks
+  and mountpoints, not a provisioned OCI userland. Busybox handles
+  the entry's shebang/applets before the store is mounted: a
+  store-symlinked bootstrap shell would dangle (spike finding 10).
+  `/bin/sh` and `/bin/bash` resolve once the selected store is up.
+  The rootfs's `/nix/store` symlink targets the host-mode share at
+  `/tmp/mysbx-shares/stage-ro/store` on guest tmpfs (spike finding 9:
+  nesting a second virtiofs device below the root device returned
+  EBUSY; staged placement avoids it). Baked mode mounts its disk
+  at `/nix` instead. Payload toolchains resolve through the selected
+  store, with a writable overlay only when scratch is attached.
+  One generic rootfs serves every repo/toolchain set, built by the
+  Nix wrapper (dak.4); store contents are a separate choice.
+- **In-guest Nix on top (shipped):** direct krun and QEMU use the
+  SAME `krun-rootfs.nix` init, NOT D2's Podman-image runtime wrapper.
+  With D7's per-run scratch disk the init prepares the writable
+  overlay, Nix state, logs/cache and TMPDIR. Host mode can copy and
+  reconcile the host database with networking enabled; baked mode
+  copies its own database without host reconciliation. The lower
+  stays read-only; the merged store is writable on private scratch.
+  Without scratch there is NO runtime tmpfs fallback and no managed
+  writable-Nix setup. The Nix binary is ALWAYS in the tools; binary
+  availability is not gated on `krun.nix.enable`.
+
+  **Known module-wiring gap:** `../../default.nix:482` gates the
+  `krunScratchSize` pin on `podman.enable && krun.nix.enable`.
+  Direct-only/QEMU-only opt-in can therefore request guest Nix but
+  receive no scratch/writable setup. D2's announced tmpfs fallback
+  belongs ONLY to the Podman-image wrapper, not this init.
+- **No implicit host Nix daemon or usable host-socket forwarding.**
+  Giving the guest the host daemon would allow writes to the HOST
+  store and reads beyond the selected guest view — more than a ro
+  share grants. In-guest Nix is the supported story. This is not a
+  universal refusal of every socket-bearing custom mount: virtiofs
+  can expose an inode without forwarding the host socket object.
 - **The guest-root git trust rides in as two IN-MEMORY overlay
   files (bd myconfig-dak.5 → dak.8).** The payload runs as guest
   root over virtiofs files that keep their host uid, so the SAME
@@ -798,17 +868,15 @@ What the guest may read is decided entirely by the SPEC's shares:
   zj2/jn0 model): mysbx computes the same two trust texts
   (`GIT_CONFIG_GLOBAL`'s target at `/etc/mysbx/gitconfig`, set
   last after every config `[env]`; libgit2's system scope reads
-  `/etc/gitconfig`), but renders them as `--krun-overlay
-  dev/root@<path>:0100644:<b64>` — the launcher decodes the
-  content and registers it with `krun_fs_add_overlay_file` on the
-  root device. NO sidecar files, NO `gittrust/<pid>/` debris, no
-  stage slots, no init placement: the pointers alias
-  launcher-owned Vecs that live across `krun_start_enter` (the
-  VM's whole lifetime). The rootfs bakes `etc/mysbx` (the overlay
-  path's intermediate dir must exist in the device tree). The
-  first-cut's sidecar-file route and its sweep are now
-  PODMAN-KRUN's only shape (bd myconfig-6xl hoisted the sweep so
-  that arm's debris is reclaimed too).
+  `/etc/gitconfig`). It renders `--krun-overlay
+  trustfs@<path>:0100644:<b64>` for a SEPARATE read-only `trustfs`
+  device, NOT the root device. The launcher registers the texts
+  there with `krun_fs_add_overlay_file`; the shared init places
+  the trust shares at their config destinations. The pointers
+  alias launcher-owned Vecs across `krun_start_enter`, so direct
+  krun needs no host `gittrust/<pid>/` sidecar files. Podman-krun
+  retains its sidecar-file route and sweep (bd myconfig-6xl);
+  QEMU instead uses read-only staging slots (D9).
 - **Share destinations are constrained to the rootfs's placeable
   share roots** — the baked mountpoints (`/etc`, `/home`, `/srv`,
   `/mnt`, `/media`, `/opt`, `/data`) plus the surfaces that are already
@@ -818,7 +886,8 @@ What the guest may read is decided entirely by the SPEC's shares:
   is a builder refusal (`UnknownShareRoot`), never a run-time ENOENT the
   init cannot diagnose. `/nix` is refused separately (`NixShareRoot`: a
   tmpfs there would hide the baked `/nix/store` link), and the
-  guest-native multiplexer socket dir (`/dev/shm/mysbx-tmux`) is refused
+  guest-native multiplexer socket dir (`/mysbx-home/.mysbx-tmux` on
+  direct krun AND QEMU; `/dev/shm/mysbx-tmux` is PODMAN-KRUN's) is refused
   with its own diagnosis (`KrunMuxSocketDest`) BEFORE the placement rule
   — a share over it would hand the payload a dead socket, so "move it
   below a baked root" would be the wrong advice. The repo itself runs
@@ -835,9 +904,16 @@ workspace share per the merged mounts' live/clone layout, the rw
 `<repo>__worktrees` sibling share (live run, sibling exists), the
 state-dirs shares, the configured mounts (implicit shares first; a
 mount covering one is refused like bwrap's `HiddenMount`), env, and
-the payload argv. The scratch disk
-(dak.7), passt (dak.6), overlay files (dak.8) and waypipe/vsock
-(dak.9) extend the spec; none of them re-open the store question.
+the payload argv. Scratch (dak.7) and trust files (dak.8) shipped;
+passt and the guest waypipe/vsock channel (dak.9) remain PROPOSED.
+**Known acceptance bug:** direct krun accepts `display = "waypipe"`
+and can start the host client, but has no guest channel/server. It
+is not a supported graphical path; Podman-krun and QEMU refuse it.
+These features do not re-open the store-selection question.
+
+Direct krun and QEMU also accept the detached interactive paths;
+[detach-validation-log.md](../detach-validation-log.md) records NO
+live matrix. The ordinary smoke/Nix logs below do not validate detach.
 
 **The virtiofs device budget groups the shares (bd
 myconfig-xpq, live finding of the first wrapped run).** Every
@@ -858,7 +934,8 @@ share rides in the ro tree like every other ro share when present
 anyway: its env records must not fall back to the 2048-byte
 cmdline); the rootfs's baked `/nix/store` link targets
 `/tmp/mysbx-shares/stage-ro/store`, so the device count is a
-CONSTANT 2 whatever the config mounts; the share records carry
+CONSTANT 2 stage devices whatever the config mounts (root and, on
+direct krun, `trustfs` are additional devices); the share records carry
 `DEVICE SLOT DEST ro|rw` and the init mounts each device once,
 bind-mounting `<device-mount>/<slot>` at each dest (a bind is no
 new virtiofs device, so finding 9 does not apply, and `getcwd()`
@@ -896,10 +973,12 @@ launcher self-probe (an invalid flag must reach argument parsing
 and print the launcher's own unknown-argument wording — the probe
 fails by design, exit 2, only the wording is matched).
 Deliberately NO VM boot: doctor pays milliseconds, the full boot
-is the runbook's probe. The live validation of the whole chain —
-shares, trust, network, scratch, guest nix — is recorded in
-../krun-live-validation.md (§4, §5; the guest-nix chain driven
-end-to-end by a real `nix flake check` on 'thing', 2026-10-02).
+is the runbook's probe. The [runbook](../krun-live-validation.md)
+§4/§5 and [historical log](../krun-validation-log.md) record shares,
+trust, network, scratch and guest-Nix probes, including a real
+`nix flake check` reaching the host's genuine flake error on 'thing'
+(2026-10-02). Later slowdowns and silent failure remain in that log;
+it is not current all-option, baked-store, stress or detach acceptance.
 
 ### D6: The direct krun backend's network is libkrun's TSI vsock proxy; `network = false` disables it (bd myconfig-dak.6)
 
@@ -938,8 +1017,8 @@ network model is the one bd myconfig-6di.5.5 verified for
   never reaches the cmdline, and the guest kernel has NO socket
   path to the host at all — stricter than an empty netns, which
   would still have loopback. The bwrap chain additionally
-  `--unshare-net`s, so the launcher process itself has no netns
-  either: neither the VMM nor the guest could dial out even if a
+  `--unshare-net`s, so the launcher has an isolated network namespace
+  without an external route: neither VMM nor guest could dial out even if a
   future libkrun version re-introduced a path. Defense in depth,
   both layers.
 - **`krun_set_passt_fd` is out of the first cut.** The symbol needs
@@ -964,7 +1043,7 @@ race (bd myconfig-0pi's probes were podman-krun's constraint: crun's
 krun handler cannot attach disks, and that is exactly what the direct
 backend removes).
 
-- **The host half creates one sparse raw file per run**, under
+- **When scratch is enabled, the host creates one sparse raw file per run**, under
   `<repo>.mysbx/scratch/<pid>.img`, truncated to the size cap — the
   SAME file contract as the podman-krun scratch (bd myconfig-0pi):
   never reused, never shared between parallel runs, swept at startup
@@ -981,21 +1060,21 @@ backend removes).
   `override { withBlk = true; }` (the same seam as dak.6's deferred
   `withNet`; a run whose lib lacks the symbol is refused with the
   diagnosis, never silently without a scratch).
-- **The guest init finds the device by PRESENCE, not by name**: the
-  `block_id` names the MMIO slot host-side (libkrun's device
-  registry), it is NOT a serial the guest reads — the scratch is
-  the only virtio-blk device, so it is the only `/dev/vd*`. The run
-  announces the scratch in the manifest env
-  (`MYSBX_KRUN_SCRATCH=1`); the init then `mkfs.ext4 -q -F`s the
-  one `/dev/vd*` ONCE per run (the file is per-run, never reused —
-  no stale fs ever survives) and mounts it
-  as the nix scratch root: the overlay upper/work over the read-only
-  host store share, nix state, logs, cache and `TMPDIR` all on the
+- **The guest init finds the writable device, not a fixed name**:
+  the original scratch-only layout had one `/dev/vd*`; baked mode
+  can add a read-only store disk. The shared init distinguishes
+  these using `/sys/block` read-only flags rather than assuming
+  the scratch is the only disk. The run announces scratch in the
+  manifest env (`MYSBX_KRUN_SCRATCH=1`); the init `mkfs.ext4 -q -F`s
+  the selected writable device ONCE per run (the file is per-run,
+  never reused — no stale fs survives) and mounts it as the Nix
+  scratch root: overlay upper/work over the host share or baked
+  store lower, Nix state, logs, cache and `TMPDIR` all on the
   ext4 — the guest kernel's OWN filesystem, chown and overlay
   xattrs/whiteouts work natively, nothing over the virtiofs xattr
   surface.
-- **The `/nix` placement is deliberate (bd myconfig-anw).** The
-  generic share placement refuses `/nix` roots (a tmpfs at `/nix`
+- **The `/nix` placement is deliberate (bd myconfig-anw).** In host
+  mode, generic share placement refuses `/nix` roots (a tmpfs at `/nix`
   hides the baked `/nix/store` link); the scratch overlay lives
   there anyway, by its own rule — and the baked link is a SYMLINK
   into the stage tree, where a mount through the link lands at the
@@ -1006,47 +1085,58 @@ backend removes).
   `/nix`), creates the real `/nix/store` dir on it, and mounts the
   overlay there with `lowerdir` naming the share's backing path
   directly. The store share stays the lower layer, the scratch the
-  upper. A run without a scratch keeps the plain ro store share
-  (no silent RAM fallback — the refusal or announcement rule of D2
-  applies unchanged).
+  upper. Baked mode uses the EROFS store subtree as lower instead.
+  Without scratch the selected store stays read-only, with NO managed
+  RAM fallback; D2's runtime tmpfs fallback is a different wrapper.
+  This holds for direct krun and QEMU. The sparse file is ephemeral,
+  not a persistent store cache; merged-store writes never make the
+  lower share/disk writable.
 - **The host file is unlinked after the backend exits** (`--result`
   mode removes its own; the startup sweep takes crashed/exec-mode
-  runs') — the virtio-blk fd keeps nothing alive past the VM, the
-  sweep is the only reclamation, same contract as podman-krun.
+  runs'). Closing the VM's disk fd releases its open reference;
+  result-mode removal and the startup sweep reclaim the named files,
+  the same per-run contract as Podman-krun.
 
-### D8: `podman-krun` is superseded by `krun` in principle; kept until the head-to-head retires it (bd myconfig-dak.10)
+<a id="d8-podman-krun-is-superseded-by-krun-in-principle-kept-until-the-head-to-head-retires-it-bd-myconfig-dak10"></a>
 
-The epic's closing decision. The direct backend now covers
-everything `podman-krun` does, with the same verified semantics
-and one fewer layer between mysbx and the VM:
+### D8: Direct-krun succession needs feature parity and live acceptance (bd myconfig-dak.10)
+
+**Status: historical succession proposal, NOT established parity or a
+shipped retirement decision.** The rationale is still one fewer OCI
+layer between mysbx and the VM, but the completed source audit does
+not support blanket direct-successor parity:
 
 | | `podman-krun` (D2) | `krun` (D3) |
 | --- | --- | --- |
 | layers to the VM | mysbx → podman → crun (OCI config) → libkrun → VM | mysbx → bwrap → launcher → libkrun → VM |
-| filesystem contract | crun prepares an OCI rootfs host-side; libkrun shares it | the spec's shares ARE the guest layout; a plain directory rootfs |
-| network | TSI via crun's krun handler (D2) | TSI directly, `network = false` kills the vsock (D6) |
-| nix scratch | the podman image's wrapper tree (krun-guest-nix.nix) | the init's virtio-blk + db copy (D7, bd myconfig-j23) |
-| image | one OCI image per toolchain pin, loaded per host (`podman-load-image`) | none — the ro host store share IS the visibility (D3) |
-| boot | image + OCI machinery in the path | 282 ms warm (the spike's probe 4, f13) |
+| filesystem contract | crun prepares an OCI rootfs; image-owned store | explicit staged shares; plain rootfs; host or baked store |
+| network | TSI through the container netns (D2) | TSI through the launcher netns; network=false disables vsock (D6) |
+| writable Nix | image wrappers; loop scratch or announced tmpfs fallback | shared direct/QEMU init; virtio-blk scratch, NO tmpfs fallback (D7); module pin gap in D3 |
+| nested Podman | opt-in provisions tools/config in the OCI image | opt-in does NOT provision direct rootfs/PATH |
+| display | waypipe refused | accepted in error; guest channel/server absent |
 
-The remaining `podman-krun` argument was its maturity — the
-krun-guest-nix wrapper tree and the D2 verification — and dak.10's
-live chain on 'thing' closed that gap: the direct backend's guest
-nix now runs a real `nix flake check` end-to-end
-(../krun-live-validation.md §5), the surface podman-krun was the
-only one to have.
+The 2026-10-02 guest-Nix run on 'thing' demonstrated a useful direct
+workflow (../krun-live-validation.md §5;
+[log](../krun-validation-log.md)), not closure of every Podman feature
+gap. Likewise, the early **282 ms** warm spike (`nix/krun-direct-spike.sh`
+probe 4) is a different workload, not a wrapped production boot number.
+The later f13 log ALREADY records both smoke suites on 2026-10-14:
+**direct 25 min 42 s; podman-krun 12.7 s**. Those historical suite
+durations and the spike do not establish a current speed ranking. The
+same log retains the later store-walk slowdown/silent-failure evidence;
+its fd-retention diagnosis is not a confirmed cause of every failure.
 
-DECISION: no new feature work lands on `podman-krun` — every
-krun-behavior fix lands on the direct backend first (the fd
-ceilings, the trust spellings, the db copy all did). The variant
-STAYS until the head-to-head on f13 records its timing against
-the spike's numbers (`nix/krun-direct-spike.sh` probe 4 vs `time
-mysbx run -- true` under `backend = "podman-krun"`) and one host
-cycle runs the direct backend as its default; retiring the
-variant is then a small PR (drop the crun pin, the image build,
-the podman-krun arm of `podman_checks`), not a redesign. The f13
-runbook pass remains the open acceptance item — recorded in
-../krun-validation-log.md when it runs.
+The epic historically favored direct-first fixes (fd ceilings, trust
+spellings and db copy), using the thinner chain as its rationale. That
+history does not establish current feature coverage or stability.
+
+**Proposed, not justified by this audit:** freezing Podman-krun feature
+work or retiring it after a head-to-head and a host-default cycle. Keep
+both variants available. Any future retirement needs explicit feature
+coverage/provisioning, comparable current workloads and stability/live
+acceptance, not a claim that the head-to-head log does not yet exist or
+that direct krun covers everything. No runtime default or availability
+changes are made by this decision-record correction.
 
 ### D9: The `microvm-qemu` backend is `krun` with libkrun swapped for qemu + rootless virtiofsd (bd myconfig-6di.6)
 
@@ -1054,8 +1144,8 @@ runbook pass remains the open acceptance item — recorded in
 alternatives table: the SAME contract as the direct `krun` backend
 (D3/D6/D7) on a different VMM. Where libkrun bundles its own kernel
 and in-process virtiofs server, this backend composes stock parts —
-one qemu microVM per run, one UNPRIVILEGED virtiofsd per staged share
-device, no net device beyond SLiRP user mode — the same pieces
+one qemu microVM per run, one UNPRIVILEGED virtiofsd per filesystem
+device (root included), and SLiRP user-mode networking — the same pieces
 `myconfig.ai.qemu-agent-sandbox` proved rootless
 (builders.nix: `--sandbox none` virtiofsd, `type = "user"` SLiRP,
 no host config).
@@ -1066,18 +1156,18 @@ The chain is the krun chain with the launcher swapped:
 bwrap → mysbx-microvm-qemu → virtiofsd ×N + qemu → VM
 ```
 
-(built in this branch, bd myconfig-6di.6 and its children)
+(shipped, bd myconfig-6di.6 and its children; live coverage is bounded below)
 
 The builder is the krun builder's twin (`mysbx-rs/src/microvm_qemu.rs`):
 the merged config renders the SAME staged-spec argv — `--cpus/--ram`,
 `--rootfs/--kernel`, `--ro-device/--rw-device` stage trees
 (myconfig-xpq's grouping: constant device count, per-share slots),
 `--ro-share/--rw-share TAG:SLOT@DEST`, `--env K=V`, `--chdir`, `--`
-payload — so the layout checks, the share roots, the refusals and
-the golden-argv tests carry over verbatim. The HOST-side bwrap wrap
-is shared with `krun` down to the byte: the launcher is the only
-swap (the same `--ro-bind /nix/store`, the same stage binds, the
-same `--unshare-net` under `network = false`).
+payload — so layout checks, share roots and common refusals carry
+over, with golden-argv coverage. The HOST-side bwrap wrap shares the
+whole-store bind, stage binds and `--unshare-net` under network=false;
+QEMU additionally needs runtime `/dev`/`/tmp` and resolver plumbing
+listed below. It is not literally a byte-identical launcher-only swap.
 
 What differs from `krun`, stated honestly:
 
@@ -1085,14 +1175,14 @@ What differs from `krun`, stated honestly:
 | --- | --- | --- |
 | VMM | libkrun, in-process (the launcher IS the VMM) | qemu-system, out-of-process |
 | kernel | libkrunfw's stock kernel, bundled | a PINNED nixpkgs kernel (`microvm-qemu.kernel`, a bzImage) |
-| virtiofs server | in-process, per `krun_add_virtiofs3` tag | one rootless virtiofsd per stage device (`--sandbox none`), sockets in a per-run dir, killed on exit |
+| virtiofs server | in-process, per `krun_add_virtiofs3` tag | one rootless virtiofsd per device, including root (`--sandbox none`); per-run sockets and Drop cleanup on ordinary exit/error paths; abrupt-death cleanup unverified |
 | rootfs read-only flag | the virtiofs device's own ro flag | virtiofsd `--readonly` for the root and the ro stage device |
 | network = shared | TSI vsock proxy (D6) | SLiRP user mode (`-netdev user`), the qemu tier's model — the guest init configures the NIC statically (10.0.2.15/24, default route 10.0.2.2, DNS 10.0.2.3 — qemu's fixed SLiRP defaults), gated on the `MYSBX_MICROVM_NET` manifest marker (bd myconfig-k106), and rewrites the guest resolver to the SLiRP DNS proxy — the host's own nameservers are host-local and dead behind the NAT (bd myconfig-m0to); libslirp's upstream discovery reads the host resolv.conf through a `--ro-bind-try` in the qemu arm's bwrap wrap |
 | network = false | implicit vsock disabled — NO socket path | NO netdev at all; bwrap additionally `--unshare-net`s the chain |
 | nix scratch | virtio-blk via `krun_add_disk2` (D7) | a virtio-blk `-drive` on the same per-run sparse file, same guest init |
 | guest-own store disk (`store = "baked"`) | `krun_add_disk2` with read_only=true — VIRTIO_BLK_F_RO, the same fixed id (`nixstore`) | a virtio-blk `-drive` with `readonly=on` on the same erofs image, same id; the kernel pin adds EROFS_FS=y (libkrunfw's x86_64 config already carries it) — the ro flag reaches /sys/block identically on both, which is how the init tells the disk from the writable scratch (guest-store.md) |
 | exit code | `krun_start_enter` returns the payload's | the init reports it over a virtio-serial port; PID-1 exit panics a stock guest, so the channel is out of band; the payload runs under `setsid -c` — a new session with the console as ctty, so interactive payloads keep job control and ^C (bd myconfig-w8jd) |
-| accel | KVM only (libkrun has no TCG) | `accel = kvm:tcg` — boots without /dev/kvm (slow), a diagnosis, not a supported mode |
+| accel | KVM only (libkrun has no TCG) | launcher argv uses `kvm:tcg`, but the NORMAL mysbx run path checks and REQUIRES KVM before launch; no supported KVM-less fallback |
 | console | the VMM's own stdio | `-serial mon:stdio` + `console=ttyS0` (bd myconfig-mbib): `-nodefaults` kills the default serial backend, so the argv wires it explicitly — the caller's terminal IS the guest console. A 16550 carries NO winsize (a live finding of bd myconfig-26z4, bd myconfig-a2uq): the guest ctty reported a 0x0 grid, herdr refused to attach and fish rendered blind. The pipeline therefore reads the caller's terminal size and rides it through the manifest env (`MYSBX_MICROVM_CONSOLE_SIZE=ROWSxCOLS`); the init stty's the console from it before the payload runs. Residual, inherent to the device: a resize mid-session does not propagate — the guest keeps the boot-time snapshot |
 | git trust | libkrun's in-memory `trustfs` device (`--krun-overlay` flags) | the RO staging tree (bd myconfig-govd): lib.rs writes the two trust texts into `<stage>/ro/gittrust-*` before the run, the trust shares ride `stage-ro` slots, and NO `--krun-overlay` flag is emitted (the launcher refuses them) |
 | host-side bwrap `/dev` | none needed (the virtiofs server is in-process) | `--dev-bind /dev/null` + `--dev-bind /dev/urandom` + `--tmpfs /tmp` (bd myconfig-ya1o): without any `--dev` flag bwrap exposes NO `/dev` at all — the launcher's `Stdio::null()` virtiofsd spawn dies ENOENT; the tmpfs is the runtime dir's socket surface (the ro rootfs's `/tmp` is read-only) |
@@ -1106,7 +1196,11 @@ tags are namespaced per-VM in qemu exactly as in libkrun — the
 same init serves both backends. The manifest channel (the x86
 cmdline-budget finding) is KEPT even though qemu's `-append` has
 no 2048-byte limit: the argv interface stays byte-stable and
-testable, and the guest init stays backend-agnostic.
+testable, and the guest init stays backend-agnostic. Both direct VMs
+use `/mysbx-home/.mysbx-tmux`, NOT Podman-krun's `/dev/shm/mysbx-tmux`.
+They share D3/D7's no-scratch/no-writable-Nix behavior, the always-present
+Nix binary and the module scratch-pin gap. The nestedPodman image opt-in
+does not provision either direct rootfs/PATH.
 
 The boot protocol is the kernel's own, which libkrun's matches:
 `-append` carries `root=/dev/root rootfstype=virtiofs` — and NO
@@ -1150,52 +1244,55 @@ records before exec. The krun backend is untouched (libkrun's
 envp route is lossless); the manifest stays the ONE channel whose
 format both backends share.
 
-**Why qemu, not libkrun — and why NOT the default.** libkrun is
-the default VM backend: it is one fewer process tree, one fewer
-kernel pin and its boot is proven at 282 ms. `microvm-qemu` exists
-for the gaps the alternatives table named: a host whose kernel
-libkrun cannot use, a need to swap/compose VMM parts (a pinned
-kernel with a config libkrunfw does not ship, a TCG mode for
-KVM-less hosts), and as the stepping stone to a full NixOS guest
-(the `myconfig.ai.qemu-agent-sandbox` shapes) should the agent
-tiers ever need it. It is expected to boot SLOWER than krun (an
-out-of-process VMM and a full kernel image), and the live
-validation runbook records the real number (bd myconfig-26z4).
-RECORDED (2026-10-25, thing, KVM): a one-shot boot-to-payload is
-~2.4 s of kernel time (`[2.3]` root mounted → `[2.4]` init runs),
-~3.1 s wall for the full qemu run incl. teardown; the rootless
-virtiofsd daemons (3, socket-per-device) are ready in ~10 ms.
-That is the slower-than-krun expectation confirmed — usable as
-the fallback it is, not as the default. Full run:
-../microvm-qemu-validation-log.md.
+**Why qemu, not libkrun — the retained rationale, not a speed ranking.**
+The original direct-libkrun preference was fewer processes and no
+separate kernel pin. QEMU supplies composable VMM/kernel parts (for
+example a kernel config libkrunfw does not ship) and a possible stepping
+stone to a full NixOS guest (`myconfig.ai.qemu-agent-sandbox`). A
+KVM-less TCG path remains PROPOSED at the mysbx level: the launcher
+spelling alone does not bypass the normal KVM gate. Enabling either
+backend makes it available, not the selected default (D10).
+
+HISTORICAL measurement (2026-10-25, thing, KVM): one-shot boot-to-payload
+~2.4 s kernel time (`[2.3]` root mounted → `[2.4]` init runs), ~3.1 s
+wall including teardown; three rootless virtiofsd daemons ready in
+~10 ms. The [full log](../microvm-qemu-validation-log.md) demonstrates
+that workload. Neither it nor the noncomparable 282 ms krun spike
+confirms a current faster/slower ranking; D8 records the later direct
+and Podman suite timings.
 
 **Threat model delta vs. `krun` — the same honesty rule.** Not a
 stronger boundary: a guest escape reaches the qemu and virtiofsd
 processes, the invoking user's own uid — the same single security
 context libkrun has (D2's delta applies verbatim). What differs:
-the VMM is OUT of process, so the launcher's own fd ceiling is
-not the virtiofs servers' bottleneck (the dj4 finding's
-accumulation arm does not apply to this backend); virtiofsd's
-`--sandbox none` means the daemon trusts the bwrap view, exactly
-as libkrun's in-process server does. `network = false` is the
-same two-layer kill (no netdev + `--unshare-net`). The allowlist
-keys stay refused (config.md D21): SLiRP has no per-domain or
-per-port hook — the same honesty rule TSI has (D6).
+the file servers are separate processes, so fd accounting moves out
+of the launcher into virtiofsd. That does NOT prove bounded retention
+or eliminate the dj4 class of server-side accumulation; it needs stress
+measurement. virtiofsd's `--sandbox none` trusts the bwrap view, which
+still includes the whole host store even for a narrowed baked guest.
+The payload is guest root; host VMM/file servers run as the invoking
+uid. `network = false` is the same two-layer kill (no netdev +
+`--unshare-net`). Allowlists stay refused (config.md D21): SLiRP, NOT
+passt, supplies no per-domain/port policy hook here.
+
+Cleanup is implemented with `Drop` for ordinary return/error paths,
+including daemon termination and runtime-directory removal. It is not
+evidence of cleanup after launcher SIGKILL or other abrupt death; that
+lifecycle case has no recorded acceptance.
 
 #### Refusals
 
-The first cut refuses exactly what `krun` refuses, plus its own:
+Shipped refusals include the shared krun builder's checks plus
+QEMU-specific kernel/display checks:
 
 - `pids-limit`, the allowlist keys, `orca`, a multiplexer
   without a baked entry — the krun refusals verbatim.
 - `display = "waypipe"` — REFUSED in the first cut, for the same
-  reason `podman-krun`'s D2 row refuses it: the channel needs an
-  AF_UNIX socket that crosses virtio-fs, which passes inodes, not
-  live socket objects. Stated honestly: the DIRECT krun backend's
-  own display story is still open (bd myconfig-dak.9 — a vsock
-  transport); when it lands, microvm-qemu shares the same shape
-  (qemu carries a vhost-vsock device the same way libkrun does),
-  and this refusal lifts together with it.
+  reason `podman-krun`'s D2 row refuses it: AF_UNIX socket objects
+  do not cross virtiofs. Direct krun currently ACCEPTS waypipe in
+  error, without a guest server/channel; it is not implemented
+  parity. The dak.9 vsock transport and any QEMU equivalent are
+  PROPOSED, not shipped, and do not automatically lift this refusal.
 - A share `dest` outside the baked share roots — the same
   `UnknownShareRoot` (the guest init is shared).
 - A missing kernel pin — the one qemu-specific refusal: a run
@@ -1217,16 +1314,21 @@ myconfig-hq7k/dnmk), the serial console (bd myconfig-mbib), the
 workspace bind, the ro root, the SLiRP NIC and its `network =
 false` kill (bd myconfig-k106), the dry-run surface (no
 `--krun-overlay`, bd myconfig-govd), the guest bootstrap (bd
-myconfig-af0j) and the console size (bd myconfig-a2uq). ALL
-PROBES PASSED 2026-10-25 on thing —
-../microvm-qemu-validation-log.md. The static CI gate is
+myconfig-af0j) and the console size (bd myconfig-a2uq). The eleven
+historical scripted probes and manual fish/herdr use passed on thing,
+KVM, 2026-10-25 —
+[log](../microvm-qemu-validation-log.md). This is NOT baked-store,
+scratch-stress, nested-Podman or detach acceptance. Direct krun and
+QEMU accept detached interactive paths, but the
+[detach ledger](../detach-validation-log.md) has no recorded live
+matrix for them. The static CI gate is
 `mysbx-microvm-qemu-wrapper-test` (nix/checks.nix): the wrapper's
 three closure pins and the dry-run flags, on STUB pins — the real
 kernel stays a host build.
 
 ### D10: Backend availability is a host opt-in; a disabled backend is refused, never fallen back from (bd myconfig-dq2w)
 
-The three heavy backends — `podman-gvisor`, `podman-krun`, `krun`,
+The four heavy backends — `podman-gvisor`, `podman-krun`, `krun`,
 `microvm-qemu` — are OFF by default and opt-in per host through the
 module:
 

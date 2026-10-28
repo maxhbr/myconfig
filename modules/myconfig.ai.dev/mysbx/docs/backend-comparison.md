@@ -142,7 +142,9 @@ path, which explains the configured-versus-environment PID distinction.
 ## Direct VM store and writable-Nix choices
 
 These choices apply to `krun` and `microvm-qemu`, not the Podman image
-backends. Explicit `store` wins. If it is omitted, a nonempty
+backends. Every other backend, including `podman-krun`, refuses
+`store = "baked"`. On Podman, `store = "host"` does not add a host-store
+bind. Explicit `store` wins on the two direct VM backends. If it is omitted, a nonempty
 `MYSBX_KRUN_STORE_DISK` pin selects `baked` for these two backends;
 otherwise the result is `host`.
 

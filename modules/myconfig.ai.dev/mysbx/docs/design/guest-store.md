@@ -5,37 +5,44 @@ SPDX-License-Identifier: MIT
 
 # Design: the VM guests' own nix store — a baked store view instead of the host share
 
-Status: implemented (option B, the erofs disk). The exploration
-resolved: the probes below landed at build time, the surviving
-option shipped behind the `store = "host" | "baked"` config key
-([config.md](./config.md) D26, the D3 amendment in
-[backends.md](./backends.md)), and this file keeps the RATIONALE:
-why B over A/C, what the costs are, and the one probe that still
-needs a KVM host (the live run, the handoff section at the end).
+Status: implemented (option B, the EROFS disk); complete live baked-store
+acceptance is not recorded. Both `host` and `baked` modes shipped behind
+`store = "host" | "baked"` ([config.md](./config.md) D26, the D3 amendment
+in [backends.md](./backends.md)). This file keeps the exploration and
+RATIONALE: why B over A/C, what the costs are, and what still needs a
+KVM host. The [current six-backend guide](../backend-comparison.md) is
+the source-audited behavior reference. This documentation update ran no
+live VM tests; earlier host-store logs are not baked-store verification.
 
 ## The question
 
-The `krun` and `microvm-qemu` backends share the WHOLE host
-`/nix/store` into the guest, read-only, as one ro virtiofs slot of
-the stage-ro device (backends.md D3, `stage_binds`'s first entry in
-`../mysbx-rs/src/krun.rs`). The payload's shell, the `toolsEnv`
-`PATH` tree, every per-run toolchain and every host-built path an
-agent may want to exec resolve through that share.
+In `store = "host"` mode, `krun` and `microvm-qemu` share the WHOLE
+host `/nix/store` into the guest, read-only, as one ro virtiofs slot
+of the stage-ro device (backends.md D3, `stage_binds` in
+`../../mysbx-rs/src/krun.rs`). The payload's shell, the `toolsEnv`
+`PATH` tree and arbitrary host-built toolchains resolve through it.
+This was the original layout, not an unconditional current default:
+with no explicit choice, a VM run uses `baked` when
+`MYSBX_KRUN_STORE_DISK` is nonempty, and `host` otherwise. An explicit
+layer choice wins (`Merged::resolved_store`).
 
-The question this file explores: could the VM instead start with its
+The question this file explored: could the VM instead start with its
 OWN nix store — built at Nix-wrapper build time from the tools
-closure ("built in, built from tools"), with the per-run overlay
-machinery writing new paths ON TOP — so the host store is never
-visible to the guest at all?
+closure ("built in, built from tools"), with optional per-run overlay
+machinery writing ON TOP — so the whole host store is not delivered
+to the guest? This is implemented. It narrows guest-visible paths,
+not the host-side view of an escaped VMM: the outer bwrap still binds
+the whole host store read-only for runtime dependencies.
 
 ## Where the design stands today
 
-Three pieces of the current design shape the answer:
+The original exploration rested on three pieces of the design:
 
 - **The whole-store share is a decision with recorded reasons**
-  (backends.md D3). It makes the direct backend no more permissive
-  than the bwrap tier (`--ro-bind /nix/store /nix/store`), needs no
-  per-run config surface, and is spike-proven. The SAME decision
+  (backends.md D3). Its store visibility matched bwrap's
+  `--ro-bind /nix/store /nix/store`, needed no per-run toolchain
+  config and had spike evidence. That is a store-view rationale,
+  not a whole-backend security comparison. The SAME decision
   already rejected a per-run closure view (the epic's option (b)):
   the closure would be recomputed per run (a nix call inside
   `mysbx run`), and a missing path in the view would be a runtime
@@ -43,45 +50,56 @@ Three pieces of the current design shape the answer:
   a per-run tools list remains a FUTURE config key that can only
   NARROW — "bind specific closures when a host wants the store
   hidden". A guest-own store is option (c) taken to its conclusion.
-- **The write story already exists and is store-agnostic.**
-  `krun.nix.enable` (bd myconfig-pz6) bakes the guest-root nix
-  wrappers into the image (the podman tier) / resolves them through
-  the store share (the direct tier); the wrapper mounts the per-run
-  scratch ext4, copies the nix state onto it, and overlays
-  `/nix/store`: lower = whatever store the guest was given, upper =
-  the scratch (`../../nix/krun-guest-nix.nix`, bd myconfig-0pi and
-  backends.md D7). Swapping the lower layer touches none of this.
-- **The db ride-along exists only because the lower is the HOST
-  store.** The `nix-var` slot (bd myconfig-j23) copies the host
-  `/nix/var/nix` into the guest, and the init RECONCILES the copied
-  db against the share (bd myconfig-mxu: the static sqlite3 prune
-  plus the static store-scan bulk classifier) — because a host
-  rebuild restages the share, the flake-source poisoning TODO shows
-  symlinked entries, and the guest nix must never re-add or delete a
-  lower-layer path (the live fchmodat2 crash). A store whose db is
-  BAKED TOGETHER WITH IT needs none of that machinery: db and store
-  match by construction.
+- **The overlay model is store-agnostic, but provisioning differs.**
+  Both direct VM backends call `krun::spec_of` and use the same
+  `../../nix/krun-rootfs.nix` init. With scratch attached, init
+  formats/mounts ext4, sets up private Nix state (copying the selected
+  db when available) and overlays `/nix/store`: lower = the selected
+  store, upper = private scratch.
+  The direct tool environment ALWAYS includes the Nix binary;
+  `krun.nix.enable` is not its availability switch. The module pins
+  `krunScratchSize` only under `cfg.podman.enable && cfg.krun.nix.enable`
+  (`../../default.nix`, around line 482). Direct-only or QEMU-only
+  opt-ins can therefore lack scratch even with guest Nix enabled.
+  Without scratch, direct init provides no managed writable-Nix
+  overlay or tmpfs fallback. The separate OCI-image wrapper
+  (`../../nix/krun-guest-nix.nix`, bd myconfig-0pi) DOES have that
+  fallback; it is not the direct init's contract. Scratch is private,
+  disposable per-run storage, not a persistent store cache.
+- **The host db ride-along exists only for the HOST lower.** The
+  `nix-var` slot (bd myconfig-j23) shares `/nix/var/nix` read-only
+  only with networking AND scratch AND host-store mode. Init copies
+  its database onto scratch and RECONCILES it against the share
+  (bd myconfig-mxu: static sqlite3 prune plus store-scan classifier).
+  The historical host-rebuild and flake-source-symlink findings
+  explain this machinery, including the live fchmodat2 re-add crash.
+  A baked store and db match by construction: with scratch, init
+  copies the BAKED db to scratch and skips host reconciliation; with
+  no scratch, the db remains on read-only EROFS.
 
 The key observation that answers half of the old rejection: if the
 store view is built by the NIX WRAPPER at build time — like the
 rootfs and `toolsEnv` already are — there is no `nix` call inside
 `mysbx run` and no per-run closure computation. The view's closure is
 computed once per wrapper rebuild. What survives of the rejection is
-the ENOENT half: a narrowed store breaks paths the whole-store
+the ENOENT half: a narrowed store breaks paths the original whole-store
 default silently served, and that breakage must become diagnosable
 (see below).
 
 ## The three ways to build and bind a guest-own store
 
 ```
-today:   host /nix/store ──ro virtiofs──> guest /nix/store ──overlay──> scratch
-idea:    baked store view ──ro ─────────> guest /nix/store ──overlay──> scratch
-         (host store: not visible at all)
+host:    host /nix/store ──ro virtiofs──> guest /nix/store
+baked:   EROFS /nix tree ──ro block────> guest /nix (store child)
+with scratch: either lower ──overlay──> merged /nix/store, private upper
 ```
 
-All three build the SAME thing at nix build time — a store view (the
-closure of `toolsEnv` + `extraTools` + the payload-relevant pins: the
-shell, the multiplexer entries' closure, `krun.nix.packages`, …) plus
+The options table below preserves the exploration before B shipped;
+its then-open launcher and kernel work is resolved in the probes below.
+All three proposed building the SAME thing at nix build time — a
+store view (the closure of `toolsEnv` + `extraTools` + the
+payload-relevant pins: the shell, the multiplexer entries' closure,
+`krun.nix.packages`, …) plus
 a REGISTERED db for exactly that view (the dockerTools
 `imageIncludeNixDB` precedent, applied to a plain view instead of an
 OCI image). They differ in how the view reaches the guest:
@@ -89,22 +107,20 @@ OCI image). They differ in how the view reaches the guest:
 | | A: bake into the rootfs | B: ro disk image via virtio-blk | C: staged view via stage-ro |
 | --- | --- | --- | --- |
 | Mechanism | `nix/krun-rootfs.nix` grows `nix/store/<name>` entries for every closure path; the store rides the ROOT virtiofs device | one squashfs/erofs/ext4 image built with `closureInfo`, attached with `krun_add_disk2` like the scratch; guest mounts it as the overlay lower | a standalone store-view derivation; `stage_binds()` binds IT into the `store` slot instead of `/nix/store` |
-| Guest-side changes | none (the baked `/nix/store` symlink already points at the slot; the root tree grows a real store subtree) | init mounts one more device; the `--store-disk` path also needs a qemu-side launcher flag (the qemu twin supports only `--scratch` today) | NONE — init, manifest and symlink untouched |
-| qemu backend | inherits | needs `--store-disk` + a virtiofsd-free blk passthrough decision | inherits identically (it renders the same staged spec) |
+| Guest-side changes | the root tree would grow a real store subtree instead of its store symlink | init mounts the EROFS device at `/nix`; krun and QEMU now both implement `--store-disk` | init, manifest and symlink would stay unchanged |
+| qemu backend | would inherit | `--store-disk` and read-only virtio-blk attachment shipped | would inherit identically (it renders the same staged spec) |
 | Rootfs property | the rootfs stops being host-independent — it changes whenever the tools change | rootfs stays generic; the coupling moves into a separate image pin | rootfs stays generic; the coupling is a new pin (`MYSBX_KRUN_STORE_VIEW`) |
-| Filesystem semantics | virtiofs lower — the known caveat class stays (no fileattr, `EOPNOTSUPP` on lower copy-up; harmless for nix, which only ever ADDS paths) | NATIVE kernel fs as the lower — the virtiofs caveats vanish entirely; xattrs, whiteouts, chown all native | same as A (virtiofs lower) |
-| New kernel requirement | none | the fs driver must be built into libkrunfw (ext4 IS proven — the scratch uses it; squashfs/erofs are UNPROVEN: the rootfs is a plain dir precisely so no fs driver was ever needed) | none |
+| Filesystem semantics | virtiofs lower retains the historical fileattr/copy-up caveats | native read-only EROFS lower; overlay copy-up, whiteouts and writable metadata use the native scratch upper | same as A (virtiofs lower) |
+| New kernel requirement | none | the fs driver must be built in; EROFS support was subsequently checked in libkrunfw and added to the QEMU kernel pin | none |
 | Device/MMIO budget | unchanged (root device already exists) | ONE more virtio-blk against libkrun's IRQ budget (the scratch already spends one; the D3 budget analysis covered fs slots only — needs a probe) | unchanged (stage-ro already exists) |
 
-Option C is the smallest-diff shape: zero guest code, both VM
-backends inherit, the host-side change is one `stage_binds()` entry
-plus one new wrapper pin, and the live validation harness
-(`../../nix/krun-live-validation.sh`) covers it unchanged. Option B is
-the cleaner ENDGAME — a native ro filesystem removes the entire
-virtiofs caveat class, so the overlay-nix limitations documented in
-backends.md D2's scope decision (no copy-up of image paths, no
-`nix store optimise`) lift — but it is not even buildable before two
-probes (kernel driver, device budget) answer its open questions.
+Option C initially looked like the smallest diff: a `stage_binds()`
+entry plus a wrapper pin, with both VM backends inheriting it. Option B
+was the preferred endgame because a native lower avoids the store's
+virtiofs-specific fileattr/copy-up caveats. That rationale is not a
+live claim that every Nix operation (including `nix store optimise`)
+has passed on baked mode. Kernel-driver and device-budget probes
+first had to establish that B was buildable.
 
 Probing C's mechanics killed it structurally, before any build:
 
@@ -128,51 +144,52 @@ itself. That is what flipped the cost table to B: `mkfs.erofs
 
 ## What gets better
 
-- **The first backend tier that actually narrows.** Today the VM
-  reads every host store path; the design itself notes the whole
-  store is already readable and reserves narrowing for "a host [that]
-  wants the store hidden". A baked view is that narrowing: the guest
-  sees the tools closure and nothing else — no host-built configs, no
-  paths of other repos, no accidentally-built artifacts.
-- **The db machinery simplifies away.** No `nix-var` ride-along, no
-  copied host db, no sqlite reconcile, no store-scan of a
-  ~175k-path share (the scan runs at BOOT; a tools-closure view is
-  orders of magnitude smaller), no fchmodat2-class hazards, and the
-  flake-source poisoning TODO becomes structurally impossible (the
-  view is built, never restaged from the host store).
-- **Writes are unchanged.** New store paths land on the per-run
-  scratch; lower entries stay immutable — which is nix's own
-  contract (store paths are content-addressed, append-only), so the
-  virtiofs copy-up limitation of options A/C is a non-issue.
+- **A narrower guest store view.** Baked mode exposes the declared
+  tool closure and extra roots, rather than every host store path.
+  Workspace/configured mounts remain available; this is not a claim
+  that the guest sees only tools, nor a security ranking. The outer
+  bwrap still exposes the whole host store to the VMM's host process.
+- **The host-db machinery is skipped.** No `nix-var` ride-along,
+  copied host db, sqlite reconcile or store-scan of a ~175k-path
+  host share. The baked db is still COPIED when scratch is attached.
+  Baking removes the host-restaging mismatch behind those historical
+  findings, not every possible Nix or filesystem failure.
+- **Backing immutability is not merged-view immutability.** The
+  EROFS image and host store share stay read-only. With scratch,
+  new paths AND copy-up writes to existing merged paths can land in
+  the private upper. Do not expect every write to an existing
+  `/nix/store` path to fail just because its backing disk is ro.
+  Such writes disappear with scratch when the run ends.
 
 ## What a narrowed store breaks — the honest costs
 
 - **Per-repo devshells and ad-hoc host-built paths.** The
-  whole-store default is what lets a payload exec any store path the
+  whole-store mode is what lets a payload exec any store path the
   HOST ever built: a repo's `result` symlinks, an `.envrc` export, a
   devshell the operator entered yesterday, a toolchain outside
-  `toolsEnv`. With a baked view those are ENOENT. Three mitigations,
-  all needed: (a) the view must include more than the base tools —
-  declared extra roots (an `extraTools`-style extension point, so a
-  host/repo states what belongs in its sandbox store); (b) in-guest
-  `nix` rebuilds the missing path (works, but needs
-  `krun.nix.enable` plus `network` — the substitution must not be
-  silently assumed); (c) the failure must be DIAGNOSED — `mysbx
+  `toolsEnv`. With a baked view those are ENOENT. Three proposed
+  mitigations: (a) declared extra roots beyond the base tools (an
+  `extraTools`-style extension point, so a host/repo states what
+  belongs in its sandbox store); (b) in-guest `nix` rebuilds the
+  missing path, requiring actual writable-Nix provisioning and
+  network access for substitution/fetches — neither can be silently
+  assumed; (c) the failure is DIAGNOSED — `mysbx
   doctor` and/or the init can diff a requested path against the
   baked view and say "not in the sandbox store: add it to the tools
   or rebuild it in-guest" instead of a bare ENOENT. (c) is the
   direct answer to the recorded rejection reason.
 
   **What shipped and what did not (the honest ledger).** (a) shipped
-  HOST-side only: `krunStoreExtraRoots` lets the module declare
-  extra roots (`krun.nix.packages` ride along when `krun.nix.enable`
-  bakes the guest wrappers), but there is no PER-REPO declaration —
-  a repo cannot name its own roots; that is a future config key (the
-  `extraTools`-style extension). (b) is NOT wired: nothing refuses
-  or announces a baked run lacking network or `krun.nix.enable` —
-  an operator must know an in-guest rebuild needs both; a refusal
-  or a warning line is future work. (c) is NOT wired: a baked ENOENT
-  is today a bare shell error; the diagnosing diff is future work.
+  HOST-side only: the Nix builder's `krunStoreExtraRoots` seam adds
+  roots (`default.nix` supplies `krun.nix.packages` when
+  `krun.nix.enable`); `extraTools` also extends the closure. There
+  is no automatic per-repository root discovery or per-repo roots
+  config key. (b) warnings/refusals are NOT wired: a baked run is
+  accepted without networking or scratch. Nix is already in the
+  direct tools, but `krun.nix.enable` alone does not ensure the
+  scratch pin under the current module gate. (c) is NOT wired: a
+  baked ENOENT is today a bare shell error; the diagnosing diff is
+  future work.
   Until they land, `store = "baked"` is for runs whose tools are
   complete in the closure — and this ledger stays here so nobody
   has to rediscover which third of the mitigation shipped.
@@ -186,17 +203,16 @@ itself. That is what flipped the cost table to B: `mkfs.erofs
   a per-run/repo key (`store = "host" | "baked"` in the sandbox
   config's vocabulary), `host` preserving the pre-key behavior
   exactly, refuse-or-announce, never a silent switch. The shipped
-  default resolves `baked` only on a PINNED host's VM run (a layer
-  may always write `host` back); `host` is the default everywhere
-  the disk cannot attach.
-- **Tier inconsistency.** The bwrap/podman tiers still bind the
-  whole store. A narrowed VM tier is the first tier that is NARROWER
-  than the tier it replaces — allowed (the constraint runs the other
-  way: no tier may be more permissive), but worth stating: a config
-  that behaves differently per backend on the same repo is a
-  diagnosability cost of its own, and the `store` key should
-  eventually apply to the bwrap tier too (a ro bind of the view
-  instead of the whole store is mechanically trivial there).
+  default resolves `baked` only for `krun`/`microvm-qemu` with a
+  NONEMPTY `MYSBX_KRUN_STORE_DISK` pin (a layer may always select
+  `host`); `host` is the default otherwise. An explicit unpinned
+  `baked` choice is refused, not silently replaced with `host`.
+- **Backend inconsistency.** Bubblewrap/nono expose the whole host
+  store; Podman backends use their image-owned store, NOT an implicit
+  whole-host-store bind. Direct VMs choose host or baked. These
+  different views have diagnosability costs, not a demonstrated
+  ordering of backend security. Extending `store` to bwrap remains a
+  separate design change, not implemented behavior.
 
 ## The probes, resolved (and the one that remains)
 
@@ -204,10 +220,11 @@ itself. That is what flipped the cost table to B: `mkfs.erofs
    AGAINST A/C — not by the link farm failing, but by B needing no
    farm at all: `mkfs.erofs --tar` packs the closure straight from
    the store paths, no populated tree, no copies, and the guest
-   mounts the image AT `/nix/store` (the baked rootfs dir is a
-   real directory, so the overlay mounts directly on it — no
-   tmpfs trick). The circular-symlink and ARG_MAX findings that
-   structurally blocked C are recorded above; the hardlink-GC
+   mounts the image AT `/nix`, hiding the rootfs's store symlink.
+   The image's `store` child is a real directory, so an optional
+   scratch overlay mounts at `/nix/store` without host mode's
+   tmpfs mountpoint trick. The circular-symlink and ARG_MAX findings
+   that structurally blocked C are recorded above; the hardlink-GC
    question is moot for B.
 2. **Kernel drivers (gated B):** ANSWERED, no rebuild for krun —
    the pinned libkrunfw x86_64 config already carries
@@ -219,17 +236,19 @@ itself. That is what flipped the cost table to B: `mkfs.erofs
 3. **MMIO budget (gated B):** ANSWERED STATICALLY — the second
    virtio-blk device costs one IRQ slot; the budget's accounting
    (11 slots minus balloon, rng, console, vsock) leaves the store
-   disk within it, exactly like the scratch (D7) already proved
-   the first blk device fits. The live boot confirms it below.
+   disk within it. The scratch (D7) has earlier live evidence for
+   one blk device; a complete baked-plus-scratch boot acceptance
+   record is still missing, not supplied by that evidence.
 4. **Db baking:** ANSWERED — `nix/krun-store-image.nix` bakes
    `/nix/var/nix/db` with the dockerTools recipe
    (`nix-store --load-db` against `closureInfo`'s registration,
    registrationTime reset for determinism) plus the gcroots
    symlinks; the `mysbx-krun-store-disk-test` check extracts the
    image with `fsck.erofs` and verifies the db rows, the gcroots
-   and the fixed UUID. No reconcile, no `store-scan` pass runs in
-   a baked guest (the init's db-copy and reconcile paths are
-   host-mode-only, `nix/krun-rootfs.nix`).
+   and the fixed UUID. Init copies the baked db onto scratch when
+   present, but no host reconcile or `store-scan` pass runs in baked
+   mode (`nix/krun-rootfs.nix`). Without scratch the baked db stays
+   read-only; there is no managed writable-Nix fallback.
 5. **End-to-end narrowed run:** STILL OPEN — needs a KVM host. See
    the handoff below.
 
@@ -262,38 +281,64 @@ If live runs survive, the follow-up decision — extending the key to
 the bwrap tier (a ro bind of a view instead of the whole store) —
 is a backends.md/config.md change of its own, informed by what the
 live runs broke. The default flip on the VM tiers has SHIPPED with
-the key itself: a silent config on a pinned host's VM backend
-resolves `baked` (`Merged::resolved_store`, mysbx-rs/src/merge.rs),
-and `host` everywhere else — the backends.md D3 share stays the
-default exactly where no disk can attach.
+the key itself: an omitted choice on `krun`/`microvm-qemu` with a
+nonempty `MYSBX_KRUN_STORE_DISK` pin resolves `baked`
+(`Merged::resolved_store`, mysbx-rs/src/merge.rs), and `host`
+otherwise. An explicit layer choice still wins; the absence of a pin
+is not a runtime fallback from an explicit baked request.
 
 ## Handoff: the live validation this sandbox cannot run
 
-Everything above is verified at BUILD time (the rootfs test suite
-inside the derivation, the erofs check, the cargo suites, the
-goldens). What still needs a real KVM host — the probe-5 half:
+The rootfs derivation tests, EROFS extraction check, cargo suites and
+goldens provide static/build coverage; their existence is not a live
+acceptance run, and they were not rerun for this docs-only update.
+`doctor` checks pins/tools and limited startup behavior; it does NOT
+boot a direct VM. Normal mysbx runs of BOTH direct backends require
+KVM; QEMU's launcher-level `kvm:tcg` is not a supported mysbx fallback.
 
-1. Boot a `store = "baked"` krun run (and the microvm-qemu twin)
-   with `MYSBX_KRUN_TRACE=1`: the init's trace must show the erofs
-   mount at `/nix` and NO store share placement.
-2. In-guest nix against the baked db: `nix path-info --all` lists
-   the baked closure, one substitution onto the scratch overlay
-   succeeds (the overlay's lowerdir IS the erofs mount), `nix
-   verify` on a baked path passes.
-3. The ro-device honesty: a write attempt to a baked store path
-   fails (read-only block device), the refusal names the disk, not
-   a generic EROFS.
-4. A host-built path outside the tool closure ENOENTs with the
-   diagnosis proposed in "What a narrowed store breaks".
-5. The budget: a config with the usual share set AND the two disks
-   boots (the static IRQ accounting says it fits — confirm).
+The remaining acceptance procedure must record the host, revision,
+backend, effective `store`, disk pins, networking and scratch presence:
 
-The harnesses exist (`nix/krun-live-validation.sh`,
-`nix/microvm-qemu-live-validation.sh`); the store-disk cases are
-the addition a KVM host runs.
+1. Boot explicit `store = "baked"` runs on `krun` AND `microvm-qemu`
+   with `MYSBX_KRUN_TRACE=1`: verify EROFS at `/nix`, its block
+   device's read-only flag, and no guest store-share placement. Use
+   the normal shares AND both disks to check the static IRQ budget.
+   Also boot without scratch and confirm no managed writable-Nix
+   setup appears. Do not assume `krun.nix.enable` supplied the disk:
+   check the current `podman.enable && krun.nix.enable` pin gate.
+2. With scratch and networking, check the db copy from the baked
+   image, no host reconciliation, `nix path-info --all`, substitution
+   of a path absent from the image into the upper, and verification
+   of an unchanged baked path. Repeat host mode separately: the
+   host db share/copy requires network + scratch + host, not baked.
+3. Test BACKING immutability separately from merged-view writes.
+   Without scratch, writes to the EROFS tree must fail. With scratch,
+   use a disposable fixture included as an extra root to exercise
+   copy-up of an existing merged path as well as new-path creation;
+   those writes may succeed in the upper. Confirm the image/host
+   backing is unchanged and a fresh run loses the scratch changes.
+   The old proposed blanket "writes to baked paths fail" test was
+   wrong for the overlay. Disk-identification refusals are separate
+   tests (e.g. a missing announced ro disk), not a promised wording
+   for an ordinary filesystem write error.
+4. Confirm a known host-built path outside the baked closure and
+   configured mounts is absent. Expect today's bare ENOENT, not
+   the proposed diagnosis. Record the same path's visibility under
+   explicit `store = "host"` as a control.
+5. Record omitted-key defaults with and without a nonempty store
+   pin, explicit `host` overriding the pinned default, and refusal
+   of explicit `baked` without a pin or on any backend other than
+   `krun` and `microvm-qemu`, including `podman-krun`.
 
-Follow-ups this file owes the design (the honest-costs ledger
-above, in merge order): the per-repo extra-roots key (a), the
-network/nix honesty for in-guest rebuilds (b), and the ENOENT
-diagnosis (c). None blocks the merge — `host` stays the default —
-but each should land before a host flips a default.
+The existing harnesses are `../../nix/krun-live-validation.sh` and
+`../../nix/microvm-qemu-live-validation.sh`; these store-disk cases
+need explicit coverage in addition to their smoke probes. The
+[krun log](../krun-validation-log.md) records host-store scratch/Nix
+results, and the [QEMU log](../microvm-qemu-validation-log.md) records
+KVM smoke/interactive results. Neither records complete live baked
+acceptance; do not relabel those earlier runs retrospectively.
+
+The honest-costs ledger remains open: automatic per-repo roots (a),
+network/writable-Nix warnings (b), and missing-path diagnosis (c) are
+not implemented. The pinned-VM default has ALREADY flipped to baked;
+operators must account for these gaps or explicitly choose `host`.
