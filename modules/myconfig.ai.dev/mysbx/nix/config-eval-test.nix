@@ -662,9 +662,13 @@ pkgs.runCommand "mysbx-generated-config-test"
     }
 
     # 1. ripgrep enabled with arguments: the ro mount below
-    #    /mysbx-home AND the variable naming the file inside it.
-    grep -q 'path = "~/.config/ripgrep"' "$rgOn" \
-      || fail "the ripgrep mount source is missing" "$rgOn"
+    #    /mysbx-home AND the variable naming the file inside it. The
+    #    source is the dereferenced-copy tree (bd myconfig-dqq0), not
+    #    the raw `~/…` host tree — home-manager deploys these files as
+    #    symlinks into its generation tree, which a baked-store run
+    #    cannot resolve.
+    grep -q 'path = "/nix/store/.*-mysbx-baseline-config/.config/ripgrep"' "$rgOn" \
+      || fail "the ripgrep mount source is missing or not the baseline-config tree" "$rgOn"
     grep -q 'dest = "/mysbx-home/.config/ripgrep"' "$rgOn" \
       || fail "the ripgrep mount dest is not below /mysbx-home" "$rgOn"
     grep -q 'mode = "ro"' "$rgOn" \

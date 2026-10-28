@@ -38,29 +38,24 @@ let
 
   # Baseline mounts: common agent-tooling host config, read-only.
   #
-  # The paths are written with the `~/` prefix: mysbx expands it at run
-  # time against the invoking user's `$HOME` (./docs/design/config.md D8),
-  # so this module needs no home-directory lookup at all. That expansion
-  # happens on the HOST, before bwrap is executed — `--clearenv` does not
-  # pass `HOME` into the sandbox, but nothing inside the sandbox ever
-  # resolves these paths, so the two facts do not collide.
+  # The three subtrees are rendered through the shared dereferenced-copy
+  # helper (./nix/sandbox-config.nix — bd myconfig-dqq0): home-manager
+  # deploys these config files as SYMLINKS into its generation tree
+  # (`…-home-manager-files/…`), and a baked-store guest run has no
+  # host-store share to resolve the link targets through — the raw `~/…`
+  # mounts handed the sandbox dangling symlinks (observed live:
+  # RIPGREP_CONFIG_PATH pointing at a `ripgreprc` that does not exist
+  # there, a hard `rg` failure on every call). The helper builds real-file
+  # copies from home-manager's merged `home.file` — the single source of
+  # truth — so a host config change lands in the sandbox on the next
+  # build, and every mount path is an absolute store path that exists.
   #
-  # CAUTION: every path here MUST exist at runtime — mysbx canonicalizes
-  # eagerly and a missing path is a hard error on *every* run
-  # (./docs/design/config.md D8). Only directories this repo itself always
-  # manages via home-manager are listed:
-  #   - `.config/git`     ← ../../../shell.git (unconditional `programs.git`)
-  #   - `.config/ripgrep` ← ../../../shell.programs.ripgrep.nix
-  #   - `.config/bat`     ← ../../../shell.programs.bat.nix
-  # Same list as the `configDirs` default of ../fns/bubblewrap-app.nix.
-  # Each entry also carries a `dest` under the sandbox home (review-2
-  # item 6). Without one, the mount lands at its host path
-  # (`/home/mhuber/.config/git`) — a path that exists nowhere in the
-  # sandbox's own view: `HOME` is `/mysbx-home` (./docs/design/config.md
-  # D14), so `git` looks in `/mysbx-home/.config/git` and finds nothing,
-  # while the argv gains a `/home/…` destination the D14 invariant wants
-  # to keep out of in-sandbox paths. Mapping `~/x` to `/mysbx-home/x`
-  # keeps the configuration where every tool already looks for it.
+  # Each entry carries a `dest` under the sandbox home: `HOME` is
+  # `/mysbx-home` in the sandbox (./docs/design/config.md D14), so `git`
+  # finds its config where it already looks. `homeDest` keeps the `~/…`
+  # spelling usable for the OTHER baseline paths (none today —
+  # `shellConfigMounts` renders store paths — but the expansion is the
+  # module's documented idiom, ./docs/design/config.md D8).
   homeDest =
     p:
     if lib.hasPrefix "~/" p then
@@ -68,18 +63,34 @@ let
     else
       throw "myconfig.ai.dev.mysbx: homeDest expects a `~/…` path, got `${p}`";
 
+  # The shared helper, consumed like the tool modules consume it
+  # (../../programs/programs.rtk/default.nix): a plain function file, no
+  # option machinery. Read from the SAME user the config layer is
+  # generated for (`hmUser`), referenced only under `mkIf cfg.enable`
+  # below (Nix is lazy); not circular — no subtree matches
+  # `.config/mysbx`.
+  baselineConfigLib = import ./nix/sandbox-config.nix {
+    inherit lib;
+    runCommand = pkgs.runCommand;
+  };
+  baselineConfigDirs = [
+    ".config/git"
+    ".config/ripgrep"
+    ".config/bat"
+  ];
+  baselineConfig = baselineConfigLib.mkSandboxConfig {
+    homeFile = hmUser.home.file;
+    homeDirectory = hmUser.home.homeDirectory;
+    subtrees = baselineConfigDirs;
+    name = "mysbx-baseline-config";
+  };
+
   baselineMounts =
-    map
-      (p: {
-        path = p;
-        dest = homeDest p;
-        mode = "ro";
-      })
-      [
-        "~/.config/git"
-        "~/.config/ripgrep"
-        "~/.config/bat"
-      ]
+    map (sub: {
+      path = "${baselineConfig.tree}/${sub}";
+      dest = "/mysbx-home/${sub}";
+      mode = "ro";
+    }) baselineConfigDirs
     ++ shellConfigMounts;
 
   # `home-manager.users.mhuber` is only referenced under `mkIf cfg.enable`
@@ -493,7 +504,14 @@ in
         # bakes them (their store paths are invisible to a baked run
         # otherwise — no host-store share to resolve through).
         krunStoreBaked = cfg.krun.store.enable;
-        krunStoreExtraRoots = lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages;
+        # `gitDefaultDiff` (bd myconfig-w4zc): the wrapper pins it as
+        # GIT_EXTERNAL_DIFF whenever Home Manager's difftastic runs in
+        # external/both git mode, so the baked disk must carry its
+        # store path too — a run with the guest-own store has no
+        # host-store share to resolve it through.
+        krunStoreExtraRoots =
+          lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages
+          ++ lib.optionals hmDifftasticExternal [ gitDefaultDiff ];
         # The native-qemu backend (backends.md D9, bd myconfig-2l9b):
         # the launcher, the SHARED guest rootfs and the kernel
         # libkrun bundles, pinned as MYSBX_MICROVM_QEMU_*.
@@ -515,7 +533,7 @@ in
         nono = cfg.nono.package;
         ssh-keygen = pkgs.openssh;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries enabledBackends; alacritty = cfg.terminal.package; shell = cfg.shell.path; podmanImage = if cfg.podman.enable then cfg.podman.image else null; podmanShell = if cfg.podman.enable then cfg.podman.shell else null; podmanPastaSpec = if cfg.podman.enable then cfg.podman.pastaSpec else null; podmanEnv = if cfg.podman.enable then cfg.podman.env else { }; krunRuntime = if cfg.podman.enable then cfg.krun.runtime else null; krunScratchSize = if cfg.podman.enable && cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null; krunLauncher = if cfg.krun.enable then cfg.krun.direct.launcher else null; krunRootfs = if cfg.krun.enable then cfg.krun.direct.rootfs else null; krunStoreBaked = cfg.krun.store.enable; krunStoreExtraRoots = lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages; microvmQemuLauncher = if cfg.microvm-qemu.enable then cfg.microvm-qemu.launcher else null; microvmQemuRootfs = if cfg.microvm-qemu.enable then cfg.microvm-qemu.rootfs else null; microvmQemuKernel = if cfg.microvm-qemu.enable then \"${cfg.microvm-qemu.kernel}/bzImage\" else null; microvmQemuEnv = if cfg.microvm-qemu.enable then cfg.microvm-qemu.env else { }; waypipe = cfg.display.package; dtach = pkgs.dtach; podmanWaypipe = if cfg.podman.enable then cfg.podman.waypipe else null; podmanMuxEntries = if cfg.podman.enable then cfg.podman.muxEntries else { }; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries enabledBackends; alacritty = cfg.terminal.package; shell = cfg.shell.path; podmanImage = if cfg.podman.enable then cfg.podman.image else null; podmanShell = if cfg.podman.enable then cfg.podman.shell else null; podmanPastaSpec = if cfg.podman.enable then cfg.podman.pastaSpec else null; podmanEnv = if cfg.podman.enable then cfg.podman.env else { }; krunRuntime = if cfg.podman.enable then cfg.krun.runtime else null; krunScratchSize = if cfg.podman.enable && cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null; krunLauncher = if cfg.krun.enable then cfg.krun.direct.launcher else null; krunRootfs = if cfg.krun.enable then cfg.krun.direct.rootfs else null; krunStoreBaked = cfg.krun.store.enable; krunStoreExtraRoots = lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages ++ lib.optionals hmDifftasticExternal [ gitDefaultDiff ]; microvmQemuLauncher = if cfg.microvm-qemu.enable then cfg.microvm-qemu.launcher else null; microvmQemuRootfs = if cfg.microvm-qemu.enable then cfg.microvm-qemu.rootfs else null; microvmQemuKernel = if cfg.microvm-qemu.enable then \"${cfg.microvm-qemu.kernel}/bzImage\" else null; microvmQemuEnv = if cfg.microvm-qemu.enable then cfg.microvm-qemu.env else { }; waypipe = cfg.display.package; dtach = pkgs.dtach; podmanWaypipe = if cfg.podman.enable then cfg.podman.waypipe else null; podmanMuxEntries = if cfg.podman.enable then cfg.podman.muxEntries else { }; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';

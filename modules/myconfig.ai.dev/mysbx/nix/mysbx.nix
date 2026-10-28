@@ -382,7 +382,8 @@
   # Extra store roots for the guest-own store disk (the module
   # layer's guest-side packages the disk must carry beyond the
   # wrapper's own closure — `krun.nix.packages`, the in-guest nix
-  # wrappers of the direct backend, whose store paths a baked run
+  # wrappers of the direct backend, and the git-default-diff wrapper
+  # the GIT_EXTERNAL_DIFF pin names, whose store paths a baked run
   # has no host-store share to resolve through).
   krunStoreExtraRoots ? [ ],
   # The waypipe binary of the HOST side of the display channel
@@ -529,6 +530,13 @@ let
   # on a host that opted in.
   storeRootPaths = [
     toolsEnv
+    # The CA bundle the wrapper pins as MYSBX_CA_BUNDLE and every
+    # guest run sets SSL_CERT_FILE/GIT_SSL_CAINFO/NIX_SSL_CERT_FILE
+    # to (krun.rs): its path must resolve through the guest's own
+    # store, or every TLS fetch inside a baked run fails at the
+    # trust anchors (bd myconfig-qq3i's fd wedges aside, this is the
+    # w4zc lesson applied to the wrapper's own pin).
+    cacert
   ]
   ++ lib.optionals (shell != null) [ shell ]
   ++ lib.optionals (muxEntries != null) (lib.attrValues muxEntries)
@@ -1023,8 +1031,9 @@ symlinkJoin {
     # it at eval time.
     krunStoreBaked = krunStoreBaked;
     # The disk's closure roots as store paths, for the same gate:
-    # `krunStoreExtraRoots` (the guest nix wrappers) must appear here
-    # when the module enables them.
+    # `krunStoreExtraRoots` (the guest nix wrappers, the
+    # git-default-diff wrapper) must appear here when the module
+    # enables them.
     krunStoreRoots = map toString storeRootPaths;
   };
 }

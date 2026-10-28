@@ -164,11 +164,16 @@ in
       # The module wiring, pinned at EVAL time: a host with
       # krun.store.enable must bake and pin the disk, the guest nix
       # wrappers must ride along while krun.nix.enable is on, and
-      # must drop out when it is off. test-f13 enables krun.nix by
-      # default, so the nix arm compares against an extension that
-      # FORCES it off — the plain host cannot discriminate it. Forcing
-      # the package passthrus evaluates the wrapper, nothing builds
-      # here (the image build is the fixture arm above).
+      # must drop out when it is off. test-f13 enables krun.nix AND
+      # opts into the store disk by default (hosts/host.f13/ai.f13.nix),
+      # so both arms compare against extensions that FORCE the
+      # respective flag off — the plain host cannot discriminate
+      # them. The same discrimination applies to the git-default-diff
+      # root (bd myconfig-w4zc): test-f13 carries the difftastic
+      # external git mode, so the no-nix arm must still CARRY it while
+      # a difftastic-off extension must DROP it. Forcing the package
+      # passthrus evaluates the wrapper, nothing builds here (the
+      # image build is the fixture arm above).
       storeHost = self.nixosConfigurations.test-f13.extendModules {
         modules = [ { myconfig.ai.dev.mysbx.krun.store.enable = true; } ];
       };
@@ -180,7 +185,19 @@ in
           }
         ];
       };
-      plainHost = self.nixosConfigurations.test-f13;
+      storeNoDifftasticHost = self.nixosConfigurations.test-f13.extendModules {
+        modules = [
+          {
+            myconfig.ai.dev.mysbx.krun.store.enable = true;
+            home-manager.users.mhuber.programs.difftastic.enable = lib.mkForce false;
+          }
+        ];
+      };
+      storeNoDiskHost = self.nixosConfigurations.test-f13.extendModules {
+        modules = [
+          { myconfig.ai.dev.mysbx.krun.store.enable = lib.mkForce false; }
+        ];
+      };
       pkgOf = host: host.config.myconfig.ai.dev.mysbx.package;
     in
     pkgs.runCommand "mysbx-krun-store-disk-test"
@@ -192,9 +209,11 @@ in
         # The eval results, injected as plain strings the shell
         # asserts on (a bool and two path lists).
         storeWiredOn = if (pkgOf storeHost).passthru.krunStoreBaked then "1" else "0";
-        storeWiredOff = if (pkgOf plainHost).passthru.krunStoreBaked then "1" else "0";
+        storeWiredOff = if (pkgOf storeNoDiskHost).passthru.krunStoreBaked then "1" else "0";
         storeRootsOn = lib.concatStringsSep " " (pkgOf storeHost).passthru.krunStoreRoots;
         storeRootsNoNix = lib.concatStringsSep " " (pkgOf storeNoNixHost).passthru.krunStoreRoots;
+        storeRootsNoDifftastic = lib.concatStringsSep " " (pkgOf storeNoDifftasticHost)
+        .passthru.krunStoreRoots;
       }
       ''
         fail() {
@@ -252,6 +271,27 @@ in
         esac
         case "$storeRootsNoNix" in
           *krun-guest-nix*) fail "the disk roots carry the guest nix wrappers with krun.nix.enable off: $storeRootsNoNix" ;;
+        esac
+        # The GIT_EXTERNAL_DIFF root (bd myconfig-w4zc): the difftastic
+        # external git mode is on for test-f13, so the disk must carry
+        # the wrapper BOTH with and without the guest nix wrappers —
+        # and must drop it on a host without the difftastic activation
+        # (its [env] entry is the only consumer).
+        case "$storeRootsOn $storeRootsNoNix" in
+          *mysbx-git-default-diff*) ;;
+          *) fail "the disk roots do not carry the git-default-diff wrapper: $storeRootsOn / $storeRootsNoNix" ;;
+        esac
+        case "$storeRootsNoDifftastic" in
+          *mysbx-git-default-diff*) fail "the disk roots carry the git-default-diff wrapper without the difftastic external git mode: $storeRootsNoDifftastic" ;;
+        esac
+        # The CA bundle root: the wrapper ALWAYS pins MYSBX_CA_BUNDLE
+        # and every guest run sets the three TLS env variables to it,
+        # so every disk variant must carry `cacert` — unlike the
+        # nix wrappers and the diff wrapper this root has no flag to
+        # drop it under.
+        case "$storeRootsOn $storeRootsNoNix $storeRootsNoDifftastic" in
+          *-nss-cacert-*) ;;
+          *) fail "the disk roots do not carry the CA bundle: $storeRootsOn / $storeRootsNoNix / $storeRootsNoDifftastic" ;;
         esac
         # The --set SPELLING the crate reads is a string literal in
         # mysbx.nix (a reformat never splits literals, so this grep
