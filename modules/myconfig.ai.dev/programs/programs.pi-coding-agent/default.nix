@@ -1710,81 +1710,84 @@ in
     };
 
     home-manager.sharedModules = [
-      {
-        myconfig.persistence.directories = [ ".pi" ];
-        # The managed-binaries dir the mysbx mounts above binds read-only
-        # (bd myconfig-dqq0): pi creates it on first run, but the mount
-        # source must exist on EVERY run — including a sandbox started on
-        # a freshly deployed host that never ran pi yet.
-        home.activation.piAgentBinDir = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-          mkdir -p "$HOME/.pi/agent/bin"
-        '';
-        # Deploy the generated extensions/theme plus the subagent example
-        # extension (multi-file, plus sample agents and workflow prompts) and
-        # the handoff single-file extension. `mkMerge` is required because the
-        # subagent files are produced as attrsets (enumerated with
-        # `builtins.readDir` in the `let` bindings above) and must be combined
-        # with the dotted `home.file.*` entries within this same module.
-        home.file = lib.mkMerge [
-          {
-            ".pi/agent/extensions/myconfig-providers.ts".source = providersExtension;
-            ".pi/agent/extensions/myconfig-jail-marker.ts".source = jailMarkerExtension;
-            ".pi/agent/extensions/myconfig-mysbx-status.ts".source = mysbxStatusExtension;
-            ".pi/agent/extensions/handoff.ts".source = handoffExtension;
-            ".pi/agent/themes/unjailed.json".source = unjailedTheme;
-            # Override the default `app.interrupt` (escape) with `ctrl+c`
-            # for reliability across SSH and tmux; `app.clear` moves to
-            # `ctrl+q` to avoid the conflict. `app.model.cycleForward`
-            # (default `ctrl+p`) and `app.model.cycleBackward` (default
-            # `shift+ctrl+p`) are disabled so those keys are never swallowed
-            # by model cycling. See ./keybindings.json.
-            ".pi/agent/keybindings.json".source = ./keybindings.json;
-          }
-          subagentExtensionFiles
-          subagentAgentFiles
-          subagentPromptFiles
-          # Dynamic litellm model discovery (bd myconfig-99z): deployed
-          # ONLY when `litellmUrl != ""`; it then solely owns the
-          # `${hostname}-litellm` provider id (see `litellmProvider`).
-          # `optionalAttrs` (not `mkIf` on `.source`): with `mkIf` the
-          # `home.file.<path>` attribute would still be declared while its
-          # `.source` is left undefined, which breaks home-manager
-          # activation for hosts that disable the plugin.
-          (lib.optionalAttrs (cfg.litellmUrl != "") {
-            ".pi/agent/extensions/myconfig-litellm-models.ts".source = litellmModelsExtension;
-          })
-          # pi-token-speed: third-party TPS status-bar extension (see the
-          # option above and the `tokenSpeedExtension` let binding).
-          # `optionalAttrs` (not `mkIf`) so the `home.file.<path>` attribute
-          # is absent entirely on hosts that disable it.
-          (lib.optionalAttrs cfg.tokenSpeed.enable {
-            ".pi/agent/extensions/pi-token-speed/index.ts".source = "${tokenSpeedExtension}/index.ts";
-            ".pi/agent/extensions/pi-token-speed/src".source = "${tokenSpeedExtension}/src";
-          })
-        ];
-        home.packages = [
-          pkgs.nixos-unstable.pi-coding-agent
-          piBwrap
-          agent-bubblewrap-pi
-          agent-qemu-pi
-          (pkgs.writeShellApplication {
-            name = "pi-tmp";
-            runtimeInputs = with pkgs; [ coreutils ];
-            text = ''
-              cd "$(mktemp -d)" && exec ${lib.getExe piBwrap} "$@"
-            '';
-          })
-          (pkgs.writeShellApplication {
-            name = "agent-bubblewrap-pi-tmp";
-            runtimeInputs = with pkgs; [ coreutils ];
-            text = ''
-              cd "$(mktemp -d)" && exec ${lib.getExe agent-bubblewrap-pi} "$@"
-            '';
-          })
-          piWorktree.wrapper
-          agentBubblewrapPiWorktree.wrapper
-        ];
-      }
+      (
+        { lib, ... }:
+        {
+          myconfig.persistence.directories = [ ".pi" ];
+          # The managed-binaries dir the mysbx mounts above binds read-only
+          # (bd myconfig-dqq0): pi creates it on first run, but the mount
+          # source must exist on EVERY run — including a sandbox started on
+          # a freshly deployed host that never ran pi yet.
+          home.activation.piAgentBinDir = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+            mkdir -p "$HOME/.pi/agent/bin"
+          '';
+          # Deploy the generated extensions/theme plus the subagent example
+          # extension (multi-file, plus sample agents and workflow prompts) and
+          # the handoff single-file extension. `mkMerge` is required because the
+          # subagent files are produced as attrsets (enumerated with
+          # `builtins.readDir` in the `let` bindings above) and must be combined
+          # with the dotted `home.file.*` entries within this same module.
+          home.file = lib.mkMerge [
+            {
+              ".pi/agent/extensions/myconfig-providers.ts".source = providersExtension;
+              ".pi/agent/extensions/myconfig-jail-marker.ts".source = jailMarkerExtension;
+              ".pi/agent/extensions/myconfig-mysbx-status.ts".source = mysbxStatusExtension;
+              ".pi/agent/extensions/handoff.ts".source = handoffExtension;
+              ".pi/agent/themes/unjailed.json".source = unjailedTheme;
+              # Override the default `app.interrupt` (escape) with `ctrl+c`
+              # for reliability across SSH and tmux; `app.clear` moves to
+              # `ctrl+q` to avoid the conflict. `app.model.cycleForward`
+              # (default `ctrl+p`) and `app.model.cycleBackward` (default
+              # `shift+ctrl+p`) are disabled so those keys are never swallowed
+              # by model cycling. See ./keybindings.json.
+              ".pi/agent/keybindings.json".source = ./keybindings.json;
+            }
+            subagentExtensionFiles
+            subagentAgentFiles
+            subagentPromptFiles
+            # Dynamic litellm model discovery (bd myconfig-99z): deployed
+            # ONLY when `litellmUrl != ""`; it then solely owns the
+            # `${hostname}-litellm` provider id (see `litellmProvider`).
+            # `optionalAttrs` (not `mkIf` on `.source`): with `mkIf` the
+            # `home.file.<path>` attribute would still be declared while its
+            # `.source` is left undefined, which breaks home-manager
+            # activation for hosts that disable the plugin.
+            (lib.optionalAttrs (cfg.litellmUrl != "") {
+              ".pi/agent/extensions/myconfig-litellm-models.ts".source = litellmModelsExtension;
+            })
+            # pi-token-speed: third-party TPS status-bar extension (see the
+            # option above and the `tokenSpeedExtension` let binding).
+            # `optionalAttrs` (not `mkIf`) so the `home.file.<path>` attribute
+            # is absent entirely on hosts that disable it.
+            (lib.optionalAttrs cfg.tokenSpeed.enable {
+              ".pi/agent/extensions/pi-token-speed/index.ts".source = "${tokenSpeedExtension}/index.ts";
+              ".pi/agent/extensions/pi-token-speed/src".source = "${tokenSpeedExtension}/src";
+            })
+          ];
+          home.packages = [
+            pkgs.nixos-unstable.pi-coding-agent
+            piBwrap
+            agent-bubblewrap-pi
+            agent-qemu-pi
+            (pkgs.writeShellApplication {
+              name = "pi-tmp";
+              runtimeInputs = with pkgs; [ coreutils ];
+              text = ''
+                cd "$(mktemp -d)" && exec ${lib.getExe piBwrap} "$@"
+              '';
+            })
+            (pkgs.writeShellApplication {
+              name = "agent-bubblewrap-pi-tmp";
+              runtimeInputs = with pkgs; [ coreutils ];
+              text = ''
+                cd "$(mktemp -d)" && exec ${lib.getExe agent-bubblewrap-pi} "$@"
+              '';
+            })
+            piWorktree.wrapper
+            agentBubblewrapPiWorktree.wrapper
+          ];
+        }
+      )
     ];
   };
 }
