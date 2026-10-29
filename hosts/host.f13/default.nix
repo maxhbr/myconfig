@@ -145,6 +145,13 @@ in
       myconfig.desktop.wayland.waybar.doesFileExistChecks = [
         "/home/${user}/myconfig/.myconfig.ready"
       ];
+      # Docking into the TB station should keep the screen unlocked;
+      # undocking re-enables idle locking (unless the inhibitor was
+      # activated manually, e.g. via the waybar icon).
+      myconfig.desktop.wayland.waybar.idleInhibitor.thunderboltDevices = [
+        # fill in with `cat /sys/bus/thunderbolt/devices/*/device_name`
+        # once docked, e.g. "Caldigit TS4"
+      ];
     }
     {
       home-manager.sharedModules = [

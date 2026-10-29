@@ -240,7 +240,7 @@ let
                     spacing = 4;
                     modules-left = [ ];
                     modules-center = [
-                      "idle_inhibitor"
+                      "custom/idle_inhibitor"
                       "custom/test_for_missing_tb_changing"
                       # "custom/audio_idle_inhibitor"
                       "clock#time"
@@ -468,13 +468,6 @@ let
                       on-click = "pavucontrol";
                       rotate = 90;
                     };
-                    idle_inhibitor = {
-                      format = "{icon}";
-                      format-icons = {
-                        activated = "";
-                        deactivated = "";
-                      };
-                    };
                     "custom/audio_idle_inhibitor".rotate = 90;
                   }
                 ]
@@ -489,12 +482,11 @@ let
   );
 in
 {
+  imports = [ ./idleInhibitor.nix ];
   options.myconfig = with lib; {
-    desktop.wayland = {
-      waybar.doesFileExistChecks = mkOption {
-        type = types.listOf types.str;
-        default = [ ];
-      };
+    desktop.wayland.waybar.doesFileExistChecks = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
     };
   };
   config = {
