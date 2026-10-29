@@ -57,7 +57,6 @@ let
     name = "sync-tb-idle-inhibitor";
     text = ''
       set -euo pipefail
-      ${lib.optionalString (!tbIdleInhibitorEnabled) "exit 0"}
       runtime_dir="${runtimeDir}"
 
       # devices authorize asynchronously after the add uevent; retry
@@ -212,8 +211,8 @@ in
           home.packages = [
             setIdleInhibitor
             idleInhibitorStatus
-            syncTbIdleInhibitor
-          ];
+          ]
+          ++ lib.optionals tbIdleInhibitorEnabled [ syncTbIdleInhibitor ];
           systemd.user.services.idle-inhibitor = {
             Unit = {
               Description = "Hold a logind idle inhibitor (screen locking is prevented while active)";
