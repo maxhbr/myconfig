@@ -18,6 +18,10 @@
         "assistant"
         "offline"
       ];
+      # assistant runs ThinkRail sessions on this host; keep its app
+      # state across reboots (cache tree — survives reboots, not backed
+      # up, same trade-off as the workdir).
+      persistentDirectories.assistant = [ ".thinkrail" ];
     };
 
     # Per-agent home-manager blocks for f13-specific customisation.
