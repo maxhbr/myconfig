@@ -26,6 +26,11 @@
             # microvm-qemu.enable = true;
           };
 
+          # agent-of-empires (`aoe`) is enabled by the `myconfig.ai.dev`
+          # umbrella default; disable it here (see
+          # modules/myconfig.ai.dev/default.nix).
+          agent-of-empires.enable = lib.mkForce false;
+
           thinkrail.enable = true;
 
           # microvm = {
