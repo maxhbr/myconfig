@@ -2437,19 +2437,19 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // asks for the guest-own store disk — only the two VM backends
     // can attach one (the virtio-blk device of krun_add_disk2; D9
     // keeps the qemu twin on the same guest contract). A backend
-    // that cannot attach the disk is refused, never silently run on
-    // the host store — that visibility is exactly what the key
-    // exists to deny. `resolved_store()` never defaults `baked` onto
-    // a non-VM backend, so reaching this gate `baked` means a layer
-    // asked for it (or a VM run took the baked default).
+    // that cannot attach the disk warns and falls back to the host
+    // store rather than refusing the run. `resolved_store()` never
+    // defaults `baked` onto a non-VM backend, so reaching this gate
+    // `baked` means a layer asked for it (or a VM run took the baked
+    // default).
     if merged.resolved_store().is_baked() && backend != "krun" && backend != "microvm-qemu" {
         eprintln!(
-            "mysbx: store = \"baked\" needs a store disk the sandbox owns — only the `krun` and `microvm-qemu` backends attach one; the `{backend}` backend cannot"
+            "mysbx: warning: store = \"baked\" needs a store disk the sandbox owns — only the `krun` and `microvm-qemu` backends attach one; the `{backend}` backend cannot"
         );
         eprintln!(
-            "  a store the backend cannot attach is refused, never accepted-and-ignored — switch the backend to a VM one, or write `store = \"host\"`"
+            "  falling back to `store = \"host\"` — switch the backend to a VM one to get the narrowing"
         );
-        return EXIT_INFRASTRUCTURE;
+        merged.store = Some(config::Store::Host);
     }
 
     let allowlist_keys: Vec<&str> = [

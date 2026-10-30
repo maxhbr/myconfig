@@ -206,7 +206,10 @@ itself. That is what flipped the cost table to B: `mkfs.erofs
   default resolves `baked` only for `krun`/`microvm-qemu` with a
   NONEMPTY `MYSBX_KRUN_STORE_DISK` pin (a layer may always select
   `host`); `host` is the default otherwise. An explicit unpinned
-  `baked` choice is refused, not silently replaced with `host`.
+  `baked` choice on a VM backend is refused, not silently replaced
+  with `host` (no disk to attach); on every other backend the
+  mismatch warns and falls back to `host` (lib.rs) — announced, so
+  still not a silent switch.
 - **Backend inconsistency.** Bubblewrap/nono expose the whole host
   store; Podman backends use their image-owned store, NOT an implicit
   whole-host-store bind. Direct VMs choose host or baked. These

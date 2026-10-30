@@ -1576,12 +1576,12 @@ what backs `/nix` inside the sandbox. Only the two direct VM backends,
 layer is silent, a run resolves `baked` on the two VM backends when
 the wrapper pins the disk (`MYSBX_KRUN_STORE_DISK` — the host set
 `myconfig.ai.dev.mysbx.krun.store.enable`), and `host` everywhere
-else: a blanket `baked` default would refuse every silent run on
-the other backends (the key cannot hold there), so the narrowing
-flips only where it can hold its promise. A layer decision always
-wins over the default — a repo sidecar writes `store = "host"` to
-opt a VM run back onto the shared store, and nothing overrides an
-explicit choice.
+else: a blanket `baked` default would warn-and-fall-back on every
+silent run on the other backends (the key cannot hold there), so
+the narrowing flips only where it can hold its promise. A layer
+decision always wins over the default — a repo sidecar writes
+`store = "host"` to opt a VM run back onto the shared store, and
+nothing overrides an explicit choice.
 
 **Why a config key and not a host option.** The host option
 (`myconfig.ai.dev.mysbx.krun.store.enable`) BAKES and PINS the
@@ -1594,13 +1594,17 @@ it without writing the key at all. The disk is expensive (a full
 copy of the tool closure) — a host that sets the option pays it
 once per wrapper rebuild, every VM run uses it by default.
 
-**Refused, never degraded.** A `store = "baked"` run without the
-pin — the host did not opt in — is refused with a message naming the
-option. Every other backend also refuses `baked`, including
-`podman-krun`, whose image-owned store is not this disk mechanism.
-There is no fallback to the host store: a run that asked for the
-narrowing silently getting the whole store would be the exact
-inversion of the refuse-or-announce rule.
+**Refused on a VM, warned-and-degraded elsewhere.** A
+`store = "baked"` run without the pin — the host did not opt in —
+is refused with a message naming the option (the backend could
+attach the disk, none is configured). Every other backend cannot
+attach a store disk at all, including `podman-krun`, whose
+image-owned store is not this disk mechanism — a `baked` request
+there warns and falls back to `host` (lib.rs), so the run proceeds
+announced on the shared store rather than being refused.
+Degrading a refusal into a silent host-store run would be the
+exact inversion of the refuse-or-announce rule, so the fallback
+always prints its warning.
 
 **What a baked run no longer sees.** Everything reachable only
 through the host store share: a tool resolved by a host store path

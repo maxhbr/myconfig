@@ -194,9 +194,9 @@ impl Merged {
     /// Nix wrapper when the host sets
     /// `myconfig.ai.dev.mysbx.krun.store.enable`), `host` everywhere
     /// else. The default must stay backend-shaped: a blanket `baked`
-    /// would refuse every silent run on the other backends (the
-    /// pipeline gate refuses `baked` where no disk can attach), so
-    /// the narrowing flips only where it can hold its promise.
+    /// would warn-and-fall-back on every silent run on the other
+    /// backends (no disk can attach there), so the narrowing flips
+    /// only where it can hold its promise.
     pub fn resolved_store(&self) -> Store {
         match self.store {
             Some(s) => s,

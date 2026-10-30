@@ -517,8 +517,8 @@ pub struct Config {
     /// Either layer may decide it and the sidecar wins when both do
     /// (the key selects a store mysbx itself builds — it grants no
     /// host access beyond what the mode already carries, so it needs
-    /// no `network`-style narrowing rule); `baked` is refused on
-    /// backends that cannot attach a store disk, never dropped.
+    /// no `network`-style narrowing rule); `baked` warns and falls
+    /// back to `host` on backends that cannot attach a store disk.
     pub store: Option<Store>,
 }
 

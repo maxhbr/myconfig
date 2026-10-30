@@ -222,10 +222,17 @@ pub fn run(args: &[String], dry_run: bool) -> i32 {
     // one, and the operator should see that before starting one.
     // The resolved value includes the baked DEFAULT of a pinned
     // host's VM run (a silent config still runs it), while a layer
-    // decision keeps full precedence over the default.
+    // decision keeps full precedence over the default. A non-VM
+    // backend cannot attach a store disk: a `baked` request there
+    // warns and runs on `host` (lib.rs), so status reports that
+    // fallback instead of a baked state that cannot hold.
     {
         let pinned = std::env::var_os("MYSBX_KRUN_STORE_DISK").is_some();
-        let state = if merged.resolved_store().is_baked() {
+        let vm_backend = matches!(
+            merged.backend.as_deref(),
+            Some("krun") | Some("microvm-qemu")
+        );
+        let state = if merged.resolved_store().is_baked() && vm_backend {
             if pinned {
                 "baked — the guest-own store disk (pinned)".to_string()
             } else {
