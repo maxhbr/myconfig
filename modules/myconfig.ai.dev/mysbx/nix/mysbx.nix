@@ -539,7 +539,12 @@ let
     cacert
   ]
   ++ lib.optionals (shell != null) [ shell ]
-  ++ lib.optionals (muxEntries != null) (lib.attrValues muxEntries)
+  ++ lib.optionals (muxEntries != null) (
+    # A `null` entry is "absent" by contract (the comment at the
+    # `muxEntries` parameter); closureInfo's exportReferencesGraph
+    # would reject it as a root path, so filter like muxEntryPins.
+    lib.filter (entry: entry != null) (lib.attrValues muxEntries)
+  )
   ++ lib.optionals (waypipe != null) [ waypipe ]
   ++ krunStoreExtraRoots;
   storeDisk =
