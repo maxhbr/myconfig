@@ -96,6 +96,11 @@ in
     home-manager.sharedModules = [
       {
         home.packages = with pkgs; [ thinkrail ];
+        # Host-side app state (sessions, workspace registry). The mysbx
+        # integration persists `.thinkrail` only inside the sandbox sidecar
+        # (`stateDirs` above); this entry covers thinkrail runs on the host
+        # itself, which otherwise lose their state on impermanence hosts.
+        myconfig.persistence.directories = [ ".thinkrail" ];
       }
     ];
 
@@ -110,7 +115,9 @@ in
       # module header.
       extraTools = [ pkgs.thinkrail ];
       # ThinkRail reads pi's mounted configuration above but writes its
-      # own state nowhere else: `~/.thinkrail` (persisted here) holds the
+      # own state nowhere else: `~/.thinkrail` (persisted via the
+      # state-dirs entry below and, on the host, via
+      # myconfig.persistence.directories) holds the
       # app state, and per-workspace scratch lives in the repo's
       # `.thinkrail/` (the workspace mount, not sandbox home). The pi
       # session store `.pi/agent/sessions` is NOT persisted here: pi's

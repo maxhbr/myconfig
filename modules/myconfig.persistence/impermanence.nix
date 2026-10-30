@@ -8,6 +8,7 @@
 }:
 let
   cfg = config.myconfig.persistence.impermanence;
+  osconfig = config;
   user = myconfig.user;
   agents = config.myconfig.agentUsers.names;
   persistentDir = "/persistent";
@@ -700,15 +701,21 @@ in
                 };
               })
               # agent users: only a persistent `workdir`, under the cache
-              # tree.  The cache subvolume is NOT in the btrbk backup set
-              # (priv/work/other are), so the workdir is scratch space that
-              # survives reboots but is not backed up — matching the
-              # disposable nature of agent state.  Everything else (priv
-              # secrets, dotfiles) stays ephemeral so agent state is lost on
-              # reboot, as required.
+              # tree, plus any per-agent opt-in directories
+              # (`myconfig.agentUsers.persistentDirectories`). The cache
+              # subvolume is NOT in the btrbk backup set (priv/work/other
+              # are), so these survive reboots but are not backed up —
+              # matching the disposable nature of agent state. Everything
+              # else (priv secrets, dotfiles) stays ephemeral so agent
+              # state is lost on reboot, as required.
               (lib.mkIf isAgentUser {
                 home.persistence."${persistentCacheDir}" = {
-                  directories = [ "workdir" ];
+                  directories = [
+                    "workdir"
+                  ]
+                  ++ (validatePaths (
+                    osconfig.myconfig.agentUsers.persistentDirectories."${config.home.username}" or [ ]
+                  ));
                   files = [ ];
                 };
               })

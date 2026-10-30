@@ -112,6 +112,20 @@ in
             Entries for names not listed in `names` are ignored.
           '';
         };
+        persistentDirectories = lib.mkOption {
+          type = lib.types.attrsOf (lib.types.listOf lib.types.str);
+          default = { };
+          description = ''
+            Per-agent directories (attrset keyed by agent name) that are
+            persisted into the agent's cache tree (like the default
+            `workdir`), surviving reboots but NOT backed up. This is the
+            deliberate narrow exception to the "agent state is ephemeral"
+            design: use it for state that makes an agent useful across
+            reboots (e.g. `.thinkrail` for a ThinkRail session user),
+            never for secrets. Entries for names not listed in `names` are
+            ignored; paths must be relative to the agent's home.
+          '';
+        };
         inheritFromMainUser = {
           sessionVariables = lib.mkOption {
             type = lib.types.listOf lib.types.str;
