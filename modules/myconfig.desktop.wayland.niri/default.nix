@@ -30,6 +30,20 @@ let
     ];
     text = builtins.readFile ./bin/niri-run-or-raise.sh;
   };
+  # Moves the focused workspace to the monitor left/right WITHOUT the focus
+  # following it: niri's move-workspace-to-monitor-* always activates the
+  # moved workspace on the target monitor, so the script restores focus to
+  # the origin monitor afterwards, and computes the neighbor with niri's own
+  # output_left_of/output_right_of rule so the swipe is a no-op on the edge
+  # (a bare `move-…; focus-monitor-previous` would jump somewhere arbitrary).
+  niriMoveWorkspaceToMonitor = pkgs.writeShellApplication {
+    name = "niri-move-workspace-to-monitor";
+    runtimeInputs = [
+      niri
+      pkgs.jq
+    ];
+    text = builtins.readFile ./bin/niri-move-workspace-to-monitor.sh;
+  };
   headless = cfg.headless.enable;
   headlessWindowRules = lib.optionalString headless ''
     // headless (myconfig.headless.enable): the initial foot terminal hosts
@@ -221,6 +235,7 @@ in
                 niri-xwayland-satellite
                 niri-toggle-dpi-scale
                 niriRunOrRaise
+                niriMoveWorkspaceToMonitor
               ];
               programs.waybar.settings.mainBar = {
                 "niri/workspaces" = {
@@ -229,6 +244,31 @@ in
                 };
                 modules-left = [ "niri/workspaces" ];
               };
+              # Niri has no configurable touchpad gestures: 3-finger swipes
+              # are hardcoded to column/workspace switching and 4-finger
+              # swipes to the (vertical-only) overview gesture. Fusuma owns
+              # the unused horizontal 4-finger direction and dispatches
+              # `niri msg` over the IPC socket.
+              services.fusuma = {
+                enable = true;
+                settings = {
+                  threshold.swipe = 0.3;
+                  interval.swipe = 0.5;
+                  swipe."4" = {
+                    left.command =
+                      "${niriMoveWorkspaceToMonitor}/bin/niri-move-workspace-to-monitor left";
+                    right.command =
+                      "${niriMoveWorkspaceToMonitor}/bin/niri-move-workspace-to-monitor right";
+                  };
+                };
+              };
+              # `niri --session` exports NIRI_SOCKET to the user manager, so
+              # systemd can check it directly. Skip the service when no niri
+              # session is running (labwc/river/plasma) or on hosts without
+              # input devices (headless VMs). Bash builtins only — the unit's
+              # PATH carries just the module's extraPackages.
+              systemd.user.services.fusuma.Service.ExecCondition =
+                "${pkgs.bash}/bin/bash -c 'test -S \"$$NIRI_SOCKET\" && compgen -G \"/dev/input/event*\" >/dev/null'";
               xdg.configFile."systemd/user/niri.service.d/override.conf".text = ''
                 [Unit]
                 X-RestartIfChanged=false
