@@ -43,7 +43,7 @@
     },
     "litellm-grafana-dashboard": {
         "cargoLock": null,
-        "date": "2026-10-28",
+        "date": "2026-10-30",
         "extract": null,
         "name": "litellm-grafana-dashboard",
         "passthru": null,
@@ -52,9 +52,9 @@
             "name": "litellm-grafana-dashboard.json",
             "sha256": "sha256-BepW78CWd6K27AL0nrIamyTESsVKsY/5/kO67QNU6vA=",
             "type": "url",
-            "url": "https://raw.githubusercontent.com/BerriAI/litellm/1176e608b199c4a6572c22490839147a9f134ece/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json"
+            "url": "https://raw.githubusercontent.com/BerriAI/litellm/4c8b90945faf69eedfbdda3d4b7dad58ce74860d/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json"
         },
-        "version": "1176e608b199c4a6572c22490839147a9f134ece"
+        "version": "4c8b90945faf69eedfbdda3d4b7dad58ce74860d"
     },
     "pi-token-speed": {
         "cargoLock": null,
@@ -107,11 +107,11 @@
         "pinned": false,
         "src": {
             "name": null,
-            "sha256": "sha256-8Qf1PaVBZjvaUcbA7UE2yQs3gCYXsl/PSuWinSb1gwg=",
+            "sha256": "sha256-kzlSNL/OWdS9RQJVOMhDsAaGnj9W82dJlFFrCaPam9U=",
             "type": "url",
-            "url": "https://github.com/JetBrains/thinkrail/releases/download/v0.2.0/thinkrail-darwin-arm64"
+            "url": "https://github.com/JetBrains/thinkrail/releases/download/v0.3.0/thinkrail-darwin-arm64"
         },
-        "version": "v0.2.0"
+        "version": "v0.3.0"
     },
     "thinkrail-linux-arm64": {
         "cargoLock": null,
@@ -122,11 +122,11 @@
         "pinned": false,
         "src": {
             "name": null,
-            "sha256": "sha256-tH8P9mM3RVtUTpYfXL7cTCtaCPQZbmpBvqJO0xWaYVQ=",
+            "sha256": "sha256-ljv/dtkJTRvyXJivjNmVfzPJ+3HTYkbyMmntvQaAWBA=",
             "type": "url",
-            "url": "https://github.com/JetBrains/thinkrail/releases/download/v0.2.0/thinkrail-linux-arm64"
+            "url": "https://github.com/JetBrains/thinkrail/releases/download/v0.3.0/thinkrail-linux-arm64"
         },
-        "version": "v0.2.0"
+        "version": "v0.3.0"
     },
     "thinkrail-linux-x64": {
         "cargoLock": null,
@@ -137,10 +137,10 @@
         "pinned": false,
         "src": {
             "name": null,
-            "sha256": "sha256-VA99RiWEkWExin2wU3GbGbQgHrf86vTdVWykx+CIAQw=",
+            "sha256": "sha256-iI5kxs1+3ovOFsoO97v0CcztyfEVXauP40OGqxUetRY=",
             "type": "url",
-            "url": "https://github.com/JetBrains/thinkrail/releases/download/v0.2.0/thinkrail-linux-x64"
+            "url": "https://github.com/JetBrains/thinkrail/releases/download/v0.3.0/thinkrail-linux-x64"
         },
-        "version": "v0.2.0"
+        "version": "v0.3.0"
     }
 }
