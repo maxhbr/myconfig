@@ -47,6 +47,31 @@ the link here:
   `skipping user agent: ... (user manager not running)` (or equivalent)
   instead of `warning: user activation for agent failed`.
 
+## Triage 2026-10-31
+
+- Checked the pinned nixpkgs (rev `1c89083e451e891152365b799595cf7790a43325`,
+  nixos-unstable): `curl raw.githubusercontent.com/.../pkgs/by-name/sw/switch-to-configuration-ng/src/main.rs` — the "Reload user units" loop still relies
+  solely on the `/run/user/<uid>` stat; no session-bus or user-manager
+  probe. Condition NOT met.
+- The local patch still applies to that pinned source (verified: every
+  context/removed line of the patch is present in the pinned `main.rs`).
+- Searched github.com/NixOS/nixpkgs issues for this symptom (stale
+  `/run/user/<uid>` + `Connection refused` on the session bus for greeter
+  / linger users): no matching issue found, so `<link-to-nixpkgs-issue>`
+  above stays empty. Filing it remains blocked — no GitHub credentials
+  from this sandbox either.
+- Closest upstream activity (both open, unmerged, NOT in the pinned rev):
+  - PR nixpkgs#575744 "switch-to-configuration-ng: add check for active
+    user service manager" (opened 2026-10-18) replaces the stat() with an
+    explicit `user@<uid>.service`-active check — would fix the greeter and
+    linger cases; motivated by run0 light sessions. Watch this PR.
+  - PR nixpkgs#569623 "switch-to-configuration-ng: derive active users
+    from utmp" — different motivation (logindless systems), tangential.
+- Result: BLOCKED, patch + overlay stay. Next check: after the next
+  flake.lock bump, re-fetch `main.rs` at the new pinned rev and look for
+  the merge of #575744 (or any other explicit user-manager probe); then
+  drop the patch per "What to remove once upstream is fixed".
+
 ## Reference
 
 Introduced by the "Stop switch-to-configuration exiting 4 on stale
