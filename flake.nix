@@ -6,10 +6,6 @@
     nixos-unstable-small.url = "github:nixos/nixpkgs?ref=nixos-unstable-small";
     nixos-unstable.url = "github:nixos/nixpkgs?ref=nixos-unstable";
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
-    # cudaPackages fix only (flake.pkgs_overrides.nix,
-    # doc/TODOs/drop-cuda-patchelf-pin.md): branch that contains
-    # e59d8331a872 (buildRedist pins patchelf 0.15.2 over the broken 0.19.2)
-    nixpkgs-unstable.url = "github:nixos/nixpkgs?ref=nixpkgs-unstable";
     # sbomnix only (flake.pkgs_overrides.nix, doc/TODOs/drop-sbomnix-nixpkgs-pin.md)
     nixpkgs-sbomnix.url = "github:nixos/nixpkgs/fe13242281a67641c0102cdb1087f0ebe586c7df";
 
@@ -135,7 +131,6 @@
                           (mkSubPkgsOverlay "master" inputs.master)
                           (mkSubPkgsOverlay "nixos-unstable" inputs.nixos-unstable)
                           (mkSubPkgsOverlay "nixos-unstable-small" inputs.nixos-unstable-small)
-                          (mkSubPkgsOverlay "nixpkgs-unstable" inputs.nixpkgs-unstable)
                           (mkSubPkgsOverlay "nixpkgs-sbomnix" inputs.nixpkgs-sbomnix)
                           # (mkSubPkgsOverlay "nixos-2511" inputs.rel2511)
                           # (mkSubPkgsOverlay "nixos-2505" inputs.rel2505)
