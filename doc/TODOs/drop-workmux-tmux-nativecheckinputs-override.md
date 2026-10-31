@@ -1,8 +1,9 @@
 # Drop the workmux `nativeCheckInputs` tmux override
 
-The workmux package (flake input `workmux`, pinned at `eb2867f` at the time
-of writing) is consumed via two places that both add tmux to the package's
-check phase:
+The workmux package (flake input `workmux`, pinned at `eb2867f` when this
+note was written; the pin has since moved — see Triage below — without any
+change to the packaging) is consumed via two places that both add tmux to
+the package's check phase:
 
 - `modules/myconfig.ai.dev/myconfig.ai.workmux/default.nix` —
   `workmuxPkg` (feeds `myconfig.ai.dev.workmux.package` and thereby all
@@ -63,3 +64,27 @@ soon as `format-output` exists, but the shell's `>` creates the file before
 `761ad3b`; the same test passed at `1d5e7da`). Drop the skip together with
 the tmux override, or earlier once upstream waits for the file's content
 instead of its existence.
+
+## Triage 2026-10-31
+
+Pin moved again — checked the drop condition at the new locked rev and at
+upstream `main`; NOT met.
+
+- flake.lock `workmux` rev: `23c09d88a1bce1b63c2d894439bb79915dd71901`
+  (bumped `3cef212` → `23c09d8` in commit 9853c47162, 2026-10-25).
+- Upstream `flake.nix` at 23c09d8 and at `main` (raw.githubusercontent.com):
+  still `nativeBuildInputs = [ pkgs.installShellFiles pkgs.git ]`, no tmux
+  in build/check inputs, no `doCheck = false`.
+- `src/workflow/remove.rs` at 23c09d8: `remove_uses_context_repository_not_process_cwd`
+  still drives `BackendType::Tmux` → `TmuxBackend::is_running()` →
+  `tmux has-session`.
+- `src/multiplexer/tmux.rs` at 23c09d8: `run_shell_preserves_literal_tmux_formats`
+  still polls `output.exists()` — the race (read between `>` and `printf`)
+  is not fixed, so the `checkFlags` skip must stay too.
+- Override verified only by store presence (workmux-23c09d8 built via a
+  home.packages consumer); `nix eval`/`nix build` are not runnable in this
+  sandbox (read-only /nix/store, no daemon socket). Full build verification
+  only applies once the drop condition is met.
+- This note remains the permanent tracking doc per the close reason of bead
+  myconfig-wrd (won't file upstream; keep the override).
+- Next check: next workmux pin bump.
