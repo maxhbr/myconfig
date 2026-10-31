@@ -28,18 +28,27 @@ memory-fitting warning is benign and unrelated.
 ## Root cause (identified 2026-09-03, upstream — NOT fork-specific)
 
 `ggml_backend_sched_backend_from_buffer()` calls `supports_op()` for
-every pre-allocated tensor. The Vulkan backend's `supports_op` has no
-`GGML_OP_NONE` case and falls through to `default: return false` (the
-CPU backend returns true for `GGML_OP_NONE`), so no backend is found
-for the unused draft lm_head leaf → `GGML_ABORT` in
-`ggml_backend_sched_backend_id_from_cur()`.
+every pre-allocated tensor. In the Vulkan backend, `supports_op`
+returns `true` for `GGML_OP_NONE` — the switch case exists in every rev
+listed below; the original 2026-09-03 wording claimed otherwise,
+corrected 2026-10-31 — but a tensor-size precheck *before* the switch
+rejects any tensor larger than `max_buffer_size`, or larger than
+`maxStorageBufferRange` on devices without `shader_64b_indexing`,
+regardless of op (the CPU backend returns true for `GGML_OP_NONE`).
+The large pre-allocated draft `output.weight` trips that precheck, so
+no backend is found for the unused draft lm_head leaf → `GGML_ABORT`
+in `ggml_backend_sched_backend_id_from_cur()`. PR #27906's description
+names the same precheck; open PR #31114 reproduces the identical abort
+through it.
 
 The identical abort site is present in **every build this host pins or
 could pin today** (verified by source inspection):
 
 - upstream master (as of 2026-09-03, `d30500b`),
 - upstream `b10549` (the host's pinned release tag),
-- upstream `v0.3.0` (the pinned nixpkgs `llama-cpp`),
+- upstream `v0.3.0`, and the nixpkgs pin as of 2026-10-31
+  (`v0.7.0`, tagged 2026-10-15) — identical abort code there
+  (verified 2026-10-31: scheduler and Vulkan precheck unchanged),
 - fork `0eb5280` (the pinned `llama-cpp-strix-halo`),
 - fork tip `df1671a` (2026-08-31, +74 commits past `0eb5280`) — so
   bumping the fork pin does NOT fix this.
@@ -52,7 +61,10 @@ GGML_OP_NONE` in `ggml_backend_sched_backend_from_buffer()`
 DFlash2 draft setup (their log names `token_embd.weight` instead of
 `output.weight` — same op-NONE leaf class). It was **closed unmerged
 by its author on 2026-08-31**; no fix has landed in master as of
-2026-09-03. Related upstream issues (open): #26636, #27833.
+2026-10-31. A second, Vulkan-side fix is open PR **#31114** (opened
+2026-10-24: skip the size precheck for the non-compute ops
+`GGML_OP_NONE`/`GGML_OP_VIEW`; fixes #30697) — also unmerged. Related
+upstream issues (open): #26636, #27833.
 
 Because the abort can name *any* unused pre-allocated draft tensor, the
 `output.weight=CPU` override only patches one instance of the class —
@@ -153,3 +165,52 @@ fork has diverged further: 213 ahead / 467 behind upstream master as of
 2026-09-12), and re-check whether the op-NONE abort is fixed upstream
 by then (watch issues #26636 / #27833). If it is, prefer the fixed
 upstream build over the fork.
+
+## Triage 2026-10-31
+
+- **Upstream still unfixed.** PR #27906 remains closed, `merged_at: null`
+  (GitHub API, checked 2026-10-31). Master
+  `ggml/src/ggml-backend.cpp` has no `GGML_OP_NONE` skip in
+  `ggml_backend_sched_backend_from_buffer()` — the only `GGML_OP_NONE`
+  hit there is inside an `#if 0` debug block — and the
+  `GGML_ABORT("pre-allocated tensor ...")` path is unchanged.
+- **New pointer: PR #31114** (open, 2026-10-24, "vulkan: skip
+  maxStorageBufferRange pre-check for non-compute tensors"). It fixes
+  the same abort *class* on the Vulkan side by skipping the tensor-size
+  precheck for `GGML_OP_NONE`/`GGML_OP_VIEW`, reproducing the identical
+  `pre-allocated tensor (...) in a buffer (Vulkan0) that cannot run the
+  operation (NONE)` abort (fixes #30697). Watch this as the likely
+  merge vehicle; the scheduler-side skip (#27906) stays dead.
+- Issues **#26636 and #27833 still open**, with fresh confirms: a
+  2026-10-21 report on #27833 hits `GGML_ASSERT` in
+  `ggml-backend-meta.cpp` with `draft-dflash` + `--split-mode tensor`
+  at `d454a20`; a 2026-10-09 comment pins the mechanism down (axis-1
+  split of `output.weight` + `ggml_top_k` in `src/models/dflash.cpp`).
+- Pinned releases re-verified 2026-10-31: nixpkgs (rev `1c89083e`) now
+  pins llama.cpp **v0.7.0** (2026-10-15) — scheduler and Vulkan
+  supports_op/precheck identical to the aborting code; fork
+  `strix-halo-vulkan` tip is now `629d2f7b` (2026-10-25), precheck
+  still present.
+- **Root-cause section corrected**: the "no `GGML_OP_NONE` case in
+  Vulkan `supports_op`" claim was wrong at every cited rev (b10549,
+  v0.3.0, `d30500b`, fork `0eb5280`/`df1671a` all have
+  `case GGML_OP_NONE: return true`); the actual reject is the
+  tensor-size precheck before the switch (as PR #27906's own body
+  describes). Consequences unchanged: the abort is upstream, not
+  fork-specific, and `output.weight=CPU` only patches one instance.
+- Local state re-verified: candidate still commented out,
+  `forkPkg` import still commented, overlay file absent
+  (`hosts/host.thing/nixpkgs.overlays.llama-cpp.nix` deleted in
+  `7c701bd595`). No related beads in the shared DB.
+- Eval check *not* runnable in this sandbox:
+  `nix eval --raw
+  .#nixosConfigurations.test-thing.config.system.build.toplevel.drvPath`
+  fails with `error: remounting "/nix/store" writable: Invalid
+  argument` — `/nix` is a read-only EROFS mount here and no nix daemon
+  socket is present. No `*.nix` files changed, so no eval regression
+  is possible from this triage; re-run the eval in the main checkout
+  before the next thing rebuild.
+- Next check: PR #31114 merge state + issues #26636/#27833; if #31114
+  lands in a tag the nixpkgs pin could adopt, re-evaluate whether the
+  DFlash2 candidate can run on *upstream* llama.cpp (Vulkan backend,
+  `--split-mode layer`) instead of re-enabling the fork.
