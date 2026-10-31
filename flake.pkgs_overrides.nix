@@ -14,12 +14,6 @@
 #
 # | Package        | Problem                                                       |
 # | -------------- | ------------------------------------------------------------- |
-# | herdr          | Fails to link at the pinned rev: `ld.bfd: .eh_frame_hdr refers  |
-# |                | to overlapping FDEs` when linking the auditable-build object    |
-# |                | against the zig-built `libghostty-vt`. Fixed upstream by       |
-# |                | disabling `bundle_compiler_rt`/`bundle_ubsan_rt` in the        |
-# |                | vendored zig build. Replaced wholesale with the build from the |
-# |                | `master` channel, which contains that fix and is binary-cached.|
 # | eternal-       | Fails to compile at the pinned rev against `abseil-cpp_202608` |
 # | terminal       | + `protobuf 36`: abseil's installed headers require C++20        |
 # |                | (`std::partial_ordering` et al.), but ET's `CMakeLists.txt`    |
@@ -258,27 +252,6 @@
           hash = "sha256-BaAULmeTxsj6uk3Aqe7ft/uN14M/b1U3ga7S71+lE68=";
         };
       });
-    })
-
-    # herdr: at the pinned nixpkgs the link of the auditable build fails:
-    #   binutils-2.46/bin/ld.bfd: .eh_frame_hdr refers to overlapping FDEs
-    #   binutils-2.46/bin/ld.bfd: final link failed: bad value
-    # when linking against the static `libghostty-vt` produced by the
-    # vendored zig build. Upstream fixed this (nixpkgs master, present in
-    # `nixos-unstable-small` too) by patching
-    # `vendor/libghostty-vt/src/build/GhosttyLibVt.zig` to set
-    # `lib.bundle_compiler_rt = false;` and `lib.bundle_ubsan_rt = false;`.
-    # Instead of re-implementing that patch here, take the whole package
-    # from the `master` channel (exposed as `pkgs.master` by the
-    # `mkSubPkgsOverlay`s in flake.nix). The resulting derivation
-    # (/nix/store/wsaf3skg…-herdr-0.9.1) is binary-cached on
-    # cache.nixos.org, so this costs no local build at all.
-    #
-    # TODO: remove once the nixpkgs input is bumped past the commit that
-    # added the `postPatch` to pkgs/by-name/he/herdr/package.nix
-    # (the drv then coincides with `master`'s and the override is a no-op).
-    (self: _super: {
-      herdr = self.master.herdr;
     })
 
     # mcp-nixos: it depends on `fastmcp` -> `fastmcp-slim`, and at the pinned
