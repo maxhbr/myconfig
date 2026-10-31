@@ -81,3 +81,38 @@ Then:
    then in a running herdr press `prefix+shift+g` inside a repository and
    check that the checkout appears at
    `<parent-of-repo>/<repo-name>__worktrees/<handle>`.
+
+## Triage 2026-10-31
+
+Condition still not met; blocked upstream.
+
+- Latest herdr release: **v0.9.5** (2026-10-14), up from 0.8.2 when this
+  note was written. Checked
+  `https://raw.githubusercontent.com/herdrdev/herdr/v0.9.5/docs/next/website/src/data/config-reference.json`:
+  `worktrees.directory` is still the *only* `worktrees.*` key ("Root
+  directory under which Herdr creates <repo>/<branch-slug> checkouts.").
+  No placeholders, no per-repo override. `src/worktree.rs` at v0.9.5 still
+  has `default_checkout_path = root.join(repo_name).join(branch_to_path_slug(branch))`.
+  The herdr `master` branch config-reference.json is identical.
+- Release notes 0.9.0–0.9.5 mention many worktree fixes (removal,
+  trust, remote, focus) but nothing about a configurable/templated worktree
+  directory.
+- Upstream tracking: issue herdrdev/herdr#261 ("Support placeholders in
+  [worktrees].directory for sibling-folder layouts") was **closed as
+  `not planned` on 2026-08-02**; the implementation PR #262 was closed
+  unmerged on 2026-05-23. Users keep +1-ing in the thread and point to
+  third-party workarounds (herdr-worktrunk, herdr-repo-worktrees plugins).
+  Reopen unlikely; revisit only if upstream changes stance.
+- Pinned nixpkgs `master` (flake.lock rev `3734c368e63f...`) also packages
+  herdr **0.9.5**, so the `herdr = self.master.herdr` override in
+  `flake.pkgs_overrides.nix` gains nothing here.
+  (Verified via GitHub raw at that rev; `nix eval` is not runnable from the
+  triaging sandbox — no nix daemon socket.)
+- Repo state re-verified: `herdr-worktree-sibling`, the jail session-config
+  assembly (`herdr-jail-entry` / `herdrJailConfigCommonFile`) and both
+  `worktreesSiblingPerm` call sites are all still present and match this
+  note's description.
+
+Next check: after each new herdr release (>= 0.9.6), re-run the
+config-reference.json query above; also glance at the #261 thread for any
+upstream change of heart.
