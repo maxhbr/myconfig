@@ -48,12 +48,27 @@ catch the creation live.
 
 ## What remains (bd myconfig-yiw)
 
-1. Catch the creation live: ship a store-watcher wrapper around the
-guest's nix (inotify on `/nix/store` for new `*-source` entries +
-argv/stderr logging) in `nix/krun-guest-nix.nix`, then let agent
-sessions run as usual. The observed creation is not deterministic
-from (fresh VM, symlink URL spelling, fresh commit, dirty tree) —
-all of those reproduce HEALTHY.
+1. Catch the creation live: DONE instrumentationally (2026-10-31,
+   branch `todo-review-krun-symlink`): the guest nix wrappers
+   (`modules/myconfig.ai.dev/mysbx/nix/krun-guest-nix.nix`) now log
+   every guest-root nix argv to `/tmp/mysbx-store-watch.log` and
+   start a static inotify watcher
+   (`.../mysbx/nix/krun-store-watch.{nix,c}`) on `/nix/store` that
+   appends a typed line (DIR / SYMLINK + target) for every new
+   `*-source` entry to the same log — a captured creation names its
+   call. One watcher per VM (flock on
+   `/dev/shm/mysbx-store-watch.lock`), fully fail-open. CAVEAT: the
+   wrappers are the payload nix only in the PODMAN-krun guest
+   (image `PATH=/bin` finds the wrapper tree); on f13's DIRECT
+   krun backend the payload PATH carries `toolsEnv`'s raw `nix`
+   (MYSBX_TOOLS_PATH) and a baked store disk — the wrapper (and
+   with it the instrumentation) never runs there, even though the
+   wrapper tree rides the disk's roots. The direct backend needs
+   either the watcher armed in `krun-rootfs.nix`'s init or the
+   wrappers placed on the payload PATH before live observation
+   there is possible. Next: let agent sessions run (podman-krun
+   sessions, or after arming the direct backend too), then read
+   the log after a mid-session `get_input.sh`-style eval fails.
 2. Identify the responsible nix code path (git fetcher fallback to
    path fetch for a dirty tree, symlink-preserving store
    registration) and file it upstream. Suspect ingredients: the
@@ -65,6 +80,44 @@ all of those reproduce HEALTHY.
 3. Fix by pinning a nix that registers a real copy (the guest's nix
    is a parameter of `nix/krun-guest-nix.nix`), or by changing the
    share placement if the cause is the flake path being a symlink.
+
+## Triage 2026-10-31
+
+ACTIONABLE (the bead's own "instrument rather than hope" next step)
+— done in this branch:
+
+- Shipped the store-watcher instrumentation: new
+  `modules/myconfig.ai.dev/mysbx/nix/krun-store-watch.c` + `.nix`
+  (static musl, the store-scan twin's pattern: inotify on a store
+  dir, one typed log line per new `*-source` entry — DIR, or
+  SYMLINK with its readlink target — plus a flock single-instance
+  gate), wired into `krun-guest-nix.nix` (new `storeWatch` param;
+  every guest-root wrapper argv is logged and the watcher started,
+  all `|| :`-fail-open), into `default.nix`'s `krun.nix.packages`
+  default and into the `checks.nix` call + a live functional
+  assertion block (watcher logs symlink+dir, skips non-source,
+  second instance exits quietly).
+- Verified: `mysbx-krun-guest-nix-test` builds and PASSES (incl.
+  the new watcher assertions, run in the check itself);
+  `mysbx-generated-config-test` PASSES; `krun.nix.packages` and
+  `krunStoreRoots` still evaluate on test-f13 and carry
+  `mysbx-krun-guest-nix`; nixfmt 1.5.0 `--check` clean on all
+  touched files; the built static watcher exercised live
+  (SYMLINK/DIR lines, flock gate, non-source skip).
+- New gap found while wiring (recorded in "What remains" 1): the
+  DIRECT krun backend's payload runs `toolsEnv`'s raw nix — the
+  wrappers (and this instrumentation) only cover the PODMAN-krun
+  guest. The 2026-10-14 poison was captured in a DIRECT-backend
+  session (`MYSBX_BACKEND=krun`), so arming the direct backend
+  (init-side watcher or wrappers on the payload PATH) is a
+  follow-up before live observation can succeed there.
+- Not verified: live observation inside a real VM (needs f13
+  hardware, out of scope here); the store-disk check build
+  (13.6 GiB unpacked — too heavy for this sandbox).
+
+Next check: after some podman-krun agent sessions ran, read
+`/tmp/mysbx-store-watch.log` from a live VM (or via a share) for a
+SYMLINK `*-source` line and the argv line above it.
 
 ## Related
 
