@@ -33,12 +33,6 @@
 # |                | depmod set (`modules.alias`, ...), which collides with the    |
 # |                | kernel's in the module aggregator's buildEnv. Removed in     |
 # |                | postInstall for the linuxPackages sets in use.               |
-# | cudaPackages   | patchelf 0.19.2 aborts in `shiftFile` when `addDriverRunpath` |
-# | (cuda_gdb,     | re-patches CUDA 13.4 binaries; `cuda-merged-13.4` and with   |
-# | cuda_sani-     | it the whole toplevel fail. Fixed upstream in e59d8331a872   |
-# | tizer_api)     | (buildRedist pins patchelf 0.15.2); the two redists are      |
-# |                | taken from the `nixpkgs-unstable` input until the fix is in   |
-# |                | `nixos-unstable`.                                              |
 # | pass-secret-   | Upstream calls `asyncio.get_event_loop()` in its entry point, |
 # | service        | which since Python 3.14 raises `RuntimeError: There is no    |
 # |                | current event loop` instead of implicitly creating one. The   |
@@ -260,29 +254,6 @@
         doCheck = false;
         enableParallelBuilding = false;
       });
-    })
-
-    # cudaPackages: patchelf 0.19.2 (stdenv default at the pinned rev)
-    # aborts in shiftFile (Assertion `splitIndex == -1' failed) when the
-    # addDriverRunpath hook re-patches some CUDA 13.4 redist binaries
-    # (cuda_gdb's cuda-gdbserver, cuda_sanitizer_api's TreeLauncher*).
-    # Both builders exit 134, so `cuda-merged-13.4` — and with it the
-    # nvidia hosts' toplevel — cannot be built at the pinned rev.
-    # Upstream fixed this in nixpkgs commit e59d8331a872
-    # ("cudaPackages: use patched patchelf to fix build failures", on
-    # nixpkgs-unstable but not yet on nixos-unstable) by pinning patchelf
-    # 0.15.2 in buildRedist's nativeBuildInputs. Take the two failing
-    # redists from the `nixpkgs-unstable` input, which has that fix.
-    # See doc/TODOs/drop-cuda-patchelf-pin.md.
-    #
-    # TODO: remove once the nixpkgs input includes commit e59d8331a872.
-    (_self: prev: {
-      cudaPackages = prev.cudaPackages.overrideScope (
-        final: _prev: {
-          cuda_gdb = final.pkgs.nixpkgs-unstable.cudaPackages_13_4.cuda_gdb;
-          cuda_sanitizer_api = final.pkgs.nixpkgs-unstable.cudaPackages_13_4.cuda_sanitizer_api;
-        }
-      );
     })
   ];
 }
