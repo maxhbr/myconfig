@@ -1399,6 +1399,24 @@ in
           append to `config.mounts` and `podman.env`.
         '';
       };
+
+      userNofileLimit = mkOption {
+        type = types.nullOr types.ints.positive;
+        default = 8388608;
+        description = ''
+          The hard RLIMIT_NOFILE of systemd user managers and their
+          units (soft stays 1024), raised when this backend is
+          enabled — the same ceiling the krun backend's
+          `krun.direct.userNofileLimit` sets. The launcher raises its
+          own soft limit to this ceiling before spawning virtiofsd,
+          and virtiofsd keeps one host fd per guest-visited inode,
+          so the ceiling is the headroom a closure-heavy guest build
+          has before its store reads wedge on ENFILE (bd
+          myconfig-qq3i). `null` keeps systemd's default (524288).
+          Sessions not started under the user manager (a plain tty
+          or ssh login) keep the system default.
+        '';
+      };
     };
 
     nono = {
@@ -1998,20 +2016,31 @@ in
     # host config) are concatenated onto this list.
     myconfig.ai.dev.mysbx.config.mounts = baselineMounts ++ workmuxMounts;
 
-    # The krun launcher's fd ceiling (`krun.direct.userNofileLimit`):
-    # user@.service bounds the user manager itself, user.conf the
-    # units (and so the sessions) it starts. Gated on `krun.enable`:
-    # the direct-libkrun backend is the only consumer of the raised
-    # ceiling.
-    systemd = lib.mkIf (cfg.krun.enable && cfg.krun.direct.userNofileLimit != null) (
+    # The krun and microvm-qemu launchers' fd ceiling
+    # (`krun.direct.userNofileLimit` and
+    # `microvm-qemu.userNofileLimit`): user@.service bounds the user
+    # manager itself, user.conf the units (and so the sessions) it
+    # starts. Gated on the enabled backends: they are the only
+    # consumers of the raised ceiling (the krun launcher hosts
+    # libkrun's virtiofs server in-process; the microvm-qemu launcher
+    # spawns one virtiofsd per device, and both pin one host fd per
+    # guest-visited inode, bd myconfig-jjfy / myconfig-qq3i).
+    systemd =
       let
-        limit = "1024:${toString cfg.krun.direct.userNofileLimit}";
+        # krun's ceiling wins when both backends are enabled — a
+        # host that sets BOTH wants the max of the two consumers.
+        nofileLimit = lib.max (if cfg.krun.enable then cfg.krun.direct.userNofileLimit else 0) (
+          if cfg.microvm-qemu.enable then cfg.microvm-qemu.userNofileLimit else 0
+        );
+        raisesCeiling =
+          (cfg.krun.enable && cfg.krun.direct.userNofileLimit != null)
+          || (cfg.microvm-qemu.enable && cfg.microvm-qemu.userNofileLimit != null);
+        limit = "1024:${toString nofileLimit}";
       in
       {
-        services."user@".serviceConfig.LimitNOFILE = limit;
-        user.settings.Manager.DefaultLimitNOFILE = limit;
-      }
-    );
+        services."user@".serviceConfig.LimitNOFILE = lib.mkIf raisesCeiling limit;
+        user.settings.Manager.DefaultLimitNOFILE = lib.mkIf raisesCeiling limit;
+      };
 
     # The host side of model access for the podman-gvisor backend: the
     # shared port-scoped forwarder of
