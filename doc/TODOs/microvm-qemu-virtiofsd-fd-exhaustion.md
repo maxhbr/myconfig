@@ -54,15 +54,85 @@ help here.
 
 1. Reproduce on the host: closure-heavy `nix build` inside a
    microvm-qemu sandbox; watch the host virtiofsd fd count
-   (`/proc/<virtiofsd-pid>/fd`).
+   (`/proc/<virtiofsd-pid>/fd`). **Live-host work, still open.**
 2. Measure the launcher's RLIMIT_NOFILE for virtiofsd and the failure
    mode at exhaustion (ENFILE passthrough, hang, daemon death).
+   **The measurement half is done (2026-10-31, see Triage): the
+   launcher set NO limit — virtiofsd inherited the session's
+   (soft 1024 under a systemd user session). The failure-mode
+   half needs the live repro of (1).**
 3. Mitigations to evaluate, mirroring the krun side (jjfy):
    - raise the virtiofsd NOFILE ceiling in the launcher wrapper (same
      shape as `krun.direct.userNofileLimit`);
+     **DONE (2026-10-31, see Triage): launcher-side
+     `raise_nofile`/`ensure_nofile` + `microvm-qemu.userNofileLimit`**;
    - check virtiofsd for an inode/announce cache eviction mode that
      closes fds for cold inodes;
+     **DONE as a NEGATIVE result (2026-10-31, see Triage): no such
+     mode exists in virtiofsd 1.14.0**;
    - doctor (microvm-qemu) could warn when the virtiofsd fd count is
-     within N% of its ceiling.
+     within N% of its ceiling. **Future work — needs live
+     fd-count data from (1) to pick N and the read path.**
 4. Record whether the wedge ever self-recovers (the >30 min observation
    suggests pinned-open fds, no LRU reclaim).
+   **Live-host work, still open; the upstream code reading (see
+   Triage) supports the no-self-recovery reading: fds drop only on
+   guest FUSE FORGET.**
+
+## Triage 2026-10-31
+
+Reconciled with bead myconfig-qq3i (p1, open): its description is
+this note verbatim — no drift. Cross-checked the krun twins
+(myconfig-jjfy closed, myconfig-wm28 open).
+
+What was verified and implemented (this worktree, commit "mysbx/
+microvm-qemu: raise the virtiofsd fd ceiling (krun
+userNofileLimit twin)"):
+
+- **Item 2 (measure), by code inspection**: the launcher
+  (`microvm-qemu-rs/src/main.rs`) set NO RLIMIT_NOFILE for itself
+  or the virtiofsd children — they inherit the invoking
+  session's ceiling (soft 1024 under a systemd user session, the
+  exact wedge of the 2026-10-26 observation).
+- **Mitigation bullet 1 implemented**, the krun fix's shape:
+  - `raise_nofile()` + `ensure_nofile()` in the launcher (raw
+    setrlimit(2), zero-dep, the `krun-rs` twin): hard to
+    RLIM_INFINITY, soft to the hard, best-effort; a sub-65536
+    ceiling is a diagnosable refusal (EXIT_SETUP via a plain
+    `return` in `run()` — the single-exit invariant of bd
+    myconfig-1ct7), because the virtiofsd children inherit the
+    launcher's limits.
+  - `myconfig.ai.dev.mysbx.microvm-qemu.userNofileLimit`
+    (default 8388608, `null` = systemd default), and the systemd
+    user-manager `LimitNOFILE` wiring now also covers this
+    backend (max of the two backends' ceilings when both are
+    enabled).
+  - Two new launcher unit tests (the krun suite's twins); 22/22
+    green. Eval-verified on test-thing/test-f13 snapshots: only
+    the launcher outPath changed; a minimal microvm-qemu-only
+    eval sets `DefaultLimitNOFILE = "1024:8388608"` and leaves
+    it unset when the backend is off or the option is null.
+- **Mitigation bullet 2 checked upstream, negative**: virtiofsd
+  1.14.0 (the pinned nixpkgs build) has NO inode-fd
+  eviction/LRU mode: the passthrough inode store keeps one
+  `O_PATH` fd per guest-visited inode and releases it only on
+  guest FUSE FORGET (`inode_store.rs` `forget_one`/
+  `drop_unlocked`). `--inode-file-handles` needs
+  `CAP_DAC_READ_SEARCH` — the rootless launcher does not have
+  it, and `prefer` falls back to `O_PATH` fds anyway. So the
+  NOFILE raise is the only available mitigation and the ceiling
+  stays a hard run limit; the structural fix remains the
+  wm28-style bounded-fd work, if ever brought to this backend.
+
+Still needing a live host (f13 or thing):
+
+- (1) the repro and the host-side fd-count measurement;
+- the failure mode at exhaustion (ENFILE passthrough vs hang vs
+  daemon death) under the RAISED ceiling;
+- whether the wedge self-recovers (expected no, per the upstream
+  reading above);
+- the doctor warning (bullet 3) once fd-count data exists.
+
+Next check: after the next live validation pass on a
+microvm-qemu host (see
+`modules/myconfig.ai.dev/mysbx/docs/microvm-qemu-validation-log.md`).

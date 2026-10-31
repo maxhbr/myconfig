@@ -45,14 +45,103 @@
 //! diagnosis, never a silent PATH guess.
 //!
 //! Zero dependencies by design: qemu and virtiofsd are separate
-//! PROCESSES invoked by absolute paths — no FFI, no dlopen, no
-//! unsafe code at all.
+//! PROCESSES invoked by absolute paths — no FFI, no dlopen. The one
+//! unsafe block is the raw setrlimit(2) fd-ceiling raise (the krun
+//! launcher's twin, bd myconfig-qq3i).
 
 use std::io::BufRead;
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
+
+// The fd ceiling of the virtiofsd children (bd myconfig-qq3i, the
+// krun raise's twin): virtiofsd keeps one fd per guest-visited
+// inode, so a closure-heavy build inside the guest exhausts the
+// INHERITED soft nofile long before the guest kernel's own limits.
+// The children run under the launcher's limits, so the raise here
+// covers them. Zero dependencies by design, so the raw setrlimit(2)
+// surface is declared like the krun launcher's: rlimit is
+// { cur, max }, both u64.
+const RLIMIT_NOFILE: std::ffi::c_int = 7;
+const RLIM_INFINITY: u64 = u64::MAX;
+
+#[repr(C)]
+struct Rlimit {
+    cur: u64,
+    max: u64,
+}
+
+unsafe extern "C" {
+    fn getrlimit(resource: std::ffi::c_int, rlim: *mut Rlimit) -> std::ffi::c_int;
+    fn setrlimit(resource: std::ffi::c_int, rlim: *const Rlimit) -> std::ffi::c_int;
+}
+
+/// The fd-ceiling raise (the krun launcher's raise_nofile twin):
+/// hard first (the soft cannot exceed it), then the soft,
+/// best-effort — a constrained session keeps its own ceiling and
+/// the soft then goes to THAT, every refusal is a WARNING, the run
+/// never dies over limits. Returns the (soft, hard) pair that
+/// stands after the attempt.
+fn raise_nofile() -> (u64, u64) {
+    unsafe {
+        let mut rlim = Rlimit { cur: 0, max: 0 };
+        if getrlimit(RLIMIT_NOFILE, &mut rlim) != 0 {
+            return (0, 0);
+        }
+        let hard_before = rlim.max;
+        if rlim.max < RLIM_INFINITY {
+            rlim.max = RLIM_INFINITY;
+            if setrlimit(RLIMIT_NOFILE, &rlim) != 0 {
+                rlim.max = hard_before; // the raise failed; keep what stands
+                eprintln!(
+                    "mysbx-microvm-qemu: WARNING: cannot raise the hard fd limit to infinity (keeping {hard_before})"
+                );
+            }
+        }
+        // re-read after the hard attempt so the soft raise uses
+        // whatever ceiling actually stands
+        if getrlimit(RLIMIT_NOFILE, &mut rlim) != 0 {
+            return (0, 0);
+        }
+        if rlim.cur < rlim.max {
+            let soft_before = rlim.cur;
+            rlim.cur = rlim.max;
+            if setrlimit(RLIMIT_NOFILE, &rlim) != 0 {
+                rlim.cur = soft_before;
+                eprintln!(
+                    "mysbx-microvm-qemu: WARNING: cannot raise the soft fd limit (keeping {soft_before})"
+                );
+            }
+        }
+        (rlim.cur, rlim.max)
+    }
+}
+
+const NOFILE_FLOOR: u64 = 65536;
+
+/// The raise's gate (the krun launcher's ensure_nofile twin): a
+/// RETURN, not an exit — run() owns the Daemons guard, and this fires
+/// BEFORE any daemon was spawned, so a plain return unwinds the same
+/// way the krun launcher's early exit does. Prints the standing pair
+/// so a live wedge can name the ceiling the run actually got, and
+/// refuses below the floor — a low ceiling guarantees the wedge
+/// (virtiofsd pins one fd per guest-visited inode, bd myconfig-qq3i),
+/// refusing it makes the cause diagnosable at launch instead of
+/// mid-session.
+fn ensure_nofile(soft: u64, hard: u64) -> bool {
+    eprintln!("mysbx-microvm-qemu: fd ceiling soft={soft} hard={hard}");
+    if soft < NOFILE_FLOOR || hard < NOFILE_FLOOR {
+        eprintln!(
+            "mysbx-microvm-qemu: the fd ceiling after the raise is below {NOFILE_FLOOR} — virtiofsd \
+             keeps one fd per guest-visited inode, so a closure-heavy build WILL wedge the \
+             guest store on it. Check the session's RLIMIT_NOFILE (systemd LimitNOFILE / \
+             myconfig.ai.dev.mysbx.microvm-qemu.userNofileLimit)"
+        );
+        return false;
+    }
+    true
+}
 
 const EXIT_SETUP: i32 = 125;
 
@@ -774,6 +863,14 @@ fn run(cfg: Config, boot_started: Instant) -> i32 {
         return EXIT_SETUP;
     };
 
+    // The fd ceiling raise (the krun launcher's twin, bd
+    // myconfig-qq3i): the virtiofsd children inherit THIS process's
+    // limits, so the raise must stand before the first spawn.
+    let (soft, hard) = raise_nofile();
+    if !ensure_nofile(soft, hard) {
+        return EXIT_SETUP;
+    }
+
     // The per-run dir: every socket lives in it, the sweep is the
     // Daemons drop.
     let dir = runtime_dir();
@@ -1387,6 +1484,49 @@ mod tests {
             "the reader must not hang on a dead qemu"
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The fd-ceiling raise, the krun launcher's test's twin (bd
+    /// myconfig-qq3i): virtiofsd pins one fd per guest-visited
+    /// inode, so the raise must not leave the soft limit at a
+    /// session's 1024. Best-effort: the test only pins that neither
+    /// limit drops and the soft reaches the hard ceiling when the
+    /// kernel allows the raises (the CI/sandbox case is the
+    /// capped-hard one, where soft == hard afterwards).
+    #[test]
+    fn raising_nofile_lifts_the_soft_limit_to_the_hard_one() {
+        let before = unsafe {
+            let mut rlim = Rlimit { cur: 0, max: 0 };
+            assert_eq!(getrlimit(RLIMIT_NOFILE, &mut rlim), 0);
+            (rlim.cur, rlim.max)
+        };
+        let (soft, hard) = raise_nofile();
+        assert!(
+            soft >= before.0,
+            "the soft limit must not drop: {before:?} -> ({soft}, {hard})"
+        );
+        assert!(
+            hard >= before.1,
+            "the hard limit must not drop: {before:?} -> ({soft}, {hard})"
+        );
+        assert!(
+            soft == hard,
+            "best effort: soft should reach the hard ceiling ({soft} vs {hard})"
+        );
+        // The gate prints the standing pair; a runner that cannot
+        // host a session must be refused at launch (the run() path
+        // returns EXIT_SETUP), not wedge mid-run. Here a successful
+        // raise must always pass it.
+        if soft >= NOFILE_FLOOR && hard >= NOFILE_FLOOR {
+            assert!(ensure_nofile(soft, hard));
+        }
+    }
+
+    /// The gate refuses a sub-floor ceiling (the diagnosable
+    /// refusal of bd myconfig-qq3i).
+    #[test]
+    fn the_nofile_gate_refuses_a_low_ceiling() {
+        assert!(!ensure_nofile(1024, 524288));
     }
 
     /// The immediate case: a server that exists up front still
