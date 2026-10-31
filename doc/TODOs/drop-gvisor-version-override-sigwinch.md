@@ -78,3 +78,32 @@ Verified:
 
 Next check: re-run the `grep` above after a nixpkgs input update; only
 when `version` ≥ `20260608.0` proceed with "What to remove".
+
+## Triage 2026-10-31
+
+Still blocked — do not touch the overlay yet.
+
+Verified (nix eval is unavailable in this sandbox; `flake.lock` was read
+directly and upstream checked via GitHub raw/API):
+
+- Overlay is still present and unchanged:
+  `modules/myconfig.ai.dev/mysbx/nix/gvisor-overlay.nix` pins
+  `20260817.0` / `b1b561450fc2f05b9626b7e269c08fbc9f5029ff`, resets
+  `patches`, re-adds `./patches/gvisor-remove-p2p-addresses.patch`.
+  After bd myconfig-e6z it is wired in via
+  `modules/myconfig.ai.dev/mysbx/podman.nix` (`nixpkgs.overlays =
+  [ (import ./nix/gvisor-overlay.nix) ]`), same shape as before.
+- Pinned nixpkgs input (`flake.lock` rev `9ae611a455b9`, 2026-06-10)
+  still ships `20260406.0` / `db8d2c9abca39156c61ee2769d52b8a11accbe16`
+  with `patches = [ ./fix-go-mod-tidy.diff ]`.
+- Upstream nixpkgs `master` (commit `16bc059657`, 2026-10-31) and
+  `nixos-unstable` also still ship `20260406.0` / `db8d2c9a`; the last
+  commit touching `pkgs/by-name/gv/gvisor/package.nix` is from 2026-04-09
+  (20260316.0 → 20260406.0).
+- Relevant upstream: nixpkgs PR #565284 ("gvisor: make the package
+  updateable by nixpkgs-update", open since 2026-09-20, unmerged) would
+  let the automated bumper pick gVisor up; watch for it landing.
+
+Next check: after the next nixpkgs input update, or once PR #565284
+merges and the automated bump lands, re-run the `grep` above; only when
+nixpkgs ships `version` ≥ `20260608.0` proceed with "What to remove".
