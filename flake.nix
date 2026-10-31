@@ -552,6 +552,11 @@
             hostName = "iso";
           } [ ];
 
+          # Single-page web viewer rendering the bd (beads) issue DB as a
+          # dependency graph. `nix run .#beads-viewer` starts the server.
+          packages.beads-viewer = nixpkgs.legacyPackages.${system}.callPackage ./misc/beads-viewer { };
+          apps.beads-viewer = inputs.flake-utils.lib.mkApp { drv = self.packages.${system}.beads-viewer; };
+
           # `nix fmt` — nixfmt for Nix, rustfmt for the
           # hand-written Rust crate in `modules/`
           # (`myconfig.ai.dev/mysbx/mysbx-rs`). `nixfmt-tree`

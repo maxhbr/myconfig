@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>beads-viewer</title>
+<style>
+  :root {
+    --open: #4a9eff;
+    --in_progress: #f5a623;
+    --blocked: #e74c3c;
+    --closed: #6abf69;
+    --frozen: #9b59b6;
+    --hooked: #e67e22;
+    --claimed: #ffe08a;
+    --bg: #14161a;
+    --fg: #d8dce2;
+    --muted: #8a929e;
+    --panel: #1d2026;
+    --border: #33373f;
+  }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex; flex-direction: column;
+    background: var(--bg); color: var(--fg);
+    font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    font-size: 14px;
+  }
+  header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--border);
+  }
+  header h1 { font-size: 16px; margin: 0; }
+  header .spacer { flex: 1; }
+  #toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  #toolbar label { display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--muted); }
+  #toolbar input[type="search"] {
+    background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+    border-radius: 4px; padding: 4px 8px; width: 180px;
+  }
+  #status-count { color: var(--muted); }
+  .legend { display: flex; gap: 10px; flex-wrap: wrap; padding: 6px 14px; font-size: 12px; color: var(--muted); background: var(--panel); border-bottom: 1px solid var(--border); }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .swatch { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  main { flex: 1; display: flex; min-height: 0; }
+  #graph-wrap { flex: 1; position: relative; overflow: hidden; }
+  #graph-wrap svg { width: 100%; height: 100%; display: block; cursor: grab; }
+  #graph-wrap svg.dragging { cursor: grabbing; }
+  aside#details {
+    width: 420px; min-width: 320px; overflow-y: auto; box-sizing: border-box;
+    background: var(--panel); border-left: 1px solid var(--border);
+    padding: 16px; display: none;
+  }
+  aside#details.open { display: block; }
+  aside#details .close {
+    float: right; cursor: pointer; border: none; background: none;
+    color: var(--muted); font-size: 18px; padding: 2px 8px;
+  }
+  aside#details h2 { font-size: 15px; margin: 0 0 8px; word-break: break-word; }
+  .chip {
+    display: inline-block; padding: 1px 8px; border-radius: 10px;
+    font-size: 12px; margin: 0 4px 4px 0; border: 1px solid var(--border);
+  }
+  .chip.status { color: #fff; }
+  .meta { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  .section { margin-top: 12px; }
+  .section h3 { font-size: 13px; margin: 0 0 4px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .section pre {
+    white-space: pre-wrap; word-break: break-word; margin: 0;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+    padding: 8px; font-size: 12px; line-height: 1.5;
+  }
+  .kv { display: grid; grid-template-columns: 130px 1fr; gap: 2px 8px; font-size: 12px; }
+  .kv .k { color: var(--muted); }
+  .comment { border-left: 3px solid var(--border); padding: 4px 10px; margin: 8px 0; }
+  .comment .meta { margin: 0 0 4px; }
+  .dep-link { color: var(--open); cursor: pointer; text-decoration: underline; }
+  #loading { padding: 40px; color: var(--muted); font-size: 16px; }
+  #error { padding: 40px; color: #e74c3c; white-space: pre-wrap; }
+  text.nodelabel { fill: var(--fg); font-size: 11px; cursor: pointer; }
+  .node rect.nodebox { stroke-width: 1.5px; }
+  .node rect.nodebox.claimed { stroke: #ffe08a; stroke-width: 3px; }
+  .edge path { fill: none; stroke: var(--muted); stroke-opacity: .6; }
+  .edge.marker path { stroke-opacity: .3; }
+  .edge.supersedes path { stroke: var(--frozen); stroke-opacity: .8; }
+  .edge.parent-child path { stroke-dasharray: 2,3; stroke-opacity: .8; }
+  .edge.discovered-from path { stroke-opacity: .35; }
+  .node:hover rect.nodebox { stroke-width: 3px; }
+  .node.selected rect.nodebox { stroke: #fff; stroke-width: 3px; }
+  text.edgelabel { fill: var(--muted); font-size: 9px; }
+  .controls {
+    position: absolute; right: 12px; top: 12px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .controls button {
+    width: 30px; height: 30px; border-radius: 4px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--fg); cursor: pointer; font-size: 16px;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>beads-viewer</h1>
+  <div id="status-count"></div>
+  <div class="spacer"></div>
+  <div id="toolbar">
+    <label><input type="checkbox" id="toggle-closed" checked> closed</label>
+    <label><input type="checkbox" id="toggle-deps" checked> edges</label>
+    <label>type
+      <select id="filter-type"><option value="">all</option></select>
+    </label>
+    <label>status
+      <select id="filter-status"><option value="">all</option></select>
+    </label>
+    <input type="search" id="search" placeholder="search title/id…">
+  </div>
+</header>
+<div class="legend" id="legend"></div>
+<main>
+  <div id="graph-wrap">
+    <div id="loading">loading beads…</div>
+    <div class="controls">
+      <button id="zoom-in" title="zoom in">+</button>
+      <button id="zoom-out" title="zoom out">−</button>
+      <button id="zoom-fit" title="fit">⛶</button>
+    </div>
+  </div>
+  <aside id="details"></aside>
+</main>
+
+<script src="dagre-0.8.5.js"></script>
+<script>
+"use strict";
+
+const STATUS_COLOR = {
+  open: "#4a9eff",
+  in_progress: "#f5a623",
+  blocked: "#e74c3c",
+  closed: "#6abf69",
+  deferred: "#9b59b6",
+  pinned: "#9b59b6",
+  hooked: "#e67e22",
+};
+const STATUS_ORDER = ["open", "in_progress", "blocked", "hooked", "deferred", "pinned", "closed"];
+const EDGE_STYLE = (type) => type === null || type === undefined
+  ? ""
+  : type.replace(/[^a-z-]/g, "");
+
+let DATA = null;   // { issues: [...] }
+let NODES = [];    // filtered issue list = visible nodes
+let SELECTED = null;
+
+const svgNS = "http://www.w3.org/2000/svg";
+
+function el(tag, attrs = {}, text) {
+  const e = document.createElementNS(svgNS, tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function statusColor(s) {
+  return STATUS_COLOR[s] || "#888";
+}
+
+function isClaimed(issue) {
+  return issue.status === "in_progress" || !!issue.assignee;
+}
+
+// ---------------------------------------------------------------- data load
+
+async function load() {
+  try {
+    const r = await fetch("/api/beads");
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    DATA = await r.json();
+  } catch (e) {
+    document.getElementById("loading").id = "error";
+    document.getElementById("error").textContent = "failed to load /api/beads: " + e;
+    return;
+  }
+  buildLegend();
+  buildFilters();
+  window.addEventListener("resize", () => render());
+  document.getElementById("toggle-closed").onchange = render;
+  document.getElementById("toggle-deps").onchange = render;
+  document.getElementById("filter-type").onchange = render;
+  document.getElementById("filter-status").onchange = render;
+  document.getElementById("search").oninput = render;
+  document.getElementById("zoom-in").onclick = () => zoomBy(1.25);
+  document.getElementById("zoom-out").onclick = () => zoomBy(0.8);
+  document.getElementById("zoom-fit").onclick = () => { scale = null; tx = 0; ty = 0; draw(); };
+  render();
+}
+
+function buildLegend() {
+  const legend = document.getElementById("legend");
+  legend.innerHTML = "";
+  for (const s of STATUS_ORDER) {
+    const span = document.createElement("span");
+    const sw = document.createElement("span");
+    sw.className = "swatch";
+    sw.style.background = statusColor(s);
+    span.append(sw, document.createTextNode(s));
+    legend.append(span);
+  }
+  const claim = document.createElement("span");
+  claim.textContent = "◉ claimed = amber ring";
+  legend.append(claim);
+}
+
+function buildFilters() {
+  const types = new Set(), statuses = new Set();
+  for (const i of DATA.issues) { types.add(i.issue_type); statuses.add(i.status); }
+  for (const [id, set] of [["filter-type", types], ["filter-status", statuses]]) {
+    const sel = document.getElementById(id);
+    for (const v of [...set].filter(Boolean).sort()) {
+      const o = document.createElement("option");
+      o.value = v; o.textContent = v;
+      sel.append(o);
+    }
+  }
+}
+
+// ---------------------------------------------------------------- filtering
+
+function visibleIssues() {
+  const showClosed = document.getElementById("toggle-closed").checked;
+  const fType = document.getElementById("filter-type").value;
+  const fStatus = document.getElementById("filter-status").value;
+  const q = document.getElementById("search").value.trim().toLowerCase();
+  return DATA.issues.filter((i) => {
+    if (!showClosed && i.status === "closed") return false;
+    if (fType && i.issue_type !== fType) return false;
+    if (fStatus && i.status !== fStatus) return false;
+    if (q && !(i.title.toLowerCase().includes(q) || i.id.includes(q))) return false;
+    return true;
+  });
+}
+
+// ---------------------------------------------------------------- rendering
+
+let graph = null;     // dagre graph with layout
+let scale = null;     // null = fit-to-viewport
+let tx = 0, ty = 0;   // pan offset (screen px)
+
+function render() {
+  NODES = visibleIssues();
+  const byId = new Map(NODES.map((n) => [n.id, n]));
+  const showDeps = document.getElementById("toggle-deps").checked;
+
+  graph = new dagre.graphlib.Graph({ multigraph: true });
+  graph.setGraph({ rankdir: "LR", nodesep: 25, ranksep: 60, marginx: 20, marginy: 20 });
+  graph.setDefaultEdgeLabel(() => ({}));
+
+  for (const n of NODES) graph.setNode(n.id, { width: 170, height: 40 });
+
+  if (showDeps) {
+    for (const n of NODES) {
+      for (const dep of n.dependencies || []) {
+        if (!byId.has(dep.depends_on_id)) continue;
+        graph.setEdge(n.id, dep.depends_on_id, { label: dep.type });
+      }
+    }
+  }
+
+  dagre.layout(graph);
+  document.getElementById("status-count").textContent =
+    `${NODES.length} of ${DATA.issues.length} beads`;
+  draw();
+}
+
+function layoutSize() {
+  let w = 0, h = 0;
+  for (const v of graph.nodes()) {
+    const n = graph.node(v);
+    w = Math.max(w, n.x + n.width / 2);
+    h = Math.max(h, n.y + n.height / 2);
+  }
+  return [w + 20, h + 20];
+}
+
+function draw() {
+  const wrap = document.getElementById("graph-wrap");
+  const old = wrap.querySelector("svg");
+  if (old) old.remove();
+  const loading = document.getElementById("loading");
+  if (loading) loading.remove();
+
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+  const [gw, gh] = layoutSize();
+  if (scale === null) scale = Math.min(1, W / gw, H / gh) * 0.95;
+
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}` });
+  const root = el("g", { transform: `translate(${tx},${ty}) scale(${scale})` });
+  svg.append(root);
+
+  // edges
+  for (const e of graph.edges()) {
+    const edge = graph.edge(e);
+    const pts = edge.points;
+    const d = "M" + pts.map((p) => `${p.x},${p.y}`).join(" L");
+    const g = el("g", { class: "edge " + EDGE_STYLE(edge.label) });
+    g.append(el("path", { d, "marker-end": "url(#arrow)" }));
+    if (edge.label && ["blocks", "supersedes", "depends-on"].includes(edge.label)) {
+      const mid = pts[Math.floor(pts.length / 2)];
+      g.append(el("text", {
+        class: "edgelabel", x: mid.x, y: mid.y - 4,
+        "text-anchor": "middle",
+      }, edge.label));
+    }
+    root.append(g);
+  }
+
+  // nodes
+  const byId = new Map(NODES.map((n) => [n.id, n]));
+  for (const id of graph.nodes()) {
+    const n = graph.node(id);
+    const issue = byId.get(id);
+    const g = el("g", {
+      class: "node" + (isClaimed(issue) ? "" : "")
+        + (SELECTED === id ? " selected" : ""),
+      transform: `translate(${n.x - n.width / 2},${n.y - n.height / 2})`,
+    });
+    const box = el("rect", {
+      class: "nodebox" + (isClaimed(issue) ? " claimed" : ""),
+      width: n.width, height: n.height, rx: 6,
+      fill: statusColor(issue.status), "fill-opacity": 0.85,
+    });
+    g.append(box);
+    if (isClaimed(issue)) {
+      g.append(el("circle", {
+        cx: n.width - 12, cy: 12, r: 5, fill: "var(--claimed)",
+      }));
+    }
+    const label = el("text", {
+      class: "nodelabel", x: 8, y: 16,
+    }, id);
+    const title = el("text", { class: "nodelabel", x: 8, y: 30 }, shorten(issue.title, 26));
+    title.setAttribute("fill", "#10131a");
+    g.append(label, title);
+    g.addEventListener("click", () => showDetails(issue));
+    root.append(g);
+  }
+
+  // defs: arrow marker
+  const defs = el("defs");
+  const marker = el("marker", {
+    id: "arrow", viewBox: "0 0 10 10", refX: 10, refY: 5,
+    markerWidth: 6, markerHeight: 6, orient: "auto",
+  });
+  marker.append(el("path", { d: "M0,0 L10,5 L0,10 z", fill: "var(--muted)" }));
+  defs.append(marker);
+  svg.prepend(defs);
+
+  wrap.append(svg);
+  attachPanZoom(svg, root, wrap);
+}
+
+function shorten(s, n) {
+  s = s || "";
+  return s.length > n ? s.slice(0, n - 1) + "…" : s;
+}
+
+function zoomBy(f) {
+  scale = Math.max(0.05, Math.min(4, (scale || 1) * f));
+  draw();
+}
+
+function attachPanZoom(svg, root, wrap) {
+  let dragging = null;
+  svg.addEventListener("mousedown", (ev) => {
+    dragging = { x: ev.clientX, y: ev.clientY, tx, ty };
+    svg.classList.add("dragging");
+    ev.preventDefault();
+  });
+  svg.addEventListener("mousemove", (ev) => {
+    if (!dragging) return;
+    tx = dragging.tx + (ev.clientX - dragging.x);
+    ty = dragging.ty + (ev.clientY - dragging.y);
+    root.setAttribute("transform", `translate(${tx},${ty}) scale(${scale})`);
+  });
+  for (const end of ["mouseup", "mouseleave"]) {
+    svg.addEventListener(end, () => {
+      dragging = null;
+      svg.classList.remove("dragging");
+    });
+  }
+  svg.addEventListener("wheel", (ev) => {
+    ev.preventDefault();
+    const f = ev.deltaY < 0 ? 1.1 : 1 / 1.1;
+    const old = scale;
+    scale = Math.max(0.05, Math.min(4, scale * f));
+    // zoom towards cursor
+    const rect = wrap.getBoundingClientRect();
+    const cx = ev.clientX - rect.left, cy = ev.clientY - rect.top;
+    tx = cx - (cx - tx) * (scale / old);
+    ty = cy - (cy - ty) * (scale / old);
+    draw();
+  }, { passive: false });
+}
+
+// ---------------------------------------------------------------- details pane
+
+function fmtDate(iso) {
+  return iso ? iso.replace("T", " ").replace("Z", "") : "—";
+}
+
+function esc(s) {
+  return String(s ?? "");
+}
+
+function depLink(dep) {
+  const a = document.createElement("span");
+  a.className = "dep-link";
+  a.textContent = dep.depends_on_id;
+  a.onclick = () => {
+    const issue = DATA.issues.find((i) => i.id === dep.depends_on_id);
+    if (issue) showDetails(issue);
+  };
+  return a;
+}
+
+function showDetails(issue) {
+  SELECTED = issue.id;
+  const pane = document.getElementById("details");
+  pane.innerHTML = "";
+  pane.classList.add("open");
+
+  const close = document.createElement("button");
+  close.className = "close";
+  close.textContent = "✕";
+  close.onclick = () => { pane.classList.remove("open"); SELECTED = null; draw(); };
+  const h2 = document.createElement("h2");
+  h2.textContent = issue.title;
+  pane.append(close, h2);
+
+  const chip = (text, bg) => {
+    const c = document.createElement("span");
+    c.className = "chip" + (bg ? " status" : "");
+    if (bg) c.style.background = bg;
+    c.textContent = text;
+    return c;
+  };
+  pane.append(chip(issue.id));
+  pane.append(chip(issue.status, statusColor(issue.status)));
+  pane.append(chip(issue.issue_type || "—"));
+  pane.append(chip("P" + issue.priority));
+
+  const claimed = isClaimed(issue);
+  if (claimed) {
+    const c = chip("claimed" + (issue.assignee ? " · " + esc(issue.assignee) : ""), "var(--claimed)");
+    c.style.color = "#10131a";
+    pane.append(c);
+  }
+
+  const kv = document.createElement("div");
+  kv.className = "kv";
+  const row = (k, v) => {
+    const kd = document.createElement("div"); kd.className = "k"; kd.textContent = k;
+    const vd = document.createElement("div"); vd.textContent = v;
+    kv.append(kd, vd);
+  };
+  row("owner", esc(issue.owner) || "—");
+  row("assignee", esc(issue.assignee) || "—");
+  row("created", fmtDate(issue.created_at) + " by " + esc(issue.created_by));
+  row("updated", fmtDate(issue.updated_at));
+  if (issue.closed_at) row("closed", fmtDate(issue.closed_at) + (issue.close_reason ? "" : ""));
+  pane.append(kv);
+
+  const section = (title, body) => {
+    const s = document.createElement("div");
+    s.className = "section";
+    const h = document.createElement("h3"); h.textContent = title;
+    s.append(h);
+    if (typeof body === "string") {
+      const pre = document.createElement("pre");
+      pre.textContent = body;
+      s.append(pre);
+    } else s.append(body);
+    pane.append(s);
+  };
+
+  if ((issue.labels || []).length) {
+    const wrap = document.createElement("div");
+    for (const l of issue.labels) wrap.append(chip(l));
+    section("labels", wrap);
+  }
+
+  if (issue.description) section("description", issue.description);
+  if (issue.close_reason) section("close reason", issue.close_reason);
+  if (issue.notes) section("notes", issue.notes);
+
+  if (issue.acceptance_criteria) {
+    section("acceptance criteria", issue.acceptance_criteria);
+  }
+
+  const deps = issue.dependencies || [];
+  if (deps.length) {
+    const wrap = document.createElement("div");
+    for (const dep of deps) {
+      const line = document.createElement("div");
+      line.append(depLink(dep));
+      const t = document.createElement("span");
+      t.textContent = "  (" + dep.type + ")";
+      t.style.color = "var(--muted)";
+      line.append(t);
+      wrap.append(line);
+    }
+    section("depends on", wrap);
+  }
+  if (issue.parent) {
+    const wrap = document.createElement("div");
+    wrap.append("parent: ");
+    const parent = DATA.issues.find((i) => i.id === issue.parent.id);
+    const link = depLink({ depends_on_id: issue.parent.id });
+    wrap.append(link);
+    if (parent && parent.title) {
+      const t = document.createElement("span");
+      t.textContent = " — " + parent.title;
+      t.style.color = "var(--muted)";
+      wrap.append(t);
+    }
+    section("structure", wrap);
+  }
+
+  if ((issue.comments || []).length) {
+    const wrap = document.createElement("div");
+    for (const c of issue.comments) {
+      const div = document.createElement("div");
+      div.className = "comment";
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      meta.textContent = `${c.author || "?"} · ${fmtDate(c.created_at || c.timestamp || "")}`;
+      const pre = document.createElement("pre");
+      pre.textContent = c.text || "";
+      div.append(meta, pre);
+      wrap.append(div);
+    }
+    section(`comments (${issue.comment_count})`, wrap);
+  }
+
+  draw(); // update selection highlight
+}
+
+load();
+</script>
+</body>
+</html>
