@@ -80,6 +80,15 @@
   # nix call minute-slow (bd myconfig-kid). Static like the direct
   # backend's baked copy (nix/krun-store-scan.nix).
   storeScan,
+  # The poisoning instrumentation's inotify watcher (doc/TODOs/
+  # krun-guest-flake-source-symlink.md, bd myconfig-yiw): the
+  # *-source poisoning's creation is not deterministic from the
+  # observed inputs — instrument instead of hoping. The wrapper
+  # starts it alongside the first nix call (best-effort, fail-open:
+  # a watcher failure is a stderr line at most, never a nix one)
+  # and logs each nix argv to the same log, so a captured creation
+  # names its call. Static like storeScan (nix/krun-store-watch.nix).
+  storeWatch,
   nix,
   scratch ? "/run/mysbx-nix",
   nixConfig ? "",
@@ -320,6 +329,22 @@ let
           defaults=${lib.escapeShellArg defaultNixConfig}
           nl=$'\n'
           export NIX_CONFIG="$defaults''${NIX_CONFIG:+$nl$NIX_CONFIG}"
+          # The poisoning instrumentation (bd myconfig-yiw, doc/TODOs/
+          # krun-guest-flake-source-symlink.md): the creation of the
+          # poisoned *-source symlink is not deterministic from the
+          # observed inputs — instrument instead of hoping. Every
+          # guest-root nix argv goes to the same log the watcher
+          # writes, so a captured creation names its call. ONE
+          # watcher per VM (it self-gates on a flock held for its
+          # lifetime and dies with the VM, like the init's own
+          # watchdog loops). All best-effort and fail-open: no log
+          # write and no watcher failure may ever block or break
+          # nix.
+          watch_log=/tmp/mysbx-store-watch.log
+          printf '%s argv %s' "$(date -u +%FT%TZ 2>/dev/null || :)" "${name}" >> "$watch_log" 2>/dev/null || :
+          printf ' %q' "$@" >> "$watch_log" 2>/dev/null || :
+          printf '\n' >> "$watch_log" 2>/dev/null || :
+          ${storeWatch}/bin/store-watch /nix/store "$watch_log" /dev/shm/mysbx-store-watch.lock >/dev/null 2>&1 &
         fi
         exec ${nix}/bin/${name} "$@"
       '';

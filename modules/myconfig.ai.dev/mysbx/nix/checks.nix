@@ -41,7 +41,9 @@
 #
 #   mysbx-krun-guest-nix-test
 #                 the guest nix wrappers of the podman-krun backend
-#                 (./krun-guest-nix.nix, docs/design/backends.md D2).
+#                 (./krun-guest-nix.nix, docs/design/backends.md D2),
+#                 including the poisoning instrumentation's store
+#                 watcher (./krun-store-watch.nix, bd myconfig-yiw).
 #
 #   mysbx-completions
 #                 the fish tab completion shipped by the package
@@ -420,7 +422,9 @@ in
   # buildEnv against a plain nix. The mount itself is live validation.
   mysbx-krun-guest-nix-test =
     let
+      storeWatch = pkgs.callPackage ../nix/krun-store-watch.nix { };
       guestNix = pkgs.callPackage ../nix/krun-guest-nix.nix {
+        inherit storeWatch;
         storeScan = pkgs.callPackage ../nix/krun-store-scan.nix { };
         nixConfig = "substituters = https://cache.example";
       };
@@ -535,6 +539,59 @@ in
         && [ "$copy_line" -lt "$scan_line" ] && [ "$scan_line" -lt "$overlay_line" ] \
         || fail "the reconcile must run after copyState and before the overlay mount"
       grep -q 'exit 125' "$setup" || fail "a failed mount must be an error, never a fallback"
+      # The poisoning instrumentation (bd myconfig-yiw): every
+      # wrapper must log its argv and start the store watcher, all
+      # fail-open — no instrumentation failure may ever reach nix.
+      # A captured creation must name its call, so the argv log and
+      # the watcher write the SAME log file.
+      for name in ${pkgs.lib.concatStringsSep " " guestNix.names}; do
+        w="${guestNix}/bin/$name"
+        grep -qF 'argv' "$w" \
+          || fail "bin/$name does not log its argv (bd myconfig-yiw)"
+        grep -qF 'mysbx-store-watch.log' "$w" \
+          || fail "bin/$name does not write the store-watch log (bd myconfig-yiw)"
+        grep -qF 'store-watch /nix/store' "$w" \
+          || fail "bin/$name does not start the store watcher (bd myconfig-yiw)"
+        grep -qF '2>/dev/null || :' "$w" \
+          || fail "bin/$name instrumentation is not fail-open (bd myconfig-yiw)"
+      done
+      # The watcher itself, live: a *-source symlink and a *-source
+      # dir in a watched directory must each leave a typed line in
+      # the log — the exact evidence a captured poisoning would
+      # produce. A second instance must exit quietly (the flock
+      # single-instance gate).
+      watch=${storeWatch}/bin/store-watch
+      wdir=$TMPDIR/store-watch-test
+      wlog=$TMPDIR/store-watch-test.log
+      wlock=$TMPDIR/store-watch-test.lock
+      mkdir -p "$wdir"
+      "$watch" "$wdir" "$wlog" "$wlock" &
+      wpid=$!
+      sleep 1
+      ln -s "$wdir/nothing" "$wdir/aaaa-symlink-source"
+      mkdir "$wdir/bbbb-dir-source"
+      touch "$wdir/cccc-other"
+      sleep 1
+      kill $wpid 2>/dev/null || :
+      wait $wpid 2>/dev/null || :
+      grep -q 'aaaa-symlink-source' "$wlog" \
+        || fail "the store watcher does not log a new *-source symlink"
+      grep -qF 'SYMLINK aaaa-symlink-source -> ' "$wlog" \
+        || fail "the store watcher does not record the symlink target"
+      grep -qF 'DIR bbbb-dir-source' "$wlog" \
+        || fail "the store watcher does not log a new *-source dir"
+      ! grep -q 'cccc-other' "$wlog" \
+        || fail "the store watcher logs non-source entries"
+      "$watch" "$wdir" "$wlog" "$wlock" &
+      w2pid=$!
+      sleep 1
+      # The second instance must take the flock gate (exit 0
+      # quietly) — a timeout guards the race where it wins the lock
+      # instead and would run in the foreground forever.
+      timeout 5 "$watch" "$wdir" "$wlog" "$wlock" \
+        || fail "a second store-watch instance must exit quietly via the flock gate, not fail"
+      kill $w2pid 2>/dev/null || :
+      wait $w2pid 2>/dev/null || :
       [ "$(id -u)" -ne 0 ] || fail "the check expects a non-root build user"
       "${guestNix}/bin/nix" --version | grep -q '^nix (Nix) ${guestNix.nix.version}$' \
         || fail "the wrapper does not pass through to the pinned nix as non-root"

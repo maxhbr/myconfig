@@ -1279,10 +1279,11 @@ in
               nix = cfg.krun.nix.package;
               sqlite = pkgs.sqlite;
               storeScan = pkgs.callPackage ./nix/krun-store-scan.nix { };
+              storeWatch = pkgs.callPackage ./nix/krun-store-watch.nix { };
               nixConfig = cfg.krun.nix.settings;
             })
           ];
-          defaultText = literalExpression "[ (pkgs.callPackage ./nix/krun-guest-nix.nix { nix = cfg.krun.nix.package; sqlite = pkgs.sqlite; storeScan = pkgs.callPackage ./nix/krun-store-scan.nix { }; nixConfig = cfg.krun.nix.settings; }) ]";
+          defaultText = literalExpression "[ (pkgs.callPackage ./nix/krun-guest-nix.nix { nix = cfg.krun.nix.package; sqlite = pkgs.sqlite; storeScan = pkgs.callPackage ./nix/krun-store-scan.nix { }; storeWatch = pkgs.callPackage ./nix/krun-store-watch.nix { }; nixConfig = cfg.krun.nix.settings; }) ]";
           description = ''
             The guest nix userspace baked into the agent image when
             `krun.nix.enable`, consumed through `podman.imagePackages`:
