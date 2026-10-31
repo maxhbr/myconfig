@@ -32,9 +32,6 @@
 # |                | output (sphinx-hook reads `sphinxBuilders` as a scalar under  |
 # |                | `__structuredAttrs`), `sqliteschema` rejects `typepy` 2.0.0.  |
 # |                | Taken from the `nixpkgs-sbomnix` input (binary-cached).       |
-# | elgato         | `tests/cli/test_cli.py` imports `click` and checks for a        |
-# |                | `click.Group`, which typer no longer provides. CLI tests       |
-# |                | skipped; breaks hosts/host.f13/mykeylight.                     |
 # | v4l2loopback   | The module output now carries a full `lib/modules/<ver>/`     |
 # |                | depmod set (`modules.alias`, ...), which collides with the    |
 # |                | kernel's in the module aggregator's buildEnv. Removed in     |
@@ -110,21 +107,6 @@
     # doc/TODOs/drop-sbomnix-nixpkgs-pin.md.
     (self: _super: {
       sbomnix = self.nixpkgs-sbomnix.sbomnix;
-    })
-
-    # elgato: `tests/cli/test_cli.py` imports `click` (no longer pulled in
-    # by typer) and asserts the typer app is a `click.Group`, which current
-    # typer no longer is. The library itself is unaffected (mykeylight uses
-    # only that), so the CLI tests are skipped. See
-    # doc/TODOs/drop-elgato-cli-tests-override.md.
-    (_final: prev: {
-      pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
-        (_pyfinal: pyprev: {
-          elgato = pyprev.elgato.overridePythonAttrs (old: {
-            disabledTestPaths = (old.disabledTestPaths or [ ]) ++ [ "tests/cli/test_cli.py" ];
-          });
-        })
-      ];
     })
 
     # v4l2loopback: its output now ships the depmod files
