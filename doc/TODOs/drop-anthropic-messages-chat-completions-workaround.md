@@ -8,18 +8,22 @@
 Without it, litellm routes Anthropic `/v1/messages` requests whose
 deployment is `openai/*` through its Responses-API bridge, which posts to
 the backend's `/v1/responses` (and `/v1/responses/input_tokens` for
-`/v1/messages/count_tokens`). The bridge emits two item shapes that
-llama.cpp's Responses→chat-completions converter (`server_chat_convert_responses_to_chatcmpl`
-in `tools/server/server-chat.cpp`) rejects:
+`/v1/messages/count_tokens`). llama.cpp's Responses→chat-completions
+converter (`server_chat_convert_responses_to_chatcmpl` in
+`tools/server/server-chat.cpp`) rejects item shapes the bridge used to
+emit:
 
-- an assistant turn becomes a bare `{"role": "assistant", "content": …}`
-  item with no `type` field → `400 Cannot determine type of 'item'`;
-- a replayed `thinking` block becomes `{"type": "reasoning", "summary": …}`
-  with no `content` array → `400 item['content'] is not an array`.
+- ~~an assistant turn becomes a bare `{"role": "assistant", "content": …}`
+  item with no `type` field → `400 Cannot determine type of 'item'`~~
+  (fixed in the deployed litellm 1.106.x: assistant turns now carry
+  `type: "message"` + `output_text` parts);
+- a replayed `thinking` block becomes a `{"type": "reasoning", "summary": …}`
+  with no `content` array → `400 item['content'] is not an array`
+  (still unfixed on both sides, see Triage 2026-10-31).
 
-The first only fires for requests that replay an assistant turn, i.e. the
-second and every later turn of a tool loop; the second fires for any
-request whose history carries a reasoning block.
+The remaining failure fires for any request whose history carries a
+reasoning/thinking block — i.e. every multi-turn conversation with the
+reasoning models (Qwen3 etc.) these backends serve.
 
 ## Code touched
 
@@ -60,12 +64,45 @@ Introduced in commit `4a3ab98eb763776c2e57850a3e8d17c6614337a6`.
 
 ## Follow-up worth filing upstream
 
-Both fixes below were verified against the `rtx5090` backend: each item shape
-is accepted by llama-server today.
+- ~~litellm: the Responses bridge should emit `type: "message"` on assistant
+  items~~ (done in the deployed litellm 1.106.x, see Triage 2026-10-31).
+  Remaining ask: include a `content` array on `reasoning` items
+  (`_reasoning_item_from_block_group` in
+  `litellm/litellm_core_utils/prompt_templates/common_utils.py` emits only
+  `type` + `summary` [+ `encrypted_content`]).
+- llama.cpp: `server_chat_convert_responses_to_chatcmpl` could accept a
+  summary-only `reasoning` item instead of throwing
+  `item['content'] is not an array`. (The older ask — treat a bare
+  `{role, content}` item as a message — is obsolete now that litellm emits
+  the `type` field.)
 
-- litellm: the Responses bridge should emit `type: "message"` on assistant
-  items and include a `content` array on `reasoning` items. Either change
-  alone makes the payload acceptable.
-- llama.cpp: `server_chat_convert_responses_to_chatcmpl` could treat a bare
-  `{role, content}` item as a message instead of throwing
-  `Cannot determine type of 'item'`.
+## Triage 2026-10-31
+
+Checked upstream sources for the versions this repo deploys (no overlay
+pins llama.cpp or litellm; both come from the locked nixpkgs rev
+`1c89083e451e891152365b799595cf7790a43325`):
+
+- litellm pinned at **1.106.4**. Its bridge
+  (`litellm/llms/anthropic/pass_through/responses_adapters/transformation.py`,
+  `translate_messages_to_responses_input`) now emits assistant text turns
+  as `{"type": "message", "role": "assistant", "content": [{"type": "output_text", …}]}`
+  — the bare-item 400 is gone. But replayed thinking blocks still become
+  `{"type": "reasoning", "summary": […]}` with no `content` array
+  (`_reasoning_item_from_block_group`, common_utils.py).
+- llama.cpp pinned at **v0.7.0**; latest release is **v0.8.0**, and both —
+  plus current master — still require `item['content']` to be a non-empty
+  array on `reasoning` items (`tools/server/server-chat.cpp`) and still
+  throw `item['content'] is not an array` otherwise.
+
+Result: condition NOT met. Any `/v1/messages` request whose history carries
+a thinking block would still 400 through the bridge, and the note's own
+verification (live two-turn Anthropic tool loop against a llama.cpp backend
+on thing) is not reachable from the review sandbox anyway
+(thing.wg0.maxhbr.local:4000 unreachable; live backends needed). Flag kept.
+
+Next check: after a litellm bump that adds `content` to reasoning items,
+or a llama.cpp bump that accepts summary-only reasoning items — then run
+the live two-turn tool-loop test on `thing` (turn 1 must produce a
+`tool_use` block, turn 2 replays assistant content + `tool_result`,
+ideally with a reasoning model so the thinking-block path is exercised
+too).
