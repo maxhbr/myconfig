@@ -13,14 +13,14 @@
 # Each entry tracks the default branch of the given repo; the resolved rev and
 # hash are frozen in `_sources/generated.nix` until the next `nvfetcher` run.
 
-# Grafana agent skills, consumed by modules/myconfig.ai/skills/grafana-core.nix.
+# Grafana agent skills, consumed by modules/myconfig.ai.dev/skills/grafana-core.nix.
 [grafana-skills]
 src.git = "https://github.com/grafana/skills"
 src.branch = "main"
 fetch.github = "grafana/skills"
 
 # SimpleEnglish (ASD-STE100 Simplified Technical English) skill, consumed by
-# modules/myconfig.ai/skills/simple-english.nix. Only the `skills/simple-english`
+# modules/myconfig.ai.dev/skills/simple-english.nix. Only the `skills/simple-english`
 # subdirectory of the upstream repo is used.
 [simple-english]
 src.git = "https://github.com/AminBlg/SimpleEnglish"
@@ -28,7 +28,7 @@ src.branch = "main"
 fetch.github = "AminBlg/SimpleEnglish"
 
 # `/bro` skill (re-explain the previous assistant message in plain language),
-# consumed by modules/myconfig.ai/skills/bro.nix. The upstream repo keeps
+# consumed by modules/myconfig.ai.dev/skills/bro.nix. The upstream repo keeps
 # `SKILL.md` at its root, so the module extracts just that file.
 [bro-skill]
 src.git = "https://github.com/luchasarie/bro-skill"

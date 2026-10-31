@@ -25,7 +25,7 @@
 #
 # ccusage is invoked with `-O` (--offline): the nixpkgs package has the
 # LiteLLM pricing table baked in at build time (see
-# modules/myconfig.ai/programs.ccusage), so no network access is needed
+# modules/myconfig.ai.dev/programs/programs.ccusage), so no network access is needed
 # and the unit carries no network-online dependency.
 #
 # Metrics written (all carry user="<monitoredUser>"; `period` is the

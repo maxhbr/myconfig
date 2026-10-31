@@ -50,7 +50,8 @@ rtk --version           # verify the installed binary
 
 The config file is `~/.config/rtk/config.toml`. On this machine it is
 generated declaratively by NixOS/home-manager
-(`modules/myconfig.ai/programs.rtk/`) and is therefore **read-only** — do not
+(`modules/myconfig.ai.dev/programs/programs.rtk/`) and is therefore
+**read-only** — do not
 edit it, and never run `rtk init`: the agent hooks and plugins it would write
 are already deployed as read-only files. Change
 `myconfig.ai.rtk.settings` in the NixOS configuration instead and rebuild.
