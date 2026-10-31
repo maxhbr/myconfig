@@ -6,7 +6,7 @@
 #
 # This is the `sandboxed-*` counterpart of the heavyweight
 # `myconfig.ai.microvm` config-seed mechanism
-# (../myconfig.ai.microvm/config-seed.nix): instead of a root-owned,
+# (../sandboxes/myconfig.ai.microvm/config-seed.nix): instead of a root-owned,
 # read-only virtiofs share staged by a privileged host daemon and copied by a
 # guest-root oneshot, the sandboxed-* wrappers run entirely in user space (no
 # host rebuild, no root, no systemd unit). So the staging + transfer happens
@@ -53,7 +53,8 @@
 # environment (`SetEnv`), exactly as before.
 #
 # ── The allowlist source of truth ──────────────────────────────────────────
-# The per-agent `configPaths` below MIRROR `../myconfig.ai.microvm/agents.nix`
+# The per-agent `configPaths` below MIRROR
+# `../sandboxes/myconfig.ai.microvm/agents.nix`
 # (the authoritative registry for the heavyweight tier): for every agent that
 # tier-4 registry knows (claude, codex, opencode, pi, herdr, hermes) the path
 # list here is identical. Two agents only this tier registers (`qwen-code`,
@@ -70,7 +71,7 @@
 
 let
   # ── the credential DENYLIST (defence in depth) ─────────────────────────
-  # Mirrors ../myconfig.ai.microvm/config-seed.nix `denyNames/Suffixes/Infixes`
+  # Mirrors ../sandboxes/myconfig.ai.microvm/config-seed.nix `denyNames/Suffixes/Infixes`
   # verbatim. Matched case-insensitively against every path component and
   # against the resolved target's components below the host home / store root.
   denyNames = [
@@ -133,7 +134,7 @@ let
   ];
 
   # ── the per-agent configuration ALLOWLIST ─────────────────────────────
-  # MIRRORS ../myconfig.ai.microvm/agents.nix `specs.<name>.configPaths`.
+  # MIRRORS ../sandboxes/myconfig.ai.microvm/agents.nix `specs.<name>.configPaths`.
   # Exact files and exact directories, relative to `$HOME`. A credential-shaped
   # entry is rejected at eval time by `mkSeeder`'s assertions (below) and at
   # runtime by the denylist. Missing paths are simply absent in the guest, so
@@ -183,7 +184,8 @@ let
     hermes = [ ];
     # `herdr` (the multiplexer tier-3 `agent-qemu-herdr` drops the operator
     # into) renders exactly `~/.config/herdr/config.toml` — keybindings only,
-    # no credentials and no host-specific paths (../programs.herdr.nix). Stage
+    # no credentials and no host-specific paths
+    # (../programs/programs.herdr.nix). Stage
     # the EXACT file, never the `.config/herdr` directory, per the allowlist
     # rule. Mirrors the tier-4 `herdr` registry entry.
     herdr = [ ".config/herdr/config.toml" ];
@@ -545,7 +547,7 @@ in
     denyOverrides
     ;
 
-  # The per-agent allowlist, mirroring ../myconfig.ai.microvm/agents.nix.
+  # The per-agent allowlist, mirroring ../sandboxes/myconfig.ai.microvm/agents.nix.
   inherit agentConfigPaths extraPaths;
 
   # The union allowlist for a set of agent names.
