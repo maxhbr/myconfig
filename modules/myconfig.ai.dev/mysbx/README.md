@@ -575,14 +575,22 @@ host value of that variable names a `/nix/store` path the podman backends
 cannot see, so each tier pins its own.
 
 What is installed is the package wrapped by
-[`nix/browser.nix`](./nix/browser.nix): it prepends `--no-sandbox` and
+[`nix/browser.nix`](./nix/browser.nix): it prepends `--no-sandbox`, sets
+`FONTCONFIG_FILE` to a `makeFontsConf`-generated config (DejaVu as the
+minimal face set, cache in `$XDG_CACHE_HOME/fontconfig`), and
 passes every other argument through, keeping the executable's name so
 the PATH probes still find it. A chrome-family browser sandboxes its
 renderers with a user namespace and cannot do so inside this one —
 bubblewrap already holds the payload in a user namespace with
-`no_new_privs` — so without the flag it dies at startup. The layer
+`no_new_privs` — so without the flag it dies at startup. Without the
+fontconfig config it dies just as hard LATER: the rootfs carries no
+`/etc/fonts`, and a config-less fontconfig makes chromium abort with
+`FATAL SkFontMgr_FontConfigInterface: Not implemented` the moment a
+page triggers a font enumeration (a `<select>` element does) — the
+headless screenshot run of an agent then fails with a browser crash
+instead of a rendered page. The layer
 given up is one the payload never had; the boundary that matters stays
-bubblewrap (or gVisor on the podman backend). The flag is baked in
+bubblewrap (or gVisor on the podman backend). Both settings are baked in
 because every caller is a machine that spawns the executable with its
 own argument list.
 

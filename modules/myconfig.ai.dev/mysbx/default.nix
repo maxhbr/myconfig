@@ -572,10 +572,12 @@ in
         host opts in per deployment.
 
         What lands on the PATH is `package` wrapped by
-        ./nix/browser.nix, which prepends `--no-sandbox` and passes
-        every other argument through: the browser cannot build its own
-        namespace sandbox inside this one, and every caller is a
-        machine with its own fixed argv. The wrapper is pinned as
+        ./nix/browser.nix, which prepends `--no-sandbox` (the browser
+        cannot build its own namespace sandbox inside this one) and
+        sets `FONTCONFIG_FILE` to a generated fonts.conf (the rootfs
+        has no `/etc/fonts`; without it chromium aborts on the first
+        font enumeration), passing every other argument through: every
+        caller is a machine with its own fixed argv. The wrapper is pinned as
         `AGENT_BROWSER_EXECUTABLE_PATH` in the generated `[env]` too,
         so `agent-browser` uses exactly this build instead of probing
         the PATH or downloading its own Chrome into the sandbox home
