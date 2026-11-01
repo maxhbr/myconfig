@@ -187,7 +187,12 @@ let
       let
         hostMetadata = metadata.hosts."${hostName}";
         addressesFromIp =
-          if (lib.attrsets.hasAttrByPath [ "ip4" ] hostMetadata) then
+          # Prefer the wg address when the peer is in the wg mesh, so
+          # connections stay inside the tunnel. Fall back to the LAN ip4
+          # for mesh-less peers.
+          if (lib.attrsets.hasAttrByPath [ "wireguard" "wg0" "ip4" ] hostMetadata) then
+            [ "tcp://${hostMetadata.wireguard.wg0.ip4}" ]
+          else if (lib.attrsets.hasAttrByPath [ "ip4" ] hostMetadata) then
             [ "tcp://${hostMetadata.ip4}" ]
           else
             [ ];
