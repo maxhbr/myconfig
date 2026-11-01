@@ -18,6 +18,8 @@
     --muted: #8a929e;
     --panel: #1d2026;
     --border: #33373f;
+    --lane-head-w: 230px;
+    --col-min: 290px;
   }
   html, body { height: 100%; margin: 0; }
   body {
@@ -38,12 +40,17 @@
     background: var(--bg); color: var(--fg); border: 1px solid var(--border);
     border-radius: 4px; padding: 4px 8px; width: 180px;
   }
+  #toolbar select {
+    background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+    border-radius: 4px; padding: 4px;
+  }
   #status-count { color: var(--muted); }
   .legend { display: flex; gap: 10px; flex-wrap: wrap; padding: 6px 14px; font-size: 12px; color: var(--muted); background: var(--panel); border-bottom: 1px solid var(--border); }
   .legend span { display: inline-flex; align-items: center; gap: 4px; }
   .swatch { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
   main { flex: 1; display: flex; min-height: 0; }
-  #graph-wrap { flex: 1; position: relative; overflow: hidden; }
+  #board, #graph-wrap { flex: 1; min-height: 0; }
+  #graph-wrap { position: relative; overflow: hidden; }
   #graph-wrap svg { width: 100%; height: 100%; display: block; cursor: grab; }
   #graph-wrap svg.dragging { cursor: grabbing; }
   aside#details {
@@ -77,6 +84,83 @@
   .dep-link { color: var(--open); cursor: pointer; text-decoration: underline; }
   #loading { padding: 40px; color: var(--muted); font-size: 16px; }
   #error { padding: 40px; color: #e74c3c; white-space: pre-wrap; }
+
+  /* ------------------------------------------------------------- board */
+
+  #board { overflow: auto; padding: 0 0 40px; }
+  #board[hidden] { display: none; }
+  #graph-wrap[hidden] { display: none; }
+  .board-grid, .lane {
+    display: grid;
+    grid-template-columns: var(--lane-head-w) repeat(var(--ncols), minmax(var(--col-min), 1fr));
+  }
+  .board-head {
+    position: sticky; top: 0; z-index: 3; background: var(--bg);
+    border-bottom: 2px solid var(--border);
+  }
+  .board-head .corner {
+    padding: 8px 10px; font-size: 12px; color: var(--muted);
+    position: sticky; left: 0; background: var(--bg); z-index: 4;
+  }
+  .colhead {
+    padding: 8px 10px; font-weight: 600; font-size: 13px;
+    display: flex; align-items: center; gap: 8px;
+    border-left: 1px solid var(--border);
+  }
+  .colhead .count {
+    font-weight: 400; color: var(--muted);
+    background: var(--panel); border-radius: 10px; padding: 0 8px; font-size: 12px;
+  }
+  .colhead .swatch { width: 8px; height: 8px; }
+  .lane { border-bottom: 1px solid var(--border); }
+  .lane.ungrouped .lane-head .lane-title { color: var(--muted); font-style: italic; }
+  .lane-head {
+    position: sticky; left: 0; z-index: 2;
+    background: var(--panel); padding: 10px; font-size: 12px;
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 4px; cursor: pointer;
+  }
+  .lane-head:hover { background: #262a31; }
+  .lane-head .lane-root { font-family: ui-monospace, monospace; color: var(--open); }
+  .lane-head .lane-title {
+    font-size: 12.5px; color: var(--fg); word-break: break-word;
+    display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .lane-head .lane-stats { color: var(--muted); }
+  .col {
+    padding: 8px; display: flex; flex-direction: column; gap: 6px;
+    border-left: 1px solid var(--border);
+  }
+  .col:empty::after {
+    content: "—"; color: var(--muted); opacity: .4; padding: 4px 8px; font-size: 16px;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-left-width: 4px;
+    border-radius: 5px; padding: 6px 8px; cursor: pointer; position: relative;
+  }
+  .card:hover { border-color: var(--muted); }
+  .card.selected { border-color: #fff; box-shadow: 0 0 0 1px #fff; }
+  .card .card-top {
+    display: flex; align-items: center; gap: 6px; margin-bottom: 3px;
+  }
+  .card .card-id { font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); }
+  .card .card-status { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .card .card-claimed {
+    color: var(--claimed); font-size: 10px; margin-left: auto;
+  }
+  .card .card-title { font-size: 13px; line-height: 1.35; word-break: break-word; }
+  .card .card-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .card .card-chips span {
+    font-size: 10.5px; padding: 0 6px; border-radius: 8px;
+    border: 1px solid var(--border); color: var(--muted); line-height: 16px;
+  }
+  .card .card-chips span.substatus { border-color: currentColor; }
+  .col-open .card { border-left-color: var(--open); }
+  .col-in_progress .card { border-left-color: var(--in_progress); }
+  .col-closed .card { border-left-color: var(--closed); opacity: .82; }
+
+  /* ------------------------------------------------------------- graph */
+
   text.nodelabel { fill: var(--fg); font-size: 11px; cursor: pointer; }
   .node rect.nodebox { stroke-width: 1.5px; }
   .node rect.nodebox.claimed { stroke: #ffe08a; stroke-width: 3px; }
@@ -103,8 +187,14 @@
   <div id="status-count"></div>
   <div class="spacer"></div>
   <div id="toolbar">
+    <label>view
+      <select id="view-mode">
+        <option value="board">board</option>
+        <option value="graph">graph</option>
+      </select>
+    </label>
     <label><input type="checkbox" id="toggle-closed" checked> closed</label>
-    <label><input type="checkbox" id="toggle-deps" checked> edges</label>
+    <label id="label-deps"><input type="checkbox" id="toggle-deps" checked> edges</label>
     <label>type
       <select id="filter-type"><option value="">all</option></select>
     </label>
@@ -116,9 +206,9 @@
 </header>
 <div class="legend" id="legend"></div>
 <main>
-  <div id="graph-wrap">
-    <div id="loading">loading beads…</div>
-    <div class="controls">
+  <div id="board" hidden></div>
+  <div id="graph-wrap" hidden>
+    <div class="controls" id="graph-controls">
       <button id="zoom-in" title="zoom in">+</button>
       <button id="zoom-out" title="zoom out">−</button>
       <button id="zoom-fit" title="fit">⛶</button>
@@ -141,19 +231,41 @@ const STATUS_COLOR = {
   hooked: "#e67e22",
 };
 const STATUS_ORDER = ["open", "in_progress", "blocked", "hooked", "deferred", "pinned", "closed"];
+
+// Board columns. Any status not listed falls into the first column and is
+// marked on the card with its own colored dot.
+const COLUMNS = [
+  { key: "open", label: "Open", statuses: ["open"] },
+  { key: "in_progress", label: "In Progress", statuses: ["in_progress"] },
+  { key: "closed", label: "Closed", statuses: ["closed"] },
+];
+const COLUMN_STATUS = {}; // status -> column key
+for (const c of COLUMNS) for (const s of c.statuses) COLUMN_STATUS[s] = c.key;
+function columnOf(status) {
+  return COLUMN_STATUS[status] || "open";
+}
+
 const EDGE_STYLE = (type) => type === null || type === undefined
   ? ""
   : type.replace(/[^a-z-]/g, "");
 
-let DATA = null;   // { issues: [...] }
-let NODES = [];    // filtered issue list = visible nodes
+let DATA = null;      // { issues: [...] }
+let NODES = [];       // filtered issue list = visible beads
 let SELECTED = null;
+let CLUSTER = null;   // Map: issue id -> cluster root id
 
 const svgNS = "http://www.w3.org/2000/svg";
 
 function el(tag, attrs = {}, text) {
   const e = document.createElementNS(svgNS, tag);
   for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function h(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
   if (text !== undefined) e.textContent = text;
   return e;
 }
@@ -174,13 +286,16 @@ async function load() {
     if (!r.ok) throw new Error("HTTP " + r.status);
     DATA = await r.json();
   } catch (e) {
-    document.getElementById("loading").id = "error";
-    document.getElementById("error").textContent = "failed to load /api/beads: " + e;
+    const loading = document.getElementById("loading");
+    loading.id = "error";
+    loading.textContent = "failed to load /api/beads: " + e;
     return;
   }
+  computeClusters();
   buildLegend();
   buildFilters();
-  window.addEventListener("resize", () => render());
+  window.addEventListener("resize", () => { if (viewMode() === "graph") draw(); });
+  document.getElementById("view-mode").onchange = render;
   document.getElementById("toggle-closed").onchange = render;
   document.getElementById("toggle-deps").onchange = render;
   document.getElementById("filter-type").onchange = render;
@@ -204,7 +319,7 @@ function buildLegend() {
     legend.append(span);
   }
   const claim = document.createElement("span");
-  claim.textContent = "◉ claimed = amber ring";
+  claim.textContent = "◉ claimed = amber dot";
   legend.append(claim);
 }
 
@@ -237,14 +352,233 @@ function visibleIssues() {
   });
 }
 
+// ---------------------------------------------------------------- clusters
+
+// A cluster groups beads that belong to one epic / big work area:
+// parent-child links first, then discovered-from as a fallback so that
+// beads discovered while working on an issue land in its lane.
+function parentOf(issue) {
+  const p = issue.parent;
+  if (typeof p === "string") return p;
+  if (p && typeof p === "object" && p.id) return p.id;
+  for (const d of issue.dependencies || []) {
+    if (d.type === "parent-child") return d.depends_on_id;
+  }
+  return null;
+}
+
+function computeClusters() {
+  const byId = new Map(DATA.issues.map((i) => [i.id, i]));
+
+  // pass 1: strict parent chains (parent field / parent-child deps)
+  const strictRoot = new Map();
+  for (const issue of DATA.issues) {
+    const seen = new Set([issue.id]);
+    let cur = issue;
+    while (true) {
+      const p = parentOf(cur);
+      if (!p || seen.has(p) || !byId.has(p)) break;
+      seen.add(p);
+      cur = byId.get(p);
+    }
+    strictRoot.set(issue.id, cur.id);
+  }
+
+  // a lane exists for every strict cluster with more than one member
+  const clusterSize = new Map();
+  for (const root of strictRoot.values())
+    clusterSize.set(root, (clusterSize.get(root) || 0) + 1);
+  const isLane = (root) => (clusterSize.get(root) || 0) > 1;
+
+  // pass 2: beads discovered while working on a lane member join that
+  // lane; everything discovered outside a lane stays ungrouped
+  CLUSTER = new Map();
+  for (const issue of DATA.issues) {
+    let root = strictRoot.get(issue.id);
+    if (!isLane(root)) {
+      for (const d of issue.dependencies || []) {
+        if (d.type !== "discovered-from") continue;
+        const target = strictRoot.get(d.depends_on_id);
+        if (target !== undefined && isLane(target)) { root = target; break; }
+      }
+    }
+    CLUSTER.set(issue.id, root);
+  }
+}
+
 // ---------------------------------------------------------------- rendering
+
+function viewMode() {
+  return document.getElementById("view-mode").value;
+}
+
+function render() {
+  NODES = visibleIssues();
+  document.getElementById("status-count").textContent =
+    `${NODES.length} of ${DATA.issues.length} beads`;
+
+  const board = document.getElementById("board");
+  const graphWrap = document.getElementById("graph-wrap");
+  const isBoard = viewMode() === "board";
+  board.hidden = !isBoard;
+  graphWrap.hidden = isBoard;
+  document.getElementById("graph-controls").hidden = isBoard;
+  document.getElementById("label-deps").style.display = isBoard ? "" : "none";
+
+  if (isBoard) renderBoard();
+  else renderGraph();
+}
+
+function refreshSelection() {
+  if (viewMode() === "board") {
+    for (const c of document.querySelectorAll(".card"))
+      c.classList.toggle("selected", c.dataset.id === SELECTED);
+  } else {
+    draw();
+  }
+}
+
+// ---------------------------------------------------------------- board
+
+function renderBoard() {
+  const board = document.getElementById("board");
+  board.innerHTML = "";
+
+  const showClosed = document.getElementById("toggle-closed").checked;
+  const cols = COLUMNS.filter((c) => showClosed || c.key !== "closed");
+  board.style.setProperty("--ncols", cols.length);
+
+  // lane = cluster root id -> visible issues
+  const byId = new Map(DATA.issues.map((i) => [i.id, i]));
+  const lanes = new Map();
+  for (const n of NODES) {
+    const rootId = CLUSTER.get(n.id) || n.id;
+    if (!lanes.has(rootId)) lanes.set(rootId, []);
+    lanes.get(rootId).push(n);
+  }
+  const named = [], ungrouped = [];
+  for (const [rootId, members] of lanes) {
+    if (members.length >= 2) named.push({ rootId, members });
+    else ungrouped.push(...members);
+  }
+  named.sort((a, b) =>
+    b.members.length - a.members.length ||
+    a.rootId.localeCompare(b.rootId));
+
+  const issueRank = (i) => {
+    const statusRank = i.status === "in_progress" ? 0
+      : i.status === "closed" ? 2 : 1;
+    return [statusRank, i.priority ?? 2, i.id];
+  };
+  const byRank = (a, b) => {
+    const [sa, pa, ia] = issueRank(a), [sb, pb, ib] = issueRank(b);
+    return sa - sb || pa - pb || ia.localeCompare(ib);
+  };
+
+  // column headers (sticky)
+  const head = h("div", "board-grid board-head");
+  head.append(h("div", "corner", "lane \\ column"));
+  for (const c of cols) {
+    const ch = h("div", "colhead");
+    const sw = h("span", "swatch");
+    sw.style.background = statusColor(c.statuses[0]);
+    ch.append(sw, document.createTextNode(c.label));
+    ch.append(h("span", "count", String(0)));
+    ch.dataset.col = c.key;
+    head.append(ch);
+  }
+  board.append(head);
+
+  const laneCounts = {};
+  for (const c of cols) laneCounts[c.key] = 0;
+
+  const buildLane = (laneRoot, members, ungroupedLane) => {
+    const lane = h("div", "lane" + (ungroupedLane ? " ungrouped" : ""));
+    const headEl = h("div", "lane-head");
+    if (laneRoot) {
+      const root = byId.get(laneRoot);
+      const rootLink = h("span", "lane-root", laneRoot);
+      if (root) rootLink.onclick = () => showDetails(root);
+      headEl.append(rootLink);
+      headEl.append(h("div", "lane-title", root ? root.title : ""));
+    } else {
+      headEl.append(h("div", "lane-title", "ungrouped"));
+    }
+
+    const stats = { open: 0, in_progress: 0, closed: 0 };
+    for (const m of members) {
+      const col = columnOf(m.status);
+      if (stats[col] !== undefined) stats[col]++;
+      laneCounts[col]++;
+    }
+    const statParts = [];
+    if (stats.open) statParts.push(stats.open + " open");
+    if (stats.in_progress) statParts.push(stats.in_progress + " wip");
+    if (stats.closed) statParts.push(stats.closed + " closed");
+    headEl.append(h("div", "lane-stats", statParts.join(" · ") || "—"));
+    lane.append(headEl);
+
+    // partition members into columns, in-progress first within each
+    const perCol = {};
+    for (const c of cols) perCol[c.key] = [];
+    for (const m of [...members].sort(byRank)) perCol[columnOf(m.status)].push(m);
+
+    for (const c of cols) {
+      const col = h("div", "col col-" + c.key);
+      for (const m of perCol[c.key]) col.append(card(m));
+      lane.append(col);
+    }
+    board.append(lane);
+  };
+
+  for (const { rootId, members } of named) buildLane(rootId, members, false);
+  if (ungrouped.length) buildLane(null, ungrouped, true);
+
+  for (const c of cols) {
+    const ch = head.querySelector(`[data-col="${c.key}"] .count`);
+    ch.textContent = String(laneCounts[c.key]);
+  }
+}
+
+function card(issue) {
+  const c = h("div", "card" + (SELECTED === issue.id ? " selected" : ""));
+  c.dataset.id = issue.id;
+  c.style.borderLeftColor = statusColor(issue.status);
+
+  const top = h("div", "card-top");
+  const dot = h("span", "card-status");
+  dot.style.background = statusColor(issue.status);
+  dot.title = issue.status;
+  top.append(h("span", "card-id", issue.id), dot);
+  if (isClaimed(issue)) {
+    const claim = h("span", "card-claimed", "◉");
+    claim.title = "claimed" + (issue.assignee ? " · " + issue.assignee : "");
+    top.append(claim);
+  }
+  c.append(top);
+
+  c.append(h("div", "card-title", issue.title || ""));
+
+  const chips = h("div", "card-chips");
+  const mk = (t, cls) => { const s = h("span", cls || "", t); chips.append(s); };
+  mk(issue.issue_type || "—");
+  mk("P" + (issue.priority ?? "—"));
+  if (issue.status && !COLUMNS.some((col) => col.statuses.includes(issue.status)))
+    mk(issue.status, "substatus");
+  if (issue.comment_count) mk("💬 " + issue.comment_count);
+  c.append(chips);
+
+  c.onclick = () => showDetails(issue);
+  return c;
+}
+
+// ---------------------------------------------------------------- graph
 
 let graph = null;     // dagre graph with layout
 let scale = null;     // null = fit-to-viewport
 let tx = 0, ty = 0;   // pan offset (screen px)
 
-function render() {
-  NODES = visibleIssues();
+function renderGraph() {
   const byId = new Map(NODES.map((n) => [n.id, n]));
   const showDeps = document.getElementById("toggle-deps").checked;
 
@@ -264,8 +598,6 @@ function render() {
   }
 
   dagre.layout(graph);
-  document.getElementById("status-count").textContent =
-    `${NODES.length} of ${DATA.issues.length} beads`;
   draw();
 }
 
@@ -280,11 +612,10 @@ function layoutSize() {
 }
 
 function draw() {
+  if (viewMode() !== "graph") return;
   const wrap = document.getElementById("graph-wrap");
   const old = wrap.querySelector("svg");
   if (old) old.remove();
-  const loading = document.getElementById("loading");
-  if (loading) loading.remove();
 
   const W = wrap.clientWidth, H = wrap.clientHeight;
   const [gw, gh] = layoutSize();
@@ -317,8 +648,7 @@ function draw() {
     const n = graph.node(id);
     const issue = byId.get(id);
     const g = el("g", {
-      class: "node" + (isClaimed(issue) ? "" : "")
-        + (SELECTED === id ? " selected" : ""),
+      class: "node" + (SELECTED === id ? " selected" : ""),
       transform: `translate(${n.x - n.width / 2},${n.y - n.height / 2})`,
     });
     const box = el("rect", {
@@ -429,7 +759,7 @@ function showDetails(issue) {
   const close = document.createElement("button");
   close.className = "close";
   close.textContent = "✕";
-  close.onclick = () => { pane.classList.remove("open"); SELECTED = null; draw(); };
+  close.onclick = () => { pane.classList.remove("open"); SELECTED = null; refreshSelection(); };
   const h2 = document.createElement("h2");
   h2.textContent = issue.title;
   pane.append(close, h2);
@@ -453,6 +783,12 @@ function showDetails(issue) {
     pane.append(c);
   }
 
+  if (issue.parent) {
+    const wrap = document.createElement("div");
+    wrap.append(chip("lane: " + (CLUSTER.get(issue.id) || issue.id)));
+    pane.append(wrap);
+  }
+
   const kv = document.createElement("div");
   kv.className = "kv";
   const row = (k, v) => {
@@ -464,14 +800,14 @@ function showDetails(issue) {
   row("assignee", esc(issue.assignee) || "—");
   row("created", fmtDate(issue.created_at) + " by " + esc(issue.created_by));
   row("updated", fmtDate(issue.updated_at));
-  if (issue.closed_at) row("closed", fmtDate(issue.closed_at) + (issue.close_reason ? "" : ""));
+  if (issue.closed_at) row("closed", fmtDate(issue.closed_at));
   pane.append(kv);
 
   const section = (title, body) => {
     const s = document.createElement("div");
     s.className = "section";
-    const h = document.createElement("h3"); h.textContent = title;
-    s.append(h);
+    const hh = document.createElement("h3"); hh.textContent = title;
+    s.append(hh);
     if (typeof body === "string") {
       const pre = document.createElement("pre");
       pre.textContent = body;
@@ -508,20 +844,6 @@ function showDetails(issue) {
     }
     section("depends on", wrap);
   }
-  if (issue.parent) {
-    const wrap = document.createElement("div");
-    wrap.append("parent: ");
-    const parent = DATA.issues.find((i) => i.id === issue.parent.id);
-    const link = depLink({ depends_on_id: issue.parent.id });
-    wrap.append(link);
-    if (parent && parent.title) {
-      const t = document.createElement("span");
-      t.textContent = " — " + parent.title;
-      t.style.color = "var(--muted)";
-      wrap.append(t);
-    }
-    section("structure", wrap);
-  }
 
   if ((issue.comments || []).length) {
     const wrap = document.createElement("div");
@@ -539,7 +861,7 @@ function showDetails(issue) {
     section(`comments (${issue.comment_count})`, wrap);
   }
 
-  draw(); // update selection highlight
+  refreshSelection(); // update selection highlight
 }
 
 load();
