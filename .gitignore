@@ -38,3 +38,5 @@ misc/semi-safe-keypair
 .beads/proxieddb/
 *.gate.lock*
 .nix-profile
+
+.playwright-cli/
