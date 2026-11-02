@@ -69,11 +69,27 @@ entry per host with these rules:
 | Condition                                                                         | `allowedIPs`         | `endpoint`                | `persistentKeepalive` |
 | --------------------------------------------------------------------------------- | -------------------- | ------------------------- | --------------------- |
 | Same `network` as me, and peer has `ip4` (LAN-anchored)                           | `[<peer-wg-ip>/32]`  | `<peer-lan-ip>:51820`     | _(none — LAN)_        |
-| Different `network`, peer has `ip4` (typically vserver)                           | `[<peer-wg-ip>/32]`  | `<peer-pub-ip>:51820`     | `25` _(NAT keepalive)_|
+| Peer has no `network` (the public rendezvous), and has `ip4`                       | `[<peer-wg-ip>/32]`  | `<peer-pub-ip>:51820`     | `25` _(NAT keepalive)_|
 | Peer is the rendezvous host                                                       | + `10.199.199.0/24`  | (as above)                | (as above)            |
 | Peer has no `ip4` (e.g. phone)                                                    | `[<peer-wg-ip>/32]`  | _(none — peer initiates)_ | _(none)_              |
 | Peer is roaming (`metadata.hosts.<peer>.wireguard.<wg>.roaming = true`)           | `[]` _(ghost peer)_  | _(none — peer initiates)_ | _(none)_              |
+| Peer is on a different `network` than me (a box at another site)                  | `[]` _(ghost peer)_  | _(none)_                  | _(none)_              |
 | `roaming = true` and peer is on my `network`                                      | `[]` _(ghost peer)_  | _(none)_                  | _(none)_              |
+
+A peer whose `network` differs from mine is treated like a roaming peer:
+it is emitted as a **ghost** (empty `allowedIPs`, no endpoint) on every
+host except the rendezvous. Its `ip4` belongs to a private segment we
+are not on, so baking it as a static `endpoint` would black-hole the
+traffic — and the per-peer `/32` would shadow the rendezvous catch-all,
+so nothing would ever fall back to the relay. All its traffic therefore
+goes through the rendezvous, which keeps the real `/32` (endpoint
+learned at runtime) so it can route that peer's relayed traffic.
+
+This covers hosts like `optiplex`, which sits on a foreign LAN at
+another site (`network = "offside"`): every home host reaches it over
+the wg mesh, relayed by the rendezvous, and it reaches the home hosts
+the same way. No `ip4` is needed (or meaningful) for such a host — leave
+it out of `metadata.json`.
 
 A roaming peer is now emitted as a **ghost on every host except the
 rendezvous** (empty `allowedIPs`, no endpoint), not just on the roaming
@@ -180,6 +196,46 @@ Effect:
   falls back to the rendezvous catch-all.
 * The host firewall does **not** open UDP/51820 globally, so the wg
   port is never exposed on untrusted Wi-Fi.
+
+### Host on a foreign LAN (offside)
+
+A box that lives on a private network other than the home LAN — e.g.
+`optiplex`, which sits at another site and is given a new
+`metadata.networks.<name>` entry (`"offside"`). It is anchored on *that*
+network, so it is neither roaming nor LAN-anchored relative to home.
+
+```json
+"optiplex": {
+  "network": "offside"
+}
+```
+
+Leave `ip4` out: no other host (and not even the host itself) can use an
+address on a segment it is not attached to. The `network` id is all that
+is needed for the peer derivation; `wireguard.wg0.{ip4,pubkey}` are
+required as for any mesh member.
+
+Effect:
+
+* Every home host emits this host as a **ghost** (empty `allowedIPs`,
+  no endpoint), exactly like a roaming peer, so its traffic falls
+  through to the rendezvous catch-all and is relayed.
+* This host emits every home host as a ghost too — its peer list is the
+  rendezvous plus ghosts, so all traffic goes out through the relay.
+* The rendezvous keeps the real per-peer `/32` for it, so it can route
+  the relayed traffic back.
+* No LAN `ip4` is announced into `/etc/hosts`, and the plain
+  `ssh <name>` alias points at the wg address instead of an address on
+  a foreign segment.
+
+Operationally the host is reached through the mesh like any other peer
+(`ssh <name>`, `ssh <name>.wg0`); traffic is relayed by the rendezvous
+because there is no direct path. `./switch.sh <name>` detects the
+missing/unreachable LAN address and deploys over wg automatically.
+
+> The alternative — port-forwarding UDP/51820 on the foreign router and
+> treating that LAN as reachable — is deliberately not modelled: the
+> address there is DHCP-leased and the segment is not ours to open.
 
 ### Rendezvous host (vserver)
 

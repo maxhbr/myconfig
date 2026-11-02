@@ -51,49 +51,79 @@ let
       otherHostName:
       let
         otherHostMetadata = metadata.hosts."${otherHostName}";
+        otherHostNetwork = otherHostMetadata.network or null;
+        otherHostWgIp =
+          if
+            lib.attrsets.hasAttrByPath [
+              "wireguard"
+              "wg0"
+              "ip4"
+            ] otherHostMetadata
+          then
+            otherHostMetadata.wireguard.wg0.ip4
+          else
+            null;
       in
       {
         pkgs,
         lib,
         myconfig,
+        config,
         ...
       }:
+      let
+        thisHostName = config.networking.hostName;
+        thisHostNetwork = metadata.hosts."${thisHostName}".network or null;
+        # A peer's `ip4` is only a usable address here when the peer sits on
+        # our L3 segment (`network` matches) or is publicly routable (no
+        # `network`, i.e. the rendezvous host). A peer on a foreign LAN is
+        # reachable only through the wg relay, so announcing its LAN address
+        # would point at a segment that does not exist locally — or, when the
+        # address falls inside our own CIDR, at an unrelated device.
+        hasIp4 = lib.attrsets.hasAttrByPath [ "ip4" ] otherHostMetadata;
+        lanIpReachable = hasIp4 && (otherHostNetwork == null || otherHostNetwork == thisHostNetwork);
+        # Address for the plain `Host <name>` alias. A LAN ip is only used when
+        # it is reachable from here; otherwise the peer's wg address, so
+        # `ssh <name>` still works through the wg mesh (relayed via the
+        # rendezvous when there is no direct path). A same-LAN peer without a
+        # wg address keeps no alias, and a peer with neither stays unannounced.
+        sameLan = otherHostNetwork != null && otherHostNetwork == thisHostNetwork;
+        aliasHostName =
+          if lanIpReachable then
+            otherHostMetadata.ip4
+          else if !sameLan && otherHostWgIp != null then
+            otherHostWgIp
+          else
+            null;
+      in
       {
         imports = [
-          (lib.mkIf (lib.attrsets.hasAttrByPath [ "ip4" ] otherHostMetadata) (
-            let
-              otherHostIp = otherHostMetadata.ip4;
-            in
-            {
-              networking.extraHosts = ''
-                ${otherHostIp} ${otherHostName}
-                ${otherHostIp} ${otherHostName}.maxhbr.local
-              '';
-              home-manager.users."${myconfig.user}" = {
-                home.file = {
-                  ".ssh/imports/my-${otherHostName}.config".text = ''
-                    Host ${otherHostName}
-                      HostName ${otherHostIp}
-                      User ${myconfig.user}
-                  '';
-                };
-                home.packages = [
-                  (pkgs.writeShellScriptBin "suspend-${otherHostName}" "ssh ${otherHostName} sudo systemctl suspend")
-                ];
+          (lib.mkIf lanIpReachable {
+            networking.extraHosts = ''
+              ${otherHostMetadata.ip4} ${otherHostName}
+              ${otherHostMetadata.ip4} ${otherHostName}.maxhbr.local
+            '';
+          })
+          (lib.mkIf (otherHostWgIp != null) {
+            networking.extraHosts = ''
+              ${otherHostWgIp} ${otherHostName}.wg0
+              ${otherHostWgIp} ${otherHostName}.wg0.maxhbr.local
+            '';
+          })
+          (lib.mkIf (aliasHostName != null) {
+            home-manager.users."${myconfig.user}" = {
+              home.file = {
+                ".ssh/imports/my-${otherHostName}.config".text = ''
+                  Host ${otherHostName}
+                    HostName ${aliasHostName}
+                    User ${myconfig.user}
+                '';
               };
-            }
-          ))
-          (lib.mkIf (lib.attrsets.hasAttrByPath [ "wireguard" "wg0" "ip4" ] otherHostMetadata) (
-            let
-              otherHostWgIp = otherHostMetadata.wireguard.wg0.ip4;
-            in
-            {
-              networking.extraHosts = ''
-                ${otherHostWgIp} ${otherHostName}.wg0
-                ${otherHostWgIp} ${otherHostName}.wg0.maxhbr.local
-              '';
-            }
-          ))
+              home.packages = [
+                (pkgs.writeShellScriptBin "suspend-${otherHostName}" "ssh ${otherHostName} sudo systemctl suspend")
+              ];
+            };
+          })
         ];
       };
     announceOtherHosts = thisHost: {

@@ -308,6 +308,49 @@ get_ip_of_target_from_metadata() {
             jq -r ".hosts.${target}.ip4" || true
         fi
 }
+# Whether `target` cannot be reached at its metadata LAN `ip4` from here but
+# can be reached over the wg mesh, so deploys have to go through wg instead.
+# That is the case when the target has no LAN `ip4` at all, or when it sits on a
+# private LAN other than the one this machine is on (a box at another site).
+# A host without a wg `ip4` is not reported here: there is no fallback path for
+# it, so the caller's normal "ip not found" error is the honest answer.
+target_needs_wg() {
+    local target="$1"
+    local metadata_file
+    for metadata_file in ./hosts/metadata.json ../myconfig/hosts/metadata.json; do
+        [[ -f $metadata_file ]] || continue
+        if [[ "$(jq -r --arg t "$target" --arg me "$(hostname)" '
+            .hosts as $h
+            | ($h[$t].network // null) as $tn
+            | ($h[$me].network // null) as $mn
+            | ($h[$t].ip4 // null) as $tip
+            | ($h[$t].wireguard.wg0.ip4 // null) as $twg
+            | if $twg == null then "no"
+              elif $tip == null then "yes"
+              elif $tn != null and $mn != null and $tn != $mn then "yes"
+              else "no" end
+        ' "$metadata_file")" == "yes" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Whether `target` is reachable directly from this machine over the wg mesh
+# without a jump host, i.e. this machine *is* the rendezvous host.
+target_reachable_without_jump() {
+    local target="$1"
+    local metadata_file
+    for metadata_file in ./hosts/metadata.json ../myconfig/hosts/metadata.json; do
+        [[ -f $metadata_file ]] || continue
+        if [[ "$(jq -r --arg me "$(hostname)" '
+            .networks.wg0.peer // null | if . == $me then "yes" else "no" end
+        ' "$metadata_file" 2>/dev/null)" == "yes" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
 get_ip_of_target() {
     local target="$1"
     local use_wg="${2:-false}"
@@ -338,7 +381,7 @@ get_ip_of_target() {
         fi
     fi
     if [[ $ip == "null" ]]; then
-        log_error "ip for $target not found in metadata"
+        log_error "ip for $target not found in metadata (host on a foreign LAN? deploy it with --use-wg)"
         exit 1
     fi
     if [[ $ip == "" ]]; then
@@ -392,7 +435,11 @@ deploy() (
 
     local ssh_opts='-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'
     if [[ $use_wg == "true" ]]; then
-        ssh_opts="$ssh_opts -J vserver"
+        # From the rendezvous host itself no jump is needed (or possible:
+        # jumping to yourself loops).
+        if ! target_reachable_without_jump "$target"; then
+            ssh_opts="$ssh_opts -J vserver"
+        fi
     fi
     export NIX_SSHOPTS="$ssh_opts"
 
@@ -550,6 +597,14 @@ main() {
     fi
 
     local target="${1:-$(hostname)}"
+
+    # A host with no reachable LAN address (no `ip4`, or on a private LAN other
+    # than ours) can only be configured through the wg mesh. Select that deploy
+    # path automatically instead of failing on a missing `ip4`.
+    if [[ $MODE != "--use-wg" && $target != "$(hostname)" ]] && target_needs_wg "$target"; then
+        log_info "$target has no reachable LAN address, deploying over wg"
+        MODE="--use-wg"
+    fi
 
     guard_pid "$target"
 

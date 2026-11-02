@@ -21,6 +21,13 @@
     # e.g. for ZFS host-identification purposes; not otherwise meaningful).
     networking.hostId = "2c43d66f";
 
+    # This box lives at another site, on a private LAN that is not the home
+    # LAN, so `metadata.json` puts it on `network = "offside"` and gives it
+    # no `ip4`. Every home host reaches it over the wg mesh, relayed by the
+    # rendezvous (vserver); the same path is used in reverse. There is no
+    # wired uplink there, so networking is DHCP over its built-in Wi-Fi
+    # (see ./wifi.nix).
+
     # This value determines the NixOS release from which the default
     # settings for stateful data, like file locations and database versions
     # on your system were taken. It's perfectly fine and recommended to leave

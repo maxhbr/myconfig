@@ -28,8 +28,14 @@ let
   #
   # For every other host that has `wireguard.<wgInterface>.{ip4,pubkey}`:
   #   * allowedIPs = [ "<peer-wg-ip>/32" ]                       (per-peer routing)
-  #   * endpoint   = peer.ip4:51820 if peer has a routable ip4   (LAN or public)
-  #   * persistentKeepalive = 25 for peers that aren't on the same LAN
+  #   * endpoint   = peer.ip4:51820 if that ip4 is directly reachable from
+  #                  here (same LAN, or a peer without a `network` such as
+  #                  the public rendezvous host)
+  #   * persistentKeepalive = 25 for reachable peers that aren't on the same LAN
+  #
+  # A peer whose `network` differs from ours sits on a private segment we
+  # are not on, so its ip4 is unreachable: it is ghosted (empty
+  # allowedIPs, no endpoint) and all its traffic relays via the rendezvous.
   #
   # The rendezvous host (`metadata.networks.<wgInterface>.peer`, typically
   # `vserver`) gets a wider `allowedIPs = [ "<wg-subnet>" ]` so it acts
@@ -60,6 +66,14 @@ let
         sameLan = thisNetwork != null && peerNetwork != null && thisNetwork == peerNetwork;
         peerWgIp = host.wireguard."${wgInterface}".ip4;
         isRendezvous = rendezvousHost != null && name == rendezvousHost;
+        # Per-peer: the peer is on a *different* LAN (e.g. a box sitting at
+        # another site, `network = "offside"`). Its ip4 belongs to a private
+        # segment we are not on, so it must never become a static endpoint —
+        # the endpoint would black-hole the traffic, and the per-peer /32
+        # would shadow the rendezvous catch-all so it never falls back to
+        # the relay. A host *without* `network` (the public rendezvous) is
+        # not covered by this: its ip4 is globally routable.
+        peerIsOffside = peerNetwork != null && !sameLan && !isRendezvous;
         # Whether *this* host (the config target) is the rendezvous /
         # relay hub. The hub must never ghost a peer: its `allowedIPs`
         # double as WireGuard's ingress filter and its cryptokey route,
@@ -89,16 +103,21 @@ let
         # at runtime via WireGuard endpoint roaming) so it can accept
         # and route the roaming peer's relayed traffic.
         isRoamingPeerGhost = peerIsRoaming && !isRendezvous && !thisHostIsRendezvous;
+        # Same symmetric treatment for a peer on a foreign LAN: it is
+        # ghosted everywhere except on the rendezvous, which keeps the /32
+        # (endpoint still suppressed, learned at runtime) so it can route
+        # the peer's relayed traffic.
+        isOffsidePeerGhost = peerIsOffside && !thisHostIsRendezvous;
         allowed =
-          if isGhostPeer || isRoamingPeerGhost then
+          if isGhostPeer || isRoamingPeerGhost || isOffsidePeerGhost then
             [ ]
           else if isRendezvous then
             ([ "${peerWgIp}/32" ] ++ (wgNetwork.allowedIPs or [ ]))
           else
             [ "${peerWgIp}/32" ];
         # Endpoint suppression: drop endpoint+keepalive when the peer is
-        # marked roaming OR we are ghosting it locally.
-        suppressEndpoint = isGhostPeer || peerIsRoaming;
+        # marked roaming, is on a foreign LAN, or we are ghosting it locally.
+        suppressEndpoint = isGhostPeer || peerIsRoaming || peerIsOffside;
       in
       {
         publicKey = host.wireguard."${wgInterface}".pubkey;
