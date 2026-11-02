@@ -5,14 +5,12 @@
   config = {
     services.udev.packages = [
       pkgs.openhantek6022
-      pkgs.saleae-logic
     ];
     home-manager.sharedModules = [
       {
         home.packages = [
           pkgs.openhantek6022
           # pkgs.pulseview
-          pkgs.saleae-logic
         ];
       }
     ];
