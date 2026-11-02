@@ -32,13 +32,13 @@
   };
   litellm-grafana-dashboard = {
     pname = "litellm-grafana-dashboard";
-    version = "4c8b90945faf69eedfbdda3d4b7dad58ce74860d";
+    version = "572832dea1fce147665d7a3a7e6d704a086f372c";
     src = fetchurl {
-      url = "https://raw.githubusercontent.com/BerriAI/litellm/4c8b90945faf69eedfbdda3d4b7dad58ce74860d/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json";
+      url = "https://raw.githubusercontent.com/BerriAI/litellm/572832dea1fce147665d7a3a7e6d704a086f372c/cookbook/litellm_proxy_server/grafana_dashboard/dashboard_v2/grafana_dashboard.json";
       name = "litellm-grafana-dashboard.json";
       sha256 = "sha256-BepW78CWd6K27AL0nrIamyTESsVKsY/5/kO67QNU6vA=";
     };
-    date = "2026-10-30";
+    date = "2026-11-02";
   };
   pi-token-speed = {
     pname = "pi-token-speed";
@@ -66,26 +66,26 @@
   };
   thinkrail-darwin-arm64 = {
     pname = "thinkrail-darwin-arm64";
-    version = "v0.3.0";
+    version = "v0.3.1";
     src = fetchurl {
-      url = "https://github.com/JetBrains/thinkrail/releases/download/v0.3.0/thinkrail-darwin-arm64";
-      sha256 = "sha256-kzlSNL/OWdS9RQJVOMhDsAaGnj9W82dJlFFrCaPam9U=";
+      url = "https://github.com/JetBrains/thinkrail/releases/download/v0.3.1/thinkrail-darwin-arm64";
+      sha256 = "sha256-j0dh0KMI10n92ncaP88SK7bxZFiecbpS5xVK3PLOW7U=";
     };
   };
   thinkrail-linux-arm64 = {
     pname = "thinkrail-linux-arm64";
-    version = "v0.3.0";
+    version = "v0.3.1";
     src = fetchurl {
-      url = "https://github.com/JetBrains/thinkrail/releases/download/v0.3.0/thinkrail-linux-arm64";
-      sha256 = "sha256-ljv/dtkJTRvyXJivjNmVfzPJ+3HTYkbyMmntvQaAWBA=";
+      url = "https://github.com/JetBrains/thinkrail/releases/download/v0.3.1/thinkrail-linux-arm64";
+      sha256 = "sha256-4WbbwPa3TtrC9Awu9ZJ42ncPGzArPQIv+fmwNsiCqbM=";
     };
   };
   thinkrail-linux-x64 = {
     pname = "thinkrail-linux-x64";
-    version = "v0.3.0";
+    version = "v0.3.1";
     src = fetchurl {
-      url = "https://github.com/JetBrains/thinkrail/releases/download/v0.3.0/thinkrail-linux-x64";
-      sha256 = "sha256-iI5kxs1+3ovOFsoO97v0CcztyfEVXauP40OGqxUetRY=";
+      url = "https://github.com/JetBrains/thinkrail/releases/download/v0.3.1/thinkrail-linux-x64";
+      sha256 = "sha256-+eiiT0fUxGZ9Xwt69gpixosfGbSi58JJ08IsFF+/bes=";
     };
   };
 }
