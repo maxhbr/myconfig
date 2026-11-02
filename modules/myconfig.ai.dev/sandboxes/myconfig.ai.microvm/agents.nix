@@ -130,10 +130,11 @@ let
         "-p"
         "%PROMPT%"
       ];
-      # `~/.claude` also holds `.credentials.json`, so only the two paths the
+      # `~/.claude` also holds `.credentials.json`, so only the paths the
       # host home-manager config actually RENDERS are allowlisted.
       configPaths = [
         ".agents/skills"
+        ".claude/CLAUDE.md"
         ".claude/settings.json"
         ".claude/skills"
       ];
@@ -172,6 +173,7 @@ let
       # moved from `tui.json` to `cli.json` with OpenCode 2.
       configPaths = [
         ".agents/skills"
+        ".config/opencode/AGENTS.md"
         ".config/opencode/agents"
         ".config/opencode/cli.json"
         ".config/opencode/commands"
@@ -190,6 +192,7 @@ let
       # rendered agent configuration is staged.
       configPaths = [
         ".agents/skills"
+        ".pi/agent/AGENTS.md"
         ".pi/agent/agents"
         ".pi/agent/extensions"
         ".pi/agent/keybindings.json"

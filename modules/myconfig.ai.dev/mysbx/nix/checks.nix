@@ -1657,6 +1657,7 @@ in
         "/mysbx-home/.pi/agent/prompts"
         "/mysbx-home/.pi/agent/themes"
         "/mysbx-home/.pi/agent/keybindings.json"
+        "/mysbx-home/.pi/agent/AGENTS.md"
         "/mysbx-home/.agents/skills"
       ];
       evalAssertions = [
@@ -1707,7 +1708,7 @@ in
         [ "$evalGate" = ok ] || { echo "mysbx-pi-mounts-test: eval gate: $evalGate" >&2; exit 1; }
 
         # The mounted subtrees must exist in the copied tree ...
-        for sub in .pi/agent/extensions .pi/agent/agents .pi/agent/prompts .pi/agent/themes .pi/agent/keybindings.json .agents/skills; do
+        for sub in .pi/agent/extensions .pi/agent/agents .pi/agent/prompts .pi/agent/themes .pi/agent/keybindings.json .pi/agent/AGENTS.md .agents/skills; do
           test -e "$sandboxTree/$sub" || fail "$sub is missing from the pi-sandbox-config tree"
         done
 

@@ -53,6 +53,10 @@ let
     ".pi/agent/themes"
     ".pi/agent/skills"
   ]
+  # The global AGENTS.md the embedded pi engine loads as context
+  # (../../agentsMd). Only when the feature deploys it: an untracked subtree
+  # would otherwise become an empty directory in the sandbox tree.
+  ++ lib.optional (config.myconfig.ai.dev.agentsMd.enable or false) ".pi/agent/AGENTS.md"
   ++ lib.optional piHasHandcraftedSkills ".agents/skills";
 
   # Like pi's integration: copies of the home-manager-deployed config,

@@ -1511,6 +1511,11 @@ let
     # Keybinding overrides (./keybindings.json).
     ".pi/agent/keybindings.json"
   ]
+  # The global AGENTS.md (../../agentsMd), deployed through a `home.file`
+  # entry when the feature is on. Not mounted otherwise: the helper
+  # materialises an EMPTY DIRECTORY for a subtree nothing deployed into,
+  # which would shadow the file name inside the sandbox.
+  ++ lib.optional (osconfig.myconfig.ai.dev.agentsMd.enable or false) ".pi/agent/AGENTS.md"
   # Handcrafted skills, discovered by pi from `~/.agents/skills/`.
   ++ lib.optional piHasHandcraftedSkills ".agents/skills";
 

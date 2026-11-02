@@ -606,7 +606,7 @@ enabled it adds its binary to the sandbox `PATH` via
 `myconfig.ai.mysbx.extraTools` — on top of the shared
 `myconfig.ai.dev.sandboxTools.extraPackages` hook, which mysbx honours
 like every other tier — and mounts its home-manager-managed
-configuration (`~/.pi/agent/{extensions,agents,prompts,themes,keybindings.json}`
+configuration (`~/.pi/agent/{AGENTS.md,extensions,agents,prompts,themes,keybindings.json}`
 and `~/.agents/skills`) read-only below `/mysbx-home`. Of its state
 directory `~/.pi` only `.pi/agent/sessions` is persisted, as a
 `state-dirs` entry in `<repo>.mysbx/state/`; `settings.json`,

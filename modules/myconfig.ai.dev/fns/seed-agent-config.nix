@@ -144,6 +144,7 @@ let
     # host home-manager config actually renders are allowlisted.
     claude = [
       ".agents/skills"
+      ".claude/CLAUDE.md"
       ".claude/settings.json"
       ".claude/skills"
     ];
@@ -162,6 +163,7 @@ let
     # (`tui.json` was the 1.x file).
     opencode = [
       ".agents/skills"
+      ".config/opencode/AGENTS.md"
       ".config/opencode/agents"
       ".config/opencode/cli.json"
       ".config/opencode/commands"
@@ -172,6 +174,7 @@ let
     # rendered agent configuration is staged.
     pi = [
       ".agents/skills"
+      ".pi/agent/AGENTS.md"
       ".pi/agent/agents"
       ".pi/agent/extensions"
       ".pi/agent/keybindings.json"

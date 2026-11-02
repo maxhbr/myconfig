@@ -26,6 +26,7 @@ in
     lib.mkEnableOption "myconfig.ai.dev (AI developer tooling: agent CLIs, sandbox tiers, mysbx, workmux, skills, hermes-agent)";
 
   imports = [
+    ./agentsMd
     ./myconfig.ai.dev.litellm-forwarder.nix
 
     ./sandboxes/myconfig.ai.jail.nix
@@ -67,6 +68,7 @@ in
     (lib.mkIf config.myconfig.ai.dev.enable {
       myconfig.dev.python.enable = true;
       myconfig.ai.dev = {
+        agentsMd.enable = lib.mkDefault true;
         opencode.enable = true;
         pi-coding-agent = {
           enable = true;
