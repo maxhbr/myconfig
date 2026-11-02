@@ -16,6 +16,15 @@ let
       getWgIp
       hasWg
       ;
+    # Hosts whose `hosts.<name>.managed_by` names `hostName`, i.e. the boxes
+    # that `upg-all` updates after itself.
+    getManagedHosts =
+      hostName:
+      let
+        isManagedByHost = host: (metadata.hosts."${host}".managed_by or null) == hostName;
+        hostNames = builtins.attrNames metadata.hosts;
+      in
+      builtins.filter isManagedByHost hostNames;
     fixIp =
       deviceName:
       (

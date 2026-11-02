@@ -36,6 +36,7 @@
       }
     },
     "nas": {
+      "managed_by": "f13",
       "network": "home",
       "ip4": "192.168.1.9",
       "pubkeys": {
@@ -50,6 +51,7 @@
       }
     },
     "workstation": {
+      "managed_by": "f13",
       "network": "home",
       "ip4": "192.168.1.40",
       "pubkeys": {
@@ -66,6 +68,7 @@
       }
     },
     "vserver": {
+      "managed_by": "f13",
       "ip4": "198.51.100.1",
       "pubkeys": {
         "id_rsa.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC6dumJloLmi+otqmB9rhaVkjjrGO3Qk+eTUA3U3oJPTw9fP1gEuOIRtU1dRY3C3gj8QXlXK1E+7C537Lw40dDLtkvXg5/0mtG/G16nFm1xtNRdLVsQkYPh2r4oZfkprLV/d9kwARZP46FuBD5nG8vHOSTEoEdqZyndJN40iv7VSSxJ9qv2QE8XusrId4Cicpr6uw9v0eh5ftO5HaNz+AcDK98q33QAOdCKMgG0B0hLkRET5jyTy0KB/do6ojTcA5ZfrAzYuB5h2xjLCUQ+wyJtAGTwG3wEjzj7laBs1d1v4UyRD0LRPjmxy41ivS+WUJ0Hcv7ZJD2jmXAoEn7GoOTunOvwjhHPS7HFiuEF8ruQ6YeAJqlxQsb/pgQF5dHkoBclCGsdN/+tmgybNCmtKEs3D2AAukgTbiHmnC4dDf8QCe4GbrFB5S2aWURAdetehz2d7eTEz2IFEzyZ8YlIMqROfzaQQsypPEcG3lTmuECQHs7XhtZ8igRe2AhAjn9ON8qGrE6hT1faFNCQ/f5UKJoMyHFSgRIJ1Wovo06bwuJgcxK0NJljtzBlccWPUupg0pSYPx2XDUR+er8zpXvprAeflLOQjznp6047hSz3iP1ZMwe7znOTazPX0XCBL6RjsS7xd7sU925iCe5mmxc0p9qEjNSu/LtJ7ZoYxt3Vj6Qyqw== mhuber@x1extremeG2",
@@ -80,6 +83,7 @@
       }
     },
     "nuc": {
+      "managed_by": "f13",
       "network": "home",
       "ip4": "192.168.1.92",
       "mac": "94:de:80:8f:a3:7a",
@@ -135,6 +139,7 @@
       }
     },
     "r6c": {
+      "managed_by": "f13",
       "network": "home",
       "ip4" : "192.168.1.175",
       "pubkeys": {
@@ -164,6 +169,7 @@
       }
     },
     "futro": {
+      "managed_by": "f13",
       "network": "home",
       "ip4": "192.168.1.188",
       "pubkeys": {
@@ -197,6 +203,7 @@
       }
     },
     "optiplex": {
+      "managed_by": "f13",
       "network": "offside",
       "pubkeys": {
         "/etc/ssh/ssh_host_rsa_key.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCjcsRGMgIZht8rP5o0PXLlOPAfvbkyUmiFvBaqOwprRzME76GfpBevK2lLsOt1LvP0ECKn42uDTuzo1QGkxIFMEuQnU1Y5zGkbtp8fKAp99vHVbAzOvV0loAisb2SwH4NOofhi6NMc86tpc0jy/0KpYkrQSYunI6Op/7BfdzWMK24L/KUXg/kuhdpOFAyR5/ymsSQP3tymDGB1X0pKgUDzIV3fT0I3oLyDPNPFuaFxDL2dpS9yYNkQOWKYkQrPoLhZC6LhbJgdtS3mpiIayy9jmtzBDix6mMfTNuM4v1alVefYLUwvI7zOu/b/edfDtdHY4pjzDtxxqCIjzKg6SZG9x8re0FV8whokGQia9TNEiVv7D8LMeTd2u80+XYJO0fx2MZUlntLKjTBfa9Aet/fu9oCEKh0LZkMGRkC+2G0540fGb9/bo9nLkdbsf/taKKCMQAtrLZMRSgsOmNNg8hvVvqy4jSH1y6XvIEoDrpclnc2/LVRj8GAxYpS2Ri3BWd8= root@optiplex"

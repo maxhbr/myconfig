@@ -2,11 +2,13 @@
   config,
   lib,
   pkgs,
+  myconfig,
   ...
 }:
 
 let
   cfg = config.myconfig;
+  hostName = config.networking.hostName;
 in
 {
   options.myconfig = with lib; {
@@ -33,13 +35,40 @@ in
           home.packages =
             with pkgs;
             let
+              switchSh = "${config.home.homeDirectory}/myconfig/priv/switch.sh";
               mk-upg-script =
                 name: args:
                 pkgs.writeShellScriptBin name ''
                   set -euo pipefail
                   set -x
-                  exec ${config.home.homeDirectory}/myconfig/priv/switch.sh ${args} "$@"
+                  exec ${switchSh} ${args} "$@"
                 '';
+              # The hosts whose `managed_by` in hosts/metadata.json points at
+              # this one, i.e. the boxes this host deploys for.
+              managedHosts = lib.remove hostName (myconfig.metadatalib.getManagedHosts hostName);
+              # Deploy every managed host after this one. A failing host is
+              # collected instead of aborting, so one unreachable box does not
+              # keep the rest from being updated.
+              managedHostsStep = lib.optionalString (managedHosts != [ ]) ''
+                failed=()
+                for host in ${lib.escapeShellArgs managedHosts}; do
+                  ${switchSh} --fast "$host" || failed+=("$host")
+                done
+                if [[ ''${#failed[@]} -gt 0 ]]; then
+                  echo "failed to update: ''${failed[*]}" >&2
+                  exit 1
+                fi
+              '';
+              # Update this host exactly like `upg`, then the hosts it manages
+              # in `--fast` mode: the recursive flake update of the first step
+              # already produced their lock file, and `switch.sh` skips that
+              # update on every host but the lead host anyway.
+              upg-all = pkgs.writeShellScriptBin "upg-all" ''
+                set -euo pipefail
+                set -x
+                ${switchSh}
+                ${managedHostsStep}
+              '';
               # Use the system nix (config.nix.package) instead of the
               # nix version sbomnix pulls in by default.
               # NOTE: `sbomnix.override { nix = ...; }` does *not* propagate
@@ -65,6 +94,7 @@ in
             [
               (mk-upg-script "upg" "")
               (mk-upg-script "upg-fast" "--fast")
+              upg-all
               sbomnix-with-system-nix
               nvd
             ]
