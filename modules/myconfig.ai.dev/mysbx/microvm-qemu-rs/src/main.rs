@@ -560,7 +560,7 @@ fn kernel_cmdline(cfg: &Config) -> String {
     params.push_str(" console=ttyS0");
     if let Some(manifest) = &cfg.manifest {
         // The pointer's TAG:SLOT spelling matches
-        // MYSBX_KRUN_MANIFEST's.
+        // MYSBX_VM_MANIFEST's.
         let tag = "stage-ro";
         let _ = manifest; // the file is host-side; the pointer is fixed
         params.push_str(&format!(" mysbx.manifest={tag}:{MANIFEST_SLOT}"));

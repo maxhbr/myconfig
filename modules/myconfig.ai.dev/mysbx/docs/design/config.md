@@ -1574,8 +1574,8 @@ what backs `/nix` inside the sandbox. Only the two direct VM backends,
 
 **The built-in default is backend- and pin-shaped.** When every
 layer is silent, a run resolves `baked` on the two VM backends when
-the wrapper pins the disk (`MYSBX_KRUN_STORE_DISK` — the host set
-`myconfig.ai.dev.mysbx.krun.store.enable`), and `host` everywhere
+the wrapper pins the disk (`MYSBX_VM_STORE_DISK` — the host set
+`myconfig.ai.dev.mysbx.vm.store.enable`), and `host` everywhere
 else: a blanket `baked` default would warn-and-fall-back on every
 silent run on the other backends (the key cannot hold there), so
 the narrowing flips only where it can hold its promise. A layer
@@ -1584,8 +1584,8 @@ decision always wins over the default — a repo sidecar writes
 nothing overrides an explicit choice.
 
 **Why a config key and not a host option.** The host option
-(`myconfig.ai.dev.mysbx.krun.store.enable`) BAKES and PINS the
-disk (`MYSBX_KRUN_STORE_DISK`, one pin for both VM backends — the
+(`myconfig.ai.dev.mysbx.vm.store.enable`) BAKES and PINS the
+disk (`MYSBX_VM_STORE_DISK`, one pin for both VM backends — the
 guest side is shared, backends.md D9) and thereby also sets the
 silent default of the two VM backends; an explicit per-run key
 still decides usage, so a host can carry the disk and a repo can

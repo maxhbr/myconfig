@@ -86,7 +86,7 @@
 // cumulative total) and its setup detail (the dlopen'd lib, the
 // payload, the manifest, the fd limits), escalates libkrun's own
 // log to info, and arms the guest init's step trace
-// (MYSBX_KRUN_TRACE=1 rides the envp unless the config already
+// (MYSBX_VM_TRACE=1 rides the envp unless the config already
 // carries it — the init's timed steps narrate the boot gap the
 // launcher cannot see into); mysbx forwards its own `--verbose`
 // here.
@@ -451,10 +451,10 @@ struct Share {
     /// The share's SLOT inside its device's staging tree — the
     /// guest entry script links the dest at
     /// <device-mount>/<slot>, so two shares of one device need
-    /// distinct slots. Carried through MYSBX_KRUN_SHARES.
+    /// distinct slots. Carried through MYSBX_VM_SHARES.
     slot: String,
     /// The SANDBOX path the payload must see the share at — carried
-    /// through to the guest via MYSBX_KRUN_SHARES, so the guest
+    /// through to the guest via MYSBX_VM_SHARES, so the guest
     /// entry script knows where each share belongs. The GUEST mount
     /// itself lives under /tmp/mysbx-shares keyed by the device tag
     /// (a virtiofs device cannot nest below the ro root share —
@@ -484,13 +484,13 @@ struct Config {
     /// `--verbose`: the caller asks for chatty timing and setup
     /// logs (mysbx passes its own `--verbose` through). Escalates
     /// the same routes the trace flag does, and ALSO arms the guest
-    /// init's own step trace (exec_spec pushes MYSBX_KRUN_TRACE=1)
+    /// init's own step trace (exec_spec pushes MYSBX_VM_TRACE=1)
     /// so the boot gap is narrated guest-side.
     verbose: bool,
     /// A guest entry script used as krun_set_exec's exec_path. It
     /// receives the payload as its argv ($1.. — the cmdline "--"
     /// vector with argv[0] replaced by this script) and the shares'
-    /// guest placement as MYSBX_KRUN_SHARES in the envp. None execs
+    /// guest placement as MYSBX_VM_SHARES in the envp. None execs
     /// the payload directly.
     init: Option<String>,
     devices: Vec<Device>,
@@ -1015,7 +1015,7 @@ fn exec_spec(cfg: &Config) -> (String, Vec<String>, Vec<String>) {
     // cmdline-sized debug runs.
     let env: Vec<String> = match &cfg.manifest {
         Some(_) => {
-            let mut env = vec![format!("MYSBX_KRUN_MANIFEST=stage-ro:{MANIFEST_SLOT}")];
+            let mut env = vec![format!("MYSBX_VM_MANIFEST=stage-ro:{MANIFEST_SLOT}")];
             // --verbose arms the guest init's step trace (the boot
             // gap narration): the launcher's own phase lines stop at
             // "vm setup" and resume only after guest exit, and the
@@ -1024,19 +1024,19 @@ fn exec_spec(cfg: &Config) -> (String, Vec<String>, Vec<String>) {
             // what the init spends the gap on. The trace flag, when
             // set, keeps its own value.
             if cfg.verbose {
-                if !cfg.env.iter().any(|(k, _)| k == "MYSBX_KRUN_TRACE") {
-                    env.push("MYSBX_KRUN_TRACE=1".to_owned());
+                if !cfg.env.iter().any(|(k, _)| k == "MYSBX_VM_TRACE") {
+                    env.push("MYSBX_VM_TRACE=1".to_owned());
                 }
             }
-            if let Some((_, v)) = cfg.env.iter().find(|(k, _)| k == "MYSBX_KRUN_TRACE") {
-                env.push(format!("MYSBX_KRUN_TRACE={v}"));
+            if let Some((_, v)) = cfg.env.iter().find(|(k, _)| k == "MYSBX_VM_TRACE") {
+                env.push(format!("MYSBX_VM_TRACE={v}"));
             }
             env
         }
         None => {
             let mut env: Vec<String> = cfg.env.iter().map(|(k, v)| format!("{k}={v}")).collect();
-            if cfg.verbose && !cfg.env.iter().any(|(k, _)| k == "MYSBX_KRUN_TRACE") {
-                env.push("MYSBX_KRUN_TRACE=1".to_owned());
+            if cfg.verbose && !cfg.env.iter().any(|(k, _)| k == "MYSBX_VM_TRACE") {
+                env.push("MYSBX_VM_TRACE=1".to_owned());
             }
             if !cfg.shares.is_empty() {
                 // One "DEVICE SLOT DEST ro|rw" entry per share: the
@@ -1066,7 +1066,7 @@ fn exec_spec(cfg: &Config) -> (String, Vec<String>, Vec<String>) {
                     })
                     .collect::<Vec<_>>()
                     .join(";");
-                env.push(format!("MYSBX_KRUN_SHARES={shares}"));
+                env.push(format!("MYSBX_VM_SHARES={shares}"));
             }
             env
         }
@@ -1149,20 +1149,20 @@ fn main() {
     };
 
     // The trace flag: the bwrap chain hands the launcher a --clearenv
-    // environment, so the HOST's MYSBX_KRUN_TRACE never reaches
+    // environment, so the HOST's MYSBX_VM_TRACE never reaches
     // this process — only the config-side --env entry does (the
     // sixth live finding: the flag sat in config.toml, the launcher
     // never saw it). Both routes checked. `--verbose` escalates the
     // same launcher-side routes (the log level, the device and
     // share list) AND arms the guest init's own step trace with
-    // timing (exec_spec pushes MYSBX_KRUN_TRACE=1 unless the env
+    // timing (exec_spec pushes MYSBX_VM_TRACE=1 unless the env
     // already carries it) — a verbose launch must narrate the boot
     // gap, and the init's timed steps are the only voice it has.
-    let trace = std::env::var("MYSBX_KRUN_TRACE").is_ok_and(|v| !v.is_empty())
+    let trace = std::env::var("MYSBX_VM_TRACE").is_ok_and(|v| !v.is_empty())
         || cfg
             .env
             .iter()
-            .any(|(k, v)| k == "MYSBX_KRUN_TRACE" && !v.is_empty());
+            .any(|(k, v)| k == "MYSBX_VM_TRACE" && !v.is_empty());
     let chatty = trace || cfg.verbose;
 
     // libkrun's own log, redirected to stderr BEFORE anything else:
@@ -1430,7 +1430,7 @@ fn main() {
         // the launcher's whole environment (env::vars() of
         // krun_set_exec), which under bwrap is exactly what the
         // caller did not ask for. The shares' guest placement rides
-        // along as MYSBX_KRUN_SHARES (one "TAG DEST ro|rw" entry per
+        // along as MYSBX_VM_SHARES (one "TAG DEST ro|rw" entry per
         // --ro-share/--rw-share, ';'-separated).
         //
         // The argv contract of krun_set_exec: the vector lands on the
@@ -1752,7 +1752,7 @@ mod tests {
         let env = exec_spec(&cfg).2;
         assert!(env.contains(&"KEY=value".to_owned()));
         assert!(env.contains(
-            &"MYSBX_KRUN_SHARES=stage-ro store /nix/store ro;stage-rw repo /home/synth/repo rw"
+            &"MYSBX_VM_SHARES=stage-ro store /nix/store ro;stage-rw repo /home/synth/repo rw"
                 .to_owned()
         ));
     }
@@ -1783,7 +1783,7 @@ mod tests {
         .unwrap();
         let env = exec_spec(&cfg).2;
         assert_eq!(env.len(), 1);
-        assert_eq!(env[0], "MYSBX_KRUN_MANIFEST=stage-ro:manifest");
+        assert_eq!(env[0], "MYSBX_VM_MANIFEST=stage-ro:manifest");
         let text = manifest_text(&cfg);
         assert!(text.contains(&format!(
             "env\tKEY\t{}\n",
@@ -1800,7 +1800,7 @@ mod tests {
         // verbose launch needs the init's timed step trace on the
         // guest console. exec_spec arms it in BOTH routes (the
         // manifest pointer envp and the legacy full envp), never
-        // overriding an explicit MYSBX_KRUN_TRACE, and staying off
+        // overriding an explicit MYSBX_VM_TRACE, and staying off
         // without --verbose.
         let base = |verbose: bool| {
             let mut cfg = test_cfg();
@@ -1818,20 +1818,19 @@ mod tests {
         });
         let env = exec_spec(&cfg).2;
         assert!(
-            env.contains(&"MYSBX_KRUN_TRACE=1".to_owned()),
+            env.contains(&"MYSBX_VM_TRACE=1".to_owned()),
             "verbose + manifest must arm the init trace: {env:?}"
         );
         assert!(
-            env.contains(&"MYSBX_KRUN_MANIFEST=stage-ro:manifest".to_owned()),
+            env.contains(&"MYSBX_VM_MANIFEST=stage-ro:manifest".to_owned()),
             "the manifest pointer must survive: {env:?}"
         );
         // ...but never overrides an explicit value
-        cfg.env
-            .push(("MYSBX_KRUN_TRACE".to_owned(), "1".to_owned()));
+        cfg.env.push(("MYSBX_VM_TRACE".to_owned(), "1".to_owned()));
         let env = exec_spec(&cfg).2;
         assert_eq!(
             env.iter()
-                .filter(|e| e.starts_with("MYSBX_KRUN_TRACE="))
+                .filter(|e| e.starts_with("MYSBX_VM_TRACE="))
                 .count(),
             1,
             "an explicit trace flag must not be duplicated: {env:?}"
@@ -1845,14 +1844,14 @@ mod tests {
             read_only: true,
         });
         let env = exec_spec(&cfg).2;
-        assert!(!env.iter().any(|e| e.starts_with("MYSBX_KRUN_TRACE=")));
+        assert!(!env.iter().any(|e| e.starts_with("MYSBX_VM_TRACE=")));
         // legacy route: the trace lands in the plain envp
         let cfg = base(true);
         let env = exec_spec(&cfg).2;
-        assert!(env.contains(&"MYSBX_KRUN_TRACE=1".to_owned()));
+        assert!(env.contains(&"MYSBX_VM_TRACE=1".to_owned()));
         let cfg = base(false);
         let env = exec_spec(&cfg).2;
-        assert!(!env.iter().any(|e| e.starts_with("MYSBX_KRUN_TRACE=")));
+        assert!(!env.iter().any(|e| e.starts_with("MYSBX_VM_TRACE=")));
     }
 
     #[test]

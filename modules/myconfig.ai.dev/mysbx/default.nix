@@ -503,13 +503,13 @@ in
         # carries the guest nix wrappers too when `krun.nix.enable`
         # bakes them (their store paths are invisible to a baked run
         # otherwise — no host-store share to resolve through).
-        krunStoreBaked = cfg.krun.store.enable;
+        vmStoreBaked = cfg.vm.store.enable;
         # `gitDefaultDiff` (bd myconfig-w4zc): the wrapper pins it as
         # GIT_EXTERNAL_DIFF whenever Home Manager's difftastic runs in
         # external/both git mode, so the baked disk must carry its
         # store path too — a run with the guest-own store has no
         # host-store share to resolve it through.
-        krunStoreExtraRoots =
+        vmStoreExtraRoots =
           lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages
           ++ lib.optionals hmDifftasticExternal [ gitDefaultDiff ];
         # The native-qemu backend (backends.md D9, bd myconfig-2l9b):
@@ -533,7 +533,7 @@ in
         nono = cfg.nono.package;
         ssh-keygen = pkgs.openssh;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries enabledBackends; alacritty = cfg.terminal.package; shell = cfg.shell.path; podmanImage = if cfg.podman.enable then cfg.podman.image else null; podmanShell = if cfg.podman.enable then cfg.podman.shell else null; podmanPastaSpec = if cfg.podman.enable then cfg.podman.pastaSpec else null; podmanEnv = if cfg.podman.enable then cfg.podman.env else { }; krunRuntime = if cfg.podman.enable then cfg.krun.runtime else null; krunScratchSize = if cfg.podman.enable && cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null; krunLauncher = if cfg.krun.enable then cfg.krun.direct.launcher else null; krunRootfs = if cfg.krun.enable then cfg.krun.direct.rootfs else null; krunStoreBaked = cfg.krun.store.enable; krunStoreExtraRoots = lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages ++ lib.optionals hmDifftasticExternal [ gitDefaultDiff ]; microvmQemuLauncher = if cfg.microvm-qemu.enable then cfg.microvm-qemu.launcher else null; microvmQemuRootfs = if cfg.microvm-qemu.enable then cfg.microvm-qemu.rootfs else null; microvmQemuKernel = if cfg.microvm-qemu.enable then \"${cfg.microvm-qemu.kernel}/bzImage\" else null; microvmQemuEnv = if cfg.microvm-qemu.enable then cfg.microvm-qemu.env else { }; waypipe = cfg.display.package; dtach = pkgs.dtach; podmanWaypipe = if cfg.podman.enable then cfg.podman.waypipe else null; podmanMuxEntries = if cfg.podman.enable then cfg.podman.muxEntries else { }; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries enabledBackends; alacritty = cfg.terminal.package; shell = cfg.shell.path; podmanImage = if cfg.podman.enable then cfg.podman.image else null; podmanShell = if cfg.podman.enable then cfg.podman.shell else null; podmanPastaSpec = if cfg.podman.enable then cfg.podman.pastaSpec else null; podmanEnv = if cfg.podman.enable then cfg.podman.env else { }; krunRuntime = if cfg.podman.enable then cfg.krun.runtime else null; krunScratchSize = if cfg.podman.enable && cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null; krunLauncher = if cfg.krun.enable then cfg.krun.direct.launcher else null; krunRootfs = if cfg.krun.enable then cfg.krun.direct.rootfs else null; vmStoreBaked = cfg.vm.store.enable; vmStoreExtraRoots = lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages ++ lib.optionals hmDifftasticExternal [ gitDefaultDiff ]; microvmQemuLauncher = if cfg.microvm-qemu.enable then cfg.microvm-qemu.launcher else null; microvmQemuRootfs = if cfg.microvm-qemu.enable then cfg.microvm-qemu.rootfs else null; microvmQemuKernel = if cfg.microvm-qemu.enable then \"${cfg.microvm-qemu.kernel}/bzImage\" else null; microvmQemuEnv = if cfg.microvm-qemu.enable then cfg.microvm-qemu.env else { }; waypipe = cfg.display.package; dtach = pkgs.dtach; podmanWaypipe = if cfg.podman.enable then cfg.podman.waypipe else null; podmanMuxEntries = if cfg.podman.enable then cfg.podman.muxEntries else { }; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -1166,47 +1166,6 @@ in
           '';
         };
       };
-      # The guest-own nix store of the VM backends
-      # (docs/design/guest-store.md): an erofs image of THIS
-      # wrapper's own tool closure — the shell, the mux-entry
-      # closures, every `extraTools` package, and with
-      # `krun.nix.enable` the guest nix wrappers — built
-      # read-only and pinned as MYSBX_KRUN_STORE_DISK, ONE pin for
-      # both VM backends. It lives under the krun tree for the
-      # same reason `microvm-qemu.rootfs` consumes
-      # `krun.direct.rootfs`: the guest side is SHARED (backends.md
-      # D9 — the krun launcher's krun_add_disk2 and the qemu drive
-      # both negotiate the write protection into the guest, the
-      # init tells the disk from the writable scratch by the
-      # /sys/block ro flag and mounts it at /nix), so its knobs
-      # sit with the krun backend that owns the shared rootfs. A
-      # run opts in per config layer (`store = "baked"`); a run
-      # that does not keeps the host-store share (D3), byte for
-      # byte.
-      store = {
-        enable = mkEnableOption ''
-          the guest-own nix store disk of the VM backends
-          (`backend = "krun"` and `backend = "microvm-qemu"`):
-          the erofs image of this wrapper's own tool closure, built
-          once per wrapper (not per run) and mounted read-only at
-          /nix by a run that opts in via the `store = "baked"`
-          config key — a baked run sees its own tools only, no
-          host store paths behind them. With the flag on, `baked`
-          is also the built-in default of the two VM backends' runs
-          (a silent config resolves it; an explicit `store =
-          "host"` opts a run back onto the shared store), and off
-          (the default) every run keeps the host-store share — a
-          `store = "baked"` run is refused with a message naming
-          this option, never a silent host-store run.
-
-          A heavy addition: the image is a full copy of the tool
-          closure (hundreds of MiB for a plain tools set, GiB-scale
-          for a kitchen-sink one). Needs a VM backend enabled
-          (`krun.enable` or `microvm-qemu.enable`) — the disk is
-          attached by their launchers only.
-        '';
-      };
-
       nix = {
         # Nix inside the krun guest (bd myconfig-pz6, backends.md D2):
         # guest-root wrappers self-overlay the image's own /nix/store
@@ -1294,6 +1253,51 @@ in
             against a plain `nix`).
           '';
         };
+      };
+    };
+
+    # The VM backends' SHARED guest side (backends.md D9): the knobs
+    # of machinery both `krun` and `microvm-qemu` boot — the same
+    # rootfs, the same init, the same guest env contract. It sits
+    # beside `krun` and `microvm-qemu`, not under either backend,
+    # because neither owns it: a knob here changes both backends'
+    # runs identically.
+    vm = {
+      # The guest-own nix store of the VM backends
+      # (docs/design/guest-store.md): an erofs image of THIS
+      # wrapper's own tool closure — the shell, the mux-entry
+      # closures, every `extraTools` package, and with
+      # `krun.nix.enable` the guest nix wrappers — built
+      # read-only and pinned as MYSBX_VM_STORE_DISK, ONE pin for
+      # both VM backends (the krun launcher's krun_add_disk2 and
+      # the qemu drive both negotiate the write protection into
+      # the guest, the init tells the disk from the writable
+      # scratch by the /sys/block ro flag and mounts it at /nix).
+      # A run opts in per config layer (`store = "baked"`); a run
+      # that does not keeps the host-store share (D3), byte for
+      # byte.
+      store = {
+        enable = mkEnableOption ''
+          the guest-own nix store disk of the VM backends
+          (`backend = "krun"` and `backend = "microvm-qemu"`):
+          the erofs image of this wrapper's own tool closure, built
+          once per wrapper (not per run) and mounted read-only at
+          /nix by a run that opts in via the `store = "baked"`
+          config key — a baked run sees its own tools only, no
+          host store paths behind them. With the flag on, `baked`
+          is also the built-in default of the two VM backends' runs
+          (a silent config resolves it; an explicit `store =
+          "host"` opts a run back onto the shared store), and off
+          (the default) every run keeps the host-store share — a
+          `store = "baked"` run is refused with a message naming
+          this option, never a silent host-store run.
+
+          A heavy addition: the image is a full copy of the tool
+          closure (hundreds of MiB for a plain tools set, GiB-scale
+          for a kitchen-sink one). Needs a VM backend enabled
+          (`krun.enable` or `microvm-qemu.enable`) — the disk is
+          attached by their launchers only.
+        '';
       };
     };
 
@@ -2003,9 +2007,9 @@ in
           # launchers only — baked with no VM backend enabled would
           # be a heavy image nothing can consume. Refused at eval,
           # not a silently useless closure.
-          assertion = !cfg.krun.store.enable || cfg.krun.enable || cfg.microvm-qemu.enable;
+          assertion = !cfg.vm.store.enable || cfg.krun.enable || cfg.microvm-qemu.enable;
           message = ''
-            myconfig.ai.dev.mysbx.krun.store.enable is on, but
+            myconfig.ai.dev.mysbx.vm.store.enable is on, but
             neither VM backend is — the store disk is attached by
             the krun and microvm-qemu launchers only. Set
             myconfig.ai.dev.mysbx.krun.enable or

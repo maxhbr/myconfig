@@ -63,11 +63,11 @@ class InitTests(unittest.TestCase):
         # the erofs's own /nix/var/nix/db maps to the baked_db fixture,
         # the reconcile gate is closed by the env marker.
         start = INIT.index(
-            '    if [ "${MYSBX_KRUN_STORE_DISK:-}" = "1" ]; then\n'
+            '    if [ "${MYSBX_VM_STORE_DISK:-}" = "1" ]; then\n'
             "        db_src=/nix/var/nix/db"
         )
         reconcile = INIT.index(
-            '    if [ "${MYSBX_KRUN_STORE_DISK:-}" != "1" ]'
+            '    if [ "${MYSBX_VM_STORE_DISK:-}" != "1" ]'
             " && [ -f /mysbx-nix/state/db/db.sqlite ]; then",
             start,
         )
@@ -112,7 +112,7 @@ class InitTests(unittest.TestCase):
             [str(ROOTFS / "bin/busybox"), "sh", "-c", script],
             capture_output=True,
             text=True,
-            env={"PATH": "", **({"MYSBX_KRUN_STORE_DISK": "1"} if store_disk else {})},
+            env={"PATH": "", **({"MYSBX_VM_STORE_DISK": "1"} if store_disk else {})},
             timeout=20,
         )
 
@@ -296,8 +296,8 @@ class InitTests(unittest.TestCase):
         # through the one shared pick_vd scan, by their /sys/block/*/ro
         # flag — never by name.
         erofs = INIT.index('"$BB" mount -t erofs -o ro "$store_dev" /nix')
-        announce = INIT.index('if [ "${MYSBX_KRUN_STORE_DISK:-}" = "1" ]; then')
-        scratch = INIT.index('if [ "${MYSBX_KRUN_SCRATCH:-}" = "1" ]; then')
+        announce = INIT.index('if [ "${MYSBX_VM_STORE_DISK:-}" = "1" ]; then')
+        scratch = INIT.index('if [ "${MYSBX_VM_SCRATCH:-}" = "1" ]; then')
         db_copy = INIT.index('db_src=/nix/var/nix/db')
         baked_overlay = INIT.index('-o lowerdir=/nix/store,upperdir=/mysbx-nix/store-upper')
         self.assertLess(announce, erofs)
@@ -346,7 +346,7 @@ class InitTests(unittest.TestCase):
         # manifest forgot — never a silent store the payload could
         # see unmounted. Writable disks only: nothing to refuse.
         result = self.run_unannounced_scan((1, 0))
-        self.assert_failed(result, "exists but MYSBX_KRUN_STORE_DISK is unset")
+        self.assert_failed(result, "exists but MYSBX_VM_STORE_DISK is unset")
         result = self.run_unannounced_scan((0,))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
@@ -376,7 +376,7 @@ class InitTests(unittest.TestCase):
         # fake tree) under the baked busybox: over the threshold it
         # drops caches, 0/under-threshold never do, and a
         # custom threshold takes effect.
-        start = INIT.index('if [ "${MYSBX_KRUN_INODE_WATCHDOG:-')
+        start = INIT.index('if [ "${MYSBX_VM_INODE_WATCHDOG:-')
         end = INIT.index('step "exec-ing the payload: $1"', start)
         block = INIT[start:end]
         # The block forks and must be waited for; the payload is a
@@ -418,10 +418,10 @@ class InitTests(unittest.TestCase):
             script = (
                 'IW_PROC=%s\n' % shlex.quote(str(base / "sys"))
                 + (
-                    'unset MYSBX_KRUN_INODE_WATCHDOG\n' if env is None
-                    else 'MYSBX_KRUN_INODE_WATCHDOG=%s\n' % shlex.quote(env)
+                    'unset MYSBX_VM_INODE_WATCHDOG\n' if env is None
+                    else 'MYSBX_VM_INODE_WATCHDOG=%s\n' % shlex.quote(env)
                 )
-                + 'MYSBX_KRUN_INODE_WATCHDOG_INTERVAL=%s\n' % shlex.quote(interval)
+                + 'MYSBX_VM_INODE_WATCHDOG_INTERVAL=%s\n' % shlex.quote(interval)
                 + payload
             )
             return subprocess.run(
@@ -470,7 +470,7 @@ class InitTests(unittest.TestCase):
         # becomes `iw_tick || break` (feeds the next observed inode
         # count), and the drop_caches write becomes `iw_drop` (counts
         # the drop and sets the post-drop count the block re-reads).
-        start_at = INIT.index('if [ "${MYSBX_KRUN_INODE_WATCHDOG:-')
+        start_at = INIT.index('if [ "${MYSBX_VM_INODE_WATCHDOG:-')
         end = INIT.index('step "exec-ing the payload: $1"', start_at)
         block = INIT[start_at:end]
         drop = "echo 2 > /proc/sys/vm/drop_caches 2>/dev/null || :"
@@ -494,11 +494,11 @@ class InitTests(unittest.TestCase):
             "BB=%s\n"
             "IW=%s\n"
             "step() { :; }\n"
-            "unset MYSBX_KRUN_INODE_WATCHDOG_INTERVAL\n"
+            "unset MYSBX_VM_INODE_WATCHDOG_INTERVAL\n"
             % (shlex.quote(str(ROOTFS / "bin/busybox")), shlex.quote(str(base)))
             + (
-                "unset MYSBX_KRUN_INODE_WATCHDOG\n" if env is None
-                else "MYSBX_KRUN_INODE_WATCHDOG=%s\n" % shlex.quote(env)
+                "unset MYSBX_VM_INODE_WATCHDOG\n" if env is None
+                else "MYSBX_VM_INODE_WATCHDOG=%s\n" % shlex.quote(env)
             )
             + 'iw_pop() { _v=$("$BB" head -n 1 "$IW/$1"); "$BB" sed -i 1d "$IW/$1"; }\n'
             + 'iw_tick() { iw_pop observed; [ -n "$_v" ] || return 1; echo "$_v" > "$IW"/inode-state; }\n'

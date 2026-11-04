@@ -182,7 +182,7 @@ pub struct Merged {
     /// default is applied by [`Merged::resolved_store`], never here:
     /// it depends on the effective backend (only the two VM backends
     /// can attach a store disk) and the wrapper's
-    /// `MYSBX_KRUN_STORE_DISK` pin, facts the merge does not own.
+    /// `MYSBX_VM_STORE_DISK` pin, facts the merge does not own.
     pub store: Option<Store>,
 }
 
@@ -190,9 +190,9 @@ impl Merged {
     /// The effective store of a run: the layer decision when one
     /// made it; else the built-in default — `baked` on the two VM
     /// backends (`krun`, `microvm-qemu`) when the wrapper pins the
-    /// guest-own store disk (`MYSBX_KRUN_STORE_DISK`, baked by the
+    /// guest-own store disk (`MYSBX_VM_STORE_DISK`, baked by the
     /// Nix wrapper when the host sets
-    /// `myconfig.ai.dev.mysbx.krun.store.enable`), `host` everywhere
+    /// `myconfig.ai.dev.mysbx.vm.store.enable`), `host` everywhere
     /// else. The default must stay backend-shaped: a blanket `baked`
     /// would warn-and-fall-back on every silent run on the other
     /// backends (no disk can attach there), so the narrowing flips
@@ -202,8 +202,7 @@ impl Merged {
             Some(s) => s,
             None => {
                 let vm = matches!(self.backend.as_deref(), Some("krun") | Some("microvm-qemu"));
-                let pinned =
-                    std::env::var_os("MYSBX_KRUN_STORE_DISK").is_some_and(|v| !v.is_empty());
+                let pinned = std::env::var_os("MYSBX_VM_STORE_DISK").is_some_and(|v| !v.is_empty());
                 if vm && pinned {
                     Store::Baked
                 } else {
@@ -1470,20 +1469,20 @@ mod tests {
     /// never interleaved with another test's.
     static STORE_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-    /// Run `f` with `MYSBX_KRUN_STORE_DISK` set to `pinned`, restoring
+    /// Run `f` with `MYSBX_VM_STORE_DISK` set to `pinned`, restoring
     /// the previous value afterwards.
     fn with_store_disk_pin<T>(pinned: bool, f: impl FnOnce() -> T) -> T {
         let _guard = STORE_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let old = std::env::var_os("MYSBX_KRUN_STORE_DISK");
+        let old = std::env::var_os("MYSBX_VM_STORE_DISK");
         if pinned {
-            unsafe { std::env::set_var("MYSBX_KRUN_STORE_DISK", "/synth/store-disk.img") };
+            unsafe { std::env::set_var("MYSBX_VM_STORE_DISK", "/synth/store-disk.img") };
         } else {
-            unsafe { std::env::remove_var("MYSBX_KRUN_STORE_DISK") };
+            unsafe { std::env::remove_var("MYSBX_VM_STORE_DISK") };
         }
         let out = f();
         match old {
-            Some(x) => unsafe { std::env::set_var("MYSBX_KRUN_STORE_DISK", x) },
-            None => unsafe { std::env::remove_var("MYSBX_KRUN_STORE_DISK") },
+            Some(x) => unsafe { std::env::set_var("MYSBX_VM_STORE_DISK", x) },
+            None => unsafe { std::env::remove_var("MYSBX_VM_STORE_DISK") },
         }
         out
     }
@@ -1516,8 +1515,8 @@ mod tests {
     fn resolved_store_defaults_baked_only_on_a_pinned_vm_run() {
         // The built-in default (docs/design/guest-store.md): `baked`
         // where the run can attach the disk — a VM backend on a host
-        // whose wrapper pins MYSBX_KRUN_STORE_DISK (the
-        // `krun.store.enable` wiring) — `host` everywhere else. A
+        // whose wrapper pins MYSBX_VM_STORE_DISK (the
+        // `vm.store.enable` wiring) — `host` everywhere else. A
         // blanket `baked` would refuse every silent bubblewrap run on
         // a pinned host (the lib.rs non-VM gate), so the backend and
         // the pin are both load-bearing.

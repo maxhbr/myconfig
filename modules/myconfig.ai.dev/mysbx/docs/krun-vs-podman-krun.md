@@ -65,7 +65,7 @@ and init do not establish identical live behavior or test coverage.
 
 Direct `krun` and `microvm-qemu` implement both `store = "host"` and
 `store = "baked"`. An explicit configuration choice wins. Otherwise
-a NONEMPTY `MYSBX_KRUN_STORE_DISK` pin selects baked for these VM
+a NONEMPTY `MYSBX_VM_STORE_DISK` pin selects baked for these VM
 backends; host is the default without it. Explicit baked without a pin
 is refused. Every other backend, including `podman-krun`, also refuses
 `store = "baked"`. In host mode arbitrary host-built

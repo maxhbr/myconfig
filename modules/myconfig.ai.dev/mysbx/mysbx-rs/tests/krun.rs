@@ -565,7 +565,7 @@ fn a_scratch_param_renders_the_flag_and_the_announcement() {
     assert_eq!(argv[i + 1], SCRATCH_IMG);
     let j = argv
         .windows(2)
-        .position(|w| w[0] == "--env" && w[1] == "MYSBX_KRUN_SCRATCH=1")
+        .position(|w| w[0] == "--env" && w[1] == "MYSBX_VM_SCRATCH=1")
         .expect("the manifest env announcement");
     // The announcement rides AFTER the network flag section, before
     // --chdir (render order: cpus/ram, rootfs, init, devices,
@@ -579,7 +579,7 @@ fn a_scratch_param_renders_the_flag_and_the_announcement() {
         &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
     );
     assert!(!argv.iter().any(|a| a == "--scratch"));
-    assert!(!argv.windows(2).any(|w| w[1] == "MYSBX_KRUN_SCRATCH=1"));
+    assert!(!argv.windows(2).any(|w| w[1] == "MYSBX_VM_SCRATCH=1"));
 }
 
 #[test]
@@ -607,7 +607,7 @@ fn a_store_disk_param_replaces_the_host_store_share() {
     assert_eq!(argv[i + 1], "/synth/store-disk.img");
     let j = argv
         .windows(2)
-        .position(|w| w[0] == "--env" && w[1] == "MYSBX_KRUN_STORE_DISK=1")
+        .position(|w| w[0] == "--env" && w[1] == "MYSBX_VM_STORE_DISK=1")
         .expect("the manifest env announcement");
     assert!(argv[i + 1..j].iter().all(|a| a != "--chdir"));
     // The staging binds drop the store slot with the share.

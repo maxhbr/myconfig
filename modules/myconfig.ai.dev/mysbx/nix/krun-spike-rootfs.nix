@@ -55,7 +55,7 @@ let
     # (mkdir, mount), each invoked through the static busybox at
     # /bin/busybox: the guest env carries no PATH, a bare applet name
     # is unresolvable there.
-    shares="''${MYSBX_KRUN_SHARES:-}"
+    shares="''${MYSBX_VM_SHARES:-}"
     while [ -n "$shares" ]; do
         entry=''${shares%%';'*}
         [ "$shares" = "$entry" ] && shares= || shares=''${shares#*';'}

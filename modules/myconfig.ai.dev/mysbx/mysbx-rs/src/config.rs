@@ -310,7 +310,7 @@ pub enum Store {
     Host,
     /// The guest-own store disk (VM backends only): no host store
     /// path enters the sandbox; the wrapper must pin the image
-    /// (`MYSBX_KRUN_STORE_DISK`) or the run is refused. A non-VM
+    /// (`MYSBX_VM_STORE_DISK`) or the run is refused. A non-VM
     /// backend cannot express it — also refused, never dropped.
     Baked,
 }

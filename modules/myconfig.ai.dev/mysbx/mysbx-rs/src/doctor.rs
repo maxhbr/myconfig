@@ -521,12 +521,12 @@ pub fn krun_store_disk_check(disk: Option<PathBuf>) -> Check {
         Some(path) => Check::fail(
             "store",
             format!(
-                "`{}` is not a readable file (MYSBX_KRUN_STORE_DISK)",
+                "`{}` is not a readable file (MYSBX_VM_STORE_DISK)",
                 path.display()
             ),
             "the Nix wrapper pins it when the host opts in \
-             (myconfig.ai.dev.mysbx.krun.store.enable), or fix the \
-             MYSBX_KRUN_STORE_DISK pin",
+             (myconfig.ai.dev.mysbx.vm.store.enable), or fix the \
+             MYSBX_VM_STORE_DISK pin",
         ),
     }
 }
@@ -994,7 +994,7 @@ fn krun_checks(checks: &mut Vec<Check>) {
     // stock host — it only names the mode a `store = "baked"` run
     // would find.
     checks.push(krun_store_disk_check(
-        crate::env_opt("MYSBX_KRUN_STORE_DISK").map(PathBuf::from),
+        crate::env_opt("MYSBX_VM_STORE_DISK").map(PathBuf::from),
     ));
     // The launcher self-probe: an invalid flag makes the launcher
     // print its usage — proof the binary loads and reaches argument
@@ -1067,7 +1067,7 @@ fn microvm_qemu_checks(checks: &mut Vec<Check>) {
     // The shared store disk pin (the guest side is shared, D9 —
     // the SAME MYSBX_KRUN_* variable, like the rootfs above).
     checks.push(krun_store_disk_check(
-        crate::env_opt("MYSBX_KRUN_STORE_DISK").map(PathBuf::from),
+        crate::env_opt("MYSBX_VM_STORE_DISK").map(PathBuf::from),
     ));
     // The one qemu-only pin: the kernel image. A file, not a dir —
     // the bzImage the wrapper pins.
@@ -1827,7 +1827,7 @@ mod tests {
         assert_eq!(
             no_pin.level,
             Level::Ok,
-            "no MYSBX_KRUN_STORE_DISK pin is the default"
+            "no MYSBX_VM_STORE_DISK pin is the default"
         );
         assert!(no_pin.detail.contains("host"));
         // A file-shaped pin: OK, naming the disk.
@@ -1845,7 +1845,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let fail = krun_store_disk_check(Some(dir.clone()));
         assert_eq!(fail.level, Level::Fail, "a non-file pin must fail");
-        assert!(fail.hint.unwrap().contains("krun.store.enable"));
+        assert!(fail.hint.unwrap().contains("vm.store.enable"));
         std::fs::remove_file(disk).unwrap();
         std::fs::remove_dir_all(&dir).unwrap();
     }

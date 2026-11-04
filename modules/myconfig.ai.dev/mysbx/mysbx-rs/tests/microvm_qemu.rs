@@ -196,7 +196,7 @@ fn a_store_disk_param_replaces_the_host_store_share() {
     assert_eq!(argv[i + 1], "/synth/store-disk.img");
     assert!(argv
         .windows(2)
-        .any(|w| w[0] == "--env" && w[1] == "MYSBX_KRUN_STORE_DISK=1"));
+        .any(|w| w[0] == "--env" && w[1] == "MYSBX_VM_STORE_DISK=1"));
     assert_golden("baked-store.txt", &argv);
 }
 
@@ -448,7 +448,7 @@ fn a_scratch_param_renders_the_flag_and_the_announcement() {
     assert_eq!(argv[i + 1], mysbx::krun::SCRATCH_IMG);
     assert!(argv
         .windows(2)
-        .any(|w| w[0] == "--env" && w[1] == "MYSBX_KRUN_SCRATCH=1"));
+        .any(|w| w[0] == "--env" && w[1] == "MYSBX_VM_SCRATCH=1"));
     // Without the param: no flag, no announcement.
     let argv = run(
         &base(true),
@@ -457,7 +457,7 @@ fn a_scratch_param_renders_the_flag_and_the_announcement() {
         &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
     );
     assert!(!argv.iter().any(|a| a == "--scratch"));
-    assert!(!argv.windows(2).any(|w| w[1] == "MYSBX_KRUN_SCRATCH=1"));
+    assert!(!argv.windows(2).any(|w| w[1] == "MYSBX_VM_SCRATCH=1"));
 }
 
 #[test]

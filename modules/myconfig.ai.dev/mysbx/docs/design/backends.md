@@ -798,7 +798,7 @@ The spec's shares and selected store disk determine the guest view:
   the shipped narrowing).** The `store = "host" | "baked"` config
   key (either layer, the sidecar wins; when both are silent the
   built-in default resolves `baked` ONLY for `krun`/`microvm-qemu`
-  with a NONEMPTY `MYSBX_KRUN_STORE_DISK`, otherwise `host` —
+  with a NONEMPTY `MYSBX_VM_STORE_DISK`, otherwise `host` —
   `Merged::resolved_store`, mysbx-rs; an explicit choice always
   wins) selects per run: `host` is D3's layout above; `baked`
   DROPS the whole-store share and the j23 nix-var ride-along and
@@ -816,8 +816,8 @@ The spec's shares and selected store disk determine the guest view:
   read_only=true and qemu's `readonly=on` — the write protection
   rides the virtio config into the guest, the init tells the disk
   from the writable scratch by the `/sys/block` ro flag), gated on
-  the host's opt-in (`krun.store.enable` bakes and pins
-  `MYSBX_KRUN_STORE_DISK`; a baked run without the pin is refused,
+  the host's opt-in (`vm.store.enable` bakes and pins
+  `MYSBX_VM_STORE_DISK`; a baked run without the pin is refused,
   never a silent host-store run). Every backend other than `krun`
   and `microvm-qemu` cannot attach the disk, so a `baked` request on
   one of them (including `podman-krun`) warns and falls back to
@@ -943,7 +943,7 @@ direct krun, `trustfs` are additional devices); the share records carry
 bind-mounting `<device-mount>/<slot>` at each dest (a bind is no
 new virtiofs device, so finding 9 does not apply, and `getcwd()`
 reports the dest, not the `/tmp/mysbx-shares` backing path). The guest init traces
-every step to the console when the host sets `MYSBX_KRUN_TRACE=1`
+every step to the console when the host sets `MYSBX_VM_TRACE=1`
 (a silent hang leaves diagnosable evidence — the live-run finding
 of bd myconfig-2n8).
 
@@ -1009,7 +1009,7 @@ network model is the one bd myconfig-6di.5.5 verified for
   DHCP path is for net devices; TSI has none). The guest init
   therefore writes one from the manifest: the wrapper reads the
   HOST's `/etc/resolv.conf` and hands its contents through the
-  manifest (`MYSBX_KRUN_RESOLV`), the init writes it to
+  manifest (`MYSBX_VM_RESOLV`), the init writes it to
   `/etc/resolv.conf` before the payload execs. The host's resolver
   addresses are exactly what the TSI proxy can reach (it dials from
   the host netns), so resolution and connects agree.
@@ -1068,7 +1068,7 @@ backend removes).
   can add a read-only store disk. The shared init distinguishes
   these using `/sys/block` read-only flags rather than assuming
   the scratch is the only disk. The run announces scratch in the
-  manifest env (`MYSBX_KRUN_SCRATCH=1`); the init `mkfs.ext4 -q -F`s
+  manifest env (`MYSBX_VM_SCRATCH=1`); the init `mkfs.ext4 -q -F`s
   the selected writable device ONCE per run (the file is per-run,
   never reused — no stale fs survives) and mounts it as the Nix
   scratch root: overlay upper/work over the host share or baked

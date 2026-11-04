@@ -167,7 +167,7 @@ pub fn microvm_qemu_argv(
         argv.push("--scratch".to_owned());
         argv.push(scratch.clone());
         argv.push("--env".to_owned());
-        argv.push("MYSBX_KRUN_SCRATCH=1".to_owned());
+        argv.push("MYSBX_VM_SCRATCH=1".to_owned());
     }
     // The guest-own store disk (docs/design/guest-store.md): the SAME
     // emission the krun renderer makes (D9: the spec is shared, the

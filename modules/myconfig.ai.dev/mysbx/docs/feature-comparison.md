@@ -198,7 +198,7 @@ The config keys are `config.md` D23 (bd myconfig-91j).
 
 For the direct VM backends an explicit `store` wins; otherwise the
 silent default is `baked` **only with** a nonempty
-`MYSBX_KRUN_STORE_DISK` pin, and `host` without it. Baked mode narrows
+`MYSBX_VM_STORE_DISK` pin, and `host` without it. Baked mode narrows
 what the **guest** sees, not the outer VM bubblewrap runtime view,
 which still includes the whole host store. It does not change Podman's
 image-owned store into a host-store bind.

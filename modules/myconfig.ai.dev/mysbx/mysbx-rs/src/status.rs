@@ -227,7 +227,7 @@ pub fn run(args: &[String], dry_run: bool) -> i32 {
     // warns and runs on `host` (lib.rs), so status reports that
     // fallback instead of a baked state that cannot hold.
     {
-        let pinned = std::env::var_os("MYSBX_KRUN_STORE_DISK").is_some();
+        let pinned = std::env::var_os("MYSBX_VM_STORE_DISK").is_some();
         let vm_backend = matches!(
             merged.backend.as_deref(),
             Some("krun") | Some("microvm-qemu")
@@ -237,7 +237,7 @@ pub fn run(args: &[String], dry_run: bool) -> i32 {
                 "baked — the guest-own store disk (pinned)".to_string()
             } else {
                 "baked — NO store image pinned (a VM run would be refused: \
-MYSBX_KRUN_STORE_DISK)"
+MYSBX_VM_STORE_DISK)"
                     .to_owned()
             }
         } else {

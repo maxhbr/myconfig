@@ -185,7 +185,7 @@ esac
 # guest-side. The fd-stress harness's --store-scan mode is the
 # canonical probe: it arms the watchdog through a scratch repo's
 # [env] (the normal config route to the init's
-# MYSBX_KRUN_INODE_WATCHDOG), walks the shared store in the guest,
+# MYSBX_VM_INODE_WATCHDOG), walks the shared store in the guest,
 # and asserts BOTH halves — the guest reports the watchdog
 # reclaiming each round, and the launcher's host fd count stays
 # under the budget — measured from both ends of the vsock.

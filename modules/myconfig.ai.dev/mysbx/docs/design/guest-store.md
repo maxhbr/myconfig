@@ -23,7 +23,7 @@ of the stage-ro device (backends.md D3, `stage_binds` in
 `PATH` tree and arbitrary host-built toolchains resolve through it.
 This was the original layout, not an unconditional current default:
 with no explicit choice, a VM run uses `baked` when
-`MYSBX_KRUN_STORE_DISK` is nonempty, and `host` otherwise. An explicit
+`MYSBX_VM_STORE_DISK` is nonempty, and `host` otherwise. An explicit
 layer choice wins (`Merged::resolved_store`).
 
 The question this file explored: could the VM instead start with its
@@ -180,7 +180,7 @@ itself. That is what flipped the cost table to B: `mkfs.erofs
   direct answer to the recorded rejection reason.
 
   **What shipped and what did not (the honest ledger).** (a) shipped
-  HOST-side only: the Nix builder's `krunStoreExtraRoots` seam adds
+  HOST-side only: the Nix builder's `vmStoreExtraRoots` seam adds
   roots (`default.nix` supplies `krun.nix.packages` when
   `krun.nix.enable`); `extraTools` also extends the closure. There
   is no automatic per-repository root discovery or per-repo roots
@@ -204,7 +204,7 @@ itself. That is what flipped the cost table to B: `mkfs.erofs
   config's vocabulary), `host` preserving the pre-key behavior
   exactly, refuse-or-announce, never a silent switch. The shipped
   default resolves `baked` only for `krun`/`microvm-qemu` with a
-  NONEMPTY `MYSBX_KRUN_STORE_DISK` pin (a layer may always select
+  NONEMPTY `MYSBX_VM_STORE_DISK` pin (a layer may always select
   `host`); `host` is the default otherwise. An explicit unpinned
   `baked` choice on a VM backend is refused, not silently replaced
   with `host` (no disk to attach); on every other backend the
@@ -278,7 +278,7 @@ devices), the spec wiring (`mysbx-rs` — the `store` key, the share
 drop, the manifest gate, and refusal of unpinned baked runs or baked
 runs on any backend other than `krun` and `microvm-qemu`, including
 `podman-krun`), the module option
-(`myconfig.ai.dev.mysbx.krun.store.enable`), the doctor line and
+(`myconfig.ai.dev.mysbx.vm.store.enable`), the doctor line and
 the check (`mysbx-krun-store-disk-test`).
 
 If live runs survive, the follow-up decision — extending the key to
@@ -286,7 +286,7 @@ the bwrap tier (a ro bind of a view instead of the whole store) —
 is a backends.md/config.md change of its own, informed by what the
 live runs broke. The default flip on the VM tiers has SHIPPED with
 the key itself: an omitted choice on `krun`/`microvm-qemu` with a
-nonempty `MYSBX_KRUN_STORE_DISK` pin resolves `baked`
+nonempty `MYSBX_VM_STORE_DISK` pin resolves `baked`
 (`Merged::resolved_store`, mysbx-rs/src/merge.rs), and `host`
 otherwise. An explicit layer choice still wins; the absence of a pin
 is not a runtime fallback from an explicit baked request.
@@ -304,7 +304,7 @@ The remaining acceptance procedure must record the host, revision,
 backend, effective `store`, disk pins, networking and scratch presence:
 
 1. Boot explicit `store = "baked"` runs on `krun` AND `microvm-qemu`
-   with `MYSBX_KRUN_TRACE=1`: verify EROFS at `/nix`, its block
+   with `MYSBX_VM_TRACE=1`: verify EROFS at `/nix`, its block
    device's read-only flag, and no guest store-share placement. Use
    the normal shares AND both disks to check the static IRQ budget.
    Also boot without scratch and confirm no managed writable-Nix

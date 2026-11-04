@@ -156,7 +156,7 @@
           };
           podman.enable = true;
           krun.enable = true;
-          krun.store.enable = true;
+          vm.store.enable = true;
           microvm-qemu.enable = true;
         };
         dev.lmstudio = {

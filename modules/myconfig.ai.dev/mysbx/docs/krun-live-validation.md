@@ -384,7 +384,7 @@ scratch and networking. The launcher shares the host Nix database only
 when all three conditions hold. Make sure that a probe's generated
 configuration does not silently select the baked store.
 The shared database must contain `db.sqlite` to exercise reconciliation.
-With `MYSBX_KRUN_TRACE=1`, expect these init markers before the guest start marker:
+With `MYSBX_VM_TRACE=1`, expect these init markers before the guest start marker:
 `enumerating the registered store paths from the copied nix db`,
 `checking N registered store path(s) against the read-only store share`,
 `copied nix db validation complete`, then
@@ -468,12 +468,12 @@ the `FORGET`s, and the host launcher's fds fall with them.
 
 Knobs through the normal `[env]` config route:
 
-- `MYSBX_KRUN_INODE_WATCHDOG` — the allowed inode growth above the
+- `MYSBX_VM_INODE_WATCHDOG` — the allowed inode growth above the
   post-drop baseline; `0` disables; default `20000`. The baseline is
   the inode count right after the last drop (`0` before the first),
   so the in-use set a drop cannot reclaim (about 72k in a long agent
   session) does not trigger a drop on every check (bd myconfig-jjfy).
-- `MYSBX_KRUN_INODE_WATCHDOG_INTERVAL` — the check interval in
+- `MYSBX_VM_INODE_WATCHDOG_INTERVAL` — the check interval in
   seconds; default `1`. A walk pins fds between two checks, so the
   interval bounds the overshoot of fast walks.
 

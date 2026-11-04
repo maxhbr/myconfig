@@ -36,7 +36,7 @@ XDG_DATA_HOME=/mysbx-home/.local/share
 --env
 PATH=/synth/bin
 --env
-MYSBX_KRUN_RESOLV=nameserver 10.0.0.53
+MYSBX_VM_RESOLV=nameserver 10.0.0.53
 options edns0
 
 --chdir

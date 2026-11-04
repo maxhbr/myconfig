@@ -67,7 +67,7 @@ pub const EXIT_INFRASTRUCTURE: i32 = 70;
 /// must announce it with the IDENTICAL record, so the string lives
 /// here once. The init reads it as the disk's announce-or-refuse
 /// contract: an unannounced read-only vd* is a refused boot.
-pub(crate) const STORE_DISK_ENV_RECORD: &str = "MYSBX_KRUN_STORE_DISK=1";
+pub(crate) const STORE_DISK_ENV_RECORD: &str = "MYSBX_VM_STORE_DISK=1";
 
 /// Print the usage to stdout.
 pub fn usage() {
@@ -3645,14 +3645,14 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // `store = "host"` (a layer decision, or the default on
             // an unpinned host) reads no pin and keeps the share.
             let krun_store_disk: Option<String> = if merged.resolved_store().is_baked() {
-                match env_opt("MYSBX_KRUN_STORE_DISK") {
+                match env_opt("MYSBX_VM_STORE_DISK") {
                     Some(path) => Some(path),
                     None => {
                         eprintln!(
-                            "mysbx: {backend}: store = \"baked\" but no store image configured (MYSBX_KRUN_STORE_DISK)"
+                            "mysbx: {backend}: store = \"baked\" but no store image configured (MYSBX_VM_STORE_DISK)"
                         );
                         eprintln!(
-                            "  the Nix wrapper pins MYSBX_KRUN_STORE_DISK when the host \
+                            "  the Nix wrapper pins MYSBX_VM_STORE_DISK when the host \
                              builds the guest-own store disk; an unwrapped build sets none — \
                              write `store = \"host\"` for the shared store"
                         );
@@ -5771,7 +5771,7 @@ const SIDECAR_TEMPLATE_ROOT: &str = r#"# mysbx sidecar config
 # Which nix store the sandbox sees (docs/design/guest-store.md):
 # `baked` runs the VM backends on their own store disk — an image the
 # Nix wrapper bakes, no host store path enters the sandbox; needs
-# `krun` or `microvm-qemu` and the wrapper's MYSBX_KRUN_STORE_DISK
+# `krun` or `microvm-qemu` and the wrapper's MYSBX_VM_STORE_DISK
 # pin, and is refused on every other backend. When both layers are
 # silent the DEFAULT is `baked` on a pinned host's VM run and
 # `host` everywhere else — write the key only to override that.

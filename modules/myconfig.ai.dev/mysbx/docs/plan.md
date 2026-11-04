@@ -260,7 +260,7 @@ builders and golden tests:
   processes, using the shared direct guest init and a pinned kernel.
 
 The direct VMs choose `store = "host" | "baked"`; explicit configuration
-wins, otherwise a nonempty `MYSBX_KRUN_STORE_DISK` pin selects baked,
+wins, otherwise a nonempty `MYSBX_VM_STORE_DISK` pin selects baked,
 and no pin selects host. Their Nix binary is always in the tools, but
 the direct init needs scratch for managed writable Nix and has no tmpfs
 fallback. Current wiring incorrectly pins scratch only with

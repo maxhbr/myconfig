@@ -100,7 +100,7 @@ ACTIONABLE (the bead's own "instrument rather than hope" next step)
 - Verified: `mysbx-krun-guest-nix-test` builds and PASSES (incl.
   the new watcher assertions, run in the check itself);
   `mysbx-generated-config-test` PASSES; `krun.nix.packages` and
-  `krunStoreRoots` still evaluate on test-f13 and carry
+  `vmStoreRoots` still evaluate on test-f13 and carry
   `mysbx-krun-guest-nix`; nixfmt 1.5.0 `--check` clean on all
   touched files; the built static watcher exercised live
   (SYMLINK/DIR lines, flock gate, non-source skip).

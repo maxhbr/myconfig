@@ -36,7 +36,7 @@
 //!    through the ro store share).
 //! 2. `--init PATH` — the guest entry (bd myconfig-dak.5) baked into
 //!    the rootfs; it receives the payload as its argv (`$1..`) and
-//!    the shares' placement as `MYSBX_KRUN_SHARES` in the env.
+//!    the shares' placement as `MYSBX_VM_SHARES` in the env.
 //! 3. `--ro-share`/`--rw-share TAG@DEST=DIR` — one per virtiofs
 //!    share. The ro store share (D3's default: the whole host
 //!    /nix/store, the same visibility the bwrap tier grants) comes
@@ -232,7 +232,7 @@ pub struct Params<'a> {
     /// The guest-own nix store disk (docs/design/guest-store.md): the
     /// STORE-VIEW path of the erofs image the Nix wrapper baked from
     /// the tools closure (lib.rs reads it from the
-    /// `MYSBX_KRUN_STORE_DISK` pin — a store path, so the launcher's
+    /// `MYSBX_VM_STORE_DISK` pin — a store path, so the launcher's
     /// bwrap wrap already sees it ro, no extra bind). PRESENCE IS THE
     /// MODE: the run attaches the disk as a second read-only
     /// virtio-blk device and carries NO host store share — the
@@ -356,7 +356,7 @@ impl std::fmt::Display for Error {
         match self {
             Error::MultiplexerUnavailable { multiplexer } => write!(
                 f,
-                "the configuration selects multiplexer `{multiplexer}` but no entry is baked for the krun guest (MYSBX_KRUN_MUX_ENTRY_{multiplexer:?} unset)"
+                "the configuration selects multiplexer `{multiplexer}` but no entry is baked for the krun guest (MYSBX_MUX_ENTRY_{multiplexer:?} unset)"
             ),
             Error::PidsLimit { pids } => write!(
                 f,
@@ -546,7 +546,7 @@ fn check_share_root(sandbox_path: &str) -> Result<(), Error> {
 
 /// The built spec — sections in fixed order (the module docs), the
 /// argv of the launcher binary plus the shares' guest placement
-/// (which rides as `MYSBX_KRUN_SHARES` in the env, section 4).
+/// (which rides as `MYSBX_VM_SHARES` in the env, section 4).
 /// Shared with the microvm-qemu backend (backends.md D9: the same
 /// spec, a different renderer).
 pub(crate) struct Spec {
@@ -574,7 +574,7 @@ pub(crate) struct Spec {
     /// The guest-own store disk's path (docs/design/guest-store.md):
     /// the launcher attaches the erofs image READ-ONLY
     /// (`krun_add_disk2` with the read-only feature, a second
-    /// virtio-blk device) and announces it (`MYSBX_KRUN_STORE_DISK=1`)
+    /// virtio-blk device) and announces it (`MYSBX_VM_STORE_DISK=1`)
     /// so the init mounts it at /nix. `None` is a host-store run.
     pub(crate) store_disk: Option<String>,
     /// The in-memory overlay files (bd myconfig-dak.8): (guest path,
@@ -842,7 +842,7 @@ pub(crate) fn share_device(slot: &str, read_only: bool) -> &'static str {
 /// 9, so no DEVICE ever mounts at the sandbox path directly), and
 /// then bind-mounts `<device-mount>/<slot>` at each sandbox path, so the
 /// payload's contract is the SANDBOX layout, the tmpfs placement is
-/// the init's. The `MYSBX_KRUN_SHARES` encoding the launcher hands
+/// the init's. The `MYSBX_VM_SHARES` encoding the launcher hands
 /// the init is one `DEVICE SLOT SANDBOX_PATH ro|rw` entry per share.
 pub(crate) struct Share {
     /// The share's slot inside its device's staging tree — distinct
@@ -898,9 +898,9 @@ pub(crate) fn spec_of(
     // so a silent guest hang leaves console evidence of every init
     // step. A config `[env]` layer may override or drop it — it is
     // a debugging aid, not an infrastructure pin.
-    if let Ok(trace) = std::env::var("MYSBX_KRUN_TRACE") {
-        if !env.iter().any(|(k, _)| k == "MYSBX_KRUN_TRACE") {
-            env.push(("MYSBX_KRUN_TRACE".to_owned(), trace));
+    if let Ok(trace) = std::env::var("MYSBX_VM_TRACE") {
+        if !env.iter().any(|(k, _)| k == "MYSBX_VM_TRACE") {
+            env.push(("MYSBX_VM_TRACE".to_owned(), trace));
         }
     }
 
@@ -1164,7 +1164,7 @@ fn sandbox_env(
             // value itself — a second encode here would hand the guest
             // base64 text as its resolver file (live-run finding on
             // 'thing', bd myconfig-dak.6).
-            set("MYSBX_KRUN_RESOLV", host_resolv);
+            set("MYSBX_VM_RESOLV", host_resolv);
         }
     }
     // The git trust's global config stays the block's LAST entry
@@ -1185,7 +1185,7 @@ fn sandbox_env(
 
 /// The virtiofs tag of a state-dir backing share — deterministic per
 /// entry, stable across runs (the guest init matches tags to
-/// mountpoints by MYSBX_KRUN_SHARES, but a readable tag is part of
+/// mountpoints by MYSBX_VM_SHARES, but a readable tag is part of
 /// the dry-run audit).
 fn state_tag(entry: &str) -> String {
     let mut tag = String::from("state-");
@@ -1208,7 +1208,7 @@ fn share_of_mount(mount: &crate::config::Mount, workspace: &Workspace) -> Result
     let read_only = matches!(mount.mode, crate::config::Mode::Ro)
         || matches!(workspace, Workspace::Clone { .. });
     // The slot must not contain whitespace or `;` (the
-    // MYSBX_KRUN_SHARES encoding is `;`-separated) and must be a
+    // MYSBX_VM_SHARES encoding is `;`-separated) and must be a
     // stable identity of the share across runs — a digest of the
     // sandbox path always satisfies both.
     let slot = format!("m-{}", crate::repo::fnv1a10(&sandbox_path));
@@ -1348,13 +1348,13 @@ fn render(spec: &Spec) -> Vec<String> {
     // device) and the init mkfs+mounts it as the nix scratch. The
     // flag takes the LAUNCHER-VIEW path (lib.rs bwrap-binds the
     // sidecar file at [`SCRATCH_IMG`]); the PRESENCE announcement
-    // (`MYSBX_KRUN_SCRATCH=1`) rides the manifest env — the init
+    // (`MYSBX_VM_SCRATCH=1`) rides the manifest env — the init
     // identifies the disk as the only /dev/vd*, never by name.
     if let Some(scratch) = &spec.scratch {
         argv.push("--scratch".to_owned());
         argv.push(scratch.clone());
         argv.push("--env".to_owned());
-        argv.push("MYSBX_KRUN_SCRATCH=1".to_owned());
+        argv.push("MYSBX_VM_SCRATCH=1".to_owned());
     }
     // 4d. the guest-own store disk (docs/design/guest-store.md): the
     // launcher attaches the erofs image as a SECOND virtio-blk
@@ -1363,7 +1363,7 @@ fn render(spec: &Spec) -> Vec<String> {
     // writable vd*). The flag takes the STORE-VIEW path (a store
     // path the wrap already binds ro for the launcher's own
     // runtime, no extra bind); the PRESENCE announcement
-    // (`MYSBX_KRUN_STORE_DISK=1`) rides the manifest env like the
+    // (`MYSBX_VM_STORE_DISK=1`) rides the manifest env like the
     // scratch's. The share list of this argv carries no store slot
     // — the disk replaces D3's whole-store share for this run.
     if let Some(disk) = &spec.store_disk {

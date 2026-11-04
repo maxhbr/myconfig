@@ -24,8 +24,8 @@ from unittest import mock
 
 NOFILE = 65536
 STORE_ROOTS = ("/nix/store", "/mysbx-krun-stage/ro/store")
-WATCHDOG_ENV = "MYSBX_KRUN_INODE_WATCHDOG"
-WATCHDOG_INTERVAL_ENV = "MYSBX_KRUN_INODE_WATCHDOG_INTERVAL"
+WATCHDOG_ENV = "MYSBX_VM_INODE_WATCHDOG"
+WATCHDOG_INTERVAL_ENV = "MYSBX_VM_INODE_WATCHDOG_INTERVAL"
 # The init's defaults (nix/krun-rootfs.nix), used by --watchdog-defaults.
 WATCHDOG_DEFAULT_GROWTH = 20000
 WATCHDOG_DEFAULT_INTERVAL = 1
@@ -480,9 +480,9 @@ class MonitorTests(unittest.TestCase):
         self.assertIn(b"watchdog reclaimed", source)
 
     def test_watchdog_env_names(self):
-        self.assertEqual(WATCHDOG_ENV, "MYSBX_KRUN_INODE_WATCHDOG")
+        self.assertEqual(WATCHDOG_ENV, "MYSBX_VM_INODE_WATCHDOG")
         self.assertEqual(
-            WATCHDOG_INTERVAL_ENV, "MYSBX_KRUN_INODE_WATCHDOG_INTERVAL"
+            WATCHDOG_INTERVAL_ENV, "MYSBX_VM_INODE_WATCHDOG_INTERVAL"
         )
 
     def test_watchdog_reclamation_timing(self):
@@ -771,7 +771,7 @@ def main():
         "--watchdog-threshold",
         type=int,
         default=20000,
-        help="the MYSBX_KRUN_INODE_WATCHDOG value the scratch repo arms "
+        help="the MYSBX_VM_INODE_WATCHDOG value the scratch repo arms "
         "(store-scan mode only)",
     )
     parser.add_argument(

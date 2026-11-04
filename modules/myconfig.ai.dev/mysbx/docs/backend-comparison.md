@@ -145,7 +145,7 @@ These choices apply to `krun` and `microvm-qemu`, not the Podman image
 backends. Every other backend, including `podman-krun`, refuses
 `store = "baked"`. On Podman, `store = "host"` does not add a host-store
 bind. Explicit `store` wins on the two direct VM backends. If it is omitted, a nonempty
-`MYSBX_KRUN_STORE_DISK` pin selects `baked` for these two backends;
+`MYSBX_VM_STORE_DISK` pin selects `baked` for these two backends;
 otherwise the result is `host`.
 
 | Store | Scratch attached | Guest result |

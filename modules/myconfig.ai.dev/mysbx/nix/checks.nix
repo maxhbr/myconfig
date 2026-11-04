@@ -164,7 +164,7 @@ in
       storeImage = pkgs.callPackage ../nix/krun-store-image.nix { };
       img = storeImage { rootPaths = [ pkgs.hello ]; };
       # The module wiring, pinned at EVAL time: a host with
-      # krun.store.enable must bake and pin the disk, the guest nix
+      # vm.store.enable must bake and pin the disk, the guest nix
       # wrappers must ride along while krun.nix.enable is on, and
       # must drop out when it is off. test-f13 enables krun.nix AND
       # opts into the store disk by default (hosts/host.f13/ai.f13.nix),
@@ -177,12 +177,12 @@ in
       # passthrus evaluates the wrapper, nothing builds here (the
       # image build is the fixture arm above).
       storeHost = self.nixosConfigurations.test-f13.extendModules {
-        modules = [ { myconfig.ai.dev.mysbx.krun.store.enable = true; } ];
+        modules = [ { myconfig.ai.dev.mysbx.vm.store.enable = true; } ];
       };
       storeNoNixHost = self.nixosConfigurations.test-f13.extendModules {
         modules = [
           {
-            myconfig.ai.dev.mysbx.krun.store.enable = true;
+            myconfig.ai.dev.mysbx.vm.store.enable = true;
             myconfig.ai.dev.mysbx.krun.nix.enable = lib.mkForce false;
           }
         ];
@@ -190,14 +190,14 @@ in
       storeNoDifftasticHost = self.nixosConfigurations.test-f13.extendModules {
         modules = [
           {
-            myconfig.ai.dev.mysbx.krun.store.enable = true;
+            myconfig.ai.dev.mysbx.vm.store.enable = true;
             home-manager.users.mhuber.programs.difftastic.enable = lib.mkForce false;
           }
         ];
       };
       storeNoDiskHost = self.nixosConfigurations.test-f13.extendModules {
         modules = [
-          { myconfig.ai.dev.mysbx.krun.store.enable = lib.mkForce false; }
+          { myconfig.ai.dev.mysbx.vm.store.enable = lib.mkForce false; }
         ];
       };
       pkgOf = host: host.config.myconfig.ai.dev.mysbx.package;
@@ -210,12 +210,12 @@ in
         ];
         # The eval results, injected as plain strings the shell
         # asserts on (a bool and two path lists).
-        storeWiredOn = if (pkgOf storeHost).passthru.krunStoreBaked then "1" else "0";
-        storeWiredOff = if (pkgOf storeNoDiskHost).passthru.krunStoreBaked then "1" else "0";
-        storeRootsOn = lib.concatStringsSep " " (pkgOf storeHost).passthru.krunStoreRoots;
-        storeRootsNoNix = lib.concatStringsSep " " (pkgOf storeNoNixHost).passthru.krunStoreRoots;
+        storeWiredOn = if (pkgOf storeHost).passthru.vmStoreBaked then "1" else "0";
+        storeWiredOff = if (pkgOf storeNoDiskHost).passthru.vmStoreBaked then "1" else "0";
+        storeRootsOn = lib.concatStringsSep " " (pkgOf storeHost).passthru.vmStoreRoots;
+        storeRootsNoNix = lib.concatStringsSep " " (pkgOf storeNoNixHost).passthru.vmStoreRoots;
         storeRootsNoDifftastic = lib.concatStringsSep " " (pkgOf storeNoDifftasticHost)
-        .passthru.krunStoreRoots;
+        .passthru.vmStoreRoots;
       }
       ''
         fail() {
@@ -262,11 +262,11 @@ in
         #    ride along as extra roots (their store paths a baked run
         #    has no host-store share to resolve through). Off: nothing.
         [ "$storeWiredOn" = 1 ] \
-          || fail "krun.store.enable does not bake the disk (the default.nix krunStoreBaked wiring is broken)"
+          || fail "vm.store.enable does not bake the disk (the default.nix vmStoreBaked wiring is broken)"
         [ "$storeWiredOff" = 0 ] \
-          || fail "the wrapper bakes the disk without krun.store.enable (a stock host must keep the host-store share)"
+          || fail "the wrapper bakes the disk without vm.store.enable (a stock host must keep the host-store share)"
         [ "$storeRootsOn" != "$storeRootsNoNix" ] \
-          || fail "krun.nix.enable did not add the guest nix wrappers to the disk roots (the krunStoreExtraRoots wiring is broken)"
+          || fail "krun.nix.enable did not add the guest nix wrappers to the disk roots (the vmStoreExtraRoots wiring is broken)"
         case "$storeRootsOn" in
           *krun-guest-nix*) ;;
           *) fail "the disk roots do not carry the guest nix wrappers: $storeRootsOn" ;;
@@ -298,18 +298,18 @@ in
         # The --set SPELLING the crate reads is a string literal in
         # mysbx.nix (a reformat never splits literals, so this grep
         # is reflow-proof).
-        grep -q -- '--set MYSBX_KRUN_STORE_DISK' ${../nix/mysbx.nix} \
-          || fail "the wrapper lost the MYSBX_KRUN_STORE_DISK pin"
+        grep -q -- '--set MYSBX_VM_STORE_DISK' ${../nix/mysbx.nix} \
+          || fail "the wrapper lost the MYSBX_VM_STORE_DISK pin"
         # The marker AGREEMENT: the crate's record, the wrapper's
         # --set and the init's gate must spell the same name, or a
         # baked run announces a disk the guest never looks for. The
         # crate anchor is the record VALUE itself — a string literal
         # rustfmt never splits, wherever the declaration reflows to.
-        grep -qF '"MYSBX_KRUN_STORE_DISK=1"' \
+        grep -qF '"MYSBX_VM_STORE_DISK=1"' \
           ${../mysbx-rs/src/lib.rs} \
           || fail "the crate's store-disk env record changed"
-        grep -qF 'MYSBX_KRUN_STORE_DISK' ${../nix/krun-rootfs.nix} \
-          || fail "the guest init lost the MYSBX_KRUN_STORE_DISK gate"
+        grep -qF 'MYSBX_VM_STORE_DISK' ${../nix/krun-rootfs.nix} \
+          || fail "the guest init lost the MYSBX_VM_STORE_DISK gate"
 
         touch $out
       '';
@@ -917,7 +917,7 @@ in
           MYSBX_PODMAN_TARBALL MYSBX_PODMAN_IMAGE MYSBX_PODMAN_IMAGE_ID \
           MYSBX_PODMAN_SHELL MYSBX_PODMAN_PASTA_SPEC MYSBX_PODMAN_ENV \
           MYSBX_PODMAN_WAYPIPE MYSBX_KRUN_RUNTIME MYSBX_KRUN_SCRATCH_SIZE \
-          MYSBX_KRUN_LAUNCHER MYSBX_KRUN_ROOTFS MYSBX_KRUN_STORE_DISK \
+          MYSBX_KRUN_LAUNCHER MYSBX_KRUN_ROOTFS MYSBX_VM_STORE_DISK \
           MYSBX_MICROVM_QEMU_LAUNCHER MYSBX_MICROVM_QEMU_ROOTFS \
           MYSBX_MICROVM_QEMU_KERNEL MYSBX_MICROVM_QEMU_ENV; do
           echo "$wrapped" | grep -aq -- "$pin" \

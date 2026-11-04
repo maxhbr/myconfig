@@ -95,7 +95,7 @@ let
   # VM: /init.krun replaces its own argv[0] with KRUN_INIT and
   # execvp()s it with the krun_set_exec argv vector — the payload
   # path arrives as $1, its arguments as $2.. The launcher's explicit
-  # envp carries MYSBX_KRUN_SHARES ("DEVICE SLOT SANDBOX_PATH
+  # envp carries MYSBX_VM_SHARES ("DEVICE SLOT SANDBOX_PATH
   # ro|rw;..." — bd myconfig-xpq's grouped devices).
   # Failures exit 125 (libkrun's own "init cannot set up the
   # environment" code, so a failure reaches the caller as an
@@ -109,7 +109,7 @@ let
   # measured 3075 — the tail silently never booted. The launcher
   # therefore writes env/shares/chdir into a MANIFEST FILE inside
   # the ro stage device and the cmdline carries only the pointer
-  # (MYSBX_KRUN_MANIFEST=stage-ro:manifest). The qemu bridge adds
+  # (MYSBX_VM_MANIFEST=stage-ro:manifest). The qemu bridge adds
   # one record kind: the payload argv (bd myconfig-hq7k) — the stock
   # kernel's `--` cmdline split is lossy (whitespace-split,
   # `=`-tokens to init's envp, MAX_INIT_ARGS), so the qemu launcher
@@ -117,7 +117,7 @@ let
   # records (libkrun's envp route is lossless). This init mounts
   # the stage-ro device, reads the file (tab-separated records,
   # base64 values via the busybox applet) and only THEN applies
-  # them. The legacy MYSBX_KRUN_SHARES env route remains for
+  # them. The legacy MYSBX_VM_SHARES env route remains for
   # cmdline-sized debug runs.
   mysbxInit = ''
     #!/bin/busybox sh
@@ -191,7 +191,7 @@ let
 
     # The trace of last resort (live debugging, bd myconfig-2n8):
     # the guest console carries every step when the wrapper or the
-    # user sets MYSBX_KRUN_TRACE=1 — a silent hang otherwise leaves
+    # user sets MYSBX_VM_TRACE=1 — a silent hang otherwise leaves
     # nothing to diagnose. Defined BEFORE the first step call: sh
     # runs top to bottom, a call above the definition would try an
     # external `step` and die under set -eu before the first mount
@@ -209,7 +209,7 @@ let
     # leading-zero fraction like ".08" from tripping ash's octal
     # parsing. A read failure (no /proc yet) reports 0 — timing is
     # best-effort, the step names are the point.
-    trace="''${MYSBX_KRUN_TRACE:-}"
+    trace="''${MYSBX_VM_TRACE:-}"
     if [ -z "$trace" ]; then
         _cmdline_mysbx trace
         if [ "$_cval" = "1" ]; then trace=1; fi
@@ -306,7 +306,7 @@ let
     # resolves through it — read the file, and apply the env lines
     # at once (the init's OWN steps use none of them; the payload
     # inherits everything through exec).
-    manifest="''${MYSBX_KRUN_MANIFEST:-}"
+    manifest="''${MYSBX_VM_MANIFEST:-}"
     if [ -z "$manifest" ]; then
         _cmdline_mysbx manifest
         manifest=$_cval
@@ -412,7 +412,7 @@ let
 
     # Each share: one "DEVICE SLOT SANDBOX_PATH ro|rw" record — the
     # manifest's share lines above, or the legacy
-    # MYSBX_KRUN_SHARES env (';'-separated, cmdline-sized debug
+    # MYSBX_VM_SHARES env (';'-separated, cmdline-sized debug
     # runs only — the seventh live finding killed that route for
     # real configs). Each device is mounted ONCE under
     # /tmp/mysbx-shares keyed by its tag; the SLOT is the share's
@@ -421,7 +421,7 @@ let
     # layout, the tmpfs placement is this init's.
     share_records="''${share_records:-}"
     if [ -z "$manifest" ]; then
-        shares="''${MYSBX_KRUN_SHARES:-}"
+        shares="''${MYSBX_VM_SHARES:-}"
         while [ -n "$shares" ]; do
             entry=''${shares%%';'*}
             [ "$shares" = "$entry" ] && shares= || shares=''${shares#*';'}
@@ -557,7 +557,7 @@ let
     # the component first. After the resolver exists, only the
     # SLiRP step below may write it (the DNS rewrite, bd
     # myconfig-m0to).
-    if [ -n "''${MYSBX_KRUN_RESOLV:-}" ]; then
+    if [ -n "''${MYSBX_VM_RESOLV:-}" ]; then
         step "writing /etc/resolv.conf from the host resolver"
         # /etc is the ro root's share-root unless a share below it
         # already tmpfs'd it: probe writability, mount when ro.
@@ -586,7 +586,7 @@ let
         fi
         # The env record was ALREADY decoded by the loader (every
         # manifest env line exports plain text) — write verbatim.
-        printf '%s\n' "$MYSBX_KRUN_RESOLV" > /etc/resolv.conf \
+        printf '%s\n' "$MYSBX_VM_RESOLV" > /etc/resolv.conf \
             || fail "cannot write /etc/resolv.conf"
     else
         # No resolver to write, but /etc/hosts may still be missing
@@ -670,10 +670,10 @@ let
     # by construction, both baked in one image. Device
     # identification is the shared pick_vd scan above: the store
     # disk is the read-only vd*, the scratch the writable one.
-    if [ "''${MYSBX_KRUN_STORE_DISK:-}" = "1" ]; then
+    if [ "''${MYSBX_VM_STORE_DISK:-}" = "1" ]; then
         store_dev=$(pick_vd 1 "the store disk")
         [ -n "$store_dev" ] \
-            || fail "MYSBX_KRUN_STORE_DISK=1 but no read-only /dev/vd* device — the store disk did not attach"
+            || fail "MYSBX_VM_STORE_DISK=1 but no read-only /dev/vd* device — the store disk did not attach"
         step "mounting the guest-own nix store ($store_dev, erofs, read-only) at /nix"
         "$BB" mount -t erofs -o ro "$store_dev" /nix \
             || fail "cannot mount the store disk $store_dev as erofs at /nix"
@@ -686,7 +686,7 @@ let
         for d in /sys/block/vd*; do
             [ -d "$d" ] || continue
             if [ "$("$BB" cat "$d/ro")" = "1" ]; then
-                fail "a read-only /dev/vd*''${d##*/} exists but MYSBX_KRUN_STORE_DISK is unset — the disk attached without its announcement"
+                fail "a read-only /dev/vd*''${d##*/} exists but MYSBX_VM_STORE_DISK is unset — the disk attached without its announcement"
             fi
         done
     fi
@@ -698,7 +698,7 @@ let
     # names the MMIO slot host-side, it is no serial the guest reads;
     # the scratch is the WRITABLE /dev/vd* (the store disk above is
     # the read-only one). The manifest env announces it
-    # (MYSBX_KRUN_SCRATCH=1); a run without it attaches no scratch —
+    # (MYSBX_VM_SCRATCH=1); a run without it attaches no scratch —
     # no silent RAM fallback.
     #
     # The disk becomes the nix scratch: the ext4 carries the overlay
@@ -707,13 +707,13 @@ let
     # TMPDIR — the guest kernel's OWN filesystem (chown and overlay
     # xattrs work natively, nothing over the virtiofs xattr
     # surface). The overlay mounts at /nix/store itself.
-    if [ "''${MYSBX_KRUN_SCRATCH:-}" = "1" ]; then
+    if [ "''${MYSBX_VM_SCRATCH:-}" = "1" ]; then
         # The device: the WRITABLE /dev/vd* through the shared
         # pick_vd scan above (the root is virtiofs, not blk; the
         # store disk above is the read-only one).
         scratch_dev=$(pick_vd 0 "the scratch")
         [ -n "$scratch_dev" ] \
-            || fail "MYSBX_KRUN_SCRATCH=1 but no writable /dev/vd* device — the disk did not attach"
+            || fail "MYSBX_VM_SCRATCH=1 but no writable /dev/vd* device — the disk did not attach"
         dev=$scratch_dev
         step "formatting $dev as the nix scratch (ext4)"
         /bin/mkfs.ext4 -q -F "$dev" \
@@ -743,7 +743,7 @@ let
         # never needs — the single-user nix creates its own.
         # big-lock/reserved are 0600 root-owned and carry no data (a
         # lock and reserved space); nix recreates both.
-        if [ "''${MYSBX_KRUN_STORE_DISK:-}" = "1" ]; then
+        if [ "''${MYSBX_VM_STORE_DISK:-}" = "1" ]; then
             db_src=/nix/var/nix/db
         else
             db_src=/tmp/mysbx-shares/stage-ro/nix-var/db
@@ -788,7 +788,7 @@ let
         # missing path. `nix store delete` cannot do this job
         # (liveness semantics, plus its store-tree unlink is
         # exactly the lower-layer crash).
-        if [ "''${MYSBX_KRUN_STORE_DISK:-}" != "1" ] && [ -f /mysbx-nix/state/db/db.sqlite ]; then
+        if [ "''${MYSBX_VM_STORE_DISK:-}" != "1" ] && [ -f /mysbx-nix/state/db/db.sqlite ]; then
             registered_file=/mysbx-nix/registered-paths.txt
             scan_file=/mysbx-nix/store-scan.txt
             recheck_file=/mysbx-nix/recheck-paths.txt
@@ -870,7 +870,7 @@ let
 
         "$BB" mkdir -p /mysbx-nix/store-upper /mysbx-nix/store-work \
             || fail "cannot create the overlay dirs on the scratch"
-        if [ "''${MYSBX_KRUN_STORE_DISK:-}" = "1" ]; then
+        if [ "''${MYSBX_VM_STORE_DISK:-}" = "1" ]; then
             # The baked disk's /nix/store is a REAL directory of the
             # erofs mounted at /nix (the baked rootfs SYMLINK is
             # hidden under that mount) — the overlay mounts directly
@@ -1013,24 +1013,24 @@ let
     # the exec below, dies with the VM (PID 1 exit) and needs no
     # daemon, timer or extra store path. Both knobs ride the manifest
     # env route:
-    # - MYSBX_KRUN_INODE_WATCHDOG (default 20000, 0 disables): the
+    # - MYSBX_VM_INODE_WATCHDOG (default 20000, 0 disables): the
     #   allowed growth above the post-drop baseline. The baseline is
     #   the inode count right after the last drop (0 before the
     #   first), so the in-use set that a drop cannot reclaim does not
     #   retrigger a drop every tick.
-    # - MYSBX_KRUN_INODE_WATCHDOG_INTERVAL (default 1 s): the check
+    # - MYSBX_VM_INODE_WATCHDOG_INTERVAL (default 1 s): the check
     #   interval. A walk pins fds between two checks, so the interval
     #   bounds the overshoot (bd myconfig-jjfy).
     # Every drop appends a line to /tmp/mysbx-inode-watchdog.log
     # (rotated to .1 past 256 KiB).
-    if [ "''${MYSBX_KRUN_INODE_WATCHDOG:-20000}" != "0" ]; then
-        step "arming the inode watchdog (growth ''${MYSBX_KRUN_INODE_WATCHDOG:-20000} over the post-drop baseline, interval ''${MYSBX_KRUN_INODE_WATCHDOG_INTERVAL:-1}s)"
+    if [ "''${MYSBX_VM_INODE_WATCHDOG:-20000}" != "0" ]; then
+        step "arming the inode watchdog (growth ''${MYSBX_VM_INODE_WATCHDOG:-20000} over the post-drop baseline, interval ''${MYSBX_VM_INODE_WATCHDOG_INTERVAL:-1}s)"
         (
-            _iw_limit="''${MYSBX_KRUN_INODE_WATCHDOG:-20000}"
+            _iw_limit="''${MYSBX_VM_INODE_WATCHDOG:-20000}"
             case "$_iw_limit" in
                 "" | *[!0-9]*) _iw_limit=20000 ;;
             esac
-            _iw_interval="''${MYSBX_KRUN_INODE_WATCHDOG_INTERVAL:-1}"
+            _iw_interval="''${MYSBX_VM_INODE_WATCHDOG_INTERVAL:-1}"
             case "$_iw_interval" in
                 "" | *[!0-9]*) _iw_interval=1 ;;
             esac
