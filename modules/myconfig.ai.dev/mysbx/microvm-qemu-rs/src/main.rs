@@ -645,6 +645,24 @@ fn qemu_argv(
         // the reason the whole key is opt-in (D27's security note).
         argv.push("-cpu".to_owned());
         argv.push("host".to_owned());
+    } else {
+        // bd myconfig-cdjk: the DEFAULT model is `max` with the
+        // nesting bits masked OFF. Two birds:
+        // - `max` under KVM carries every feature KVM's supported-CPUID
+        //   reports (host-bounded), so the guest sees the host's
+        //   SSE4.2/POPCNT/AVX (x86-64-v2) — qemu64 (the bare-model
+        //   default) is x86-64-v1, and every Bun-compiled tool
+        //   (`hunk`…) refuses to start on it. Under TCG `max` is
+        //   everything TCG can emulate, so the D9 fallback keeps
+        //   booting (`host` would break it: host requires KVM).
+        // - `vmx=off,svm=off` are load-bearing, not belt-and-braces:
+        //   the guest kernel pins KVM in (D27), and a plain `max`
+        //   under KVM would expose VMX on any host with nesting
+        //   enabled — a run WITHOUT the key would silently get a
+        //   working /dev/kvm, breaking D27's "off by default"
+        //   security contract.
+        argv.push("-cpu".to_owned());
+        argv.push("max,vmx=off,svm=off".to_owned());
     }
     argv.extend([
         "-m".to_owned(),
@@ -1362,11 +1380,16 @@ mod tests {
 
     #[test]
     fn nested_virt_switches_the_cpu_and_drops_the_tcg_fallback() {
-        // D27: only the opt-in run carries -cpu host (VMX/SVM for the
-        // guest's own /dev/kvm) and accel=kvm with NO tcg fallback — a
-        // silent TCG boot would come up without VMX and the run would
-        // die at the first nested VM launch, not at the boot. The
-        // the plain argv carries neither -cpu nor an accel change.
+        // D27 + bd myconfig-cdjk: the opt-in run carries -cpu host
+        // (VMX/SVM for the guest's own /dev/kvm) and accel=kvm with
+        // NO tcg fallback — a silent TCG boot would come up without
+        // VMX and the run would die at the first nested VM launch,
+        // not at the boot. The DEFAULT run carries
+        // -cpu max,vmx=off,svm=off: `max` for x86-64-v2 (SSE4.2,
+        // Bun tools refuse on qemu64's v1), the masks to keep D27's
+        // off-by-default contract (the guest kernel pins KVM in —
+        // bare `max` would hand a plain run a working /dev/kvm on
+        // any nesting-enabled host).
         let sockets =
             |tag: &str| PathBuf::from(format!("/run/sock/{}.sock", tag.replace('/', "-")));
         let plain = qemu_argv(
@@ -1377,8 +1400,9 @@ mod tests {
         );
         assert!(plain.join("\n").contains("-M\nmicrovm,accel=kvm:tcg"));
         assert!(
-            !plain.iter().any(|a| a == "-cpu"),
-            "no -cpu without the flag"
+            plain.join("\n").contains("-cpu\nmax,vmx=off,svm=off"),
+            "the default model is max with the nesting bits masked: {:?}",
+            plain
         );
 
         let mut cfg = test_cfg();
@@ -1459,6 +1483,12 @@ mod tests {
         let joined = argv.join("\n");
         // The machine: microvm, KVM first, TCG fallback.
         assert!(joined.contains("-M\nmicrovm,accel=kvm:tcg"));
+        // The CPU model (bd myconfig-cdjk): `max` — x86-64-v2 under
+        // KVM, full TCG emulation under the fallback — with the
+        // nesting bits MASKED (D27's off-by-default contract: the
+        // guest kernel pins KVM in, bare `max` would hand a plain
+        // run a working /dev/kvm on a nesting-enabled host).
+        assert!(joined.contains("-cpu\nmax,vmx=off,svm=off"));
         // The kernel pair.
         assert!(joined.contains("-kernel\n/synth/bzImage"));
         // The root chardev + device pair.
