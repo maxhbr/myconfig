@@ -173,6 +173,22 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         }
     ));
 
+    // Nested virt (docs/design/config.md D27), microvm-qemu only:
+    // said out loud because a repo sidecar ALONE can enable it — a
+    // user who never wrote the key still gets a materially
+    // different machine (the host's CPU model exposed by -cpu host,
+    // its own /dev/kvm, a widened host KVM attack surface), and the
+    // report is where that difference must surface, not in a boot
+    // failure. Every other backend would have refused the key, so
+    // `false` needs no qualifier.
+    if r.merged.nested_virt {
+        p(
+            "nested-virt:    on — the guest gets /dev/kvm and the host CPU model \
+           (microvm-qemu, D27)"
+                .to_string(),
+        );
+    }
+
     // The workspace of this run (workspace.md D1): the live repo —
     // the default, said out loud like the multiplexer is, because
     // "which tree does this run write" is a property of every run —

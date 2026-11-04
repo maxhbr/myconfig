@@ -1662,7 +1662,14 @@ enabling of nesting (below); the per-run decision is policy.
 `nested-virt = false` is a host-wide deny the sidecar cannot lift —
 re-enabling is a hard merge error (`NestedVirtUpgrade`). Otherwise
 either layer may enable it; the default when every layer is silent is
-`false`. The `false` default is a security decision, not a
+`false`. Note the asymmetry: only the USER layer's `false` denies —
+a sidecar `nested-virt = false` is a no-op that a user `true`
+overturns (the boolean mirror of `network`'s value merge: each
+layer's "on" side wins; the hard error sits at the same condition,
+a sidecar trying to lift the user's deny. A sidecar author cannot
+pin a repo-wide nested-virt guarantee — unlike `network`, whose
+sidecar `false` DOES deny repo-wide). The `false` default is a
+security decision, not a
 convenience: nested VMX widens the host KVM attack surface (the
 guest can now run its own KVM, and a bug in the host's nested-
 virtualization implementation is a new escape path), and `-cpu host`

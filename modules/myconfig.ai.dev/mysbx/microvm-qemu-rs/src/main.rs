@@ -761,6 +761,34 @@ fn qemu_argv(
 // The run path: pins, daemons, qemu, teardown.
 // ---------------------------------------------------------------------------
 
+/// The nested-virt host probe (docs/design/config.md D27): a
+/// `--nested-virt` launch is accel=kvm with NO tcg fallback, so a
+/// host that cannot open /dev/kvm rw cannot boot it — refuse here,
+/// where the cause belongs, instead of dying inside QEMU with its
+/// raw "Could not access KVM kernel module". A real O_RDWR open,
+/// not a mode-bit guess (the pipeline's `kvm_available` rule): a
+/// node that exists but is not openable fails the same way. The
+/// wrapped run is already gated by the mysbx-rs pre-flight (which
+/// ALSO checks the host's nesting sysfs); this is the same refusal
+/// for a directly invoked launcher, at the granularity the launcher
+/// can see.
+fn nested_virt_probe(enabled: bool) -> Result<(), String> {
+    if !enabled {
+        return Ok(());
+    }
+    match std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("/dev/kvm")
+    {
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!(
+            "--nested-virt needs an openable /dev/kvm on the host (docs/design/config.md \
+             D27); the launch has no tcg fallback, so the run is refused here: {e}"
+        )),
+    }
+}
+
 /// A PINNED binary path (no PATH fallback — the run pipeline's own
 /// rule): the wrapper sets it; a missing pin is a 125, never a
 /// silent guess off the PATH.
@@ -879,6 +907,19 @@ fn run(cfg: Config, boot_started: Instant) -> i32 {
         for s in &cfg.shares {
             eprintln!("mysbx-microvm-qemu: share {}:{}@{}", s.tag, s.slot, s.dest);
         }
+    }
+
+    // Nested virt (docs/design/config.md D27): the launch is
+    // accel=kvm with no tcg fallback, so the run CANNOT boot when
+    // the host has no /dev/kvm — probe it here and refuse with the
+    // cause instead of letting QEMU die with its raw "Could not
+    // access KVM kernel module" (the pipeline pre-flight in
+    // mysbx-rs already gates the wrapped run; this is the same
+    // refusal for a directly invoked launcher — the refuse-where-
+    // the-cause-belongs rule).
+    if let Err(e) = nested_virt_probe(cfg.nested_virt) {
+        eprintln!("mysbx-microvm-qemu: {e}");
+        return EXIT_SETUP;
     }
 
     // The overlay files (bd myconfig-dak.8) have no qemu twin yet —
@@ -1373,6 +1414,33 @@ mod tests {
             .unwrap()
             .nested_virt
         );
+    }
+
+    #[test]
+    fn a_nested_virt_launch_refuses_a_host_without_kvm() {
+        // D27: the probe mirrors the run refusal — a host that can
+        // open /dev/kvm rw may run, a host that cannot is refused
+        // BY NAME, never left to QEMU's raw "Could not access KVM
+        // kernel module". The kvm-less branch is the only half this
+        // test host can pin deterministically: a kvm-equipped host
+        // gets the same open the probe does (and the positive half
+        // would not discriminate a probe that dropped its check, so
+        // the error wording carries the pin too).
+        assert_eq!(nested_virt_probe(false), Ok(()));
+        match std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open("/dev/kvm")
+        {
+            Ok(_) => assert_eq!(nested_virt_probe(true), Ok(())),
+            Err(_) => {
+                let e = nested_virt_probe(true).unwrap_err();
+                assert!(
+                    e.contains("--nested-virt needs an openable /dev/kvm"),
+                    "{e}"
+                );
+            }
+        }
     }
 
     #[test]
