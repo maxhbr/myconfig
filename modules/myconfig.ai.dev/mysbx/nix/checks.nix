@@ -844,6 +844,29 @@ in
           [ "$pin_line" -lt "$net_line" ] \
             || fail "the env pins must precede the SLiRP NIC marker"
         fi
+        # NO nested-virt switch (docs/design/config.md D27): the key
+        # is off by default, so the plain dry run carries no switch —
+        # the flag (and the -cpu host / accel=kvm it stands for)
+        # appears only when a layer sets `nested-virt = true`.
+        if echo "$argv" | grep -q -- '--nested-virt'; then
+          fail "the plain dry run carries --nested-virt — the key is off by default (config.md D27)"
+        fi
+
+        # 3b. the POSITIVE nested-virt path, end to end through the
+        #     real wrapped binary: a sidecar `nested-virt = true`
+        #     must produce BOTH the --nested-virt launcher flag and
+        #     the MYSBX_MICROVM_NESTED_VIRT=1 manifest marker (the
+        #     guest init's refuse-or-announce key, bd
+        #     myconfig-9wkp.10) — the negative grep above pins the
+        #     default, this one pins that a granted key is never
+        #     silently dropped on the way from TOML to argv.
+        printf 'backend = "microvm-qemu"\nnested-virt = true\n' > "$work/repo.mysbx/config.toml"
+        argv_nested=$( cd "$repo" && HOME="$work/home" "${pkgQemu}/bin/mysbx" run --dry-run -- true ) \
+          || fail "the nested-virt dry run refused — run it verbosely for the diagnosis"
+        echo "$argv_nested" | grep -qx -- '--nested-virt' \
+          || fail "a sidecar nested-virt = true does not reach the launcher as --nested-virt"
+        echo "$argv_nested" | grep -qx -- 'MYSBX_MICROVM_NESTED_VIRT=1' \
+          || fail "a nested-virt run carries no MYSBX_MICROVM_NESTED_VIRT=1 marker — the guest init could not refuse a kvm-less host"
 
         touch $out
       '';

@@ -25,7 +25,9 @@
 //! backend), the env plus the backend pins
 //! (MYSBX_MICROVM_QEMU_ENV, bd myconfig-mzys), `--network none`
 //! (shared is silent — SLiRP is the launcher's default, exactly as
-//! TSI is krun's), the scratch, `--chdir`, `--` payload.
+//! TSI is krun's), the scratch, `--chdir`, `--` payload. The
+//! opt-in `--nested-virt` switch (config.md D27) sits with the
+//! qemu-only pair (`--kernel`/`--exit-channel`).
 //! `krun::krun_argv` stays byte-identical; this module re-renders its
 //! own spec and never touches the krun goldens.
 
@@ -71,6 +73,17 @@ pub fn microvm_qemu_argv(
     argv.push("--kernel".to_owned());
     argv.push(kernel.to_owned());
     argv.push("--exit-channel".to_owned());
+    // Nested virtualization (docs/design/config.md D27): the
+    // launcher's flag switches the machine to `-cpu host` +
+    // `accel=kvm` (no TCG fallback — the guest kernel pins KVM in)
+    // so VMs can be developed inside the sandbox. Off by default:
+    // nested VMX widens the host KVM attack surface and `-cpu host`
+    // exposes the host CPU model. The krun argv is untouched —
+    // `krun::krun_argv` never sees the key (the pipeline refuses
+    // `nested-virt = true` on every other backend, lib.rs).
+    if cfg.nested_virt {
+        argv.push("--nested-virt".to_owned());
+    }
     argv.push("--init".to_owned());
     argv.push(spec.init.clone());
     let ro_slots = spec.shares.iter().filter(|s| s.read_only).count();
@@ -149,6 +162,14 @@ pub fn microvm_qemu_argv(
     if spec.network {
         argv.push("--env".to_owned());
         argv.push("MYSBX_MICROVM_NET=1".to_owned());
+    }
+    // The nested-virt marker (docs/design/config.md D27): the guest
+    // init REFUSES the run early when the VM was booted without
+    // VMX/SVM after all (the same refuse-or-announce rule as the
+    // store-disk marker) — /dev/kvm must exist in a nested-virt run.
+    if cfg.nested_virt {
+        argv.push("--env".to_owned());
+        argv.push("MYSBX_MICROVM_NESTED_VIRT=1".to_owned());
     }
     // NO `--krun-overlay` flags (bd myconfig-govd): the launcher
     // refuses them (the in-memory trustfs device is libkrun's own),

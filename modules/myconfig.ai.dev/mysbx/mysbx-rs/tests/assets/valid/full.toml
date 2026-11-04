@@ -4,6 +4,11 @@
 backend = "bwrap"
 network = true
 
+# Nested virtualization (config.md D27): hand a `microvm-qemu` run
+# hardware virtualization so VMs can be developed inside the sandbox.
+# Tri-state like `network`: this layer decides nothing here.
+nested-virt = false
+
 # The multiplexer (config.md D17): the INTERACTIVE payload is a session
 # of the named multiplexer instead of a plain shell (`mysbx run -- CMD`
 # is unaffected, cli.md D11). One of "tmux", "workmux", "herdr",

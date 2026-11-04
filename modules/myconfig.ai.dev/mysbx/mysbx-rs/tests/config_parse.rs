@@ -123,6 +123,8 @@ fn full_config() {
     let c = load_ok("valid/full.toml");
     assert_eq!(c.backend.as_deref(), Some("bwrap"));
     assert_eq!(c.network, Some(true));
+    // nested-virt (D27): tri-state like `network` — this layer denies.
+    assert_eq!(c.nested_virt, Some(false));
     // multiplexer (D17): tri-state like `network`; the interactive
     // payload of this layer is a workmux session.
     assert_eq!(c.multiplexer, Some(Multiplexer::Workmux));

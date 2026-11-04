@@ -510,6 +510,20 @@ pub struct Config {
     /// Process limit (`pids-limit`, podman `--pids-limit`). Same
     /// layering as `memory`; only `podman-gvisor` enforces it.
     pub pids_limit: Option<u32>,
+    /// Whether the guest of a `microvm-qemu` run gets hardware
+    /// virtualization (`nested-virt`, docs/design/config.md D27): a
+    /// boolean, tri-state in a layer like `network`. `Some(true)` asks
+    /// for `/dev/kvm` in the guest (`-cpu host`, `accel=kvm`), so VMs can
+    /// be developed and tested inside the sandbox; the default is
+    /// `false` because nested VMX widens the host KVM attack surface
+    /// and `-cpu host` exposes the host CPU model. A user-config
+    /// `false` is a host-wide deny the sidecar cannot lift (the same
+    /// narrowing rule as `network`); either layer may otherwise
+    /// enable it. Only the `microvm-qemu` backend honors the key —
+    /// every other backend refuses `Some(true)`, never silently drops
+    /// it (krun: libkrun's `krun_set_nested_virt` is macOS-only in the
+    /// pinned 1.17.4, libkrunfw 5.3.0 ships CONFIG_KVM unset).
+    pub nested_virt: Option<bool>,
     /// Which nix store the sandbox sees (`store`, docs/design/
     /// guest-store.md): `None` means "not decided by this layer", like
     /// `backend` — the [`Store::Host`] default is applied after the
@@ -527,6 +541,7 @@ impl Default for Config {
         Config {
             backend: None,
             network: None,
+            nested_virt: None,
             multiplexer: None,
             display: None,
             mounts: Vec::new(),
@@ -578,6 +593,7 @@ impl Config {
     pub const KEYS: &'static [&'static str] = &[
         "backend",
         "network",
+        "nested-virt",
         "multiplexer",
         "display",
         "mounts",
@@ -620,6 +636,9 @@ impl Config {
             match key.as_str() {
                 "backend" => config.backend = Some(string(value, "backend")?.to_owned()),
                 "network" => config.network = Some(boolean(value, "network")?),
+                "nested-virt" => {
+                    config.nested_virt = Some(boolean(value, "nested-virt")?)
+                }
                 "multiplexer" => {
                     config.multiplexer = Some(Multiplexer::parse(
                         string(value, "multiplexer")?,
@@ -1108,7 +1127,22 @@ mod tests {
         // `network` is tri-state in a layer: None means "not decided" —
         // the shared-by-default `true` is applied after the merge.
         assert_eq!(c.network, None);
+        assert_eq!(c.nested_virt, None, "nested-virt is tri-state too");
         assert!(c.backend.is_none());
+    }
+
+    #[test]
+    fn nested_virt_parses_as_a_boolean_and_rejects_other_shapes() {
+        // D27: a plain boolean key, tri-state in a layer like `network`.
+        let c = Config::parse("nested-virt = true\n").unwrap();
+        assert_eq!(c.nested_virt, Some(true));
+        let c = Config::parse("nested-virt = false\n").unwrap();
+        assert_eq!(c.nested_virt, Some(false));
+        // A wrong type names the key, like every other schema error.
+        let e = Config::parse("nested-virt = \"yes\"\n").unwrap_err();
+        let msg = e.to_string();
+        assert!(matches!(e, Error::Schema(_)), "{msg}");
+        assert!(msg.contains("nested-virt"), "{msg}");
     }
 
     #[test]

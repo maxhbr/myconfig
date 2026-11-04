@@ -255,10 +255,8 @@ in
                   threshold.swipe = 0.3;
                   interval.swipe = 0.5;
                   swipe."4" = {
-                    left.command =
-                      "${niriMoveWorkspaceToMonitor}/bin/niri-move-workspace-to-monitor left";
-                    right.command =
-                      "${niriMoveWorkspaceToMonitor}/bin/niri-move-workspace-to-monitor right";
+                    left.command = "${niriMoveWorkspaceToMonitor}/bin/niri-move-workspace-to-monitor left";
+                    right.command = "${niriMoveWorkspaceToMonitor}/bin/niri-move-workspace-to-monitor right";
                   };
                 };
               };

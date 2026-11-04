@@ -35,6 +35,7 @@ fn base(network: bool) -> Merged {
     Merged {
         backend: Some("krun".into()),
         network,
+        nested_virt: false,
         mounts: Vec::new(),
         env: BTreeMap::new(),
         nix: BTreeMap::new(),

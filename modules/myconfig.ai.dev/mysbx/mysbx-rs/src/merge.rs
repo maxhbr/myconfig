@@ -95,6 +95,15 @@ pub struct Merged {
     /// docs/plan.md) is already applied, and nothing downstream of the
     /// merge may re-decide it.
     pub network: bool,
+    /// The effective nested-virtualization sense of a `microvm-qemu`
+    /// run (docs/design/config.md D27), resolved once from the layers'
+    /// tri-state values — a plain `bool` on purpose, like `network`:
+    /// the default (off) is already applied, and nothing downstream
+    /// of the merge may re-decide it. The SAME narrowing rule as
+    /// `network`: a user-config `false` is a host-wide deny the
+    /// sidecar cannot lift (`NestedVirtUpgrade` is the hard error),
+    /// otherwise either layer may enable it.
+    pub nested_virt: bool,
     /// Which multiplexer the interactive payload is
     /// (docs/design/config.md D17): resolved once from the layers'
     /// tri-state values, like `network`, so nothing downstream may
@@ -311,6 +320,10 @@ pub enum Error {
     EnvOverride { key: String, message: String },
     /// The sidecar re-enables the network the user config set to `false`.
     NetworkUpgrade { message: String },
+    /// The sidecar re-enables nested virtualization the user config set
+    /// to `false` (docs/design/config.md D27) — the same narrowing
+    /// violation as [`Error::NetworkUpgrade`].
+    NestedVirtUpgrade { message: String },
     /// Reading or parsing one of the layers failed.
     Load(String),
 }
@@ -352,6 +365,7 @@ impl fmt::Display for Error {
             ),
             Error::EnvOverride { key, message } => write!(f, "{message} (key: `{key}`)"),
             Error::NetworkUpgrade { message } => f.write_str(message),
+            Error::NestedVirtUpgrade { message } => f.write_str(message),
             Error::Load(m) => f.write_str(m),
         }
     }
@@ -596,6 +610,28 @@ pub fn merge(
         _ => true,
     };
 
+    // nested-virt (docs/design/config.md D27): the SAME layer rule as
+    // `network` — a user-config `false` is a host-wide deny the
+    // sidecar cannot lift (re-enabling is the NestedVirtUpgrade hard
+    // error), an omitted layer decided nothing, and otherwise either
+    // layer may enable it. The off-by-default of D27 applies AFTER the
+    // layers, never inside one — exactly like `network`'s shared.
+    if user.nested_virt == Some(false) && sidecar.nested_virt == Some(true) {
+        return Err(Error::NestedVirtUpgrade {
+            message: format!(
+                "{}: nested-virt = true re-enables the nested virtualization the user \
+                 config {} denied with `nested-virt = false` — the sidecar may deny it, \
+                 never re-enable it (docs/design/config.md D27)",
+                sidecar_file.display(),
+                user_file.display(),
+            ),
+        });
+    }
+    let nested_virt = match (user.nested_virt, sidecar.nested_virt) {
+        (Some(true), _) | (_, Some(true)) => true,
+        _ => false,
+    };
+
     // env: sidecar-only keys pass through, user-set keys must not be
     // overridden — the asymmetry is deliberate (see module docs).
     let mut env = BTreeMap::new();
@@ -777,6 +813,7 @@ pub fn merge(
     Ok(Merged {
         backend: sidecar.backend.or(user.backend),
         network,
+        nested_virt,
         // multiplexer (D17): the later layer wins where it decided,
         // exactly like `backend` — the key selects the interactive
         // payload from mysbx's own closure and exposes nothing of the
@@ -1154,6 +1191,86 @@ mod tests {
         assert!(msg.contains("network"), "{msg}");
         assert!(msg.contains("fake-user-config.toml"), "{msg}");
         assert!(msg.contains("config.toml"), "{msg}");
+    }
+
+    #[test]
+    fn nested_virt_upgrade_rejected() {
+        // D27's narrowing rule, the network twin: a user-config `false`
+        // is a host-wide deny the sidecar cannot lift.
+        let mut u = Config::default();
+        u.nested_virt = Some(false);
+        let mut s = Config::default();
+        s.nested_virt = Some(true);
+        let e = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap_err();
+        assert!(matches!(e, Error::NestedVirtUpgrade { .. }), "{e}");
+        let msg = e.to_string();
+        assert!(msg.contains("nested-virt"), "{msg}");
+        assert!(msg.contains("D27"), "{msg}");
+    }
+
+    #[test]
+    fn nested_virt_merge_table_and_default_off() {
+        // The explicit table: any true enables, only explicit falses
+        // keep it off, and both layers silent default to false (D27).
+        let merged = merge(
+            Config::default(),
+            Config::default(),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert!(!merged.nested_virt, "off by default");
+
+        let mut u = Config::default();
+        u.nested_virt = Some(true);
+        let merged = merge(
+            u,
+            Config::default(),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert!(merged.nested_virt, "a user-config true enables");
+
+        let mut s = Config::default();
+        s.nested_virt = Some(true);
+        let merged = merge(
+            Config::default(),
+            s,
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert!(merged.nested_virt, "a sidecar true enables (no user deny)");
+
+        let mut u = Config::default();
+        u.nested_virt = Some(false);
+        let merged = merge(
+            u,
+            Config::default(),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert!(!merged.nested_virt, "a user-config false stays off");
+
+        // An omitted sidecar is not an explicit anything (the network
+        // lesson): a user deny survives a silent sidecar untouched.
+        let mut u = Config::default();
+        u.nested_virt = Some(false);
+        let merged = merge(
+            u,
+            Config::default(),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert!(!merged.nested_virt);
     }
 
     #[test]

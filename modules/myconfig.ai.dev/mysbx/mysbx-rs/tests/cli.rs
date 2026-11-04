@@ -9815,6 +9815,132 @@ fn allowlist_on_podman_krun_is_refused() {
 }
 
 #[test]
+fn nested_virt_on_krun_is_refused() {
+    // D27: only `microvm-qemu` honors `nested-virt = true`; the
+    // direct krun backend refuses it (libkrun's
+    // krun_set_nested_virt is macOS-only in the pinned 1.17.4,
+    // libkrunfw 5.3.0 ships CONFIG_KVM unset) — before the session
+    // clone and before the --dry-run return, so a dry run audits
+    // the refusal too.
+    let Some((inv, _, sidecar)) = krun_fixture("nested-virt-krun-refused", &[]) else {
+        return; // no placeable krun fixture root here
+    };
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"krun\"\nnested-virt = true\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(stderr.contains("krun"), "{stderr}");
+    assert!(stderr.contains("nested-virt"), "{stderr}");
+    assert!(
+        !stdout.contains("--nested-virt"),
+        "no argv on refusal: {stdout}"
+    );
+}
+
+#[test]
+fn nested_virt_on_bubblewrap_is_refused() {
+    // The container/bwrap tiers have no VM to nest at all — the
+    // same refusal, naming the one backend that honors the key.
+    let (inv, _, sidecar) = fixture("nested-virt-bwrap-refused", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnested-virt = true\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(stderr.contains("nested-virt"), "{stderr}");
+    assert!(stderr.contains("microvm-qemu"), "{stderr}");
+    assert!(
+        !stdout.contains("--clearenv"),
+        "no argv on refusal: {stdout}"
+    );
+}
+
+#[test]
+fn nested_virt_user_deny_beats_a_sidecar_true_end_to_end() {
+    // The merge's narrowing rule (D27, the network twin): a
+    // user-config `false` is a host-wide deny the sidecar cannot
+    // lift — the run refuses with the NestedVirtUpgrade wording,
+    // never silently running with the sidecar's grant.
+    let (inv, _, sidecar) = fixture("nested-virt-sidecar-upgrade", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\nnested-virt = false\n",
+    )
+    .unwrap();
+    std::fs::write(sidecar.join("config.toml"), "nested-virt = true\n").unwrap();
+    let (code, _stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(stderr.contains("nested-virt = true re-enables"), "{stderr}");
+    assert!(stderr.contains("D27"), "{stderr}");
+}
+
+#[test]
+fn a_sidecar_enabled_nested_virt_is_reported_out_loud() {
+    // D27 + the report's own rule: a repo sidecar ALONE can enable
+    // nested-virt, so the user who never wrote the key must still
+    // SEE the materially different machine (the host CPU model,
+    // its own /dev/kvm) in the report — a sidecar grant is not a
+    // silent one. The microvm-qemu dry run is the vehicle; the
+    // refusal paths of the other backends are covered above.
+    let Some((inv, _, sidecar)) = krun_fixture("nested-virt-reported", &[]) else {
+        return; // no placeable fixture root here
+    };
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"microvm-qemu\"\nnested-virt = true\n",
+    )
+    .unwrap();
+    let rootfs = sidecar.join("rootfs-stub");
+    std::fs::create_dir_all(rootfs.join("bin")).unwrap();
+    std::fs::write(rootfs.join("bin/mysbx-init"), "#!/bin/sh\n").unwrap();
+    let kernel = sidecar.join("kernel-stub.bzImage");
+    std::fs::write(&kernel, "stub\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["run", "--verbose", "--dry-run", "--", "/bin/true"]);
+    cmd.env("MYSBX_MICROVM_QEMU_LAUNCHER", "/does/not/matter/dry-run")
+        .env(
+            "MYSBX_MICROVM_QEMU_ROOTFS",
+            rootfs.to_str().unwrap().to_string(),
+        )
+        .env(
+            "MYSBX_MICROVM_QEMU_KERNEL",
+            kernel.to_str().unwrap().to_string(),
+        );
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "the nested-virt dry run must report: {}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    let report = report_lines(&stdout).join("\n");
+    assert!(
+        report.contains("nested-virt:    on — the guest gets /dev/kvm"),
+        "{report}"
+    );
+    // The flag rides the launcher argv too — line-exact, the nix
+    // wrapper test's `grep -qx` twin (a substring would match the
+    // report line's own prose).
+    assert!(
+        stdout.lines().any(|l| l.trim() == "--nested-virt"),
+        "the launcher argv carries no --nested-virt record: {stdout}"
+    );
+    assert!(
+        stdout
+            .lines()
+            .any(|l| l.trim() == "MYSBX_MICROVM_NESTED_VIRT=1"),
+        "the launcher argv carries no nested-virt manifest marker: {stdout}"
+    );
+}
+
+#[test]
 fn podman_krun_network_false_is_enforced_like_gvisor() {
     // bd myconfig-6di.5.5: `network = false` on the krun backend is
     // the same `--network none` as on podman-gvisor, and the

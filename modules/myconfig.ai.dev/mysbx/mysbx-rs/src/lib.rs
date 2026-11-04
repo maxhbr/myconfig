@@ -1858,6 +1858,27 @@ fn kvm_available() -> bool {
         .is_ok()
 }
 
+/// Whether the HOST kernel exposes nested virtualization
+/// (docs/design/config.md D27): the `nested` module parameter of
+/// kvm-intel or kvm-amd must read `Y` or `1` (the shared parse of
+/// [`doctor::nested_virt_check`], so the refusal and doctor can
+/// never disagree). `false` when neither module parameter is
+/// readable (no /dev/kvm host, or nesting disabled) — a
+/// `nested-virt = true` run is refused then, never booted into a
+/// guest whose VMX/SVM would be missing.
+fn nested_virt_supported() -> bool {
+    doctor::nested_virt_check(
+        std::fs::read_to_string("/sys/module/kvm_intel/parameters/nested")
+            .ok()
+            .as_deref(),
+        std::fs::read_to_string("/sys/module/kvm_amd/parameters/nested")
+            .ok()
+            .as_deref(),
+    )
+    .level
+        == doctor::Level::Ok
+}
+
 /// Parse a `--memory`-shaped size (the same grammar as
 /// [`podman_gvisor::parse_krun_ram_mib`]) into bytes for the scratch
 /// file's `truncate` cap (bd myconfig-0pi). Empty/garbage is an
@@ -2503,6 +2524,32 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 return EXIT_INFRASTRUCTURE;
             }
         }
+    }
+
+    // The nested-virt backend gate (docs/design/config.md D27):
+    // `nested-virt = true` is honored ONLY by the `microvm-qemu`
+    // backend — every other backend refuses the key, never silently
+    // drops it. krun: libkrun 1.17.4's `krun_set_nested_virt` is
+    // macOS-only and libkrunfw 5.3.0 ships CONFIG_KVM unset, so the
+    // guest could not run a nested VM; podman-krun and the
+    // container/bwrap tiers have no virtio KVM passthrough at all.
+    // A refused run sits BEFORE the session clone and before the
+    // `--dry-run` early return, so a dry run audits it too — the
+    // same accepted-never-ignored rule the allowlist refusal
+    // follows.
+    if merged.nested_virt && backend != "microvm-qemu" {
+        eprintln!(
+            "mysbx: nested-virt = true is not supported on the `{backend}` backend \
+             (docs/design/config.md D27)"
+        );
+        eprintln!(
+            "  only `microvm-qemu` can hand the guest hardware virtualization \
+             (its launcher boots -cpu host, accel=kvm); the krun backends ship \
+             guests without KVM (libkrunfw 5.3.0 has CONFIG_KVM unset, and \
+             libkrun's krun_set_nested_virt is macOS-only in the pinned 1.17.4)"
+        );
+        eprintln!("  drop the key, or switch the backend to `microvm-qemu`");
+        return EXIT_INFRASTRUCTURE;
     }
 
     // 4c. the orca multiplexer's backend support (bd myconfig-2m8):
@@ -3439,6 +3486,29 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                     "  add the user to the `kvm` group (or enable the seat udev ACL), \
                      or switch the backend to `bubblewrap` or `podman-gvisor`"
                 );
+                return EXIT_INFRASTRUCTURE;
+            }
+            // The nested-virt pre-flight (docs/design/config.md D27):
+            // a nested-virt run needs the HOST kernel's own nesting
+            // enabled — /sys/module/kvm_intel/parameters/nested (or
+            // kvm_amd) must read Y/1. Skipped by a --dry-run like the
+            // /dev/kvm gate above (the audit contract); a real run
+            // refuses, naming the sysfs parameter the host must flip —
+            // a run that booted the guest without VMX would die at the
+            // first nested VM launch, not at the launch where the
+            // cause belongs.
+            if merged.nested_virt && !dry_run && !nested_virt_supported() {
+                eprintln!(
+                    "mysbx: microvm-qemu: nested-virt is set but the host kernel does \
+                     not enable nested KVM"
+                );
+                eprintln!(
+                    "  /sys/module/kvm_intel/parameters/nested (or \
+                     /sys/module/kvm_amd/parameters/nested) must read Y or 1 — set \
+                     `boot.extraModprobeConfig = \"options kvm-intel nested=1\"` (kvm-amd \
+                     on AMD) and reload the kvm module"
+                );
+                eprintln!("  drop `nested-virt` from the config, or enable nesting on the host");
                 return EXIT_INFRASTRUCTURE;
             }
             // The launcher and rootfs pins of the Nix wrapper
@@ -5767,6 +5837,13 @@ const SIDECAR_TEMPLATE_ROOT: &str = r#"# mysbx sidecar config
 # network = false                # the network is shared unless a layer denies
 #                                # it; a sidecar may deny, never re-enable (D7)
 # display = "off"                # off | waypipe, a Wayland channel (D18)
+#
+# Nested virtualization (D27): hand the guest hardware virtualization
+# (`/dev/kvm`) so VMs can be developed inside the sandbox. Only the
+# `microvm-qemu` backend honors it; every other backend refuses it.
+# Off by default: nested VMX widens the host KVM attack surface.
+#
+# nested-virt = true
 #
 # Which nix store the sandbox sees (docs/design/guest-store.md):
 # `baked` runs the VM backends on their own store disk — an image the

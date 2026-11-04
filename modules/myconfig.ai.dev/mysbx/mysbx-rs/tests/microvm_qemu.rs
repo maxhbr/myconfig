@@ -43,6 +43,7 @@ fn base(network: bool) -> Merged {
     Merged {
         backend: Some("microvm-qemu".into()),
         network,
+        nested_virt: false,
         mounts: Vec::new(),
         env: BTreeMap::new(),
         nix: BTreeMap::new(),
@@ -122,6 +123,56 @@ fn run(cfg: &Merged, repo: &Repo, payload: &Payload, params: &Params<'_>) -> Vec
     let host_env = BTreeMap::new();
     microvm_qemu_argv(cfg, repo, payload, &host_env, params, KERNEL, &[])
         .unwrap_or_else(|e| panic!("the argv builds: {e}"))
+}
+
+#[test]
+fn nested_virt_rides_the_qemu_only_flag_and_marker() {
+    // docs/design/config.md D27: the opt-in carries exactly TWO argv
+    // pieces — the launcher's `--nested-virt` switch (it boots -cpu
+    // host, accel=kvm) and the manifest marker the guest init refuses
+    // a /dev/kvm-less boot on. The plain argv stays byte-identical to
+    // the default argv (no flag, no marker).
+    let mut cfg = base(true);
+    cfg.nested_virt = true;
+    let argv = run(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
+    );
+    assert!(argv.iter().any(|a| a == "--nested-virt"), "{argv:?}");
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--env" && w[1] == "MYSBX_MICROVM_NESTED_VIRT=1"),
+        "{argv:?}"
+    );
+    assert_golden("nested-virt.txt", &argv);
+
+    // Without the key: NEITHER piece — the default argv is the
+    // minimal golden, byte for byte.
+    let plain = run(
+        &base(true),
+        &synth_repo(),
+        &Payload::Shell,
+        &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
+    );
+    assert!(!plain.iter().any(|a| a == "--nested-virt"), "{plain:?}");
+    assert!(
+        !plain
+            .windows(2)
+            .any(|w| w[1] == "MYSBX_MICROVM_NESTED_VIRT=1"),
+        "{plain:?}"
+    );
+    assert_eq!(
+        plain,
+        run(
+            &base(true),
+            &synth_repo(),
+            &Payload::Shell,
+            &params("/synth/rootfs", "/synth/shell", None, Workspace::Live),
+        ),
+        "an unset nested-virt builds the same argv as a key-less config"
+    );
 }
 
 #[test]

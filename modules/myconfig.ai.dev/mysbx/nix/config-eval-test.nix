@@ -324,6 +324,14 @@ let
         };
       }
     ];
+    # The nested-virt key (docs/design/config.md D27): `null` (the
+    # default) leaves the decision to the sidecar, so the generated
+    # layer carries no key; an explicit host-wide value reaches the
+    # TOML as `nested-virt`.
+    nestedVirtOn = generated [
+      { myconfig.ai.dev.mysbx.config.nestedVirt = true; }
+    ];
+    nestedVirtOff = generated [ { myconfig.ai.dev.mysbx.config.nestedVirt = false; } ];
     # The sandbox's own ssh keypair is unconditional (../docs/design/
     # config.md D22): the option is gone, and the generated layer
     # never carries an `ssh-key` key — the crate refuses one as
@@ -634,6 +642,8 @@ pkgs.runCommand "mysbx-generated-config-test"
       krunNestedOn
       allowlist
       limits
+      nestedVirtOn
+      nestedVirtOff
       sandboxToolsEnv
       sandboxToolsEnvOff
       ;
@@ -774,6 +784,16 @@ pkgs.runCommand "mysbx-generated-config-test"
     grep -q '^pids-limit = 1024$' "$limits" || fail "the pidsLimit seed is missing" "$limits"
     if grep -qE '^(memory|cpus|pids-limit) ' "$nonoBackend"; then
       fail "an unset limit option leaked a key" "$nonoBackend"
+    fi
+
+    # ... the D27 nested-virt key: an explicit option reaches the
+    # layer, and the null default leaves it out (the sidecar decides).
+    grep -q '^nested-virt = true$' "$nestedVirtOn" \
+      || fail "the nestedVirt = true seed is missing" "$nestedVirtOn"
+    grep -q '^nested-virt = false$' "$nestedVirtOff" \
+      || fail "the nestedVirt = false seed is missing" "$nestedVirtOff"
+    if grep -q '^nested-virt' "$nonoBackend"; then
+      fail "the null nestedVirt default leaked a key" "$nonoBackend"
     fi
 
     # 6a. the sandbox ssh keypair (D22) is unconditional: the option

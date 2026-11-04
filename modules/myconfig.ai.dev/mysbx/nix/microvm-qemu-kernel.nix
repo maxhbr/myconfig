@@ -16,6 +16,17 @@
 #   ext4 + overlayfs                                  the scratch + store overlay
 #   erofs                                             the guest-own store disk
 #                                                     (docs/design/guest-store.md)
+#   kvm (+ kvm_intel / kvm_amd)                        the nested-virt opt-in
+#                                                     (docs/design/config.md D27): a
+#                                                     `nested-virt = true` run boots
+#                                                     -cpu host, so the guest gets
+#                                                     VMX/SVM and its own /dev/kvm —
+#                                                     BUILT IN because the static
+#                                                     init loads no modules. They are
+#                                                     INERT without VMX/SVM (the
+#                                                     accel gate keeps a plain run on
+#                                                     kvm:tcg), so ONE kernel serves
+#                                                     both modes.
 #   8250 console                                      already =y, the serial console
 #   tmpfs, proc, sysfs                                 already =y, the init's mounts
 #
@@ -63,6 +74,26 @@ kernelPackages.kernel.override {
     # module, and the config generator re-asks VIRTIO_FS when its
     # dependency stays m (the repeated-question refusal).
     FUSE_FS = yes;
+    # The nested-virt opt-in (docs/design/config.md D27): the KVM
+    # core and both vendor modules BUILT IN — the static init loads
+    # no modules, so a nested-virt guest finds its /dev/kvm at boot.
+    # Inert without VMX/SVM (no /dev/kvm node appears on a plain run:
+    # the CPU carries no VMX for KVM to expose), so the same kernel
+    # serves both modes with zero flags.
+    # CRYPTO_DEV_CCP_DD comes with them because the nixpkgs default
+    # config requires KVM_AMD_SEV=y (common-config.nix), whose
+    # dependency `!(KVM_AMD=y && CRYPTO_DEV_CCP_DD=m)` would otherwise
+    # leave the required answer UNUSED — a hard config error (the
+    # generator's unused-option refusal). Building the ccp device
+    # driver in keeps SEV satisfiable; both are inert without AMD
+    # hardware.
+    # NOTE on the generator's repeated-question refusal: KVM selects
+    # VIRTUALIZATION; like VIRTIO above, the DEPENDENCY is left at
+    # its default and only the leaf options are set here.
+    KVM = yes;
+    KVM_INTEL = yes;
+    KVM_AMD = yes;
+    CRYPTO_DEV_CCP_DD = yes;
   };
   # Faster build, smaller bzImage: no modules to sign or strip.
   buildDTBs = false;

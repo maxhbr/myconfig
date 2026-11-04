@@ -31,6 +31,16 @@
 #   9 dry-run surface     — the launcher argv names the qemu pins
 #                           (--kernel, --exit-channel; NO --krun-overlay,
 #                           bd govd)
+#  10 guest bootstrap      — devpts, /dev/shm, /dev/fd, lo up
+#                           (bd myconfig-af0j)
+#  11 console size         — the guest stty carries the caller's
+#                           rows/cols (bd myconfig-a2uq)
+#  12 guest CPU           — the default model is max,vmx=off,svm=off
+#                           (bd cdjk): SSE4.2 present (Bun tools run;
+#                           qemu64's x86-64-v1 would refuse them), and NO
+#                           vmx/svm flag (D27's off-by-default contract —
+#                           this probe is the masked DEFAULT run only; a
+#                           nested-virt run MUST carry vmx)
 set -euo pipefail
 
 repo=${1:?usage: microvm-qemu-live-validation.sh <repo>}
@@ -247,5 +257,51 @@ ${mysbx} run --backend microvm-qemu -- sh -c 'echo \"WINSIZE-\$(/bin/busybox stt
 else
     printf 'SKIP 11 console size — util-linux script/stty is not on PATH\n' >&2
 fi
+
+# 12. the guest CPU model (bd myconfig-cdjk): the DEFAULT run is
+# -cpu max,vmx=off,svm=off. Three pins:
+# - sse4_2 MUST be present: qemu64 (the bare-model default the bug
+#   shipped with) is x86-64-v1, and every Bun-compiled tool (hunk…)
+#   refuses to start on it — `max` under KVM carries every feature
+#   KVM_GET_SUPPORTED_CPUID reports (host-bounded), so the guest
+#   sees the host's v2 features.
+# - hunk --version MUST run: the criterion names the tool, not just
+#   the flag (the PATH guard skips the probe where the sandbox tool
+#   set lacks it — the flag half above still pins the fix).
+# - vmx/svm MUST be absent: the masks are D27's off-by-default
+#   contract made good on the live machine — the guest kernel pins
+#   KVM in, so an unmasked `max` would hand this very run a working
+#   /dev/kvm. (The POSITIVE half — a nested-virt run carries vmx and
+#   /dev/kvm — is bd myconfig-9wkp.10's live criterion, run on a
+#   nesting-enabled host with `nested-virt = true`; this probe pins
+#   the default only.)
+#
+# The count rides a MARKER-delimited payload line, probe 2's own
+# trick: a bare `run` captures the kernel boot log on stdout (the
+# serial console IS the caller's stdio, bd mbib), so the raw count
+# would arrive multi-line-contaminated and the grep's own exit
+# code would trip errexit before any `fail` could name the cause —
+# the marker + `|| true` keeps both the extraction and the FAIL
+# contract honest.
+# shellcheck disable=SC2016 # $(grep …) expands inside the sandbox
+sse=$(run sh -c 'echo "SSE-START$(grep -c sse4_2 /proc/cpuinfo)SSE-END"' |
+    sed -n 's/.*SSE-START\([0-9]*\)SSE-END.*/\1/p' | tail -n 1) || true
+[ -n "${sse:-}" ] ||
+    fail "12 guest CPU" "no SSE-START..SSE-END marker reached the console — the payload never ran (bd cdjk)"
+[ "${sse:-0}" -gt 0 ] ||
+    fail "12 guest CPU" "no sse4_2 in the guest /proc/cpuinfo — the model is not max (Bun tools will refuse to start) (bd cdjk)"
+if command -v hunk >/dev/null 2>&1; then
+    # shellcheck disable=SC2016 # hunk runs inside the sandbox
+    if ! run sh -c 'hunk --version >/dev/null 2>&1'; then
+        fail "12 guest CPU" "hunk --version does not run in the guest — the Bun-built tool still refuses the CPU (bd cdjk)"
+    fi
+    pass "12 guest CPU: hunk --version runs (the Bun tool starts)"
+else
+    printf 'SKIP 12 guest CPU: hunk half — the tool is not on the sandbox PATH\n' >&2
+fi
+if run sh -c 'grep -q -e "\bvmx\b" -e "\bsvm\b" /proc/cpuinfo'; then
+    fail "12 guest CPU" "vmx/svm in the DEFAULT run's /proc/cpuinfo — the nesting bits are unmasked (D27's off-by-default contract) (bd cdjk)"
+fi
+pass "12 guest CPU: sse4_2 present, vmx/svm masked (max,vmx=off,svm=off)"
 
 printf 'microvm-qemu live validation: all probes passed\n'
