@@ -23,7 +23,7 @@
             # podman.enable = true;
             krun.enable = true;
             krun.store.enable = true;
-            # microvm-qemu.enable = true;
+            microvm-qemu.enable = true;
           };
 
           # agent-of-empires (`aoe`) is enabled by the `myconfig.ai.dev`
