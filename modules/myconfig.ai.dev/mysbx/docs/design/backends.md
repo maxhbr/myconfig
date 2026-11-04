@@ -1185,7 +1185,7 @@ What differs from `krun`, stated honestly:
 | nix scratch | virtio-blk via `krun_add_disk2` (D7) | a virtio-blk `-drive` on the same per-run sparse file, same guest init |
 | guest-own store disk (`store = "baked"`) | `krun_add_disk2` with read_only=true — VIRTIO_BLK_F_RO, the same fixed id (`nixstore`) | a virtio-blk `-drive` with `readonly=on` on the same erofs image, same id; the kernel pin adds EROFS_FS=y (libkrunfw's x86_64 config already carries it) — the ro flag reaches /sys/block identically on both, which is how the init tells the disk from the writable scratch (guest-store.md) |
 | exit code | `krun_start_enter` returns the payload's | the init reports it over a virtio-serial port; PID-1 exit panics a stock guest, so the channel is out of band; the payload runs under `setsid -c` — a new session with the console as ctty, so interactive payloads keep job control and ^C (bd myconfig-w8jd) |
-| accel | KVM only (libkrun has no TCG) | launcher argv uses `kvm:tcg`, but the NORMAL mysbx run path checks and REQUIRES KVM before launch; no supported KVM-less fallback |
+| accel | KVM only (libkrun has no TCG) | launcher argv uses `kvm:tcg`, but the NORMAL mysbx run path checks and REQUIRES KVM before launch; no supported KVM-less fallback; `nested-virt = true` (config.md D27) switches the launcher to `-cpu host` + `accel=kvm` with NO tcg fallback, so the guest gets VMX/SVM and its own `/dev/kvm` — opt-in and off by default: nested VMX widens the host KVM attack surface and `-cpu host` exposes the host CPU model; the run path pre-flights the host's `kvm_intel`/`kvm_amd` `nested` parameter, the guest init refuses a marked run without `/dev/kvm`, and every other backend refuses the key outright (krun: `krun_set_nested_virt` is macOS-only in libkrun 1.17.4, libkrunfw 5.3.0 ships CONFIG_KVM unset) |
 | console | the VMM's own stdio | `-serial mon:stdio` + `console=ttyS0` (bd myconfig-mbib): `-nodefaults` kills the default serial backend, so the argv wires it explicitly — the caller's terminal IS the guest console. A 16550 carries NO winsize (a live finding of bd myconfig-26z4, bd myconfig-a2uq): the guest ctty reported a 0x0 grid, herdr refused to attach and fish rendered blind. The pipeline therefore reads the caller's terminal size and rides it through the manifest env (`MYSBX_MICROVM_CONSOLE_SIZE=ROWSxCOLS`); the init stty's the console from it before the payload runs. Residual, inherent to the device: a resize mid-session does not propagate — the guest keeps the boot-time snapshot |
 | git trust | libkrun's in-memory `trustfs` device (`--krun-overlay` flags) | the RO staging tree (bd myconfig-govd): lib.rs writes the two trust texts into `<stage>/ro/gittrust-*` before the run, the trust shares ride `stage-ro` slots, and NO `--krun-overlay` flag is emitted (the launcher refuses them) |
 | host-side bwrap `/dev` | none needed (the virtiofs server is in-process) | `--dev-bind /dev/null` + `--dev-bind /dev/urandom` + `--tmpfs /tmp` (bd myconfig-ya1o): without any `--dev` flag bwrap exposes NO `/dev` at all — the launcher's `Stdio::null()` virtiofsd spawn dies ENOENT; the tmpfs is the runtime dir's socket surface (the ro rootfs's `/tmp` is read-only) |
@@ -1301,6 +1301,10 @@ QEMU-specific kernel/display checks:
 - A missing kernel pin — the one qemu-specific refusal: a run
   names `MYSBX_MICROVM_QEMU_KERNEL` or refuses, never a PATH
   fallback (the launcher-pin rule of D3's doctor arm).
+- `nested-virt = true` on any other backend — refused, never
+  accepted-and-ignored (config.md D27); on this backend a run additionally
+  pre-flights the host's `nested` module parameter and the guest init
+  refuses a marked boot without `/dev/kvm`.
 
 #### Structure
 

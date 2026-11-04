@@ -80,6 +80,9 @@ config that can execute is config that can escape.
 - the store a VM run mounts at `/nix` (`store`, see D26): the host
   store shared read-only, or the guest-own baked disk — the narrowing
   the sidecar may preselect for a repo, exactly like `backend`
+- nested virtualization for a `microvm-qemu` run (`nested-virt`,
+  see D27): whether the guest gets hardware virtualization and its
+  own `/dev/kvm` — opt-in, honored by exactly one backend
 - network policy (`network = false` is the deny switch; networking is
   enabled by default through the backend's transport; D21's allowlist
   keys are enforced only on nono). D20's proposed `egress` key is not
@@ -1634,3 +1637,65 @@ The narrowing describes the guest view, not an escaped VMM's view:
 the host-side bubblewrap still exposes the host store for launcher
 runtime dependencies. Complete baked-store live acceptance remains
 unrecorded; see [guest-store.md](./guest-store.md).
+
+### D27: `nested-virt` — opt-in nested virtualization for a `microvm-qemu` run
+
+```toml
+nested-virt = true       # boolean, off by default
+```
+
+One top-level boolean key, tri-state in a layer like `network`:
+`Some(true)` on a `microvm-qemu` run hands the guest hardware
+virtualization — the launcher boots `-cpu host` with `accel=kvm` (no
+TCG fallback), the guest kernel's KVM (built into the pinned
+`microvm-qemu.kernel`) exposes `/dev/kvm`, and VMs can be developed
+and tested inside the sandbox (microvm-ch, microvm-qemu,
+podman-krun).
+
+**Why a config key.** The point of the key is the development loop of
+the backend epic itself: a sandbox that runs a nested VM is the test
+bed for cloud-hypervisor and qemu work (bd myconfig-9wkp). It is a
+config key, not a host option, because the host's part is only the
+enabling of nesting (below); the per-run decision is policy.
+
+**Layering: the `network` rule verbatim.** A user-config
+`nested-virt = false` is a host-wide deny the sidecar cannot lift —
+re-enabling is a hard merge error (`NestedVirtUpgrade`). Otherwise
+either layer may enable it; the default when every layer is silent is
+`false`. The `false` default is a security decision, not a
+convenience: nested VMX widens the host KVM attack surface (the
+guest can now run its own KVM, and a bug in the host's nested-
+virtualization implementation is a new escape path), and `-cpu host`
+exposes the host CPU model to the guest — both are documented in
+backends.md D9's table.
+
+**Honored by exactly one backend.** `microvm-qemu` implements the
+key; every other backend REFUSES `nested-virt = true` (exit 70,
+before the session clone and before `--dry-run`'s early return, so a
+dry run audits the refusal too) — never accepted-and-ignored:
+
+- `krun`: libkrun 1.17.4's `krun_set_nested_virt` is macOS-only,
+  and libkrunfw 5.3.0 ships `CONFIG_KVM` unset — the guest cannot
+  run a nested VM at all.
+- `podman-krun`: same guest kernel gap as `krun`, plus no virtio
+  KVM passthrough in the crun/libkrun chain.
+- `bubblewrap`, `nono`, `podman-gvisor`: no VM at all, no
+  virtualization to nest.
+
+**Host pre-flight and guest refuse-or-announce.** A
+`nested-virt = true` run requires the HOST kernel's own nesting
+enabled: `/sys/module/kvm_intel/parameters/nested` (or
+`kvm_amd`'s) must read `Y` or `1` — the run path refuses otherwise,
+naming the parameter (`boot.extraModprobeConfig = "options
+kvm-intel nested=1"` is the NixOS spelling). Inside the guest, the
+init refuses early when the manifest marks nested-virt but
+`/dev/kvm` is missing (a TCG boot) — the store-disk marker's rule:
+fail at the boot, not at the payload's first nested VM launch.
+`mysbx doctor` reports the host's nested support as a WARN when it
+is off (never a FAIL: the key gates one opt-in, not the backend).
+
+**The kernel pin serves both modes.** The pinned guest kernel builds
+KVM, KVM_INTEL and KVM_AMD in (`nix/microvm-qemu-kernel.nix`) — the
+static init loads no modules. They are inert without VMX/SVM, so
+ONE kernel serves both modes and the plain run's argv stays
+byte-identical.

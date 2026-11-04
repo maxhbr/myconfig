@@ -56,6 +56,7 @@ fn base(network: bool) -> Merged {
     Merged {
         backend: Some("bubblewrap".into()),
         network,
+        nested_virt: false,
         mounts: Vec::new(),
         env: BTreeMap::new(),
         nix: BTreeMap::new(),
@@ -1058,6 +1059,7 @@ fn golden_both_layers_contribute_mounts() {
     let cfg = Merged {
         backend: Some("bubblewrap".into()),
         network: true,
+        nested_virt: false,
         mounts: vec![
             make_mount("/synth/data/refs", None, Mode::Ro), // user
             make_mount("/synth/data/cache", None, Mode::Rw), // user
@@ -1438,6 +1440,7 @@ fn mount_order_is_preserved() {
     let cfg = Merged {
         backend: Some("bubblewrap".into()),
         network: true,
+        nested_virt: false,
         mounts: vec![
             make_mount("/synth/data/outer", None, Mode::Ro),
             make_mount("/synth/other", None, Mode::Rw),
@@ -3898,6 +3901,7 @@ fn podman_base(network: bool) -> Merged {
     Merged {
         backend: Some("podman-gvisor".into()),
         network,
+        nested_virt: false,
         mounts: Vec::new(),
         env: BTreeMap::new(),
         nix: BTreeMap::new(),
@@ -4412,6 +4416,7 @@ fn podman_mount_order_is_preserved() {
     let cfg = Merged {
         backend: Some("podman-gvisor".into()),
         network: true,
+        nested_virt: false,
         mounts: vec![
             make_mount("/synth/data/outer", None, Mode::Ro),
             make_mount("/synth/other", None, Mode::Rw),
@@ -5621,6 +5626,7 @@ fn nono_base(network: bool) -> Merged {
     Merged {
         backend: Some("nono".into()),
         network,
+        nested_virt: false,
         mounts: Vec::new(),
         env: BTreeMap::new(),
         nix: BTreeMap::new(),

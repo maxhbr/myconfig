@@ -2255,6 +2255,7 @@ mod tests {
         Merged {
             backend: Some("bubblewrap".into()),
             network: true,
+            nested_virt: false,
             mounts: Vec::new(),
             env: BTreeMap::new(),
             nix: BTreeMap::new(),

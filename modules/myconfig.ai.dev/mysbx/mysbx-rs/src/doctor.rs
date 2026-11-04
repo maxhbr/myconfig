@@ -531,6 +531,34 @@ pub fn krun_store_disk_check(disk: Option<PathBuf>) -> Check {
     }
 }
 
+/// The host's nested-KVM support (docs/design/config.md D27): the
+/// `nested` module parameter of kvm-intel/kvm-amd. `None` = no
+/// readable parameter (no kvm module, or nesting absent) — only a
+/// warn, never a fail: nesting gates ONE opt-in config key, and a
+/// host that never sets `nested-virt` must not see a red doctor
+/// line over it. The run path REFUSES a `nested-virt = true` run
+/// on an unsupported host; doctor names the same parameter so the
+/// refusal is diagnosable before it happens.
+pub fn nested_virt_check(intel: Option<&str>, amd: Option<&str>) -> Check {
+    let supported = [intel, amd].into_iter().flatten().any(|v| {
+        let v = v.trim();
+        v == "Y" || v == "1"
+    });
+    if supported {
+        return Check::ok(
+            "nested virt",
+            "the host enables nested KVM (kvm_intel/kvm_amd nested = Y)",
+        );
+    }
+    Check::warn(
+        "nested virt",
+        "not enabled on this host",
+        "a `nested-virt = true` run needs /sys/module/kvm_intel/parameters/nested \
+         (or kvm_amd) to read Y or 1 — set boot.extraModprobeConfig = \"options kvm-intel \
+         nested=1\" (kvm-amd on AMD) and reload the kvm module; without it the run refuses",
+    )
+}
+
 /// The Landlock check of the nono backend; `abi` is the kernel's
 /// Landlock ABI version, `None` when Landlock is unavailable.
 pub fn landlock_check(abi: Option<i64>) -> Check {
@@ -1034,6 +1062,16 @@ fn microvm_qemu_checks(checks: &mut Vec<Check>) {
     checks.push(kvm_check(
         Path::new("/dev/kvm").exists(),
         crate::kvm_available(),
+    ));
+    // The nested-KVM support of D27 (docs/design/config.md): a WARN,
+    // never a fail — it gates one opt-in config key, not the backend.
+    checks.push(nested_virt_check(
+        std::fs::read_to_string("/sys/module/kvm_intel/parameters/nested")
+            .ok()
+            .as_deref(),
+        std::fs::read_to_string("/sys/module/kvm_amd/parameters/nested")
+            .ok()
+            .as_deref(),
     ));
     let launcher = match crate::env_opt("MYSBX_MICROVM_QEMU_LAUNCHER") {
         Some(pin) => match resolve_executable(&pin, std::env::var_os("PATH").as_deref()) {
@@ -2078,6 +2116,20 @@ mod tests {
                 "{url}"
             );
         }
+    }
+
+    #[test]
+    fn nested_virt_check_names_the_parameter_and_never_fails() {
+        // D27: Y or 1 on either vendor's module parameter is OK; every
+        // other reading (N, unreadable) is a WARN naming the sysfs
+        // parameter — never a fail, the key is opt-in and off by
+        // default.
+        assert_eq!(nested_virt_check(Some("Y"), None).level, Level::Ok);
+        assert_eq!(nested_virt_check(None, Some("1\n")).level, Level::Ok);
+        assert_eq!(nested_virt_check(Some("N"), None).level, Level::Warn);
+        assert_eq!(nested_virt_check(None, None).level, Level::Warn);
+        let warn = nested_virt_check(Some("0"), Some("N"));
+        assert!(warn.hint.as_deref().unwrap().contains("parameters/nested"));
     }
 
     #[test]

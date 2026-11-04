@@ -410,6 +410,21 @@ let
         done < "$mpath"
     fi
 
+    # Nested virtualization (docs/design/config.md D27): the run
+    # asked for `/dev/kvm` in the guest (the microvm-qemu builder rode
+    # the marker on the manifest env; the launcher booted -cpu host,
+    # accel=kvm). Refuse-or-announce, the store-disk rule's twin: a
+    # marked run WITHOUT /dev/kvm means the VM came up without
+    # VMX/SVM after all (a TCG boot, a missing host module) — better
+    # to fail HERE, naming the marker, than at the payload's first
+    # nested VM launch. An UNMARKED run never checks anything: the
+    # krun guest (no marker, no KVM in libkrunfw) is untouched.
+    if [ "''${MYSBX_MICROVM_NESTED_VIRT:-}" = "1" ]; then
+        [ -e /dev/kvm ] \
+            || fail "MYSBX_MICROVM_NESTED_VIRT=1 but /dev/kvm does not exist — the VM has no hardware virtualization (a TCG boot or a host without nesting: docs/design/config.md D27)"
+        step "nested-virt: /dev/kvm present"
+    fi
+
     # Each share: one "DEVICE SLOT SANDBOX_PATH ro|rw" record — the
     # manifest's share lines above, or the legacy
     # MYSBX_VM_SHARES env (';'-separated, cmdline-sized debug

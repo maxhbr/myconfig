@@ -9815,6 +9815,72 @@ fn allowlist_on_podman_krun_is_refused() {
 }
 
 #[test]
+fn nested_virt_on_krun_is_refused() {
+    // D27: only `microvm-qemu` honors `nested-virt = true`; the
+    // direct krun backend refuses it (libkrun's
+    // krun_set_nested_virt is macOS-only in the pinned 1.17.4,
+    // libkrunfw 5.3.0 ships CONFIG_KVM unset) — before the session
+    // clone and before the --dry-run return, so a dry run audits
+    // the refusal too.
+    let Some((inv, _, sidecar)) = krun_fixture("nested-virt-krun-refused", &[]) else {
+        return; // no placeable krun fixture root here
+    };
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"krun\"\nnested-virt = true\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(stderr.contains("krun"), "{stderr}");
+    assert!(stderr.contains("nested-virt"), "{stderr}");
+    assert!(
+        !stdout.contains("--nested-virt"),
+        "no argv on refusal: {stdout}"
+    );
+}
+
+#[test]
+fn nested_virt_on_bubblewrap_is_refused() {
+    // The container/bwrap tiers have no VM to nest at all — the
+    // same refusal, naming the one backend that honors the key.
+    let (inv, _, sidecar) = fixture("nested-virt-bwrap-refused", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnested-virt = true\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(stderr.contains("nested-virt"), "{stderr}");
+    assert!(stderr.contains("microvm-qemu"), "{stderr}");
+    assert!(
+        !stdout.contains("--clearenv"),
+        "no argv on refusal: {stdout}"
+    );
+}
+
+#[test]
+fn nested_virt_user_deny_beats_a_sidecar_true_end_to_end() {
+    // The merge's narrowing rule (D27, the network twin): a
+    // user-config `false` is a host-wide deny the sidecar cannot
+    // lift — the run refuses with the NestedVirtUpgrade wording,
+    // never silently running with the sidecar's grant.
+    let (inv, _, sidecar) = fixture("nested-virt-sidecar-upgrade", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\nnested-virt = false\n",
+    )
+    .unwrap();
+    std::fs::write(sidecar.join("config.toml"), "nested-virt = true\n").unwrap();
+    let (code, _stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(stderr.contains("nested-virt = true re-enables"), "{stderr}");
+    assert!(stderr.contains("D27"), "{stderr}");
+}
+
+#[test]
 fn podman_krun_network_false_is_enforced_like_gvisor() {
     // bd myconfig-6di.5.5: `network = false` on the krun backend is
     // the same `--network none` as on podman-gvisor, and the

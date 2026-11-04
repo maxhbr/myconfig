@@ -844,6 +844,13 @@ in
           [ "$pin_line" -lt "$net_line" ] \
             || fail "the env pins must precede the SLiRP NIC marker"
         fi
+        # NO nested-virt switch (docs/design/config.md D27): the key
+        # is off by default, so the plain dry run carries no switch —
+        # the flag (and the -cpu host / accel=kvm it stands for)
+        # appears only when a layer sets `nested-virt = true`.
+        if echo "$argv" | grep -q -- '--nested-virt'; then
+          fail "the plain dry run carries --nested-virt — the key is off by default (config.md D27)"
+        fi
 
         touch $out
       '';

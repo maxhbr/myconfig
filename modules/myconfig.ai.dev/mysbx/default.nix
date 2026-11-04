@@ -449,6 +449,7 @@ let
   // lib.optionalAttrs (cfg.config.allowDomains != [ ]) { allow-domains = cfg.config.allowDomains; }
   // lib.optionalAttrs (cfg.config.connectPorts != [ ]) { connect-ports = cfg.config.connectPorts; }
   // lib.optionalAttrs (cfg.config.listenPorts != [ ]) { listen-ports = cfg.config.listenPorts; }
+  // lib.optionalAttrs (cfg.config.nestedVirt != null) { nested-virt = cfg.config.nestedVirt; }
   // lib.optionalAttrs (cfg.config.memory != null) { inherit (cfg.config) memory; }
   // lib.optionalAttrs (cfg.config.cpus != null) { inherit (cfg.config) cpus; }
   // lib.optionalAttrs (cfg.config.pidsLimit != null) { pids-limit = cfg.config.pidsLimit; };
@@ -1565,6 +1566,20 @@ in
             type = types.bool;
             default = true;
             description = "Share the host network; `false` is the deny switch.";
+          };
+          nestedVirt = mkOption {
+            type = types.nullOr types.bool;
+            default = null;
+            description = ''
+              Hand a `microvm-qemu` sandbox hardware virtualization
+              (./docs/design/config.md D27): the guest gets its own
+              `/dev/kvm` and can run nested VMs. `null` (the default)
+              leaves the decision to the sidecar; `false` is a
+              host-wide deny the sidecar cannot lift; only `true`
+              with `backend = "microvm-qemu"` runs — every other
+              backend refuses the key. Off by default: nested VMX
+              widens the host KVM attack surface.
+            '';
           };
           multiplexer = mkOption {
             type = types.enum [

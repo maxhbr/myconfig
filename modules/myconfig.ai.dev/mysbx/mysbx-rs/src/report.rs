@@ -658,6 +658,7 @@ mod tests {
         let merged = Merged {
             backend: Some("bubblewrap".into()),
             network: false,
+            nested_virt: false,
             mounts: vec![
                 Mount {
                     file: false,

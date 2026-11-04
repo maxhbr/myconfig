@@ -216,6 +216,12 @@ struct Config {
     rootfs: PathBuf,
     kernel: PathBuf,
     exit_channel: bool,
+    /// The nested-virtualization opt-in (docs/design/config.md D27):
+    /// `-cpu host` + `accel=kvm` ONLY, so the guest gets VMX/SVM and
+    /// `/dev/kvm` — VMs can be developed inside the sandbox. Off by
+    /// default: nested VMX widens the host KVM attack surface and
+    /// `-cpu host` exposes the host CPU model.
+    nested_virt: bool,
     verbose: bool,
     init: Option<String>,
     devices: Vec<Device>,
@@ -233,7 +239,7 @@ struct Config {
 fn usage() -> ! {
     eprintln!(
         "usage: mysbx-microvm-qemu [--cpus N] [--ram MIB] [--verbose] --rootfs DIR \
-         --kernel BZIMAGE [--exit-channel] [--init PATH] \
+         --kernel BZIMAGE [--exit-channel] [--nested-virt] [--init PATH] \
          [--ro-device TAG=DIR] [--rw-device TAG=DIR] \
          [--ro-share TAG:SLOT@DEST] [--rw-share TAG:SLOT@DEST] \
          [--manifest FILE] [--network shared|none] \
@@ -313,6 +319,7 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
         rootfs: PathBuf::new(),
         kernel: PathBuf::new(),
         exit_channel: false,
+        nested_virt: false,
         verbose: false,
         init: None,
         devices: Vec::new(),
@@ -361,6 +368,7 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
                     "--rootfs" => cfg.rootfs = PathBuf::from(value_of("--rootfs")?),
                     "--kernel" => cfg.kernel = PathBuf::from(value_of("--kernel")?),
                     "--exit-channel" => cfg.exit_channel = true,
+                    "--nested-virt" => cfg.nested_virt = true,
                     "--init" => cfg.init = Some(value_of("--init")?),
                     "--ro-device" => add_device(&mut cfg, &value_of("--ro-device")?, true)?,
                     "--rw-device" => add_device(&mut cfg, &value_of("--rw-device")?, false)?,
@@ -598,7 +606,13 @@ fn kernel_cmdline(cfg: &Config) -> String {
 /// The qemu argv (headless microVM, the microvm.nix proven shape):
 /// `-M microvm,accel=kvm:tcg` (KVM first, TCG the fallback —
 /// D9: boots without /dev/kvm, a diagnosis not a supported mode),
-/// one `-chardev socket` + `-device vhost-user-fs-pci` per device,
+/// or — ONLY under the nested-virt opt-in (docs/design/config.md
+/// D27) — `accel=kvm` with NO tcg fallback and `-cpu host`: the
+/// guest needs VMX/SVM for its own /dev/kvm, and a TCG guest that
+/// silently lacks them would make every nested VM launch a
+/// mid-session surprise instead of the launch-time refusal the
+/// run path reports. The argv carries one
+/// `-chardev socket` + `-device vhost-user-fs-pci` per device,
 /// the memfd-shared memory backend vhost-user-fs needs, SLiRP or
 /// no netdev, the exit-channel virtserialport, the scratch
 /// virtio-blk drive, `-no-reboot` so a panicking guest EXITS
@@ -614,7 +628,25 @@ fn qemu_argv(
         "-name".to_owned(),
         "mysbx".to_owned(),
         "-M".to_owned(),
-        "microvm,accel=kvm:tcg,pit=off,pic=off,pcie=on,acpi=on,rtc=on".to_owned(),
+        if cfg.nested_virt {
+            // D27: KVM only — the guest kernel pins KVM in, so a TCG
+            // fallback boot would come up WITHOUT VMX/SVM and the
+            // run would die at the first nested VM launch, not at
+            // the boot where the cause belongs.
+            "microvm,accel=kvm,pit=off,pic=off,pcie=on,acpi=on,rtc=on".to_owned()
+        } else {
+            "microvm,accel=kvm:tcg,pit=off,pic=off,pcie=on,acpi=on,rtc=on".to_owned()
+        },
+    ];
+    if cfg.nested_virt {
+        // `-cpu host` is what exposes VMX/SVM: the default qemu64
+        // model carries neither, so nested VMs would be impossible
+        // no matter the accel. It also exposes the host CPU model —
+        // the reason the whole key is opt-in (D27's security note).
+        argv.push("-cpu".to_owned());
+        argv.push("host".to_owned());
+    }
+    argv.extend([
         "-m".to_owned(),
         format!("{}M", cfg.ram_mib),
         "-smp".to_owned(),
@@ -626,7 +658,7 @@ fn qemu_argv(
         cfg.kernel.to_string_lossy().into_owned(),
         "-append".to_owned(),
         kernel_cmdline(cfg),
-    ];
+    ]);
     // The root fs device (the same chardev/device pair shape as
     // every share — qemu has no in-process virtiofs).
     let root_socket = socket_of(FS_ROOT_TAG);
@@ -807,11 +839,16 @@ fn run(cfg: Config, boot_started: Instant) -> i32 {
     // The banner (the krun launcher's rule: a hung run must not be
     // a silent one).
     eprintln!(
-        "mysbx-microvm-qemu: booting {} cpus {} MiB kernel={} rootfs={}",
+        "mysbx-microvm-qemu: booting {} cpus {} MiB kernel={} rootfs={}{}",
         cfg.cpus,
         cfg.ram_mib,
         cfg.kernel.display(),
         cfg.rootfs.display(),
+        if cfg.nested_virt {
+            " (nested-virt)"
+        } else {
+            ""
+        },
     );
     if cfg.verbose {
         eprintln!("mysbx-microvm-qemu: payload: {:?}", cfg.payload);
@@ -822,6 +859,10 @@ fn run(cfg: Config, boot_started: Instant) -> i32 {
         );
         eprintln!("mysbx-microvm-qemu: scratch: {:?}", cfg.scratch);
         eprintln!("mysbx-microvm-qemu: store-disk: {:?}", cfg.store_disk);
+        eprintln!(
+            "mysbx-microvm-qemu: nested-virt: {}",
+            if cfg.nested_virt { "on" } else { "off" }
+        );
         eprintln!(
             "mysbx-microvm-qemu: {} env entries, {} overlay files",
             cfg.env.len(),
@@ -1112,6 +1153,7 @@ mod tests {
             rootfs: PathBuf::from("/synth/rootfs"),
             kernel: PathBuf::from("/synth/bzImage"),
             exit_channel: true,
+            nested_virt: false,
             verbose: false,
             init: None,
             devices: vec![Device {
@@ -1275,6 +1317,62 @@ mod tests {
         assert!(kernel_cmdline(&cfg).contains("mysbx.trace=1"));
         cfg.verbose = false;
         assert!(!kernel_cmdline(&cfg).contains("mysbx.trace=1"));
+    }
+
+    #[test]
+    fn nested_virt_switches_the_cpu_and_drops_the_tcg_fallback() {
+        // D27: only the opt-in run carries -cpu host (VMX/SVM for the
+        // guest's own /dev/kvm) and accel=kvm with NO tcg fallback — a
+        // silent TCG boot would come up without VMX and the run would
+        // die at the first nested VM launch, not at the boot. The
+        // the plain argv carries neither -cpu nor an accel change.
+        let sockets =
+            |tag: &str| PathBuf::from(format!("/run/sock/{}.sock", tag.replace('/', "-")));
+        let plain = qemu_argv(
+            Path::new("/synth/qemu"),
+            &test_cfg(),
+            &sockets,
+            Some(Path::new("/run/sock/exit.sock")),
+        );
+        assert!(plain.join("\n").contains("-M\nmicrovm,accel=kvm:tcg"));
+        assert!(
+            !plain.iter().any(|a| a == "-cpu"),
+            "no -cpu without the flag"
+        );
+
+        let mut cfg = test_cfg();
+        cfg.nested_virt = true;
+        let nested = qemu_argv(
+            Path::new("/synth/qemu"),
+            &cfg,
+            &sockets,
+            Some(Path::new("/run/sock/exit.sock")),
+        );
+        let joined = nested.join("\n");
+        assert!(joined.contains("-M\nmicrovm,accel=kvm"));
+        assert!(
+            !joined.contains("accel=kvm:tcg"),
+            "no tcg fallback under the flag"
+        );
+        assert!(joined.contains("-cpu\nhost"));
+
+        // The flag parses and defaults off.
+        let cfg = parse_args_result(
+            "--rootfs /r --kernel /k --nested-virt -- /bin/true"
+                .split_whitespace()
+                .map(str::to_owned),
+        )
+        .unwrap();
+        assert!(cfg.nested_virt);
+        assert!(
+            !parse_args_result(
+                "--rootfs /r --kernel /k -- /bin/true"
+                    .split_whitespace()
+                    .map(str::to_owned),
+            )
+            .unwrap()
+            .nested_virt
+        );
     }
 
     #[test]
