@@ -6284,6 +6284,10 @@ fn an_over_the_budget_run_is_timed_out_exit_124() {
         eprintln!("skipping: no sandbox-reachable bash");
         return;
     };
+    let Some(sleep) = sandbox_sleep() else {
+        eprintln!("skipping: no sandbox-reachable sleep");
+        return;
+    };
     let (inv, _, sidecar) = fixture_with_backend("result-timeout", &[]);
     let args = [
         "run".to_owned(),
@@ -6293,7 +6297,7 @@ fn an_over_the_budget_run_is_timed_out_exit_124() {
         "--".to_owned(),
         bash.to_string_lossy().into_owned(),
         "-c".to_owned(),
-        "sleep 30".to_owned(),
+        format!("exec {} 30", sleep.display()),
     ];
     let mut cmd = spawn_with_args(&inv, &args);
     cmd.env("MYSBX_TOOLS_PATH", "/usr/bin");
@@ -6319,12 +6323,26 @@ fn a_cancelled_result_run_exits_130_and_records_the_signal() {
     // the run exits `130` (the shell's 128 + 2) and the file records
     // `cancelled` naming SIGINT. `kill(2)` from the test is the
     // operator's Ctrl-C.
+    //
+    // The run gets its OWN process group (run_with_result makes the
+    // backend its leader, the once_run_wait rule): the kill reaches
+    // the run's processes only. The canary below is the test's own
+    // group sibling — a caller's process that shares mysbx's
+    // inherited group — and must SURVIVE the cancellation. The
+    // pre-fix kill aimed at that inherited group and took the
+    // caller's processes with it.
     if !is_bwrap_available() {
         eprintln!("skipping: bwrap not available in this environment");
         return;
     }
     let Some(bash) = sandbox_bash() else {
         eprintln!("skipping: no sandbox-reachable bash");
+        return;
+    };
+    // `sleep` by its ABSOLUTE store path (the once sigterm test's
+    // rule): the sandbox's PATH holds only the tools closure.
+    let Some(sleep) = sandbox_sleep() else {
+        eprintln!("skipping: no sandbox-reachable sleep");
         return;
     };
     let (inv, _, sidecar) = fixture_with_backend("result-cancel", &[]);
@@ -6334,20 +6352,39 @@ fn a_cancelled_result_run_exits_130_and_records_the_signal() {
         "--".to_owned(),
         bash.to_string_lossy().into_owned(),
         "-c".to_owned(),
-        "sleep 30".to_owned(),
+        format!("exec {} 30", sleep.display()),
     ];
     let mut cmd = spawn_with_args(&inv, &args);
     cmd.env("MYSBX_TOOLS_PATH", "/usr/bin");
     cmd.stdin(std::process::Stdio::piped());
     let child = cmd.spawn().expect("failed to spawn mysbx");
+    // The canary: a process of the CALLER's group (the harness's —
+    // what mysbx inherited), alive across the cancellation. The
+    // pre-fix group-kill reached exactly this process.
+    let mut canary = std::process::Command::new(&sleep)
+        .arg("30")
+        .spawn()
+        .expect("failed to spawn the group canary");
     // Give the run time to reach the wait loop, then send SIGINT to
     // the mysbx process — the handler records it, the loop kills the
-    // group, the record is written.
+    // run's group, the record is written.
     std::thread::sleep(std::time::Duration::from_millis(700));
     unsafe {
         libc_kill(child.id(), 2);
     }
     let out = child.wait_with_output().expect("mysbx died unexpectedly");
+    // The canary was never signaled: the kill reached the run's OWN
+    // group, not the caller's.
+    let canary_alive = canary
+        .try_wait()
+        .expect("cannot probe the canary")
+        .is_none();
+    let _ = canary.kill();
+    let _ = canary.wait();
+    assert!(
+        canary_alive,
+        "the cancellation kill never reaches the caller's group"
+    );
     assert_eq!(
         out.status.code(),
         Some(130),
@@ -6360,6 +6397,23 @@ fn a_cancelled_result_run_exits_130_and_records_the_signal() {
     assert!(result.contains("\"exitCode\": 130"), "{result}");
     assert!(result.contains("\"cancelledBy\": \"SIGINT\""), "{result}");
     assert!(!result.contains("payloadExitCode"), "{result}");
+}
+
+/// `sleep` by its ABSOLUTE store path: the sandbox's PATH holds only
+/// the tools closure (`MYSBX_TOOLS_PATH`), so a plain `sleep` lookup
+/// depends on what that closure ships — the tests pin the binary
+/// itself (the once sigterm test's rule). `None` when no candidate
+/// sits in a sandbox-reachable dir.
+fn sandbox_sleep() -> Option<PathBuf> {
+    std::env::var_os("PATH").and_then(|path| {
+        std::env::split_paths(&path).find_map(|dir| {
+            if !(dir.starts_with("/nix/store") || dir.starts_with("/usr/bin")) {
+                return None;
+            }
+            let candidate = dir.join("sleep");
+            candidate.is_file().then_some(candidate)
+        })
+    })
 }
 
 /// `kill(2)` from the tests, the zero-dependency way: a raw extern like
@@ -14580,16 +14634,7 @@ fn once_sigterm_forwards_tears_down_and_reports_the_signal() {
     // `sleep` by its ABSOLUTE store path: the sandbox's PATH holds
     // only the tools closure (`MYSBX_TOOLS_PATH`), and a plain
     // `sleep` lookup would depend on what that closure ships.
-    let sleep = std::env::var_os("PATH").and_then(|path| {
-        std::env::split_paths(&path).find_map(|dir| {
-            if !(dir.starts_with("/nix/store") || dir.starts_with("/usr/bin")) {
-                return None;
-            }
-            let candidate = dir.join("sleep");
-            candidate.is_file().then_some(candidate)
-        })
-    });
-    let Some(sleep) = sleep else {
+    let Some(sleep) = sandbox_sleep() else {
         eprintln!("skipping: no sandbox-reachable sleep");
         return;
     };

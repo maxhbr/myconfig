@@ -4851,6 +4851,18 @@ fn run_with_result(
         eprintln!("mysbx: cannot exec the backend: {e}");
         EXIT_INFRASTRUCTURE
     };
+    // The run gets its OWN process group — the same rule as
+    // once_run_wait (cli.md D22): the cancellation must reach the
+    // run's processes and NOTHING else. mysbx inherits its caller's
+    // group; killing THAT group (the pre-fix behaviour) would
+    // signal the caller too — a script running mysbx, or the sibling
+    // processes of the pipeline that started it. The child is made
+    // a group leader BEFORE the spawn, so the whole run sits in one
+    // private group and the kill below targets exactly it.
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
@@ -4898,15 +4910,17 @@ fn run_with_result(
     // reached an end on its own has one; a killed run does not — its
     // outcome is mysbx's kill, not the payload's.
     let ended = if signum != 0 {
-        // Cancelled or timed out: kill the whole process group — the
-        // backend is in it, a shell payload's children too — then
-        // reap it, so no sandbox process outlives the budget. KILL,
+        // Cancelled or timed out: kill the whole RUN's process group —
+        // the backend is its leader, a shell payload's children are
+        // in it — never the group mysbx itself inherited from its
+        // caller — then reap it, so no sandbox process outlives the
+        // budget. KILL,
         // not TERM: a graceful escalation would need a second wait
         // loop with its own budget, and the operator asked for THIS
         // run to end now. The child is reaped BEFORE the state is
         // derived, so the record is final when it is written.
         unsafe {
-            libc_kill(-libc_getpgrp(), SIGKILL);
+            libc_kill(-(child.id() as i32), SIGKILL);
         }
         let _ = child.wait();
         if signum == SIGALRM {
@@ -5056,16 +5070,6 @@ unsafe fn libc_kill(pgrp: i32, signum: i32) {
     kill(pgrp, signum);
 }
 
-/// `getpgrp(2)` — the group the kill above aims at. The backend is
-/// in mysbx's group (a spawned child stays there unless it calls
-/// `setpgid` itself, which bwrap does not), so killing the group
-/// reaches the backend AND every process it spawned.
-unsafe fn libc_getpgrp() -> i32 {
-    extern "C" {
-        fn getpgrp() -> i32;
-    }
-    getpgrp()
-}
 /// Everything that must stay unwritable for `path` to still be THIS
 /// policy file on the next run (review-4 item 1): the pathname is
 /// walked component by component on the host filesystem, and every
