@@ -874,12 +874,16 @@ let
             # each entry's d_type straight from the readdir stream
             # (libkrun passes the host's through), the awk join
             # classifies all rows in bulk, and only the rows it
-            # cannot classify — DT_UNKNOWN (d_type 0), a non-directory
-            # share root entry, or a path deeper than the scanned root
-            # — fall back to the old per-path stat loop, exact
-            # semantics kept: [ -e ] false for missing AND dangling
-            # symlinks, [ -L ] true for every symlink (live-target
-            # poison included).
+            # cannot classify — DT_UNKNOWN (d_type 0) or a path
+            # deeper than the scanned root — fall back to the old
+            # per-path stat loop, exact semantics kept: [ -e ] false
+            # for missing AND dangling symlinks, [ -L ] true for
+            # every symlink (live-target poison included). A
+            # single-component row whose root entry carries a KNOWN
+            # d_type other than symlink is decidable in bulk — [ -e ]
+            # is true and [ -L ] false for it, whatever the type — so
+            # DT_DIR rows (the ~100% case: a registered store path
+            # IS a directory) stay in the join and never stat.
             step "scanning the read-only store share (bulk getdents)"
             /bin/store-scan /nix/store > "$scan_file" \
                 || fail "cannot scan the read-only store share"
@@ -893,9 +897,9 @@ let
                     name = deep > 0 ? substr(p, 1, deep - 1) : p
                     if (name == "") next
                     t = entry[name]
-                    if (t == "" || t == 10)
+                    if (t == "" || (t == 10 && deep == 0))
                         print $0 >> doomed_file
-                    else if (deep > 0 || t == 0 || t == 4)
+                    else if (deep > 0 || t == 0)
                         print $0 >> recheck_file
                 }
             ' "$scan_file" "$registered_file" \

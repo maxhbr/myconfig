@@ -227,11 +227,15 @@ let
         # minute-slow — store-scan reads the share once via
         # getdents (the d_type arrives in the readdir stream) and
         # awk joins all rows in bulk. Only rows the scan cannot
-        # classify (DT_UNKNOWN, a non-directory root entry, a path
-        # deeper than the scanned root) fall back to the old
-        # per-path stat, whose exact semantics stay: [ -e ] is false
-        # for a DANGLING poisoned symlink as well as a missing
-        # path, [ -L ] true for every symlink. `nix store delete`
+        # classify (DT_UNKNOWN, a path deeper than the scanned root)
+        # fall back to the old per-path stat, whose exact semantics
+        # stay: [ -e ] is false for a DANGLING poisoned symlink as
+        # well as a missing path, [ -L ] true for every symlink.
+        # A single-component row whose root entry carries a KNOWN
+        # d_type other than symlink is decidable in bulk — [ -e ]
+        # true and [ -L ] false whatever the type — so DT_DIR rows
+        # (the ~100% case: a registered store path IS a directory)
+        # stay in the join and never stat. `nix store delete`
         # cannot do this job: liveness semantics refuse rows held
         # by live processes and its store-tree unlink is exactly
         # the lower-layer crash.
@@ -253,9 +257,9 @@ let
               name = deep > 0 ? substr(p, 1, deep - 1) : p
               if (name == "") next
               t = entry[name]
-              if (t == "" || t == 10)
+              if (t == "" || (t == 10 && deep == 0))
                   print $0 >> doomed_file
-              else if (deep > 0 || t == 0 || t == 4)
+              else if (deep > 0 || t == 0)
                   print $0 >> recheck_file
           }
         ' "$scan" "$registered" \

@@ -669,6 +669,35 @@ class InitTests(unittest.TestCase):
         self.assertTrue((self.store / "live-link").is_symlink())
         self.assertTrue((self.store / "broken-link").is_symlink())
 
+    def test_deep_rows_follow_the_old_full_path_semantics(self):
+        # bd myconfig-kid: a row DEEPER than the scanned root is not
+        # decidable from the root entry's d_type alone — the old loop
+        # stat'ed the FULL path ([ -e ] follows the root symlink). A
+        # live symlinked dir that carries the subpath KEEPS the row
+        # (a root-entry symlink must not doom it); a deep row whose
+        # full path is absent DIES in the fallback stat.
+        (self.store / "target").mkdir()
+        (self.store / "target" / "sub").mkdir()
+        (self.store / "gone").mkdir()
+        (self.store / "symdir").symlink_to("target")
+        names = [
+            "symdir/sub",      # kept: [ -e ] through the live symlink
+            "gone/missing",    # doomed: the fallback stat finds no entry
+            "target/sub",      # kept: a plain deep row that exists
+        ]
+        self.seed(names)
+        result = self.run_reconcile()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(
+            "1 of 3 registered store path(s) missing or symlinked",
+            result.stdout,
+        )
+        paths, _ = self.rows()
+        self.assertEqual(
+            [row[1] for row in paths],
+            [str(self.store / "symdir/sub"), str(self.store / "target/sub")],
+        )
+
     def test_baked_mode_copies_the_disk_own_db(self):
         # The baked branch of the db copy (docs/design/guest-store.md):
         # db_src is the erofs's OWN /nix/var/nix/db, and the copy loop
