@@ -4583,12 +4583,13 @@ fn sandbox_pipeline(
             // cli.md D22: mysbx-once stays the PARENT — no exec — so
             // the temp root can be torn down after the payload. The
             // wait reuses the `--result` signal dance (SIGINT/SIGTERM
-            // caught, forwarded to the process group, no timeout, no
-            // result file — the temp sidecar dies with the run), then
-            // the per-run state cleanup and the ONCE teardown run:
-            // the dirty-worktree guard, the host-repo worktree prune
-            // and the temp-root removal. The exit code is the
-            // payload's own (D8 unchanged).
+            // caught, forwarded to the RUN's own process group, no
+            // timeout, no result file — the temp sidecar dies with
+            // the run), then the per-run state cleanup and the ONCE
+            // teardown run: the dirty-worktree guard, the kept
+            // worktrees' repair, the surgical removal of THIS run's
+            // registrations and the temp-root removal. The exit code
+            // is the payload's own (D8 unchanged).
             let exit = once_run_wait(cmd);
             cleanup_per_run_state(
                 waypipe_child,
@@ -4733,6 +4734,19 @@ fn once_run_wait(mut cmd: std::process::Command) -> i32 {
         // the exit code is the shell's `128 + 1`.
         libc_signal_catch(SIGHUP);
     }
+    // The run gets its OWN process group (the detach tests' rule,
+    // cli.md D22's lifecycle): the cancellation must reach the run's
+    // processes — the backend, a shell payload's children — and
+    // NOTHING else. mysbx-once inherits its caller's group; killing
+    // that group (the pre-fix behaviour) would signal the caller
+    // too — a script running mysbx-once, or the sibling processes
+    // of the pipeline that started it. The child is made a group
+    // leader BEFORE the spawn, so the whole run sits in one private
+    // group and the forward below targets exactly it.
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
@@ -4767,13 +4781,14 @@ fn once_run_wait(mut cmd: std::process::Command) -> i32 {
             }
         }
     }
-    // A cancellation: forward it to the process group — the backend
-    // is in it, a shell payload's children too — reap, and report
-    // the shell's `128 + signum`. The teardown in the caller still
-    // runs (that is once-mode's point: the temp root must not
-    // outlive a killed run).
+    // A cancellation: forward it to the RUN's group — the backend
+    // is its leader, a shell payload's children are in it — never
+    // the group mysbx-once itself inherited from its caller. Reap,
+    // and report the shell's `128 + signum`. The teardown in the
+    // caller still runs (that is once-mode's point: the temp root
+    // must not outlive a killed run).
     unsafe {
-        libc_kill(-libc_getpgrp(), signum);
+        libc_kill(-(child.id() as i32), signum);
     }
     let _ = child.wait();
     128 + signum

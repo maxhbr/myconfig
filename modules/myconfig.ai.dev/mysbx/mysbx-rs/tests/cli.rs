@@ -14602,21 +14602,37 @@ fn once_sigterm_forwards_tears_down_and_reports_the_signal() {
         .stdin(std::process::Stdio::piped());
     // SIGTERM of the PARENT (the mysbx-once process), not the child
     // — `kill(2)` the same way the result-mode test signals mysbx.
-    // The run goes in its OWN process group (`process_group(0)`, the
-    // detach tests' reason): the group kill the wait performs must
-    // reach the run's processes only, never the harness that spawned
-    // it — the harness and mysbx-once would otherwise share one
-    // group and the forwarded SIGTERM would TERM the test itself.
-    {
-        use std::os::unix::process::CommandExt;
-        cmd.process_group(0);
-    }
+    // NO external process-group isolation: production must manage
+    // the run group itself (once_run_wait makes the backend its own
+    // group leader), and the forwarded SIGTERM must reach the run's
+    // processes only — never the caller that started mysbx-once.
+    // The canary below is this test's own group sibling: it shares
+    // the test harness's group (what a calling script's sibling
+    // processes look like) and must SURVIVE the cancellation.
     let mut child = cmd.spawn().expect("failed to spawn mysbx-once");
+    // The canary: a process of the CALLER's group (the harness's —
+    // what mysbx-once inherited), alive across the cancellation.
+    let mut canary = std::process::Command::new(&sleep)
+        .arg("30")
+        .spawn()
+        .expect("failed to spawn the group canary");
     std::thread::sleep(std::time::Duration::from_millis(700));
     unsafe {
         libc_kill(child.id(), 15);
     }
     let out = child.wait_with_output().expect("failed to reap mysbx-once");
+    // The canary was never signaled: the forward reached the run's
+    // OWN group, not the caller's.
+    let canary_alive = canary
+        .try_wait()
+        .expect("cannot probe the canary")
+        .is_none();
+    let _ = canary.kill();
+    let _ = canary.wait();
+    assert!(
+        canary_alive,
+        "the forwarded signal never reaches the caller's group"
+    );
     assert_eq!(
         out.status.code(),
         Some(143),

@@ -861,18 +861,28 @@ too — on tmpfs that is a RAM consideration, not worked around.
 
 **Lifecycle.** mysbx-once stays the PARENT — no `exec` (D8's
 passthrough is emulated: the exit code is the payload's own,
-`128 + signum` for a cancellation). SIGINT/SIGTERM/SIGHUP are
-forwarded to the process group; after the payload, the teardown
-runs:
+`128 + signum` for a cancellation). The backend runs in its OWN
+process group — a cancellation (SIGINT/SIGTERM/SIGHUP, including a
+closed terminal's HUP) is caught by mysbx-once and forwarded to
+that RUN's group only, never to the group mysbx-once itself
+inherited from its caller; after the payload, the teardown runs:
 
 1. the data-loss guard — every linked worktree under the temp
-   `worktrees/` is probed; one with uncommitted changes keeps the
-   whole temp root (named on stdout, `## mysbx-once: kept <path>`).
-   Commits are safe — a worktree branch lives in the host repo's
-git dir — but the working tree is only here;
-2. `git worktree prune` on the host repo — the entries that pointed
-   into the removed root;
-3. removal of the temp root.
+   `worktrees/` (at every depth, `git status --porcelain
+   --untracked-files=all`, failing closed) is probed; one with
+   uncommitted changes keeps the whole temp root (named on stdout,
+   `## mysbx-once: kept <path>`). Commits are safe — a worktree
+   branch lives in the host repo's git dir — but the working tree
+   is only here; a KEPT worktree's admin backlink is repaired to
+   its real host path (`git worktree repair`), so the operator's
+   own `git worktree prune` keeps finding it;
+2. removal of the temp root, then THIS run's worktree
+   registrations — surgically, one per worktree the run created,
+   each only when its backlink names a path of this run. Never a
+   repo-global `git worktree prune`: a once registration's backlink
+   names the sandbox-only `<repo>__worktrees` spelling, so a global
+   prune would also delete the registrations of a KEPT worktree and
+   of a CONCURRENT once-run.
 
 **Refused with exit `70` and a `mysbx-once:` message** (the forms
 whose state the temp root cannot carry): `init`, `edit`, `status`,
