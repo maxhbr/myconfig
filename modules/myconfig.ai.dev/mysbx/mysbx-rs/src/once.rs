@@ -275,11 +275,17 @@ pub fn teardown(root: &TempRoot, repo: &Repo) -> bool {
             );
         }
     }
+    // Prune is best-effort and quiet: it talks to the HOST repo's
+    // git, stderr included — a repo whose git cannot run (or is not
+    // even a git checkout) is debris of the class a crashed run
+    // leaves, never the run's own output.
     let _ = std::process::Command::new("git")
         .arg("-C")
         .arg(&repo.root)
         .arg("worktree")
         .arg("prune")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
         .status();
     keep
 }
