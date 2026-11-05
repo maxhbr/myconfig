@@ -455,10 +455,14 @@ The enumerated krun differences are:
   system-gitconfig`) read-only at `/etc/gitconfig`. It holds
   exact entries for the repo root and each checkout (a directory
   with a `.git`) that exists in the worktrees sibling at launch
-  (clone runs: the repo path only). It has no includes: git reads
-  it as system config next to the GIT_CONFIG_GLOBAL file. A
-  worktree created during the run is trusted by git (via `/*`)
-  but not by libgit2 until the next run. `$HOME` and
+  (clone runs: the repo path only), followed by the git-CLI trust
+  list's `/*` walk forms (bd myconfig-gvk): an env-stripped git —
+  workmux's git subprocesses drop `GIT_CONFIG_GLOBAL` — reads ONLY
+  this system file, so a worktree created during the run is
+  trusted the moment it lands. libgit2 ignores every non-exact
+  value, so it still matches only the exact entries. The file has
+  no includes: git reads it as system config next to the
+  GIT_CONFIG_GLOBAL file. `$HOME` and
   `XDG_CONFIG_HOME` are not redirected because nix reads its own
   config and cache through them.
 - the per-run scratch disk (bd myconfig-0pi) — opt-in per build

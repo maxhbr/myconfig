@@ -323,11 +323,11 @@ impl<'a> Params<'a> {
 /// The two trust TEXTS of a run's git trust (bd myconfig-dak.8):
 /// the global config (`git_trust_text`'s exact-path entries plus the
 /// in-sandbox user-config includes) and the libgit2 system config
-/// (`libgit2_trust_text`'s exact entries only). Registered as
-/// IN-MEMORY overlay files on the root device
-/// (`krun_fs_add_overlay_file`) — no host file, no sidecar dir, no
-/// stage slot, no init placement; the launcher owns the bytes for
-/// the VM's whole lifetime.
+/// (`libgit2_trust_text`'s exact entries plus the git-CLI walk
+/// forms, bd myconfig-gvk). Registered as IN-MEMORY overlay files
+/// on the root device (`krun_fs_add_overlay_file`) — no host file,
+/// no sidecar dir, no stage slot, no init placement; the launcher
+/// owns the bytes for the VM's whole lifetime.
 pub struct GitTrust {
     pub global_text: String,
     pub system_text: String,
