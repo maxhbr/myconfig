@@ -226,3 +226,60 @@ point survives (this one did).
   32g scratch twice-over without a GC between builds (D7's cap is
   a real constraint for kernel-sized builds — build on a bigger
   host or GC between attempts).
+
+## 2026-11-05, nested-KVM microvm-qemu agent sandbox — the §4 remainder live (bd myconfig-85i)
+
+Host context: an agent sandbox (microvm-qemu backend, nested KVM:
+`/dev/kvm` + `svm`, `MYSBX_MICROVM_NESTED_VIRT=1`), 20 cpus, 48G
+RAM, guest kernel 6.12.115 (the nested direct-krun VMs boot the
+libkrunfw 6.12.91), the rebuilt wrapper from `test-f13` at main
+94e2c195f8. The direct-krun VMs below boot INSIDE that sandbox
+(KVM-in-KVM), so absolute timings are inflated vs a bare-metal
+f13 — recorded as relative evidence, not a D8 ranking.
+
+- §4 A.1/A.2/A.4 — PASS (same session as bd myconfig-9svh's
+  closing run): exactly one writable /dev/vda (ro=0), ext4 at
+  /mysbx-nix, the store overlay up (lowerdir=stage-ro/store,
+  upperdir=/mysbx-nix/store-upper), write-through to /nix/store
+  through the overlay upper, df shows the 8g scratch cap on both
+  /nix/store and /mysbx-nix (not VM RAM). A real `getFlake` eval
+  of the mounted workspace through the wrapped nix succeeds
+  inside the same guest (the toplevel.drvPath target stays
+  blocked by the bd myconfig-4idc IFD on every host).
+- §4 A.3 — PASS (the honest absence): a run without a
+  `scratch-size` resolves no size → no MYSBX_VM_SCRATCH pin, no
+  /dev/vd*, no ext4, no overlay; /nix/store is the plain ro
+  virtiofs share (write probe refused EROFS, df names the share).
+- probe (b) — PASS (the per-run file lifecycle, code path
+  CORRECTED): the bead's own description said "the launcher
+  unlinks after krun_start_enter returns" — the code path shows
+  the launcher does NOT unlink (`krun-rs/src/main.rs` attaches the
+  disk and exits with the payload's code, matching backends.md's
+  per-run lifecycle contract); the removal lives in mysbx's
+  `cleanup_per_run_state` (a waited `--result`/detached-inner run
+  removes its `<pid>.img` after the backend exits — observed
+  live: the file exists during the run, the dir is empty after),
+  and exec-mode runs rely on the next run's `sweep_krun_scratch`
+  (observed live: the earlier exec run's debris was swept at the
+  next run's launch).
+- probe (c) — PASS (the parallel-run sweep): a live long run's
+  `<pid>.img` survives a concurrently-started short run's
+  launch-time sweep, and the short run's own file is removed on
+  its exit; after the long run exits its file is gone too (no
+  manual sweep).
+- §2.1 manual probes (the two NOT covered by the scripted smoke's
+  earlier live runs) — PASS: git status/branch/log inside the
+  direct-krun guest over the real linked worktree
+  `myconfig__worktrees/mzys-qemu-litellm` (with its git-dirs
+  approved, bd myconfig-2ww) — no dubious-ownership refusal (the
+  trust files' both-spellings grant); a `state-dirs` entry is
+  bound rw at /mysbx-home/<entry> with writes reaching the host
+  sidecar both ways. The live-repo edit and the ro-rootfs refusal
+  stay covered by the scripted probes 4/5 (2026-10-04 'thing',
+  2026-10-14 f13).
+
+Not covered here (needs the physical host): the podman-krun side
+of the D8 head-to-head timing (no podman in this sandbox; the
+krun one-shot true recorded at ~1.7–2.5 s warm, microvm-qemu at
+~5.2–6.0 s warm, both nested-KVM-inflated), §2.2 nested podman
+(no podman image), and a bare-metal f13 re-run of the timings.
