@@ -88,14 +88,16 @@ so the OCI wrapper uses `losetup` + ext4 on the bound file instead.
 Both scratches are private, per-run and disposable, not persistent Nix
 caches; new paths must be obtained again in a later run.
 
-Provisioning is not uniform. The direct tools ALWAYS include Nix, but
-`default.nix` (around line 482) pins `krunScratchSize` only when
-`cfg.podman.enable && cfg.krun.nix.enable`. A direct-only or QEMU-only
-opt-in can lack scratch even with guest Nix enabled. Without scratch,
-direct init provides no managed writable-Nix overlay or tmpfs fallback.
-The separate OCI-image guest-Nix wrapper DOES have a tmpfs fallback;
-its RAM cost must not be attributed to direct init. Podman uses its
-image-owned store, not the whole host store.
+Provisioning is not uniform. The direct tools ALWAYS include Nix;
+the scratch size flows from `krun.nix.scratchSize` through the
+`scratch-size` config key on `krun.nix.enable` alone (bd
+myconfig-9svh, fixing the old `podman.enable && krun.nix.enable`
+env-pin gate that left a direct-only opt-in without scratch).
+Without scratch, direct init provides no managed writable-Nix
+overlay or tmpfs fallback. The separate OCI-image guest-Nix wrapper
+DOES have a tmpfs fallback; its RAM cost must not be attributed to
+direct init. Podman uses its image-owned store, not the whole host
+store.
 
 ### Other behavior to account for
 

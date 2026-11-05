@@ -203,10 +203,12 @@ what the **guest** sees, not the outer VM bubblewrap runtime view,
 which still includes the whole host store. It does not change Podman's
 image-owned store into a host-store bind.
 
-Current module-wiring gap: `krunScratchSize` is pinned only when
-`podman.enable && krun.nix.enable`. A direct-only/QEMU-only host can
-enable guest Nix yet receive no scratch; Nix binary availability does
-not imply a managed writable store. Complete baked-store live
+Fixed module-wiring gap (bd myconfig-9svh): the scratch size used
+to be pinned only when `podman.enable && krun.nix.enable`; it now
+flows from `krun.nix.scratchSize` through `config.scratchSize` on
+`krun.nix.enable` alone, so a direct-only/QEMU-only host that enables
+guest Nix receives the scratch disk. Nix binary availability does not
+imply a managed writable store. Complete baked-store live
 acceptance is still unrecorded; see the [current guide](./backend-comparison.md).
 
 ## 10. Nested containers

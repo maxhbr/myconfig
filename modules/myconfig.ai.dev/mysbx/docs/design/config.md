@@ -1630,11 +1630,12 @@ scratch, direct guest init provides no managed writable setup or RAM
 fallback. The separate OCI-image guest-Nix wrapper has its own tmpfs
 fallback; that is not direct VM behavior.
 
-The current module supplies `MYSBX_KRUN_SCRATCH_SIZE` only under
-`podman.enable && krun.nix.enable` (`../../default.nix`). Thus a
-direct-only or QEMU-only host can opt into guest Nix without receiving
-the scratch pin. Scratch is per-run disposable storage, not a
-persistent store cache. See the
+The module flows `krun.nix.scratchSize` into `config.scratchSize`
+(`scratch-size`, D23) whenever `krun.nix.enable` — every arm that
+can attach a scratch disk gets one, direct-only and QEMU-only hosts
+included (bd myconfig-9svh fixed the old `podman.enable &&
+krun.nix.enable` env-pin gate). Scratch is per-run disposable
+storage, not a persistent store cache. See the
 [store/scratch matrix](../backend-comparison.md#direct-vm-store-and-writable-nix-choices).
 
 The narrowing describes the guest view, not an escaped VMM's view:

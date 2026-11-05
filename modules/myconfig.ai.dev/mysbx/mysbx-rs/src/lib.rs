@@ -3679,12 +3679,15 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // swept of dead-run debris first, never reused — but a
             // REAL virtio-blk attach (krun_add_disk2), not the
             // loop-mount of the crun-constrained podman arm. The
-            // same MYSBX_KRUN_SCRATCH_SIZE pin drives both: the
-            // host that opts into guest nix names one size. The
+            // SAME size resolution drives both — the `scratch-size`
+            // config key (the host default, seeded from
+            // `krun.nix.scratchSize` when `krun.nix.enable`, bd
+            // myconfig-9svh) or the MYSBX_KRUN_SCRATCH_SIZE
+            // override. The
             // bwrap tier binds the file at krun::SCRATCH_IMG below.
             // A --dry-run audits the flags and creates NOTHING.
-            // The scratch size (config.md D23): the wrapper's
-            // MYSBX_KRUN_SCRATCH_SIZE pin overrides the config
+            // The scratch size (config.md D23): the shell's
+            // MYSBX_KRUN_SCRATCH_SIZE override beats the config
             // layers — the same precedence as MYSBX_PODMAN_MEMORY
             // over `memory` — so a host pins the ceiling the layers
             // may not lift, and the user config's `scratch-size` is

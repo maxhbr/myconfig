@@ -57,10 +57,11 @@ The original exploration rested on three pieces of the design:
   db when available) and overlays `/nix/store`: lower = the selected
   store, upper = private scratch.
   The direct tool environment ALWAYS includes the Nix binary;
-  `krun.nix.enable` is not its availability switch. The module pins
-  `krunScratchSize` only under `cfg.podman.enable && cfg.krun.nix.enable`
-  (`../../default.nix`, around line 482). Direct-only or QEMU-only
-  opt-ins can therefore lack scratch even with guest Nix enabled.
+  `krun.nix.enable` is not its availability switch. The scratch
+  size flows from `krun.nix.scratchSize` through `config.scratchSize`
+  (`scratch-size`, D23) whenever `krun.nix.enable` — the old env-pin
+  gate on `podman.enable && krun.nix.enable` left direct-only or
+  QEMU-only opt-ins without scratch and is gone (bd myconfig-9svh).
   Without scratch, direct init provides no managed writable-Nix
   overlay or tmpfs fallback. The separate OCI-image wrapper
   (`../../nix/krun-guest-nix.nix`, bd myconfig-0pi) DOES have that
@@ -309,7 +310,9 @@ backend, effective `store`, disk pins, networking and scratch presence:
    the normal shares AND both disks to check the static IRQ budget.
    Also boot without scratch and confirm no managed writable-Nix
    setup appears. Do not assume `krun.nix.enable` supplied the disk:
-   check the current `podman.enable && krun.nix.enable` pin gate.
+   the size flows from `krun.nix.scratchSize` through
+   `config.scratchSize` (bd myconfig-9svh; the old
+   `podman.enable && krun.nix.enable` env-pin gate is gone).
 2. With scratch and networking, check the db copy from the baked
    image, no host reconciliation, `nix path-info --all`, substitution
    of a path absent from the image into the upper, and verification

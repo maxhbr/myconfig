@@ -335,6 +335,19 @@ let
         myconfig.ai.dev.mysbx.krun.nix.scratchSize = "100g";
       }
     ];
+    # bd myconfig-9svh: the scratch default must hold on a
+    # DIRECT-krun host too — the explicit twin of `scratchDefault`
+    # with `krun.enable` on and `podman.enable` forced OFF, so a
+    # reintroduced podman gate in the default fails here even if a
+    # default flip makes it pass `scratchDefault`'s modules.
+    scratchDirectOnly = generated [
+      {
+        myconfig.ai.dev.mysbx.krun.enable = true;
+        myconfig.ai.dev.mysbx.krun.nix.enable = true;
+        myconfig.ai.dev.mysbx.podman.enable = lib.mkForce false;
+        myconfig.ai.dev.mysbx.krun.nix.scratchSize = "100g";
+      }
+    ];
     # The nested-virt key (docs/design/config.md D27): `null` (the
     # default) leaves the decision to the sidecar, so the generated
     # layer carries no key; an explicit host-wide value reaches the
@@ -654,6 +667,7 @@ pkgs.runCommand "mysbx-generated-config-test"
       allowlist
       limits
       scratchDefault
+      scratchDirectOnly
       nestedVirtOn
       nestedVirtOff
       sandboxToolsEnv
@@ -798,6 +812,8 @@ pkgs.runCommand "mysbx-generated-config-test"
       || fail "the scratchSize seed is missing" "$limits"
     grep -q '^scratch-size = "100g"$' "$scratchDefault" \
       || fail "krun.nix.scratchSize did not default config.scratchSize" "$scratchDefault"
+    grep -q '^scratch-size = "100g"$' "$scratchDirectOnly" \
+      || fail "the direct-only krun host (podman off) lost its scratch-size default" "$scratchDirectOnly"
     if grep -qE '^(memory|cpus|pids-limit|scratch-size) ' "$nonoBackend"; then
       fail "an unset limit option leaked a key" "$nonoBackend"
     fi

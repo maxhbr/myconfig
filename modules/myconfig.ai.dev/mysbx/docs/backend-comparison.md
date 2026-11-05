@@ -165,12 +165,16 @@ Both direct backends use the same guest initialization. The Nix binary
 is always present in their tool environment; `krun.nix.enable` concerns
 writable-Nix provisioning, not binary availability.
 
-There is a module-wiring gap: `krunScratchSize` is pinned only when both
-`podman.enable` and `krun.nix.enable` are true. Direct-only or QEMU-only
-configurations can therefore enable guest Nix without receiving scratch.
-The direct guest init has no managed RAM fallback without that disk.
-The separate Podman-image guest-Nix wrapper does have a tmpfs fallback;
-do not transfer that promise to the direct init.
+Scratch rides the `scratch-size` config key (bd myconfig-9svh,
+fixed): the host default flows from `krun.nix.scratchSize` through
+`config.scratchSize` into the generated user config whenever
+`krun.nix.enable` — on every arm that can attach one, podman or not.
+Before the fix the env pin was gated on `podman.enable &&
+krun.nix.enable`, so a direct-only or QEMU-only host could enable
+guest Nix without receiving scratch. The direct guest init has no
+managed RAM fallback without that disk. The separate Podman-image
+guest-Nix wrapper does have a tmpfs fallback; do not transfer that
+promise to the direct init.
 
 Baked-store contents are the wrapper's tool closure plus configured
 extra roots. Arbitrary host-built executable paths may be missing.
