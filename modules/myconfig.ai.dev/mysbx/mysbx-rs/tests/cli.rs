@@ -14734,7 +14734,10 @@ fn once_worktrees_live_in_the_temp_root_and_leave_no_stale_entries() {
         return;
     };
     let script = format!(
-        "#!{}\nset -e\n{} worktree add {sibling}/fix-1 -b fix-1\ncd {sibling}/fix-1\necho work > w.txt\n{} add w.txt\n{} commit -m worktree-work\n",
+        // A GROUPED spelling (`<sibling>/team/fix-1`) proves the
+        // guard's discovery walks nested directories, not just the
+        // sibling's immediate children.
+        "#!{}\nset -e\n{} worktree add {sibling}/team/fix-1 -b fix-1\ncd {sibling}/team/fix-1\necho work > w.txt\n{} add w.txt\n{} commit -m worktree-work\n",
         sh.display(),
         git.display(),
         git.display(),

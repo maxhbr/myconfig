@@ -290,34 +290,57 @@ pub fn teardown(root: &TempRoot, repo: &Repo) -> bool {
     keep
 }
 
-/// The linked worktrees under `<dir>`: every entry with a `.git`
-/// FILE (a linked worktree's pointer; a directory of that name is a
-/// plain repository someone put there, a missing one is debris —
-/// both are removed with the root without a guard: neither carries
-/// uncommitted worktree state git could still commit).
+/// The linked worktrees under `<dir>` — at EVERY depth: a
+/// workmux-style layout groups them (`<repo>__worktrees/<team>/<fix>`,
+/// nested by topic), and `git worktree add` takes any path, so no
+/// depth is more correct than another. The walk is cheap (the temp
+/// root dies with the run, nobody else writes it) and it must not
+/// MISS one: a missed worktree's uncommitted changes are deleted
+/// with the root. An entry with a `.git` FILE is a linked worktree's
+/// pointer; a `.git` DIRECTORY is a plain repository someone put
+/// there, a missing one is debris — both are removed with the root
+/// without a guard: neither carries uncommitted WORKTREE state git
+/// could still commit.
 fn read_worktree_dirs(dir: &Path) -> Option<Vec<PathBuf>> {
     let mut out = Vec::new();
-    for entry in std::fs::read_dir(dir).ok()? {
-        let Ok(entry) = entry else { continue };
-        let path = entry.path();
-        if path.join(".git").is_file() {
-            out.push(path);
-        }
-    }
+    walk_worktree_dirs(dir, &mut out);
     out.sort();
     Some(out)
 }
 
+fn walk_worktree_dirs(dir: &Path, out: &mut Vec<PathBuf>) {
+    for entry in std::fs::read_dir(dir).ok().into_iter().flatten() {
+        let Ok(entry) = entry else { continue };
+        let path = entry.path();
+        let is_dir = path.is_dir();
+        if path.join(".git").is_file() {
+            out.push(path.clone());
+        }
+        // A linked worktree can hold nested ones in its own tree
+        // (a repo checked out inside a worktree — git does not
+        // care), and the plain grouping directories between them
+        // are walked either way.
+        if is_dir {
+            walk_worktree_dirs(&path, out);
+        }
+    }
+}
+
 /// Whether a worktree has uncommitted changes — `git status
 /// --porcelain` with any output counts (the handoff verbs' own
-/// probe, `handoff::host_tree_dirty`). Fails CLOSED: a `git` that
+/// probe, `handoff::host_tree_dirty`) — with `--untracked-files=all`
+/// FORCED on: this probe is a DELETION guard, and a repo (or the
+/// operator's global config) with `status.showUntrackedFiles = no`
+/// would otherwise make porcelain print nothing for a worktree
+/// whose only work is new files — exactly the work that exists
+/// nowhere else and would be deleted. Fails CLOSED: a `git` that
 /// cannot run counts as dirty — the root must not be removed over
 /// work whose state cannot be inspected.
 fn worktree_dirty(worktree: &Path) -> bool {
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(worktree)
-        .args(["status", "--porcelain"])
+        .args(["--untracked-files=all", "status", "--porcelain"])
         .stderr(std::process::Stdio::null())
         .output();
     match out {
@@ -449,5 +472,61 @@ mod tests {
         };
         assert!(teardown(&temp, &repo), "a dirty worktree keeps the root");
         assert!(temp.root.exists());
+    }
+
+    #[test]
+    fn read_worktree_dirs_finds_nested_worktrees() {
+        // A workmux-style grouped layout: `<worktrees>/<team>/<fix>`
+        // is a linked worktree two levels down, and a `.git`
+        // DIRECTORY (a plain repo someone put there) is not one —
+        // the guard must see the first and not the second.
+        let base = tmpdir("nested");
+        let deep = base.join("worktrees/team/fix");
+        std::fs::create_dir_all(&deep).unwrap();
+        std::fs::write(deep.join(".git"), "gitdir: somewhere\n").unwrap();
+        let plain = base.join("worktrees/plain-repo");
+        std::fs::create_dir_all(plain.join(".git")).unwrap();
+        let found = read_worktree_dirs(&base.join("worktrees")).unwrap();
+        assert_eq!(found, vec![deep], "only the linked worktree is found");
+    }
+
+    #[test]
+    fn worktree_dirty_forces_untracked_files_all_over_the_config() {
+        // A repo (or a global config) with `status.showUntrackedFiles
+        // = no` must NOT hide a worktree whose only work is new
+        // files — the guard would delete them. `--untracked-files=all`
+        // on the command line overrides the config.
+        let dir = tmpdir("untracked");
+        let dirty = dir.join("dirty");
+        std::fs::create_dir_all(&dirty).unwrap();
+        let git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(&dirty)
+                .args(args)
+                .env("GIT_CONFIG_GLOBAL", "/dev/null")
+                .env("GIT_CONFIG_SYSTEM", "/dev/null")
+                .env("GIT_AUTHOR_NAME", "mysbx-tests")
+                .env("GIT_AUTHOR_EMAIL", "mysbx-tests@invalid")
+                .env("GIT_COMMITTER_NAME", "mysbx-tests")
+                .env("GIT_COMMITTER_EMAIL", "mysbx-tests@invalid")
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
+        };
+        if !git(&["init", "-b", "main"]) {
+            eprintln!("skipping: no git on PATH");
+            return;
+        }
+        if !git(&["config", "status.showUntrackedFiles", "no"]) {
+            return;
+        }
+        std::fs::write(dirty.join("uncommitted"), "work").unwrap();
+        // The probe sees the untracked file despite the config.
+        assert!(
+            worktree_dirty(&dirty),
+            "an untracked-only worktree counts as dirty despite status.showUntrackedFiles=no"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
