@@ -321,3 +321,56 @@ the baked erofs store disk came from the wrapper pin
   `/mysbx-home/.config/hunk/config.toml` are home-manager-files
   SYMLINKS inside the baked guest — the programs.beads and
   programs.hunk modules still bind `~/.config/…` raw.
+## 2026-11-05, nested-KVM agent sandbox — the flake-source symlink poisoning: repro attempts + direct-backend instrumentation live (bd myconfig-yiw)
+
+Host context: same nested-KVM microvm-qemu sandbox as the 85i/dqq0
+entries above, wrapper rebuilt from `test-f13` at main ac7fbc06b0,
+sidecar `backend = "krun"`, `store = "host"`, `scratch-size = "8g"`,
+`git-dirs = [/home/mhuber/myconfig/myconfig/.git]`, guest nix
+2.34.9. Seven fresh direct-krun VMs, ~35 poisoning-shaped fetches.
+
+- repro attempts — PASS (the honest negative): every deterministic
+  shape of the 2026-10-14 poisoning registered a REAL dir, none a
+  symlink: the `./get_input.sh nixpkgs` getFlake shape on a clean
+  tree (3x, incl. as the FIRST nix call after boot); dirty-tree
+  evals (untracked file, modified tracked file, STAGED tracked
+  file); the verbatim 08:42 timeline (mid-session commit, then the
+  silent `get_input.sh 2>/dev/null` within a minute, then the
+  displayed retry ~4 s later); `?rev=`-pinned and `?dirty=true`
+  evals; `nix flake metadata` via BOTH the `/home/.../myconfig`
+  sandbox spelling and the `/tmp/mysbx-shares/stage-rw/workspace`
+  share spelling; rapid back-to-back evals of different inputs.
+  Registrations observed in the scratch db all carried the rev's
+  true nar hash (`blv892iv…` = the myconfig source at the probe
+  HEAD, `p7yx739q…` = the locked nixpkgs).
+- the 2026-10-31 instrumentation gap — PASS (closed for live
+  observation): the store watcher (`krun-store-watch.c`, baked into
+  the store disk at `/nix/store/hpf9mm7idv…-mysbx-krun-store-watch-…`)
+  runs fine against the DIRECT backend's raw `toolsEnv` nix when
+  armed from the payload itself (probe shape: inline `nixlog()`
+  argv-logger + `store-watch /nix/store $log $lock &`): the log
+  captured each `argv nix eval …` line and a typed `DIR <hash>
+  -source` line per new registration (flake-parts dep `pyb04…`,
+  pyproject-nix dep `b77a7…`, the myconfig source `blv892…`). A
+  captured SYMLINK creation would name its call the same way.
+- the baked guest-nix wrappers on the DIRECT backend — REFUSED, by
+  layout (a finding, not a regression): prepending
+  `/nix/store/i7hjy…-mysbx-krun-guest-nix/bin` to PATH makes every
+  call die `creating directory "/run/mysbx-nix/state/profiles":
+  Read-only file system` — the wrapper tree is the PODMAN image's
+  layout, its scratch `/run/mysbx-nix` has no writable root on the
+  direct guest (`/run` is on the ro root; the direct backend's
+  scratch lives at `/mysbx-nix`, placed by its own init). Arming
+  the direct backend needs either an init-side bind of a writable
+  wrapper scratch or the probe-style inline shim; the wrappers
+  stay podman-only.
+- the watcher log — the direct guest's `/tmp` is a per-VM tmpfs:
+  the log dies with the VM. Live-observation sessions must copy it
+  into the workspace before the VM exits.
+
+Not reproduced: the poisoning itself. The leading hypotheses stay
+(a) a concurrent-nix race in the overlay store (the dead session's
+harness had background nix activity near 08:48) and (b) virtiofs/
+overlay dentry nondeterminism in the git workdir walk. The bead
+stays OPEN on the instrument-first strategy; deterministic repro
+shapes are exhausted.
