@@ -14793,3 +14793,169 @@ fn once_worktrees_live_in_the_temp_root_and_leave_no_stale_entries() {
         "no stale entry points at the removed temp worktree: {list}"
     );
 }
+
+#[test]
+fn once_bare_form_runs_without_a_sidecar_and_leaves_nothing_behind() {
+    // The primary acceptance of cli.md D22: the BARE form — the
+    // form D13 refuses for a not-inited repo — runs in once-mode
+    // for a repo with no sidecar at all, and the host keeps no
+    // trace: no sidecar config, no worktrees sibling, no temp root.
+    if !is_bwrap_available() {
+        eprintln!("skipping: bwrap not available in this environment");
+        return;
+    }
+    if !is_ssh_keygen_available() {
+        eprintln!("skipping: no usable ssh-keygen in this environment");
+        return;
+    }
+    // The bare form execs the payload shell with no arguments: a
+    // `true` binary exits 0 at once — the same trick the plain
+    // bare-form tests use.
+    let true_path = std::env::var_os("PATH").and_then(|path| {
+        std::env::split_paths(&path).find_map(|dir| {
+            if !(dir.starts_with("/nix/store") || dir.starts_with("/usr/bin")) {
+                return None;
+            }
+            let candidate = dir.join("true");
+            candidate.is_file().then_some(candidate)
+        })
+    });
+    let Some(true_path) = true_path else {
+        eprintln!("skipping: no sandbox-reachable true");
+        return;
+    };
+    let (inv, _repo, sidecar) = fixture_uninited("once-bare", &[]);
+    let out = spawn_once(&inv, &[])
+        .env("MYSBX_SHELL", &true_path)
+        .env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .output()
+        .expect("failed to spawn mysbx-once");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "the bare once run exits with the payload's code; stdout: {} stderr: {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let base = inv.home.join("runtime/mysbx-once");
+    assert!(
+        !base.exists()
+            || std::fs::read_dir(&base)
+                .map(|d| d.count() == 0)
+                .unwrap_or(false),
+        "the temp root was removed after the bare run"
+    );
+    assert!(
+        !sidecar.join("config.toml").exists(),
+        "the host sidecar was not created"
+    );
+}
+
+#[test]
+fn once_keeps_the_temp_root_over_a_dirty_worktree() {
+    // The data-loss guard, live (cli.md D22): a payload that leaves
+    // a linked worktree DIRTY keeps the whole temp root — named on
+    // stdout (`## mysbx-once: kept <path>: uncommitted changes in
+    // <worktree>`) — instead of deleting uncommitted work. The exit
+    // code stays the payload's own.
+    if !is_bwrap_available() {
+        eprintln!("skipping: bwrap not available in this environment");
+        return;
+    }
+    if !is_ssh_keygen_available() {
+        eprintln!("skipping: no usable ssh-keygen in this environment");
+        return;
+    }
+    let Some(git) = std::env::var_os("PATH").and_then(|path| {
+        std::env::split_paths(&path).find_map(|dir| {
+            let candidate = dir.join("git");
+            if !candidate.is_file() {
+                return None;
+            }
+            let real = std::fs::canonicalize(&candidate).ok()?;
+            (real.starts_with("/nix/store") || real.starts_with("/usr/bin")).then_some(real)
+        })
+    }) else {
+        eprintln!("skipping: no sandbox-reachable git");
+        return;
+    };
+    let Some(sh) = sandbox_bash() else {
+        eprintln!("skipping: no sandbox-reachable bash");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture_uninited("once-dirty", &[]);
+    let Some(repo) = git_repo(inv.cwd.parent().unwrap(), "repo") else {
+        return;
+    };
+    assert!(git_in(&repo, &["config", "user.name", "mysbx-tests"]));
+    assert!(git_in(
+        &repo,
+        &["config", "user.email", "mysbx-tests@invalid"]
+    ));
+    let repo_name = repo.file_name().unwrap().to_string_lossy().into_owned();
+    let sibling = repo
+        .parent()
+        .unwrap()
+        .join(format!("{repo_name}__worktrees"));
+    // Payload: a linked worktree, one commit (to have a clean base),
+    // then an UNCOMMITTED file — the worktree is dirty at exit.
+    let script = format!(
+        "#!{}\nset -e\n{} worktree add {sibling}/fix-1 -b fix-1\ncd {sibling}/fix-1\necho work > w.txt\n{} add w.txt\n{} commit -m base\necho dirty > uncommitted.txt\n",
+        sh.display(),
+        git.display(),
+        git.display(),
+        git.display(),
+        sibling = sibling.display()
+    );
+    let script_path = inv.cwd.join("once-dirty-payload.sh");
+    std::fs::write(&script_path, script).unwrap();
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let out = spawn_once(&inv, &["run", "--verbose", "--"])
+        .arg(&script_path)
+        .env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .output()
+        .expect("failed to spawn mysbx-once");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        out.status.success(),
+        "the payload ran clean; stdout: {stdout} stderr: {stderr}"
+    );
+    // The guard fired: the root is KEPT and named on stdout.
+    assert!(
+        stdout.contains("## mysbx-once: kept "),
+        "the kept message names the temp root: {stdout}"
+    );
+    assert!(
+        stdout.contains("uncommitted changes"),
+        "the kept message says why: {stdout}"
+    );
+    // The temp root still exists, with the dirty worktree inside.
+    let base = inv.home.join("runtime/mysbx-once");
+    let kept: Vec<_> = std::fs::read_dir(&base)
+        .expect("the base dir exists")
+        .filter_map(|e| e.ok())
+        .collect();
+    assert_eq!(kept.len(), 1, "exactly one kept root: {stdout}");
+    let kept_root = kept[0].path();
+    assert!(
+        kept_root.join("worktrees/fix-1/uncommitted.txt").is_file(),
+        "the dirty worktree still exists under the kept root: {}",
+        kept_root.display()
+    );
+    // And the host is still untouched.
+    assert!(!sibling.exists(), "no host worktrees sibling");
+    let host_sidecar = inv
+        .cwd
+        .parent()
+        .unwrap()
+        .join(format!("{}.mysbx", repo_name));
+    assert!(
+        !host_sidecar.join("config.toml").exists(),
+        "no host sidecar was created"
+    );
+    let _ = std::fs::remove_dir_all(&base);
+}
