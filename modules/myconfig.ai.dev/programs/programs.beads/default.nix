@@ -83,8 +83,9 @@ let
   # materialises the skill; it writes `.agents/skills/beads/` into its
   # working directory, so run it in a throwaway git repo and copy the
   # result out. `--non-interactive`/TTY-less is irrelevant here — setup does
-  # not prompt — but `$HOME` is pinned so the build cannot read or write
-  # the builder user's real `~/.claude`/`~/.codex`.
+  # not prompt — but `$HOME` is exported from `mktemp -d` inside the
+  # builder so the build never touches the builder user's real
+  # `~/.claude`/`~/.codex` and does not depend on the sandbox-only `/build`.
   beadsSkillSrc =
     pkgs.runCommand "beads-skill"
       {
@@ -92,10 +93,10 @@ let
           package
           pkgs.gitMinimal
         ];
-        HOME = "/build/home";
       }
       ''
-        mkdir -p $HOME $out
+        export HOME="$(mktemp -d)"
+        mkdir -p $out
         cd "$(mktemp -d)"
         git init -q .
         bd setup codex >/dev/null
