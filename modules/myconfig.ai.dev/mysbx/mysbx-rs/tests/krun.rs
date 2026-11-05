@@ -13,7 +13,8 @@
 use mysbx::bwrap::{Payload, Workspace};
 use mysbx::config::{Mode, Mount, Multiplexer};
 use mysbx::krun::{
-    backing_paths, krun_argv, Params, DEFAULT_CPUS, DEFAULT_RAM_MIB, GUEST_SHARE_ROOT, SCRATCH_IMG,
+    backing_paths, git_dir_tag, krun_argv, Params, DEFAULT_CPUS, DEFAULT_RAM_MIB, GUEST_SHARE_ROOT,
+    SCRATCH_IMG,
 };
 use mysbx::merge::Merged;
 use mysbx::repo::Repo;
@@ -254,7 +255,7 @@ fn the_worktrees_sibling_is_an_implicit_rw_share_of_a_live_run() {
     assert_eq!(argv[wt - 1], "--rw-share");
     assert!(pos("stage-rw:workspace@/home/synth/repo rw") < wt);
     assert!(wt < pos("stage-rw:state--cache@/mysbx-home/.cache rw"));
-    let binds = mysbx::krun::stage_binds(&cfg, &repo, &p);
+    let binds = mysbx::krun::stage_binds(&cfg, &repo, &p).expect("the stage binds build");
     assert!(binds.contains(&(
         "/home/synth/repo__worktrees".to_owned(),
         false,
@@ -291,11 +292,13 @@ fn the_worktrees_sibling_is_an_implicit_rw_share_of_a_live_run() {
     let wt = pos_of(&argv, "stage-rw:worktrees@/home/synth/repo__worktrees rw");
     assert_eq!(argv[wt - 1], "--rw-share");
     assert!(pos_of(&argv, "stage-rw:workspace@/home/synth/repo rw") < wt);
-    assert!(mysbx::krun::stage_binds(&cfg, &repo, &clone).contains(&(
-        "/synth/repo.mysbx/clones/s1__worktrees".to_owned(),
-        false,
-        "worktrees".to_owned()
-    )));
+    assert!(mysbx::krun::stage_binds(&cfg, &repo, &clone)
+        .expect("the stage binds build")
+        .contains(&(
+            "/synth/repo.mysbx/clones/s1__worktrees".to_owned(),
+            false,
+            "worktrees".to_owned()
+        )));
 
     // Without a sibling there is nothing to share.
     let cfg = base(true);
@@ -303,8 +306,135 @@ fn the_worktrees_sibling_is_an_implicit_rw_share_of_a_live_run() {
         .iter()
         .any(|a| a.contains("worktrees")));
     assert!(!mysbx::krun::stage_binds(&cfg, &synth_repo(), &p)
+        .expect("the stage binds build")
         .iter()
         .any(|(_, _, slot)| slot == "worktrees"));
+}
+
+#[test]
+fn approved_git_dirs_are_implicit_rw_shares_of_a_live_run() {
+    // bd myconfig-2ww: a repo that is itself a linked worktree has a
+    // `.git` FILE pointing at metadata outside the root; the bind
+    // backends bind those directories rw, the direct VM backends
+    // share them — rw, at their host paths, right after the
+    // workspace — so the pointer resolves inside the guest.
+    let mut repo = synth_repo();
+    repo.git_dirs = vec![PathBuf::from("/home/synth/repo/.git/worktrees/wt")];
+    let mut cfg = base(true);
+    cfg.git_dirs.push("/home/synth/repo/.git".into());
+    let p = params("/synth/rootfs", "/synth/shell", None, Workspace::Live);
+    let argv = run(&cfg, &repo, &Payload::Shell, &p);
+    let gitdir = "/home/synth/repo/.git/worktrees/wt";
+    let slot = git_dir_tag(gitdir);
+    let share = format!("stage-rw:{slot}@{gitdir} rw");
+    let gd = argv
+        .iter()
+        .position(|a| a == &share)
+        .unwrap_or_else(|| panic!("{share} missing: {argv:?}"));
+    assert_eq!(argv[gd - 1], "--rw-share");
+    assert!(
+        argv.iter()
+            .position(|a| a == "stage-rw:workspace@/home/synth/repo rw")
+            .unwrap()
+            < gd
+    );
+    // The git dirs come before the worktrees sibling, like bwrap's
+    // bind order (backends.md D3).
+    repo.worktrees = Some(PathBuf::from("/home/synth/repo__worktrees"));
+    let argv = run(&cfg, &repo, &Payload::Shell, &p);
+    let gd = argv
+        .iter()
+        .position(|a| a == &share)
+        .unwrap_or_else(|| panic!("{share} missing"));
+    let wt = argv
+        .iter()
+        .position(|a| a == "stage-rw:worktrees@/home/synth/repo__worktrees rw")
+        .unwrap();
+    assert!(gd < wt);
+    let binds = mysbx::krun::stage_binds(&cfg, &repo, &p).expect("the binds build");
+    assert!(binds.contains(&(gitdir.to_owned(), false, slot.clone(),)));
+    // The backing map (the trust files' second spelling) carries it.
+    let backing = backing_paths(&cfg, &repo, &p).expect("the backing map builds");
+    assert!(backing.contains(&(
+        gitdir.to_owned(),
+        format!("{GUEST_SHARE_ROOT}/stage-rw/{slot}")
+    )));
+
+    // Without an approval the run is REFUSED — a repo-writable
+    // pointer is not a mount specification on this backend either.
+    // Both consumption sites refuse: the share list (the argv a
+    // dry run audits) and the outer stage binds.
+    let mut unapproved = base(true);
+    unapproved.git_dirs.clear();
+    let err = krun_argv(&unapproved, &repo, &Payload::Shell, &BTreeMap::new(), &p).unwrap_err();
+    assert!(err.to_string().contains("is not approved"), "{err}");
+    assert!(mysbx::krun::stage_binds(&unapproved, &repo, &p)
+        .unwrap_err()
+        .to_string()
+        .contains("is not approved"));
+
+    // A protected target is refused with the same text as on bwrap.
+    let mut protected = synth_repo();
+    protected.git_dirs = vec![PathBuf::from("/tmp/evildoer")];
+    let err = krun_argv(&cfg, &protected, &Payload::Shell, &BTreeMap::new(), &p).unwrap_err();
+    assert!(err.to_string().contains("protected sandbox path"), "{err}");
+
+    // A gitdir under a first component the guest cannot place a
+    // share under (no baked mountpoint, `SHARE_ROOTS`) is a
+    // REFUSAL — the one honest krun-vs-bwrap divergence: bwrap
+    // binds the directory, a VM guest cannot link it (the init
+    // can only place shares below the baked roots).
+    let mut unplaceable = synth_repo();
+    unplaceable.git_dirs = vec![PathBuf::from("/var/lib/some-gitdir")];
+    let mut placeable_cfg = base(true);
+    placeable_cfg.git_dirs.push("/var/lib/some-gitdir".into());
+    let err = krun_argv(
+        &placeable_cfg,
+        &unplaceable,
+        &Payload::Shell,
+        &BTreeMap::new(),
+        &p,
+    )
+    .unwrap_err();
+    assert!(
+        matches!(&err, mysbx::krun::Error::UnknownShareRoot { root, .. } if root == "/var"),
+        "{err}"
+    );
+
+    // A mount covering the gitdir is refused like every implicit share.
+    let mut hiding = base(true);
+    hiding.git_dirs.push("/home/synth/repo/.git".into());
+    hiding.mounts.push(make_mount(
+        "/synth/data",
+        Some("/home/synth/repo/.git"),
+        Mode::Ro,
+    ));
+    let err = krun_argv(&hiding, &repo, &Payload::Shell, &BTreeMap::new(), &p).unwrap_err();
+    assert!(
+        matches!(&err, mysbx::krun::Error::HiddenMount { hidden, .. }
+            if hidden == "/home/synth/repo/.git/worktrees/wt"),
+        "{err}"
+    );
+
+    // A CLONE run shares NONE: the clone carries its own `.git`
+    // directory (workspace.md D3), there is nothing to approve.
+    let clone = params(
+        "/synth/rootfs",
+        "/synth/shell",
+        None,
+        Workspace::Clone {
+            clone: Path::new("/synth/repo.mysbx/clones/s1"),
+            worktrees: Path::new("/synth/repo.mysbx/clones/s1__worktrees"),
+        },
+    );
+    // Even WITHOUT an approval: the pointer never applies.
+    let unapproved_cfg = base(true);
+    let argv = run(&unapproved_cfg, &repo, &Payload::Shell, &clone);
+    assert!(!argv.iter().any(|a| a.starts_with("stage-rw:g-")));
+    assert!(!mysbx::krun::stage_binds(&unapproved_cfg, &repo, &clone)
+        .expect("the binds build")
+        .iter()
+        .any(|(_, _, slot)| slot.starts_with("g-")));
 }
 
 #[test]
@@ -522,6 +652,7 @@ fn the_nix_var_share_rides_only_with_network_and_scratch() {
     let p = params("/synth/rootfs", "/synth/shell", None, Workspace::Live);
     assert!(
         !mysbx::krun::stage_binds(&cfg, &synth_repo(), &p)
+            .expect("the stage binds build")
             .iter()
             .any(|(_, _, slot)| slot == "nix-var"),
         "no scratch: no nix-var share"
@@ -530,7 +661,7 @@ fn the_nix_var_share_rides_only_with_network_and_scratch() {
         scratch: Some("/synth/scratch.img"),
         ..params("/synth/rootfs", "/synth/shell", None, Workspace::Live)
     };
-    let binds = mysbx::krun::stage_binds(&cfg, &synth_repo(), &p);
+    let binds = mysbx::krun::stage_binds(&cfg, &synth_repo(), &p).expect("the stage binds build");
     let (src, ro, _) = binds
         .iter()
         .find(|(_, _, slot)| slot == "nix-var")
@@ -613,7 +744,7 @@ fn a_store_disk_param_replaces_the_host_store_share() {
         .expect("the manifest env announcement");
     assert!(argv[i + 1..j].iter().all(|a| a != "--chdir"));
     // The staging binds drop the store slot with the share.
-    let binds = mysbx::krun::stage_binds(&cfg, &synth_repo(), &p);
+    let binds = mysbx::krun::stage_binds(&cfg, &synth_repo(), &p).expect("the stage binds build");
     assert!(
         !binds.iter().any(|(_, _, slot)| slot == "store"),
         "no host store slot in the staging binds"
@@ -636,6 +767,7 @@ fn a_store_disk_param_replaces_the_host_store_share() {
         &synth_repo(),
         &params("/synth/rootfs", "/synth/shell", None, Workspace::Live)
     )
+    .expect("the stage binds build")
     .iter()
     .any(|(_, _, slot)| slot == "store"));
 }
@@ -662,6 +794,7 @@ fn a_baked_run_needs_no_host_nix_db_ridealong() {
     );
     assert!(
         !mysbx::krun::stage_binds(&cfg, &synth_repo(), &p)
+            .expect("the stage binds build")
             .iter()
             .any(|(_, _, slot)| slot == "nix-var"),
         "no nix-var stage bind in a baked run"
@@ -745,7 +878,7 @@ fn clone_run_forces_configured_rw_mounts_read_only() {
         .windows(2)
         .any(|w| w[0] == "--rw-share" && w[1].starts_with("stage-rw:m-")));
     // The staging bind carries the same downgrade:
-    let binds = mysbx::krun::stage_binds(&cfg, &synth_repo(), &p);
+    let binds = mysbx::krun::stage_binds(&cfg, &synth_repo(), &p).expect("the stage binds build");
     let (bind, ro, slot) = binds
         .iter()
         .find(|(_, _, slot)| slot.starts_with("m-"))
@@ -763,7 +896,7 @@ fn clone_run_forces_configured_rw_mounts_read_only() {
     assert!(!argv
         .windows(2)
         .any(|w| w[0] == "--ro-share" && w[1].starts_with("stage-ro:m-")));
-    let binds = mysbx::krun::stage_binds(&cfg, &synth_repo(), &p);
+    let binds = mysbx::krun::stage_binds(&cfg, &synth_repo(), &p).expect("the stage binds build");
     let (_, ro, _) = binds
         .iter()
         .find(|(_, _, slot)| slot.starts_with("m-"))
@@ -1119,7 +1252,7 @@ fn git_trust_registers_two_overlay_files_and_the_env_pin() {
     );
     // But NO stage-slot bind exists (the content is in-memory, no
     // host files to stage):
-    let binds = mysbx::krun::stage_binds(&cfg, &synth_repo(), &p);
+    let binds = mysbx::krun::stage_binds(&cfg, &synth_repo(), &p).expect("the stage binds build");
     assert!(
         !binds
             .iter()

@@ -3989,7 +3989,26 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
                 argv.push(file.to_string_lossy().into_owned());
                 argv.push(krun::SCRATCH_IMG.to_owned());
             }
-            for (host_dir, read_only, slot) in krun::stage_binds(&merged, &repo, &krun_params) {
+            // The stage binds carry the approved git metadata
+            // directories too (bd myconfig-2ww): a refusal here — an
+            // unapproved or protected gitdir — aborts the run like
+            // the share-list check inside the launcher argv does,
+            // with the SAME bwrap-shaped text (krun_git_dir_error).
+            let stage_binds = match krun::stage_binds(&merged, &repo, &krun_params) {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("mysbx: {e}");
+                    // The stage tree is already created at this
+                    // point — remove it like the adjacent failure
+                    // arms of this block do (the next run's sweep
+                    // would, but a refused run leaves no debris).
+                    if let Some(dir) = &krun_stage_dir {
+                        let _ = std::fs::remove_dir_all(dir);
+                    }
+                    return EXIT_INFRASTRUCTURE;
+                }
+            };
+            for (host_dir, read_only, slot) in stage_binds {
                 let mode = if read_only { "ro" } else { "rw" };
                 let dest = format!("{}/{mode}/{slot}", krun::STAGE_ROOT);
                 argv.push((if read_only { "--ro-bind" } else { "--bind" }).into());

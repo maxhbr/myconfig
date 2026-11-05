@@ -910,7 +910,13 @@ The KrunSpec builder (dak.3) turns the merged config into exactly
 this: cpus, ram, the rootfs pin, one ro store share (dropped for a
 `store = "baked"` run, its slot exempt from the mount cover check BY
 SLOT — a positional slice would exempt the workspace), one rw
-workspace share per the merged mounts' live/clone layout, the rw
+workspace share per the merged mounts' live/clone layout, the
+approved git metadata directories rw at their host paths (live
+run, bd myconfig-2ww — the same approval/protected checks as the
+bind backends, so a repo that is itself a linked worktree has a
+resolving `.git` pointer inside the guest; a gitdir under a root the
+guest cannot place a share under is the one honest divergence: bwrap
+binds it, the VM refuses the run), the rw
 `<repo>__worktrees` sibling share (live run, sibling exists), the
 state-dirs shares, the configured mounts (implicit shares first; a
 mount covering one is refused like bwrap's `HiddenMount`), env, and
