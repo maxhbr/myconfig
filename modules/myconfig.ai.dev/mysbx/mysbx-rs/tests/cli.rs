@@ -14959,3 +14959,67 @@ fn once_keeps_the_temp_root_over_a_dirty_worktree() {
     );
     let _ = std::fs::remove_dir_all(&base);
 }
+
+#[test]
+fn once_dry_runs_of_the_other_backends_bind_the_temp_worktrees() {
+    // cli.md D22's validation clause: bwrap is live-validated, the
+    // other backends are validated by their dry-run argv — each
+    // backend's builder must carry the once shape (the temp
+    // worktrees bound at the host sibling's path), never the host
+    // sibling itself.
+    let (inv, repo, _sidecar) = fixture_uninited("once-backends", &["--dry-run"]);
+    let repo_name = repo.file_name().unwrap().to_string_lossy().into_owned();
+    let sibling = repo
+        .parent()
+        .unwrap()
+        .join(format!("{repo_name}__worktrees"))
+        .to_string_lossy()
+        .into_owned();
+    // krun is not in the list: its guest rootfs bakes no mountpoint
+    // for a repo under the test tempdir's first component (the
+    // krun backend refuses mounts below such roots by design), so a
+    // tmpdir fixture cannot reach its Once arm — the arm mirrors the
+    // clone arm the krun tests already cover.
+    for backend in ["nono", "podman-gvisor"] {
+        let mut cmd = spawn_once(&inv, &["--backend", backend, "--dry-run"]);
+        if backend == "podman-gvisor" {
+            cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest");
+        }
+        if backend == "krun" {
+            // The dry run needs only the pins' presence, the same
+            // stubs the krun argv tests use.
+            cmd.env("MYSBX_KRUN_LAUNCHER", "/usr/bin/krun-stub")
+                .env("MYSBX_KRUN_ROOTFS", "/var/lib/mysbx/rootfs-stub.img")
+                .env("MYSBX_KRUN_KERNEL", "/var/lib/mysbx/kernel-stub");
+        }
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        let (code, stdout, stderr) = (
+            out.status.code().unwrap_or(-1),
+            String::from_utf8_lossy(&out.stdout).into_owned(),
+            String::from_utf8_lossy(&out.stderr).into_owned(),
+        );
+        assert_eq!(code, 0, "{backend}: stderr: {stderr}");
+        let argv: Vec<&str> = stdout.lines().collect();
+        // The temp worktrees directory is a bind source...
+        let temp_src = argv
+            .iter()
+            .find(|a| a.contains("mysbx-once/dry-run/worktrees"))
+            .unwrap_or_else(|| panic!("{backend}: the temp worktrees are bound: {stdout}"));
+        // ...at the host sibling's path as its dest.
+        let idx = argv
+            .iter()
+            .position(|a| a == temp_src)
+            .unwrap_or_else(|| panic!("{backend}: {stdout}"));
+        // bwrap/krun spell the dest as its own argv word, podman
+        // embeds it in the `type=bind,src=...,dst=...,rw` option —
+        // both must name the host sibling's path.
+        assert!(
+            argv.iter().any(|a| a == &sibling) || stdout.contains(&format!(",dst={sibling}")),
+            "{backend}: the dest is the host sibling's path: {stdout}"
+        );
+        assert!(
+            !std::path::Path::new(&sibling).exists(),
+            "{backend}: the host sibling was not created"
+        );
+    }
+}

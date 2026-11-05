@@ -3611,13 +3611,11 @@ fn sandbox_pipeline(
                 policy_paths: &policy_paths,
                 mux_entry: podman_mux_entry.as_deref(),
                 waypipe: waypipe_params.clone(),
-                workspace: match &session {
-                    Some(s) => crate::bwrap::Workspace::Clone {
-                        clone: &s.clone,
-                        worktrees: &s.worktrees,
-                    },
-                    None => crate::bwrap::Workspace::Live,
-                },
+                // The shared workspace of the run — once-mode
+                // included (cli.md D22): the podman builders take
+                // the same Live/Clone/Once fact every backend gets,
+                // never their own recomputation of it.
+                workspace: workspace.clone(),
                 // Stdio wiring (bd myconfig-jho): the backend is exec'd
                 // with mysbx's own stdio, so the container must be
                 // attached — `--interactive` always (a one-shot
