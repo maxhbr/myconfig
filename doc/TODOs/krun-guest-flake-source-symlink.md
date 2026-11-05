@@ -127,3 +127,26 @@ input of the old snapshot serves "Stale file handle") — and the
 documented fchmodat2 re-add crash. All three are the one
 db-snapshot-vs-live-share divergence, fixed together by the
 boot-time reconcile; see bd myconfig-mxu.
+
+## Session 2026-11-05 (bd myconfig-yiw live repro session)
+
+Seven fresh direct-krun VMs, ~35 poisoning-shaped fetches, ZERO
+reproductions — every deterministic shape of the 2026-10-14
+poisoning registered a REAL dir with the rev's true nar hash
+(the get_input.sh getFlake shape, dirty/staged trees, the
+verbatim commit-then-silent-eval timeline, ?rev / ?dirty,
+metadata via both spellings, rapid sequences, first-call-after-
+boot). The 2026-10-31 instrumentation gap is closed for live
+observation: the store watcher runs fine against the direct
+backend's RAW toolsEnv nix when armed from the payload (the
+probe-6c shape — inline argv logger + `store-watch &`), capturing
+argv lines and typed DIR lines per new *-source registration.
+Findings: the baked guest-nix wrappers cannot simply be put on
+the direct backend's PATH (their /run/mysbx-nix scratch has no
+writable root there), and the watcher log dies with the per-VM
+/tmp tmpfs — copy it into the workspace before VM exit.
+Deterministic repro shapes are EXHAUSTED; the two remaining
+hypotheses are a concurrent-nix race in the overlay store and
+virtiofs/overlay dentry nondeterminism. Next: run instrumented
+agent sessions (probe-6c pattern) and read the log after the
+next mid-session poisoning.
