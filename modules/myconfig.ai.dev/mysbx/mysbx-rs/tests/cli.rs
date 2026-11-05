@@ -10703,6 +10703,68 @@ fn podman_krun_scratch_pin_binds_the_per_run_file_and_exports_the_path() {
 }
 
 #[test]
+fn podman_krun_scratch_size_is_a_config_key_not_only_a_pin() {
+    // D23: `scratch-size` in a config layer drives the same bind +
+    // env export as the wrapper pin — the pin overrides the layers,
+    // never the only way to name a size (the host's system-wide
+    // default now rides the generated user config).
+    let Some((inv, _, sidecar)) = krun_fixture("podman-krun-scratch-key", &[]) else {
+        return; // no placeable krun fixture root here
+    };
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"podman-krun\"\nscratch-size = \"16g\"\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest").env(
+        "MYSBX_KRUN_RUNTIME",
+        "/nix/store/synth-crun-libkrun/bin/crun",
+    );
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(
+        stdout
+            .lines()
+            .any(|l| l.ends_with("dst=/run/mysbx-scratch.img,rw") && l.contains("/scratch/")),
+        "the config-key run binds a scratch: {stdout}"
+    );
+    assert!(
+        stdout
+            .lines()
+            .any(|l| l == "MYSBX_KRUN_SCRATCH_IMG=/run/mysbx-scratch.img"),
+        "the config-key run exports the scratch path: {stdout}"
+    );
+}
+
+#[test]
+fn podman_krun_scratch_refuses_a_sidecar_size_below_the_floor_end_to_end() {
+    let Some((inv, _, sidecar)) = krun_fixture("podman-krun-scratch-floor", &[]) else {
+        return; // no placeable krun fixture root here
+    };
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"podman-krun\"\nscratch-size = \"1m\"\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest").env(
+        "MYSBX_KRUN_RUNTIME",
+        "/nix/store/synth-crun-libkrun/bin/crun",
+    );
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_ne!(out.status.code(), Some(0));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("scratch-size"), "{stderr}");
+}
+
+#[test]
 fn podman_krun_refused_run_leaves_the_scratch_dir_untouched() {
     // The host half runs only for a run that reaches the backend —
     // a run refused at the /dev/kvm gate (the doctor check, bd

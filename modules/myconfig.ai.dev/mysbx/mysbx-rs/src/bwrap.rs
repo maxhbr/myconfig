@@ -2266,6 +2266,7 @@ mod tests {
             connect_ports: Vec::new(),
             listen_ports: Vec::new(),
             memory: None,
+            scratch_size: None,
             cpus: None,
             pids_limit: None,
             store: None,

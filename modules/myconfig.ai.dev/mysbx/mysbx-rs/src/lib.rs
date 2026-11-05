@@ -3253,7 +3253,9 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // run's. A --dry-run audits the bind + env and creates
             // NOTHING.
             let krun_scratch_params = if backend == "podman-krun" {
-                match env_opt("MYSBX_KRUN_SCRATCH_SIZE") {
+                // The pin overrides the config layers' `scratch-size`
+                // (the same precedence as the direct arm above).
+                match env_opt("MYSBX_KRUN_SCRATCH_SIZE").or_else(|| merged.scratch_size.clone()) {
                     Some(size) => {
                         let dir = repo.sidecar.join("scratch");
                         if !preflight_only {
@@ -3681,7 +3683,15 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             // host that opts into guest nix names one size. The
             // bwrap tier binds the file at krun::SCRATCH_IMG below.
             // A --dry-run audits the flags and creates NOTHING.
-            let krun_scratch_params_direct = match env_opt("MYSBX_KRUN_SCRATCH_SIZE") {
+            // The scratch size (config.md D23): the wrapper's
+            // MYSBX_KRUN_SCRATCH_SIZE pin overrides the config
+            // layers — the same precedence as MYSBX_PODMAN_MEMORY
+            // over `memory` — so a host pins the ceiling the layers
+            // may not lift, and the user config's `scratch-size` is
+            // the default a run falls back to.
+            let scratch_size =
+                env_opt("MYSBX_KRUN_SCRATCH_SIZE").or_else(|| merged.scratch_size.clone());
+            let krun_scratch_params_direct = match scratch_size {
                 Some(size) => {
                     let dir = repo.sidecar.join("scratch");
                     if !preflight_only {
@@ -5889,9 +5899,12 @@ const SIDECAR_TEMPLATE_ROOT: &str = r#"# mysbx sidecar config
 #
 # Resource limits (D23): enforced by the podman backends, warned about
 # by the others. A krun VM takes whole vCPUs and more than 128 MiB.
+# `scratch-size` caps the per-run nix scratch disk (a krun/qemu VM
+# with guest nix; 64 MiB floor).
 #
 # memory = "8g"
 # cpus = 4
+# scratch-size = "32g"
 # pids-limit = 1024
 #
 # The sandbox's own ssh keypair (D22) is always generated:

@@ -894,7 +894,6 @@ in
         podmanPastaSpec = null;
         podmanEnv = { };
         krunRuntime = null;
-        krunScratchSize = null;
         krunLauncher = null;
         krunRootfs = null;
         microvmQemuLauncher = null;
@@ -939,7 +938,7 @@ in
         for pin in \
           MYSBX_PODMAN_TARBALL MYSBX_PODMAN_IMAGE MYSBX_PODMAN_IMAGE_ID \
           MYSBX_PODMAN_SHELL MYSBX_PODMAN_PASTA_SPEC MYSBX_PODMAN_ENV \
-          MYSBX_PODMAN_WAYPIPE MYSBX_KRUN_RUNTIME MYSBX_KRUN_SCRATCH_SIZE \
+          MYSBX_PODMAN_WAYPIPE MYSBX_KRUN_RUNTIME \
           MYSBX_KRUN_LAUNCHER MYSBX_KRUN_ROOTFS MYSBX_VM_STORE_DISK \
           MYSBX_MICROVM_QEMU_LAUNCHER MYSBX_MICROVM_QEMU_ROOTFS \
           MYSBX_MICROVM_QEMU_KERNEL MYSBX_MICROVM_QEMU_ENV; do

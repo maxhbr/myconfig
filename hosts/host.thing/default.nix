@@ -156,6 +156,9 @@
           };
           podman.enable = true;
           krun.enable = true;
+          # Sparse: only the guest's writes fill it. Sized for
+          # in-sandbox kernel builds.
+          krun.nix.scratchSize = "100g";
           vm.store.enable = true;
           microvm-qemu.enable = true;
         };

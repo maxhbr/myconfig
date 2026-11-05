@@ -183,6 +183,10 @@ pub struct Merged {
     /// neither layer set it. The `MYSBX_PODMAN_*` env pins override
     /// them per invocation (lib.rs).
     pub memory: Option<String>,
+    /// The per-run nix scratch disk cap (`scratch-size`): same
+    /// layering as `memory`; `None` when neither layer set it. The
+    /// `MYSBX_KRUN_SCRATCH_SIZE` env pin overrides both layers.
+    pub scratch_size: Option<String>,
     pub cpus: Option<String>,
     pub pids_limit: Option<u32>,
     /// Which nix store the sandbox sees (`store`, docs/design/
@@ -841,6 +845,7 @@ pub fn merge(
         // Resource limits (D23): the later layer wins, like
         // `multiplexer`.
         memory: sidecar.memory.or(user.memory),
+        scratch_size: sidecar.scratch_size.or(user.scratch_size),
         cpus: sidecar.cpus.or(user.cpus),
         pids_limit: sidecar.pids_limit.or(user.pids_limit),
         // store (docs/design/guest-store.md): the later layer wins,
@@ -1335,8 +1340,8 @@ mod tests {
     fn resource_limits_come_from_the_sidecar_else_the_user_layer() {
         // config.md D23: like `multiplexer`, the sidecar wins per key.
         let m = merge(
-            cfg("memory = \"8g\"\ncpus = 4\npids-limit = 100\n"),
-            cfg("memory = \"2g\"\n"),
+            cfg("memory = \"8g\"\ncpus = 4\npids-limit = 100\nscratch-size = \"64g\"\n"),
+            cfg("memory = \"2g\"\nscratch-size = \"16g\"\n"),
             &user_file(),
             &sidecar_file(),
             &no_home(),
@@ -1345,6 +1350,7 @@ mod tests {
         assert_eq!(m.memory.as_deref(), Some("2g"));
         assert_eq!(m.cpus.as_deref(), Some("4"));
         assert_eq!(m.pids_limit, Some(100));
+        assert_eq!(m.scratch_size.as_deref(), Some("16g"));
         let none = merge(
             Config::default(),
             Config::default(),

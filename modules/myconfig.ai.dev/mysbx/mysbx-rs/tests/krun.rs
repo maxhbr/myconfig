@@ -46,6 +46,7 @@ fn base(network: bool) -> Merged {
         connect_ports: Vec::new(),
         listen_ports: Vec::new(),
         memory: None,
+        scratch_size: None,
         cpus: None,
         pids_limit: None,
         store: Some(mysbx::config::Store::Host),
