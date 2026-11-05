@@ -263,8 +263,9 @@ The direct VMs choose `store = "host" | "baked"`; explicit configuration
 wins, otherwise a nonempty `MYSBX_VM_STORE_DISK` pin selects baked,
 and no pin selects host. Their Nix binary is always in the tools, but
 the direct init needs scratch for managed writable Nix and has no tmpfs
-fallback. Current wiring incorrectly pins scratch only with
-`podman.enable && krun.nix.enable`, so direct-only hosts can miss it.
+fallback. The scratch size flows from `krun.nix.scratchSize` through
+`config.scratchSize` on `krun.nix.enable` alone (bd myconfig-9svh
+fixed the old `podman.enable && krun.nix.enable` gate).
 
 Waypipe works on bwrap/nono and provisioned gVisor; Podman-krun and QEMU
 refuse it. Direct krun currently **accepts it in error without a guest

@@ -451,6 +451,7 @@ let
   // lib.optionalAttrs (cfg.config.listenPorts != [ ]) { listen-ports = cfg.config.listenPorts; }
   // lib.optionalAttrs (cfg.config.nestedVirt != null) { nested-virt = cfg.config.nestedVirt; }
   // lib.optionalAttrs (cfg.config.memory != null) { inherit (cfg.config) memory; }
+  // lib.optionalAttrs (cfg.config.scratchSize != null) { "scratch-size" = cfg.config.scratchSize; }
   // lib.optionalAttrs (cfg.config.cpus != null) { inherit (cfg.config) cpus; }
   // lib.optionalAttrs (cfg.config.pidsLimit != null) { pids-limit = cfg.config.pidsLimit; };
 in
@@ -488,17 +489,13 @@ in
         # `podman-gvisor` with the runtime swapped, so it rides the
         # podman flag — the shared image is what makes it runnable.
         krunRuntime = if cfg.podman.enable then cfg.krun.runtime else null;
-        # The per-run scratch disk (bd myconfig-0pi): pinned only
-        # when the guest nix is enabled — otherwise nothing in the
-        # guest would consume the file. Consumed by BOTH arms that
-        # attach a scratch: the podman-krun run (the crate's
-        # podman-krun branch) and the direct krun / microvm-qemu run
-        # (krun_scratch_params_direct in the crate) — podman.enable
-        # is no part of the gate, or a direct-krun host bakes the
-        # guest nix wrappers into its rootfs but attaches no
-        # scratch, and every payload nix call dies remounting the
-        # read-only store.
-        krunScratchSize = if cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null;
+        # The scratch size flows through the generated user config
+        # (`config.scratchSize`, rendered as the TOML `scratch-size`)
+        # since D23 made it a config key: the crate falls back to it
+        # when the env pin is absent. `MYSBX_KRUN_SCRATCH_SIZE` stays
+        # the per-invocation override (`--set-default` semantics in
+        # the shell), never baked here anymore.
+
         # The direct-libkrun backend (bd myconfig-dak.4): the
         # launcher and the guest rootfs, pinned as
         # MYSBX_KRUN_LAUNCHER/MYSBX_KRUN_ROOTFS.
@@ -540,7 +537,7 @@ in
         nono = cfg.nono.package;
         ssh-keygen = pkgs.openssh;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries enabledBackends; alacritty = cfg.terminal.package; shell = cfg.shell.path; podmanImage = if cfg.podman.enable then cfg.podman.image else null; podmanShell = if cfg.podman.enable then cfg.podman.shell else null; podmanPastaSpec = if cfg.podman.enable then cfg.podman.pastaSpec else null; podmanEnv = if cfg.podman.enable then cfg.podman.env else { }; krunRuntime = if cfg.podman.enable then cfg.krun.runtime else null; krunScratchSize = if cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null; krunLauncher = if cfg.krun.enable then cfg.krun.direct.launcher else null; krunRootfs = if cfg.krun.enable then cfg.krun.direct.rootfs else null; vmStoreBaked = cfg.vm.store.enable; vmStoreExtraRoots = lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages ++ lib.optionals hmDifftasticExternal [ gitDefaultDiff ]; microvmQemuLauncher = if cfg.microvm-qemu.enable then cfg.microvm-qemu.launcher else null; microvmQemuRootfs = if cfg.microvm-qemu.enable then cfg.microvm-qemu.rootfs else null; microvmQemuKernel = if cfg.microvm-qemu.enable then \"${cfg.microvm-qemu.kernel}/bzImage\" else null; microvmQemuEnv = if cfg.microvm-qemu.enable then cfg.microvm-qemu.env else { }; waypipe = cfg.display.package; dtach = pkgs.dtach; podmanWaypipe = if cfg.podman.enable then cfg.podman.waypipe else null; podmanMuxEntries = if cfg.podman.enable then cfg.podman.muxEntries else { }; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries enabledBackends; alacritty = cfg.terminal.package; shell = cfg.shell.path; podmanImage = if cfg.podman.enable then cfg.podman.image else null; podmanShell = if cfg.podman.enable then cfg.podman.shell else null; podmanPastaSpec = if cfg.podman.enable then cfg.podman.pastaSpec else null; podmanEnv = if cfg.podman.enable then cfg.podman.env else { }; krunRuntime = if cfg.podman.enable then cfg.krun.runtime else null; krunLauncher = if cfg.krun.enable then cfg.krun.direct.launcher else null; krunRootfs = if cfg.krun.enable then cfg.krun.direct.rootfs else null; vmStoreBaked = cfg.vm.store.enable; vmStoreExtraRoots = lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages ++ lib.optionals hmDifftasticExternal [ gitDefaultDiff ]; microvmQemuLauncher = if cfg.microvm-qemu.enable then cfg.microvm-qemu.launcher else null; microvmQemuRootfs = if cfg.microvm-qemu.enable then cfg.microvm-qemu.rootfs else null; microvmQemuKernel = if cfg.microvm-qemu.enable then \"${cfg.microvm-qemu.kernel}/bzImage\" else null; microvmQemuEnv = if cfg.microvm-qemu.enable then cfg.microvm-qemu.env else { }; waypipe = cfg.display.package; dtach = pkgs.dtach; podmanWaypipe = if cfg.podman.enable then cfg.podman.waypipe else null; podmanMuxEntries = if cfg.podman.enable then cfg.podman.muxEntries else { }; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -1219,23 +1216,24 @@ in
           type = types.str;
           default = "32g";
           description = ''
-            The size cap of the per-run scratch disk (bd
-            myconfig-0pi): the wrapper pins it as
-            `MYSBX_KRUN_SCRATCH_SIZE` and the crate truncates a
-            per-run SPARSE file under `<repo>.mysbx/scratch/` to it
-            before the exec. The guest nix wrapper loop-mounts that
-            file as a disk-backed ext4 — the nix scratch (overlay
-            upper/work, state, logs, cache, TMPDIR) stops costing VM
-            RAM. The file is sparse: creation costs no disk space,
-            only the guest's writes fill it. A podman `--memory`-shaped
-            value (bytes or K/M/G suffix).
+            The size cap of the per-run scratch disk, rendered into
+            the generated user config as the `scratch-size` key
+            (the default of `config.scratchSize`). The crate
+            truncates a per-run SPARSE file under
+            `<repo>.mysbx/scratch/` to the merged value before the
+            exec. The guest nix wrapper loop-mounts that file as a
+            disk-backed ext4 — the nix scratch (overlay upper/work,
+            state, logs, cache, TMPDIR) stops costing VM RAM. The
+            file is sparse: creation costs no disk space, only the
+            guest's writes fill it. A podman `--memory`-shaped value
+            (bytes or K/M/G suffix, 64 MiB floor).
 
             The disk-backed scratch needs the guest's loop + ext4
             support (libkrunfw kernel) — validated by the live probes
             of bd myconfig-0pi's runbook. When the kernel cannot
             attach the loop device, the guest wrapper refuses the nix
             call with the diagnosis instead of silently falling back.
-            The tmpfs fallback stays for runs WITHOUT the pin and
+            The tmpfs fallback stays for runs WITHOUT the key and
             announces itself.
           '';
         };
@@ -1838,6 +1836,21 @@ in
               (a krun VM size, a cgroup limit under podman-gvisor when
               cgroups are active); the other backends warn. A sidecar
               value wins; `MYSBX_PODMAN_MEMORY` overrides both.
+            '';
+          };
+
+          scratchSize = mkOption {
+            type = types.nullOr types.str;
+            default = if cfg.krun.nix.enable then cfg.krun.nix.scratchSize else null;
+            defaultText = literalExpression "cfg.krun.nix.scratchSize when krun.nix.enable";
+            example = "100g";
+            description = ''
+              Host-wide `scratch-size` (./docs/design/config.md D23):
+              the per-run nix scratch disk cap, podman `--memory`
+              grammar. Rendered into the generated user config —
+              the layer a sidecar may override. Defaults to
+              `krun.nix.scratchSize` when the host opts into guest
+              nix (the scratch exists only there).
             '';
           };
 

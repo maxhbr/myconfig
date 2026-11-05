@@ -186,6 +186,94 @@ class InitTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_uid_files_are_baked_and_carried_onto_the_etc_tmpfs(self):
+        # bd myconfig-v3fk, the live run's finding: the guest bakes
+        # no passwd, and ssh-keygen (the sandbox keypair step)
+        # refuses an unnamed uid ("No user exists for uid …") — the
+        # tmux multiplexers each carry a SHELL pin for the same
+        # reason. The rootfs now bakes /etc/passwd + /etc/group, and
+        # the init carries them onto any /etc tmpfs it mounts (the
+        # same carry-over rule as the baked hosts mapping).
+        passwd = (ROOTFS / "etc/passwd").read_text()
+        self.assertIn("root:x:0:0:", passwd)
+        self.assertIn("nobody:x:65534:65534:", passwd)
+        group = (ROOTFS / "etc/group").read_text()
+        self.assertIn("root:x:0:", group)
+        self.assertIn("nobody:x:65534:", group)
+        # The resolver step's tmpfs carries ALL THREE baked files:
+        # the carry loop names passwd and group next to hosts.
+        start = INIT.index('if [ -n "${MYSBX_VM_RESOLV:-}" ]; then')
+        end = INIT.index("# The SLiRP NIC", start)
+        block = INIT[start:end]
+        self.assertIn("for _f in hosts passwd group; do", block)
+        # The ensure helper (bd myconfig-v3fk), pinned on the text —
+        # the live fixtures below run the real generated helper:
+        # idempotent, and re-creating the minimal pair when either
+        # file is missing (a share-loop tmpfs that hid the bake).
+        helper = INIT[INIT.index("ensure_uid_files() {"):INIT.index("\n}\n", INIT.index("ensure_uid_files() {")) + len("\n}\n")]
+        self.assertIn('if [ ! -f /etc/passwd ]; then', helper)
+        self.assertIn('if [ ! -f /etc/group ]; then', helper)
+        self.assertIn("root:x:0:0:root:/root:/bin/sh", helper)
+        self.assertIn("nobody:x:65534:65534:nobody:/nonexistent:/bin/false", helper)
+        # LIVE under the baked busybox: the helper runs unchanged
+        # against a tmpfs /etc the way the guest sees it — the
+        # run_init_block idiom, with the /etc path swapped for the
+        # fixture dir (the helper is a pure path-writing helper,
+        # nothing else in it resolves through /etc).
+        etc = self.base / "etc"
+        etc.mkdir()
+        helper_fixture = helper.replace("/etc", str(etc))
+        script = (
+            "set -eu\n"
+            f"BB={shlex.quote(str(ROOTFS / 'bin/busybox'))}\n"
+            'fail() { echo "mysbx-init: $*" >&2; exit 125; }\n'
+            'step() { echo "mysbx-init: $*"; }\n'
+            + helper_fixture
+            + "ensure_uid_files\n"
+            + "printf 'rc-helper-ok\\n'\n"
+        )
+        result = subprocess.run(
+            [str(ROOTFS / "bin/busybox"), "sh", "-c", script],
+            capture_output=True,
+            text=True,
+            env={"PATH": ""},
+            timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("rc-helper-ok", result.stdout)
+        self.assertIn(
+            "root:x:0:0:root:/root:/bin/sh",
+            (etc / "passwd").read_text(),
+        )
+        self.assertTrue((etc / "group").exists())
+        # Idempotent: a second run over present files is a no-op
+        # (an operator-provided passwd of a future feature stays).
+        result2 = subprocess.run(
+            [str(ROOTFS / "bin/busybox"), "sh", "-c", script],
+            capture_output=True,
+            text=True,
+            env={"PATH": ""},
+            timeout=20,
+        )
+        self.assertEqual(result2.returncode, 0, result2.stdout + result2.stderr)
+        self.assertIn("rc-helper-ok", result2.stdout)
+        self.assertEqual(
+            (etc / "passwd").read_text(),
+            "root:x:0:0:root:/root:/bin/sh\nnobody:x:65534:65534:nobody:/nonexistent:/bin/false\n",
+            "a second run over present files is a no-op",
+        )
+
+    def test_slirp_step_also_ensures_the_uid_files(self):
+        # The SLiRP mount site backs up and carries the same three
+        # files as the resolver step, and re-ensures after its own
+        # tmpfs — the share-loop tmpfs the earlier step could not
+        # see is the case the re-ensure covers (bd myconfig-v3fk).
+        start = INIT.index('if [ "${MYSBX_MICROVM_NET:-}" = "1" ]; then')
+        end = INIT.index("# The scratch disk", start)
+        block = INIT[start:end]
+        self.assertIn("for _f in hosts passwd group; do", block)
+        self.assertIn("ensure_uid_files", block)
+
     def test_shares_are_bind_mounted_not_linked(self):
         # The sandbox path of a share is a bind mount of its device slot,
         # so getcwd()/realpath() report the sandbox path, never the

@@ -263,12 +263,13 @@ not mount (host policy refuses ext4/overlay in the sandbox; the
 guest kernel carries `EXT4_FS`/`OVERLAY_FS`/`VIRTIO_BLK` all `=y`).
 
 Preconditions: select `store = "host"` for this host-share procedure.
-Make sure that the dry-run launcher has `--scratch`. The current
-module pins `MYSBX_KRUN_SCRATCH_SIZE` only when both `podman.enable`
-and `krun.nix.enable` are true. A direct-only guest-Nix opt-in does not
-satisfy that condition. Direct init has no managed tmpfs fallback when
-the scratch disk is absent. The launcher also needs block support
-(`withBlk`, enabled by default).
+Make sure that the dry-run launcher has `--scratch`. The host default
+flows from `krun.nix.scratchSize` through `config.scratchSize` (the
+`scratch-size` key, bd myconfig-9svh) whenever `krun.nix.enable` — a
+direct-only opt-in satisfies it (the old `podman.enable &&
+krun.nix.enable` env-pin gate is gone). Direct init has no managed
+tmpfs fallback when the scratch disk is absent. The launcher also
+needs block support (`withBlk`, enabled by default).
 
 For baked-store validation, use the separate
 [acceptance procedure](design/guest-store.md). A baked run has an

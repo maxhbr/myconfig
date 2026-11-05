@@ -64,9 +64,12 @@
 #
 # Resource limits (D23): enforced by the podman backends, warned about
 # by the others. A krun VM takes whole vCPUs and more than 128 MiB.
+# `scratch-size` caps the per-run nix scratch disk (a krun/qemu VM
+# with guest nix; 64 MiB floor).
 #
 # memory = "8g"
 # cpus = 4
+# # scratch-size = "32g"
 # pids-limit = 1024
 #
 # The sandbox's own ssh keypair (D22) is always generated:

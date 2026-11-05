@@ -455,15 +455,21 @@ The enumerated krun differences are:
   system-gitconfig`) read-only at `/etc/gitconfig`. It holds
   exact entries for the repo root and each checkout (a directory
   with a `.git`) that exists in the worktrees sibling at launch
-  (clone runs: the repo path only). It has no includes: git reads
-  it as system config next to the GIT_CONFIG_GLOBAL file. A
-  worktree created during the run is trusted by git (via `/*`)
-  but not by libgit2 until the next run. `$HOME` and
+  (clone runs: the repo path only), followed by the git-CLI trust
+  list's `/*` walk forms (bd myconfig-gvk): an env-stripped git —
+  workmux's git subprocesses drop `GIT_CONFIG_GLOBAL` — reads ONLY
+  this system file, so a worktree created during the run is
+  trusted the moment it lands. libgit2 ignores every non-exact
+  value, so it still matches only the exact entries. The file has
+  no includes: git reads it as system config next to the
+  GIT_CONFIG_GLOBAL file. `$HOME` and
   `XDG_CONFIG_HOME` are not redirected because nix reads its own
   config and cache through them.
 - the per-run scratch disk (bd myconfig-0pi) — opt-in per build
-  (the module pins `MYSBX_KRUN_SCRATCH_SIZE` only when BOTH
-  `podman.enable` and `krun.nix.enable` are true): the host truncates
+  (the size rides the `scratch-size` config key, seeded from
+  `krun.nix.scratchSize` whenever `krun.nix.enable` — bd
+  myconfig-9svh; the old env pin was gated on BOTH `podman.enable`
+  and `krun.nix.enable` and baked by the wrapper): the host truncates
   one SPARSE file per run under `<repo>.mysbx/scratch/<pid>.img`
   to the cap, binds it rw at
   `/run/mysbx-scratch.img` and exports
@@ -674,10 +680,12 @@ Consequences, stated honestly:
     `MYSBX_PODMAN_MEMORY` (8g or more for `nix develop`). Every run
     substitutes again. The RAM cost is REMOVED by the per-run
     scratch disk when its pin is present (bd myconfig-0pi,
-    `krun.nix.scratchSize`, normally pinned with `podman.enable`
-    AND `krun.nix.enable`): the host truncates one SPARSE
+    `krun.nix.scratchSize` flowing through the `scratch-size` config
+    key on `krun.nix.enable` alone, bd myconfig-9svh): the host
+    truncates one SPARSE
     file per run under `<repo>.mysbx/scratch/<pid>.img` to the size
-    cap (`MYSBX_KRUN_SCRATCH_SIZE`, a podman `--memory`-shaped
+    cap (`MYSBX_KRUN_SCRATCH_SIZE`, the per-invocation operator
+    override of the same grammar — a podman `--memory`-shaped
     value, default 32g — creation costs no disk space, only the
     guest's writes fill it), binds it over virtio-fs at
     `/run/mysbx-scratch.img` and names it in the payload env
@@ -853,11 +861,14 @@ The spec's shares and selected store disk determine the guest view:
   writable-Nix setup. The Nix binary is ALWAYS in the tools; binary
   availability is not gated on `krun.nix.enable`.
 
-  **Known module-wiring gap:** `../../default.nix:482` gates the
-  `krunScratchSize` pin on `podman.enable && krun.nix.enable`.
-  Direct-only/QEMU-only opt-in can therefore request guest Nix but
-  receive no scratch/writable setup. D2's announced tmpfs fallback
-  belongs ONLY to the Podman-image wrapper, not this init.
+  **Fixed wiring (bd myconfig-9svh):** the scratch size used to
+  ride an env pin gated on `podman.enable && krun.nix.enable`, so
+  a Direct-only/QEMU-only opt-in could request guest Nix but
+  receive no scratch/writable setup; it now flows from
+  `krun.nix.scratchSize` through `config.scratchSize` (the
+  `scratch-size` key, D23) on `krun.nix.enable` alone. D2's
+  announced tmpfs fallback belongs ONLY to the Podman-image
+  wrapper, not this init.
 - **No implicit host Nix daemon or usable host-socket forwarding.**
   Giving the guest the host daemon would allow writes to the HOST
   store and reads beyond the selected guest view — more than a ro
@@ -903,7 +914,13 @@ The KrunSpec builder (dak.3) turns the merged config into exactly
 this: cpus, ram, the rootfs pin, one ro store share (dropped for a
 `store = "baked"` run, its slot exempt from the mount cover check BY
 SLOT — a positional slice would exempt the workspace), one rw
-workspace share per the merged mounts' live/clone layout, the rw
+workspace share per the merged mounts' live/clone layout, the
+approved git metadata directories rw at their host paths (live
+run, bd myconfig-2ww — the same approval/protected checks as the
+bind backends, so a repo that is itself a linked worktree has a
+resolving `.git` pointer inside the guest; a gitdir under a root the
+guest cannot place a share under is the one honest divergence: bwrap
+binds it, the VM refuses the run), the rw
 `<repo>__worktrees` sibling share (live run, sibling exists), the
 state-dirs shares, the configured mounts (implicit shares first; a
 mount covering one is refused like bwrap's `HiddenMount`), env, and

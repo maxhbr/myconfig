@@ -226,3 +226,98 @@ point survives (this one did).
   32g scratch twice-over without a GC between builds (D7's cap is
   a real constraint for kernel-sized builds — build on a bigger
   host or GC between attempts).
+
+## 2026-11-05, nested-KVM microvm-qemu agent sandbox — the §4 remainder live (bd myconfig-85i)
+
+Host context: an agent sandbox (microvm-qemu backend, nested KVM:
+`/dev/kvm` + `svm`, `MYSBX_MICROVM_NESTED_VIRT=1`), 20 cpus, 48G
+RAM, guest kernel 6.12.115 (the nested direct-krun VMs boot the
+libkrunfw 6.12.91), the rebuilt wrapper from `test-f13` at main
+94e2c195f8. The direct-krun VMs below boot INSIDE that sandbox
+(KVM-in-KVM), so absolute timings are inflated vs a bare-metal
+f13 — recorded as relative evidence, not a D8 ranking.
+
+- §4 A.1/A.2/A.4 — PASS (same session as bd myconfig-9svh's
+  closing run): exactly one writable /dev/vda (ro=0), ext4 at
+  /mysbx-nix, the store overlay up (lowerdir=stage-ro/store,
+  upperdir=/mysbx-nix/store-upper), write-through to /nix/store
+  through the overlay upper, df shows the 8g scratch cap on both
+  /nix/store and /mysbx-nix (not VM RAM). A real `getFlake` eval
+  of the mounted workspace through the wrapped nix succeeds
+  inside the same guest (the toplevel.drvPath target stays
+  blocked by the bd myconfig-4idc IFD on every host).
+- §4 A.3 — PASS (the honest absence): a run without a
+  `scratch-size` resolves no size → no MYSBX_VM_SCRATCH pin, no
+  /dev/vd*, no ext4, no overlay; /nix/store is the plain ro
+  virtiofs share (write probe refused EROFS, df names the share).
+- probe (b) — PASS (the per-run file lifecycle, code path
+  CORRECTED): the bead's own description said "the launcher
+  unlinks after krun_start_enter returns" — the code path shows
+  the launcher does NOT unlink (`krun-rs/src/main.rs` attaches the
+  disk and exits with the payload's code, matching backends.md's
+  per-run lifecycle contract); the removal lives in mysbx's
+  `cleanup_per_run_state` (a waited `--result`/detached-inner run
+  removes its `<pid>.img` after the backend exits — observed
+  live: the file exists during the run, the dir is empty after),
+  and exec-mode runs rely on the next run's `sweep_krun_scratch`
+  (observed live: the earlier exec run's debris was swept at the
+  next run's launch).
+- probe (c) — PASS (the parallel-run sweep): a live long run's
+  `<pid>.img` survives a concurrently-started short run's
+  launch-time sweep, and the short run's own file is removed on
+  its exit; after the long run exits its file is gone too (no
+  manual sweep).
+- §2.1 manual probes (the two NOT covered by the scripted smoke's
+  earlier live runs) — PASS: git status/branch/log inside the
+  direct-krun guest over the real linked worktree
+  `myconfig__worktrees/mzys-qemu-litellm` (with its git-dirs
+  approved, bd myconfig-2ww) — no dubious-ownership refusal (the
+  trust files' both-spellings grant); a `state-dirs` entry is
+  bound rw at /mysbx-home/<entry> with writes reaching the host
+  sidecar both ways. The live-repo edit and the ro-rootfs refusal
+  stay covered by the scripted probes 4/5 (2026-10-04 'thing',
+  2026-10-14 f13).
+
+Not covered here (needs the physical host): the podman-krun side
+of the D8 head-to-head timing (no podman in this sandbox; the
+krun one-shot true recorded at ~1.7–2.5 s warm, microvm-qemu at
+~5.2–6.0 s warm, both nested-KVM-inflated), §2.2 nested podman
+(no podman image), and a bare-metal f13 re-run of the timings.
+
+## 2026-11-05, nested-KVM microvm-qemu agent sandbox — the baked-store baseline configs live (bd myconfig-dqq0)
+
+Host context: same nested-KVM sandbox as the 85i entry above
+(microvm-qemu, `/dev/kvm` + `svm`), wrapper rebuilt from
+`test-f13` at main 216ef13a08, sidecar set to `backend = "krun"`,
+`store = "baked"`, `network = false`, `multiplexer = "none"`,
+`scratch-size = "8g"`, `git-dirs = […/myconfig/.git]`. The user
+layer (`~/.config/mysbx/config.toml` — this sandbox's own
+deployment does not carry it) was materialised from the same
+eval (`home-manager.users.mhuber.xdg.configFile."mysbx/config.toml".source`)
+so the run saw the same mounts/env a rebuilt f13 home would get;
+the baked erofs store disk came from the wrapper pin
+(`MYSBX_VM_STORE_DISK`), built fresh from `test-f13`'s closure.
+
+- the bd myconfig-dqq0 acceptance (the commit 48348f1bd5 fix,
+  live for the first time in a baked run) — PASS, all probes:
+  - `/mysbx-home/.config/ripgrep/ripgreprc` is a REGULAR FILE
+    (the raw-tree mount would have preserved the host's
+    home-manager-files SYMLINK, dangling with no host-store
+    share)
+  - `RIPGREP_CONFIG_PATH=/mysbx-home/.config/ripgrep/ripgreprc`
+    and `rg --files` (1187 files) and a pattern search both exit
+    0 — the reported hard failure of every baked-run rg call is
+    gone
+  - `.config/git` and `.config/bat` present with ZERO symlinks in
+    either tree (the same-class mounts fixed by the same commit)
+  - a first probe WITHOUT the user layer mounted confirmed the
+    negative control: no `.config/{ripgrep,git,bat}` in the guest
+    at all, `RIPGREP_CONFIG_PATH` unset — the mounts are the
+    layer's job, the baked image itself carries only what
+    `storeRootPaths` names
+- remaining raw-tree mounts observed in the same run (filed as
+  bd myconfig-kf8j, discovered-from this one):
+  `/mysbx-home/.config/beads/config.toml` and
+  `/mysbx-home/.config/hunk/config.toml` are home-manager-files
+  SYMLINKS inside the baked guest — the programs.beads and
+  programs.hunk modules still bind `~/.config/…` raw.

@@ -76,6 +76,7 @@ config that can execute is config that can escape.
   (`state-dirs`, see D15): entries backed by the sidecar's `state/`
   tree
 - the backend and its resource limits (`memory`, `cpus`, `pids-limit`,
+  `scratch-size`,
   see D23)
 - the store a VM run mounts at `/nix` (`store`, see D26): the host
   store shared read-only, or the guest-own baked disk — the narrowing
@@ -1402,13 +1403,16 @@ Three top-level keys (bd myconfig-91j):
 memory = "8g"        # podman --memory grammar: bytes, or a b/k/m/g suffix
 cpus = 4             # a positive number (integer or float)
 pids-limit = 1024    # a positive integer
+scratch-size = "32g" # the nix scratch disk cap, memory grammar, 64 MiB floor
 ```
 
 **Merge**: per key, the sidecar wins when it sets the key, else the
 user layer — like `multiplexer` (D17). A limit grants no host access,
 so there is no narrowing rule. The `MYSBX_PODMAN_MEMORY`/`_CPUS`/
 `_PIDS_LIMIT` environment pins override the merged value for one
-invocation.
+invocation; `MYSBX_KRUN_SCRATCH_SIZE` does the same for
+`scratch-size` (the host's system-wide default rides the generated
+user config, not the wrapper).
 
 **Enforcement** is per backend. Bubblewrap/nono warn and ignore these
 keys so a host-wide setting does not prevent those runs. Rootless
@@ -1626,11 +1630,12 @@ scratch, direct guest init provides no managed writable setup or RAM
 fallback. The separate OCI-image guest-Nix wrapper has its own tmpfs
 fallback; that is not direct VM behavior.
 
-The current module supplies `MYSBX_KRUN_SCRATCH_SIZE` only under
-`podman.enable && krun.nix.enable` (`../../default.nix`). Thus a
-direct-only or QEMU-only host can opt into guest Nix without receiving
-the scratch pin. Scratch is per-run disposable storage, not a
-persistent store cache. See the
+The module flows `krun.nix.scratchSize` into `config.scratchSize`
+(`scratch-size`, D23) whenever `krun.nix.enable` — every arm that
+can attach a scratch disk gets one, direct-only and QEMU-only hosts
+included (bd myconfig-9svh fixed the old `podman.enable &&
+krun.nix.enable` env-pin gate). Scratch is per-run disposable
+storage, not a persistent store cache. See the
 [store/scratch matrix](../backend-comparison.md#direct-vm-store-and-writable-nix-choices).
 
 The narrowing describes the guest view, not an escaped VMM's view:

@@ -40,9 +40,11 @@
 //! 3. `--ro-share`/`--rw-share TAG@DEST=DIR` — one per virtiofs
 //!    share. The ro store share (D3's default: the whole host
 //!    /nix/store, the same visibility the bwrap tier grants) comes
-//!    first, then the workspace, the worktrees sibling (live runs,
-//!    when it exists), every state-dir backing store, then every
-//!    configured mount. The virtiofs SERVER enforces the ro
+//!    first, then the workspace, the approved git metadata
+//!    directories (live runs, bd myconfig-2ww), the worktrees
+//!    sibling (live runs, when it exists), every state-dir backing
+//!    store, then every configured mount. The virtiofs SERVER
+//!    enforces the ro
 //!    flag; the guest kernel cannot remount it (spike probe 2).
 //!    DEST is the GUEST path of the share mount — under
 //!    `/tmp/mysbx-shares/` on the guest tmpfs, never below another
@@ -87,7 +89,7 @@ use crate::podman_gvisor::{parse_krun_cpus, parse_krun_ram_mib};
 use crate::repo::Repo;
 use crate::session::Session;
 use std::borrow::Cow;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub type HostEnv = std::collections::BTreeMap<String, String>;
 
@@ -147,6 +149,53 @@ pub const STAGE_ROOT: &str = "/mysbx-krun-stage";
 
 /// The staging slot of the workmux `<repo>__worktrees` sibling.
 const WORKTREES_SLOT: &str = "worktrees";
+
+/// The staging slot of an approved git metadata directory (bd
+/// myconfig-2ww): the gitdir a repo-writable `.git` FILE points at
+/// outside the root (a linked worktree, a submodule) — shared rw
+/// at its host path in a LIVE run, exactly like bwrap/podman bind
+/// it, because git needs it rw to update refs and the index. The
+/// slot is a digest of the path (the mount rule), so the tag stays
+/// a stable identity of the share across runs and never carries
+/// whitespace or `;` (the MYSBX_VM_SHARES encoding is
+/// `;`-separated).
+pub fn git_dir_tag(path: &str) -> String {
+    format!("g-{}", crate::repo::fnv1a10(path))
+}
+
+/// The approved git metadata directories a LIVE run shares into
+/// the guest (bd myconfig-2ww): each `repo.git_dirs` entry first
+/// passes the SAME approval/protected check bwrap runs
+/// ([`crate::bwrap::check_git_dir`]) — a repo-writable pointer is
+/// not a mount specification on this backend either — and the
+/// survivors are the share list's implicit rw entries. A CLONE run
+/// shares NONE: the clone carries its own `.git` DIRECTORY, so
+/// there is nothing external to approve (workspace.md D3).
+fn checked_git_dirs(
+    repo: &Repo,
+    cfg: &Merged,
+    workspace: &Workspace<'_>,
+) -> Result<Vec<PathBuf>, Error> {
+    if !matches!(workspace, Workspace::Live) {
+        return Ok(Vec::new());
+    }
+    for git_dir in &repo.git_dirs {
+        crate::bwrap::check_git_dir(git_dir, &cfg.git_dirs, false).map_err(krun_git_dir_error)?;
+    }
+    Ok(repo.git_dirs.clone())
+}
+
+/// The bwrap refusal of an unapprovable/protected gitdir, mapped
+/// onto this backend's `Error`: the krun arms cannot carry
+/// `bwrap::Error` through their own `Display` (the report prints
+/// the backend's own error verbatim), so the text moves 1:1 — the
+/// refusal, its reason and its remedy stay identical to the
+/// bwrap/podman ones.
+fn krun_git_dir_error(e: crate::bwrap::Error) -> Error {
+    Error::GitDirRefused {
+        message: e.to_string(),
+    }
+}
 
 /// The manifest's slot inside the ro stage tree (krun-rootfs.nix's
 /// guest init reads it at GUEST_STAGE_RO/manifest; the launcher
@@ -274,11 +323,11 @@ impl<'a> Params<'a> {
 /// The two trust TEXTS of a run's git trust (bd myconfig-dak.8):
 /// the global config (`git_trust_text`'s exact-path entries plus the
 /// in-sandbox user-config includes) and the libgit2 system config
-/// (`libgit2_trust_text`'s exact entries only). Registered as
-/// IN-MEMORY overlay files on the root device
-/// (`krun_fs_add_overlay_file`) — no host file, no sidecar dir, no
-/// stage slot, no init placement; the launcher owns the bytes for
-/// the VM's whole lifetime.
+/// (`libgit2_trust_text`'s exact entries plus the git-CLI walk
+/// forms, bd myconfig-gvk). Registered as IN-MEMORY overlay files
+/// on the root device (`krun_fs_add_overlay_file`) — no host file,
+/// no sidecar dir, no stage slot, no init placement; the launcher
+/// owns the bytes for the VM's whole lifetime.
 pub struct GitTrust {
     pub global_text: String,
     pub system_text: String,
@@ -335,10 +384,17 @@ pub enum Error {
     /// need a deliberate placement of its own, not this hole).
     NixShareRoot { dest: String },
     /// A configured mount's dest is at or above an implicit share
-    /// (the workspace or a `state-dirs` entry): the same refusal as
+    /// (the workspace, a git metadata directory or a `state-dirs`
+    /// entry): the same refusal as
     /// bwrap/podman (`HiddenMount`) — implicit shares are placed
     /// first, so the mount would cover them.
     HiddenMount { dest: String, hidden: String },
+    /// A git metadata directory a repo-writable `.git` FILE points
+    /// at cannot be shared: not approved by a trusted layer, or
+    /// related to a protected sandbox path (bd myconfig-2ww). The
+    /// text is the bwrap refusal verbatim — same reason, same
+    /// remedy as on the bind backends.
+    GitDirRefused { message: String },
     /// A configured mount's dest is at, below or above the guest-native
     /// multiplexer socket directory (docs/design/config.md D17,
     /// [`crate::podman_gvisor::KRUN_MUX_SOCKET_DIR`]): the socket must
@@ -381,6 +437,7 @@ impl std::fmt::Display for Error {
                 f,
                 "mount {dest} would hide {hidden} — implicit binds are not configuration and always come first, so a dest may not cover them"
             ),
+            Error::GitDirRefused { message } => f.write_str(message),
             Error::KrunMuxSocketDest { dest } => write!(
                 f,
                 "the mount dest `{dest}` is at, below or above the multiplexer socket directory {} — the socket has to stay on the guest's own /dev/shm tmpfs (a virtiofs file is a dead inode to the guest, and tmux refuses a socket dir it does not own), so no share may land there",
@@ -596,7 +653,11 @@ pub(crate) struct Spec {
 /// The store share rides in the ro tree like every other ro share:
 /// the wrap's own --ro-bind /nix/store (the launcher's runtime)
 /// already grants the visibility, this bind only adds the slot.
-pub fn stage_binds(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Vec<(String, bool, String)> {
+pub fn stage_binds(
+    cfg: &Merged,
+    repo: &Repo,
+    params: &Params<'_>,
+) -> Result<Vec<(String, bool, String)>, Error> {
     let mut binds: Vec<(String, bool, String)> = Vec::new();
     // The store share's slot: a ro bind of /nix/store into the ro
     // tree — the same source the wrap's own --ro-bind /nix/store
@@ -616,6 +677,19 @@ pub fn stage_binds(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Vec<(Strin
         false,
         "workspace".to_owned(),
     ));
+    // The approved git metadata directories (bd myconfig-2ww): the
+    // gitdir a repo-writable `.git` FILE points at — staged rw like
+    // bwrap/podman bind it, so the pointer resolves inside the
+    // guest. Checked (approval/protected) once here and once in
+    // `krun_shares`; the two must stay in lockstep (the share's
+    // backing path names this slot).
+    for git_dir in checked_git_dirs(repo, cfg, &params.workspace)? {
+        binds.push((
+            git_dir.to_string_lossy().into_owned(),
+            false,
+            git_dir_tag(&git_dir.to_string_lossy()),
+        ));
+    }
     // The worktrees slot's HOST source: the host sibling in a live run,
     // the session's own worktrees directory in a clone run (its
     // sandbox path is the `<repo>__worktrees` sibling either way).
@@ -673,7 +747,7 @@ pub fn stage_binds(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Vec<(Strin
     if cfg.network && params.scratch.is_some() && !params.baked() {
         binds.push(("/nix/var/nix".to_owned(), true, "nix-var".to_owned()));
     }
-    binds
+    Ok(binds)
 }
 
 /// The run's shares — the exact list [`krun_argv`] renders (store,
@@ -708,6 +782,24 @@ fn krun_shares(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Result<Vec<Sha
         sandbox_path: repo.root.to_string_lossy().into_owned(),
         read_only: false,
     });
+    // The approved git metadata directories (bd myconfig-2ww): the
+    // gitdir a repo-writable `.git` FILE points at outside the root
+    // — an implicit rw share at its host path, the SAME rule as the
+    // bwrap/podman bind (git needs the dir rw for refs and index;
+    // the init's trust files already name these paths, so the
+    // guest-side git ownership check passes too). Approval and
+    // protected-path checks run per entry — the same refusals, the
+    // same remedies as on the bind backends. Before the worktrees
+    // sibling, like bwrap's bind order.
+    for git_dir in checked_git_dirs(repo, cfg, &params.workspace)? {
+        let sandbox_path = git_dir.to_string_lossy().into_owned();
+        check_share_root(&sandbox_path)?;
+        shares.push(Share {
+            slot: git_dir_tag(&sandbox_path),
+            sandbox_path: sandbox_path.clone(),
+            read_only: false,
+        });
+    }
     // The worktrees slot, rw, at the `<repo>__worktrees` path — the
     // same rule as the bwrap/podman binds: in a LIVE run the host's
     // sibling (present when the run created it, config.md D13), in a

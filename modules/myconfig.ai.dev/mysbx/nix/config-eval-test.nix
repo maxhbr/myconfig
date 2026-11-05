@@ -314,14 +314,38 @@ let
         myconfig.ai.dev.mysbx.config.listenPorts = [ 8080 ];
       }
     ];
-    # The D23 resource-limit keys (bd myconfig-91j).
+    # The D23 resource-limit keys (bd myconfig-91j) — including the
+    # scratch-size default that flows from krun.nix.scratchSize.
     limits = generated [
       {
         myconfig.ai.dev.mysbx.config = {
           memory = "8g";
           cpus = 4;
           pidsLimit = 1024;
+          scratchSize = "100g";
         };
+      }
+    ];
+    # krun.nix.scratchSize feeds config.scratchSize when the host
+    # opts into guest nix (the host default, no explicit config
+    # value needed).
+    scratchDefault = generated [
+      {
+        myconfig.ai.dev.mysbx.krun.nix.enable = true;
+        myconfig.ai.dev.mysbx.krun.nix.scratchSize = "100g";
+      }
+    ];
+    # bd myconfig-9svh: the scratch default must hold on a
+    # DIRECT-krun host too — the explicit twin of `scratchDefault`
+    # with `krun.enable` on and `podman.enable` forced OFF, so a
+    # reintroduced podman gate in the default fails here even if a
+    # default flip makes it pass `scratchDefault`'s modules.
+    scratchDirectOnly = generated [
+      {
+        myconfig.ai.dev.mysbx.krun.enable = true;
+        myconfig.ai.dev.mysbx.krun.nix.enable = true;
+        myconfig.ai.dev.mysbx.podman.enable = lib.mkForce false;
+        myconfig.ai.dev.mysbx.krun.nix.scratchSize = "100g";
       }
     ];
     # The nested-virt key (docs/design/config.md D27): `null` (the
@@ -642,6 +666,8 @@ pkgs.runCommand "mysbx-generated-config-test"
       krunNestedOn
       allowlist
       limits
+      scratchDefault
+      scratchDirectOnly
       nestedVirtOn
       nestedVirtOff
       sandboxToolsEnv
@@ -782,7 +808,13 @@ pkgs.runCommand "mysbx-generated-config-test"
     grep -q '^memory = "8g"$' "$limits" || fail "the memory seed is missing" "$limits"
     grep -q '^cpus = 4$' "$limits" || fail "the cpus seed is missing" "$limits"
     grep -q '^pids-limit = 1024$' "$limits" || fail "the pidsLimit seed is missing" "$limits"
-    if grep -qE '^(memory|cpus|pids-limit) ' "$nonoBackend"; then
+    grep -q '^scratch-size = "100g"$' "$limits" \
+      || fail "the scratchSize seed is missing" "$limits"
+    grep -q '^scratch-size = "100g"$' "$scratchDefault" \
+      || fail "krun.nix.scratchSize did not default config.scratchSize" "$scratchDefault"
+    grep -q '^scratch-size = "100g"$' "$scratchDirectOnly" \
+      || fail "the direct-only krun host (podman off) lost its scratch-size default" "$scratchDirectOnly"
+    if grep -qE '^(memory|cpus|pids-limit|scratch-size) ' "$nonoBackend"; then
       fail "an unset limit option leaked a key" "$nonoBackend"
     fi
 

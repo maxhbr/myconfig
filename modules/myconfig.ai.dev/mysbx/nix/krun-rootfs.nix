@@ -562,6 +562,27 @@ let
     done < "$records_file"
     "$BB" rm -f "$records_file"
 
+    # The uid files (bd myconfig-v3fk, the live run's finding): the
+    # baked /etc/passwd + /etc/group name the uid the payload runs
+    # as — ssh-keygen (the sandbox keypair step) and every
+    # uid-resolving tool refuses an unnamed uid. The /etc tmpfs the
+    # share loop or the resolver step may mount hides the baked
+    # files; this helper re-creates the minimal pair wherever a
+    # file is missing, on whatever /etc is mounted by the time it
+    # runs. Idempotent: present files are never touched (an
+    # operator-provided passwd of a future feature stays).
+    ensure_uid_files() {
+        if [ ! -f /etc/passwd ]; then
+            printf 'root:x:0:0:root:/root:/bin/sh\nnobody:x:65534:65534:nobody:/nonexistent:/bin/false\n' \
+                > /etc/passwd \
+                || fail "cannot write /etc/passwd (the uid files)"
+        fi
+        if [ ! -f /etc/group ]; then
+            printf 'root:x:0:\nnobody:x:65534:\n' > /etc/group \
+                || fail "cannot write /etc/group (the uid files)"
+        fi
+    }
+
     # The guest resolver (bd myconfig-dak.6, backends.md D6): TSI
     # dials from the launcher's netns — the HOST netns — so the
     # host's resolver addresses are exactly what the proxy can
@@ -577,17 +598,25 @@ let
         # /etc is the ro root's share-root unless a share below it
         # already tmpfs'd it: probe writability, mount when ro.
         if ! "$BB" touch /etc/.mysbx-resolv-probe 2>/dev/null; then
-            # Copy the baked /etc/hosts before the tmpfs hides the
-            # ro root's /etc: the guest has no other source of the
-            # localhost → 127.0.0.1 mapping, and without it Node.js
-            # fetch() fails with getaddrinfo ENOTFOUND localhost
-            # (curl resolves localhost itself, so it masked the gap).
-            hosts_backup=/tmp/.mysbx-etc-hosts
-            "$BB" cp /etc/hosts "$hosts_backup" 2>/dev/null || rm -f "$hosts_backup"
+            # Copy the baked /etc/hosts (and the uid files, bd
+            # myconfig-v3fk) before the tmpfs hides the ro root's
+            # /etc: the guest has no other source of the localhost
+            # → 127.0.0.1 mapping, and ssh-keygen (the sandbox
+            # keypair step) refuses an unnamed uid. Without the
+            # mapping Node.js fetch() fails with getaddrinfo
+            # ENOTFOUND localhost (curl resolves localhost itself,
+            # so it masked the gap).
+            etc_backup=/tmp/.mysbx-etc
+            "$BB" mkdir -p "$etc_backup"
+            for _f in hosts passwd group; do
+                "$BB" cp /etc/$_f "$etc_backup/$_f" 2>/dev/null || "$BB" rm -f "$etc_backup/$_f"
+            done
             "$BB" mount -t tmpfs tmpfs /etc \
                 || fail "cannot mount the tmpfs for /etc (the resolver)"
-            [ -f "$hosts_backup" ] && "$BB" cp "$hosts_backup" /etc/hosts || true
-            "$BB" rm -f "$hosts_backup"
+            for _f in hosts passwd group; do
+                [ -f "$etc_backup/$_f" ] && "$BB" cp "$etc_backup/$_f" /etc/$_f || true
+            done
+            "$BB" rm -rf "$etc_backup"
         else
             "$BB" rm -f /etc/.mysbx-resolv-probe
         fi
@@ -599,6 +628,12 @@ let
             printf '127.0.0.1 localhost\n::1 localhost\n' > /etc/hosts \
                 || fail "cannot write /etc/hosts"
         fi
+        # The uid files (bd myconfig-v3fk), the same ensure rule as
+        # hosts: a tmpfs the share loop mounted BEFORE the resolver
+        # hides the baked passwd/group too — re-create the minimal
+        # pair when either is missing (the payload's ssh-keygen
+        # refuses an unnamed uid).
+        ensure_uid_files
         # The env record was ALREADY decoded by the loader (every
         # manifest env line exports plain text) — write verbatim.
         printf '%s\n' "$MYSBX_VM_RESOLV" > /etc/resolv.conf \
@@ -609,6 +644,9 @@ let
         if [ ! -f /etc/hosts ]; then
             printf '127.0.0.1 localhost\n::1 localhost\n' > /etc/hosts 2>/dev/null || true
         fi
+        # And the uid files share the hosts' fate — same tmpfs,
+        # same ensure rule (bd myconfig-v3fk).
+        ensure_uid_files
     fi
 
     # The SLiRP NIC of the qemu backend (bd myconfig-k106, the qemu
@@ -655,13 +693,27 @@ let
             # are unreachable from behind the NAT (bd
             # myconfig-m0to). A fresh tmpfs (no /etc shares) keeps
             # the baked /etc/hosts; a tmpfs'd /etc carries it —
-            # the localhost mapping must survive the rewrite.
+            # the localhost mapping must survive the rewrite. The
+            # uid files ride the same carry (bd myconfig-v3fk): the
+            # resolver step's ensure already placed them, its
+            # tmpfs hid nothing new — this re-ensure is for the
+            # share-loop tmpfs the earlier step could not see.
             if ! "$BB" touch /etc/.mysbx-resolv-probe 2>/dev/null; then
+                etc_backup=/tmp/.mysbx-etc-slrp
+                "$BB" mkdir -p "$etc_backup"
+                for _f in hosts passwd group; do
+                    "$BB" cp /etc/$_f "$etc_backup/$_f" 2>/dev/null || "$BB" rm -f "$etc_backup/$_f"
+                done
                 "$BB" mount -t tmpfs tmpfs /etc \
                     || fail "cannot mount the tmpfs for /etc (the SLiRP resolver)"
+                for _f in hosts passwd group; do
+                    [ -f "$etc_backup/$_f" ] && "$BB" cp "$etc_backup/$_f" /etc/$_f || true
+                done
+                "$BB" rm -rf "$etc_backup"
             else
                 "$BB" rm -f /etc/.mysbx-resolv-probe
             fi
+            ensure_uid_files
             [ -f /etc/hosts ] || "$BB" printf '%s\n' \
                 '127.0.0.1 localhost' > /etc/hosts
             "$BB" printf 'nameserver 10.0.2.3\n' > /etc/resolv.conf \
@@ -1201,6 +1253,18 @@ runCommand "mysbx-krun-rootfs"
     # and masked the gap). The init copies this file to the /etc
     # tmpfs when it mounts one for resolv.conf.
     printf '127.0.0.1 localhost\n::1 localhost\n' > $out/etc/hosts
+    # The uid the payload runs as (bd myconfig-v3fk, the live run's
+    # finding): the ro root bakes no passwd, and openssh's ssh-keygen
+    # refuses an unnamed uid ("No user exists for uid …") — the
+    # sandbox keypair step died on it, and the tmux multiplexers each
+    # carry their own SHELL pin because tmux cannot resolve the
+    # pane shell either. root + nobody is the honest minimal set:
+    # the host user's own name cannot be baked (the rootfs is
+    # host-independent), and the payload runs as uid 0 in the VM.
+    # The init copies both to the /etc tmpfs when it mounts one,
+    # the same carry-over rule as hosts above.
+    printf 'root:x:0:0:root:/root:/bin/sh\nnobody:x:65534:65534:nobody:/nonexistent:/bin/false\n' > $out/etc/passwd
+    printf 'root:x:0:\nnobody:x:65534:\n' > $out/etc/group
     # The scratch disk's mountpoint (bd myconfig-dak.7, backends.md
     # D7): the ro root can hold no new entries at run time, so the
     # ext4's target is baked here — the live run's finding (mkdir

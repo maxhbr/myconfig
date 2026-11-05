@@ -50,8 +50,10 @@ listen-ports = [8080]
 
 # Resource limits (config.md D23): the podman backends enforce them, the
 # others warn. A krun VM takes whole vCPUs and more than 128 MiB.
+# `scratch-size` caps the per-run nix scratch disk (64 MiB floor).
 memory = "8g"
 cpus = 4
+scratch-size = "32g"
 pids-limit = 512
 
 # The nix store the sandbox sees (docs/design/guest-store.md): `host` is

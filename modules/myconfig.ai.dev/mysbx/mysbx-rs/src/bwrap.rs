@@ -2158,7 +2158,15 @@ fn check_symlinkable_dests(
 ///   layer that knows `$HOME`.
 /// - a target that is at-or-below NO approved entry: the pointer is
 ///   untrusted content (config.md D3) and grants nothing.
-fn check_git_dir(gitdir: &Path, approved: &[PathBuf], nono_state: bool) -> Result<(), Error> {
+///
+/// Shared with the direct VM backends (`crate::krun`), which share
+/// the same directories into the guest and must refuse the same
+/// targets for the same reasons (bd myconfig-2ww).
+pub(crate) fn check_git_dir(
+    gitdir: &Path,
+    approved: &[PathBuf],
+    nono_state: bool,
+) -> Result<(), Error> {
     // Protected paths (`/` among them): the bind lands at the git dir's real host path,
     // so a gitdir related to one is as bad as a mount dest that is.
     // `check_dest` expects the normalized in-sandbox spelling; host
@@ -2266,6 +2274,7 @@ mod tests {
             connect_ports: Vec::new(),
             listen_ports: Vec::new(),
             memory: None,
+            scratch_size: None,
             cpus: None,
             pids_limit: None,
             store: None,

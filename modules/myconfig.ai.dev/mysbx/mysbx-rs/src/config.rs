@@ -504,6 +504,10 @@ pub struct Config {
     /// when both layers decide (D23). Only the podman backends
     /// enforce it; the others warn.
     pub memory: Option<String>,
+    /// The per-run nix scratch disk cap (`scratch-size`, podman
+    /// `--memory` grammar). Same layering as `memory`; the wrapper's
+    /// `MYSBX_KRUN_SCRATCH_SIZE` pin overrides both layers.
+    pub scratch_size: Option<String>,
     /// CPU limit (`cpus`, a positive number; podman `--cpus`, or
     /// the whole vCPUs of a krun VM). Same layering as `memory`.
     pub cpus: Option<String>,
@@ -554,6 +558,7 @@ impl Default for Config {
             connect_ports: Vec::new(),
             listen_ports: Vec::new(),
             memory: None,
+            scratch_size: None,
             cpus: None,
             pids_limit: None,
             store: None,
@@ -606,6 +611,7 @@ impl Config {
         "connect-ports",
         "listen-ports",
         "memory",
+        "scratch-size",
         "cpus",
         "pids-limit",
         "store",
@@ -681,6 +687,9 @@ impl Config {
                 "connect-ports" => config.connect_ports = ports(value, "connect-ports")?,
                 "listen-ports" => config.listen_ports = ports(value, "listen-ports")?,
                 "memory" => config.memory = Some(memory(value)?),
+                "scratch-size" => {
+                    config.scratch_size = Some(scratch_size(value)?)
+                }
                 "cpus" => config.cpus = Some(cpus(value)?),
                 "pids-limit" => config.pids_limit = Some(pids_limit(value)?),
                 "store" => {
@@ -841,6 +850,35 @@ fn memory(value: &Value) -> Result<String, Error> {
         _ => Err(Error::Schema(format!(
             "memory: expected a size like \"8g\" or \"512m\" \
              (a positive number of bytes with an optional b/k/m/g suffix), found {raw:?}"
+        ))),
+    }
+}
+
+/// Parse `scratch-size`: the `memory` grammar, with the scratch's
+/// own 64 MiB floor (an ext4 that small cannot serve as the nix
+/// scratch — the same floor `MYSBX_KRUN_SCRATCH_SIZE` enforces).
+fn scratch_size(value: &Value) -> Result<String, Error> {
+    let raw = memory(value)?;
+    let lower = raw.to_ascii_lowercase();
+    let (digits, multiplier) = if let Some(d) = lower.strip_suffix('g') {
+        (d, 1024 * 1024 * 1024)
+    } else if let Some(d) = lower.strip_suffix('m') {
+        (d, 1024 * 1024)
+    } else if let Some(d) = lower.strip_suffix('k') {
+        (d, 1024)
+    } else if let Some(d) = lower.strip_suffix('b') {
+        (d, 1)
+    } else {
+        (lower.as_str(), 1)
+    };
+    match digits
+        .parse::<u64>()
+        .ok()
+        .and_then(|n| n.checked_mul(multiplier))
+    {
+        Some(bytes) if bytes >= 64 * 1024 * 1024 => Ok(raw.to_owned()),
+        _ => Err(Error::Schema(format!(
+            "scratch-size: expected a size like \"32g\" (at least 64m), found {raw:?}"
         ))),
     }
 }
@@ -1485,6 +1523,28 @@ mod tests {
     fn empty_path_is_rejected() {
         let e = Config::parse("[[mounts]]\npath = \"\"\n").unwrap_err();
         assert!(e.to_string().contains("must not be empty"), "{e}");
+    }
+
+    #[test]
+    fn scratch_size_takes_the_memory_grammar_with_a_64m_floor() {
+        // D23: the same b/k/m/g grammar as `memory`, plus the
+        // scratch's own floor — the pin's (an ext4 that small
+        // cannot serve as the nix scratch).
+        for raw in ["32g", "100G", "512m", "64m", "67108864"] {
+            let c = Config::parse(&format!("scratch-size = \"{raw}\"\n")).unwrap();
+            assert_eq!(c.scratch_size.as_deref(), Some(raw), "{raw}");
+        }
+        for raw in ["63m", "1024", "garbage"] {
+            let e = Config::parse(&format!("scratch-size = \"{raw}\"\n")).unwrap_err();
+            assert!(
+                e.to_string().contains(raw),
+                "the refusal names the offending value: {raw}: {e}"
+            );
+        }
+        // The floor's OWN refusal (a value the memory grammar
+        // accepts but the scratch cannot serve):
+        let e = Config::parse("scratch-size = \"32k\"\n").unwrap_err();
+        assert!(e.to_string().contains("scratch-size"), "{e}");
     }
 
     #[test]
