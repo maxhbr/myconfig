@@ -29,7 +29,7 @@
 //!
 //! Lifecycle (cli.md D22): mysbx-once stays the PARENT — no `exec`
 //! — so it can tear the temp root down after the payload. It
-//! forwards SIGINT/SIGTERM to the child, waits, runs the
+//! forwards SIGINT/SIGTERM/SIGHUP to the child, waits, runs the
 //! data-loss guard (a linked worktree under the temp root with
 //! uncommitted changes keeps the root and names it), prunes the
 //! host repo's stale worktree entries, removes the temp root, and
@@ -262,16 +262,11 @@ pub fn teardown(root: &TempRoot, repo: &Repo) -> bool {
     }
     // The host repo's worktree bookkeeping: `git worktree prune`
     // drops the entries whose worktree directories no longer exist
-    // — after the removal below (or for a kept root, only the
-    // entries that pointed at removed dirs — none). Best-effort:
-    // a git that cannot run is debris of the same class a crashed
-    // run leaves, reported but not fatal to the teardown.
-    let _ = std::process::Command::new("git")
-        .arg("-C")
-        .arg(&repo.root)
-        .arg("worktree")
-        .arg("prune")
-        .status();
+    // — so it must run AFTER the removal below to see them gone
+    // (pruning before would be a no-op: the directories still
+    // exist). Best-effort: a git that cannot run is debris of the
+    // same class a crashed run leaves, reported but not fatal to
+    // the teardown.
     if !keep {
         if let Err(e) = std::fs::remove_dir_all(&root.root) {
             eprintln!(
@@ -280,6 +275,12 @@ pub fn teardown(root: &TempRoot, repo: &Repo) -> bool {
             );
         }
     }
+    let _ = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&repo.root)
+        .arg("worktree")
+        .arg("prune")
+        .status();
     keep
 }
 

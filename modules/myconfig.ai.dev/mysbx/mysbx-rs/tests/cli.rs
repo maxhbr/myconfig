@@ -14456,6 +14456,10 @@ fn once_refuses_the_persistent_verbs_and_flags() {
 
 #[test]
 fn once_run_command_exits_with_the_payload_code_and_removes_the_temp_root() {
+    if !is_ssh_keygen_available() {
+        eprintln!("skipping: no usable ssh-keygen in this environment");
+        return;
+    }
     // `mysbx-once run -- true` / `-- false` exit 0 / 1 (D8), the
     // host is untouched, and the temp root is GONE after the run.
     // Needs a runnable bwrap — the same self-skip the other
@@ -14500,9 +14504,14 @@ fn once_run_command_exits_with_the_payload_code_and_removes_the_temp_root() {
     let (code, _o, e) = run(&false_path.to_string_lossy());
     assert_eq!(code, 1, "stderr: {e}");
 
-    // The teardown held: no temp root, no host sidecar, no sibling.
+    // The teardown held: the base dir may remain (empty), but the
+    // pid-named temp roots are gone; no host sidecar, no sibling.
+    let base = inv.home.join("runtime/mysbx-once");
     assert!(
-        !inv.home.join("runtime/mysbx-once").exists(),
+        !base.exists()
+            || std::fs::read_dir(&base)
+                .map(|d| d.count() == 0)
+                .unwrap_or(false),
         "the temp root was removed"
     );
     assert!(
@@ -14549,19 +14558,28 @@ fn once_ignores_an_existing_host_sidecar() {
 
 #[test]
 fn once_sigterm_forwards_tears_down_and_reports_the_signal() {
+    if !is_ssh_keygen_available() {
+        eprintln!("skipping: no usable ssh-keygen in this environment");
+        return;
+    }
     // The once lifecycle's middle (cli.md D22): mysbx-once is the
     // PARENT, so a SIGTERM reaches it, not the payload's bwrap. It
     // must forward the signal to the child's group, tear the temp
     // root down, and exit `128 + signum` — D8's cancellation code,
-    // the same number the result mode uses.
+    // the same dance the `--result` wait runs (the
+    // `a_cancelled_result_run_...` precedent, SIGTERM instead of
+    // SIGINT).
     if !is_bwrap_available() {
         eprintln!("skipping: bwrap not available in this environment");
         return;
     }
-    // A payload that stays alive until the signal: the bare form's
-    // shell replaced by a script that traps nothing and sleeps —
-    // inside the sandbox only /nix/store and /usr/bin are bound, so
-    // sleep must be taken from a base-bound directory.
+    let Some(bash) = sandbox_bash() else {
+        eprintln!("skipping: no sandbox-reachable bash");
+        return;
+    };
+    // `sleep` by its ABSOLUTE store path: the sandbox's PATH holds
+    // only the tools closure (`MYSBX_TOOLS_PATH`), and a plain
+    // `sleep` lookup would depend on what that closure ships.
     let sleep = std::env::var_os("PATH").and_then(|path| {
         std::env::split_paths(&path).find_map(|dir| {
             if !(dir.starts_with("/nix/store") || dir.starts_with("/usr/bin")) {
@@ -14576,24 +14594,28 @@ fn once_sigterm_forwards_tears_down_and_reports_the_signal() {
         return;
     };
     let (inv, _repo, _sidecar) = fixture_uninited("once-sigterm", &[]);
-    let mut cmd = spawn_once(&inv, &["--verbose"]);
-    cmd.env("MYSBX_SHELL", &sleep)
-        .env("MYSBX_TOOLS_PATH", "/usr/bin")
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
-    // SIGTERM of the PARENT (the wrapped mysbx-once), not the child.
+    let bash = bash.to_string_lossy().into_owned();
+    let cmd_line = format!("exec {} 30", sleep.display());
+    let args = ["run", "--", &bash, "-c", &cmd_line];
+    let mut cmd = spawn_once(&inv, &args);
+    cmd.env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .stdin(std::process::Stdio::piped());
+    // SIGTERM of the PARENT (the mysbx-once process), not the child
+    // — `kill(2)` the same way the result-mode test signals mysbx.
+    // The run goes in its OWN process group (`process_group(0)`, the
+    // detach tests' reason): the group kill the wait performs must
+    // reach the run's processes only, never the harness that spawned
+    // it — the harness and mysbx-once would otherwise share one
+    // group and the forwarded SIGTERM would TERM the test itself.
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
     let mut child = cmd.spawn().expect("failed to spawn mysbx-once");
-    std::thread::sleep(std::time::Duration::from_secs(3));
-    let pid = child.id();
-    // SIGTERM of the PARENT (the wrapped mysbx-once), not the child
-    // — std has no signal API, and the suite keeps its zero-dep
-    // discipline, so the shell's `kill` carries it.
-    std::process::Command::new("kill")
-        .arg("-15")
-        .arg(pid.to_string())
-        .status()
-        .expect("failed to signal mysbx-once");
+    std::thread::sleep(std::time::Duration::from_millis(700));
+    unsafe {
+        libc_kill(child.id(), 15);
+    }
     let out = child.wait_with_output().expect("failed to reap mysbx-once");
     assert_eq!(
         out.status.code(),
@@ -14602,12 +14624,15 @@ fn once_sigterm_forwards_tears_down_and_reports_the_signal() {
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
     );
+    let base = inv.home.join("runtime/mysbx-once");
     assert!(
-        !inv.home.join("runtime/mysbx-once").exists(),
+        !base.exists()
+            || std::fs::read_dir(&base)
+                .map(|d| d.count() == 0)
+                .unwrap_or(false),
         "the temp root was removed after the signal"
     );
 }
-
 #[test]
 fn once_failure_paths_do_not_leak_the_temp_root() {
     // The lifecycle wrapper's own contract (cli.md D22): the temp
@@ -14642,4 +14667,129 @@ fn once_failure_paths_do_not_leak_the_temp_root() {
         runtime.display()
     );
     let _ = std::fs::remove_dir_all(&runtime);
+}
+
+#[test]
+fn once_worktrees_live_in_the_temp_root_and_leave_no_stale_entries() {
+    if !is_ssh_keygen_available() {
+        eprintln!("skipping: no usable ssh-keygen in this environment");
+        return;
+    }
+    // cli.md D22's worktree acceptance: `git worktree add` INSIDE
+    // the once sandbox lands in the TEMP root (bound at the host
+    // sibling's path), a branch committed there persists in the host
+    // repo (a branch lives in the git dir, never in the worktree),
+    // and after the run the host has no sibling, no temp root, and
+    // no stale `git worktree list` entry (the teardown prunes the
+    // entries whose directories died with the root).
+    if !is_bwrap_available() {
+        eprintln!("skipping: bwrap not available in this environment");
+        return;
+    }
+    let Some(bash) = sandbox_bash() else {
+        eprintln!("skipping: no sandbox-reachable bash");
+        return;
+    };
+    // git reachable INSIDE the sandbox, the same discovery rule
+    // sandbox_bash uses for bash.
+    let Some(git) = std::env::var_os("PATH").and_then(|path| {
+        std::env::split_paths(&path).find_map(|dir| {
+            let candidate = dir.join("git");
+            if !candidate.is_file() {
+                return None;
+            }
+            let real = std::fs::canonicalize(&candidate).ok()?;
+            (real.starts_with("/nix/store") || real.starts_with("/usr/bin")).then_some(real)
+        })
+    }) else {
+        eprintln!("skipping: no sandbox-reachable git");
+        return;
+    };
+    // A real repo at the fixture's cwd — git_repo skips when no
+    // host git exists, but we already required one above.
+    let (inv, _repo, _sidecar) = fixture_uninited("once-worktree", &[]);
+    let Some(repo) = git_repo(inv.cwd.parent().unwrap(), "repo") else {
+        return;
+    };
+    let repo_name = repo.file_name().unwrap().to_string_lossy().into_owned();
+    let sibling = repo
+        .parent()
+        .unwrap()
+        .join(format!("{repo_name}__worktrees"));
+    // The repo-local identity the sandbox git needs (the run's
+    // --clearenv leaves no GIT_AUTHOR_* behind; the repo-local
+    // config travels with the rw repo bind).
+    assert!(git_in(&repo, &["config", "user.name", "mysbx-tests",]));
+    assert!(git_in(
+        &repo,
+        &["config", "user.email", "mysbx-tests@invalid",]
+    ));
+    // The payload: one linked worktree at the path the SANDBOX sees
+    // (the host sibling's path — the temp root is bound there), one
+    // commit on its branch, nothing left dirty.
+    // The script's interpreter is the ABSOLUTE store bash (the
+    // sandbox has no /bin/sh without the `MYSBX_BINSH` pin).
+    let Some(sh) = sandbox_bash() else {
+        eprintln!("skipping: no sandbox-reachable bash");
+        return;
+    };
+    let script = format!(
+        "#!{}\nset -e\n{} worktree add {sibling}/fix-1 -b fix-1\ncd {sibling}/fix-1\necho work > w.txt\n{} add w.txt\n{} commit -m worktree-work\n",
+        sh.display(),
+        git.display(),
+        git.display(),
+        git.display(),
+        sibling = sibling.display()
+    );
+    // The script lives IN THE REPO (bound rw — the payload's own
+    // filesystem): the host home is not mounted inside the sandbox.
+    let script_path = inv.cwd.join("once-worktree-payload.sh");
+    std::fs::write(&script_path, script).unwrap();
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let out = spawn_once(&inv, &["run", "--verbose", "--"])
+        .arg(&script_path)
+        .env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .output()
+        .expect("failed to spawn mysbx-once");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        out.status.success(),
+        "the payload ran clean; stdout: {stdout} stderr: {stderr}"
+    );
+    // The commit survives in the host repo (a branch is git-dir
+    // state, the worktree itself was ephemeral).
+    assert!(
+        git_in(&repo, &["rev-parse", "--verify", "fix-1"]),
+        "the branch committed in the temp worktree lives in the host repo"
+    );
+    // The host is untouched: no sibling, no temp root.
+    assert!(
+        !sibling.exists(),
+        "the host worktrees sibling was not created"
+    );
+    assert!(
+        !inv.home.join("runtime/mysbx-once").exists()
+            || std::fs::read_dir(inv.home.join("runtime/mysbx-once"))
+                .map(|d| d.count() == 0)
+                .unwrap_or(false),
+        "the temp root was removed"
+    );
+    // No stale worktree entry in the host repo.
+    let list = Command::new("git")
+        .arg("-C")
+        .arg(&repo)
+        .args(["worktree", "list"])
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .output()
+        .expect("git worktree list failed");
+    let list = String::from_utf8_lossy(&list.stdout);
+    assert!(
+        !list.contains(&sibling.display().to_string()),
+        "no stale entry points at the removed temp worktree: {list}"
+    );
 }

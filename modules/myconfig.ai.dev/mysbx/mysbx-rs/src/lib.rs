@@ -4728,6 +4728,12 @@ fn once_run_wait(mut cmd: std::process::Command) -> i32 {
     unsafe {
         libc_signal_catch(SIGINT);
         libc_signal_catch(SIGTERM);
+        // A closed terminal SIGHUPs the parent (cli.md D22's
+        // lifecycle): the run must not die with the default action —
+        // that would leak the temp root — so HUP is caught and
+        // forwarded to the group like the other cancellations, and
+        // the exit code is the shell's `128 + 1`.
+        libc_signal_catch(SIGHUP);
     }
     let mut child = match cmd.spawn() {
         Ok(c) => c,

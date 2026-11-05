@@ -861,8 +861,9 @@ too — on tmpfs that is a RAM consideration, not worked around.
 
 **Lifecycle.** mysbx-once stays the PARENT — no `exec` (D8's
 passthrough is emulated: the exit code is the payload's own,
-`128 + signum` for a cancellation). SIGINT/SIGTERM are forwarded
-to the process group; after the payload, the teardown runs:
+`128 + signum` for a cancellation). SIGINT/SIGTERM/SIGHUP are
+forwarded to the process group; after the payload, the teardown
+runs:
 
 1. the data-loss guard — every linked worktree under the temp
    `worktrees/` is probed; one with uncommitted changes keeps the
