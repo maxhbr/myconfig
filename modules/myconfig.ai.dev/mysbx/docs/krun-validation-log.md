@@ -283,3 +283,41 @@ of the D8 head-to-head timing (no podman in this sandbox; the
 krun one-shot true recorded at ~1.7–2.5 s warm, microvm-qemu at
 ~5.2–6.0 s warm, both nested-KVM-inflated), §2.2 nested podman
 (no podman image), and a bare-metal f13 re-run of the timings.
+
+## 2026-11-05, nested-KVM microvm-qemu agent sandbox — the baked-store baseline configs live (bd myconfig-dqq0)
+
+Host context: same nested-KVM sandbox as the 85i entry above
+(microvm-qemu, `/dev/kvm` + `svm`), wrapper rebuilt from
+`test-f13` at main 216ef13a08, sidecar set to `backend = "krun"`,
+`store = "baked"`, `network = false`, `multiplexer = "none"`,
+`scratch-size = "8g"`, `git-dirs = […/myconfig/.git]`. The user
+layer (`~/.config/mysbx/config.toml` — this sandbox's own
+deployment does not carry it) was materialised from the same
+eval (`home-manager.users.mhuber.xdg.configFile."mysbx/config.toml".source`)
+so the run saw the same mounts/env a rebuilt f13 home would get;
+the baked erofs store disk came from the wrapper pin
+(`MYSBX_VM_STORE_DISK`), built fresh from `test-f13`'s closure.
+
+- the bd myconfig-dqq0 acceptance (the commit 48348f1bd5 fix,
+  live for the first time in a baked run) — PASS, all probes:
+  - `/mysbx-home/.config/ripgrep/ripgreprc` is a REGULAR FILE
+    (the raw-tree mount would have preserved the host's
+    home-manager-files SYMLINK, dangling with no host-store
+    share)
+  - `RIPGREP_CONFIG_PATH=/mysbx-home/.config/ripgrep/ripgreprc`
+    and `rg --files` (1187 files) and a pattern search both exit
+    0 — the reported hard failure of every baked-run rg call is
+    gone
+  - `.config/git` and `.config/bat` present with ZERO symlinks in
+    either tree (the same-class mounts fixed by the same commit)
+  - a first probe WITHOUT the user layer mounted confirmed the
+    negative control: no `.config/{ripgrep,git,bat}` in the guest
+    at all, `RIPGREP_CONFIG_PATH` unset — the mounts are the
+    layer's job, the baked image itself carries only what
+    `storeRootPaths` names
+- remaining raw-tree mounts observed in the same run (filed as
+  bd myconfig-kf8j, discovered-from this one):
+  `/mysbx-home/.config/beads/config.toml` and
+  `/mysbx-home/.config/hunk/config.toml` are home-manager-files
+  SYMLINKS inside the baked guest — the programs.beads and
+  programs.hunk modules still bind `~/.config/…` raw.
