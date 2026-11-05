@@ -33,6 +33,7 @@ pub mod loadimage;
 pub mod merge;
 pub mod microvm_qemu;
 pub mod nono;
+pub mod once;
 pub mod podman_gvisor;
 pub mod repo;
 pub mod report;
@@ -110,6 +111,12 @@ pub const FORWARDED_ENV_VARS: &[&str] =
 /// unchanged in a plain run — the exec replaces this process — while
 /// a `--result` run waits and interprets instead (cli.md D17).
 pub fn run(args: Vec<String>) -> i32 {
+    // Once-mode (cli.md D22): `mysbx-once` IS this binary under
+    // another name — the whole dispatcher below runs for it, with
+    // the once gate refusing the forms whose state the temp root
+    // cannot carry and the run arms routing to
+    // [`RunMode::Once`].
+    let once = once::active();
     // The global flags are accepted only BEFORE the subcommand / bare
     // form; anything after `--` is payload and never parsed (cli.md D4,
     // D5, D10). `gui` takes no `--`: its whole argument tail is the
@@ -118,6 +125,16 @@ pub fn run(args: Vec<String>) -> i32 {
         Ok(x) => x,
         Err(code) => return code,
     };
+    // The once gate (cli.md D22): the forms whose STATE the temp
+    // root cannot carry are refused with a `mysbx-once:` message
+    // (exit `70`, D8 — the command line is fine, the form it names
+    // does not exist here). The run-scoped flags that name
+    // outcome/registry state first, then the verb list.
+    if once {
+        if let Some(code) = once_gate(&flags, rest) {
+            return code;
+        }
+    }
     match rest.first().map(String::as_str) {
         // detach.md B2: `--detach` and `--detachable` are two ways
         // to start one detached run — never both in one invocation,
@@ -212,6 +229,7 @@ pub fn run(args: Vec<String>) -> i32 {
         }
         // Bare `mysbx` is the primary action (docs/design/cli.md D2): enter
         // the sandbox for the current repository.
+        None if once => sandbox(flags, bwrap::Payload::Shell, RunMode::Once),
         None => sandbox(flags, bwrap::Payload::Shell, RunMode::Exec),
         // The run-scoped flags are refused with the verb before any
         // verb arm runs (D14 for `--multiplexer`, D16 for
@@ -457,6 +475,57 @@ pub fn run(args: Vec<String>) -> i32 {
             2
         }
     }
+}
+
+/// The once-mode gate (cli.md D22): `Some(code)` refuses the
+/// invocation, `None` lets it run. Called once from [`run`] after
+/// the global flags parsed, BEFORE any verb arm — the gate owns the
+/// whole once refusal surface, so each rule lives in one place:
+///
+/// * `--session` creates the session clone in the temp sidecar —
+///   the clone (and its branch handoff) would vanish with the root,
+///   and the session registry is host state once-mode must not
+///   touch.
+/// * `--result`/`--timeout` write result.json into the temp
+///   sidecar — deleted with it before anyone could read it. No
+///   consumable outcome, refused rather than accepted-and-deleted.
+/// * `--detach`/`--detachable` start a run whose teardown has no
+///   owner: the dtach master outlives the mysbx-once parent, and a
+///   dead parent cannot remove the temp root after the detached
+///   run ends.
+/// * The host-side verbs (`init`, `edit`, `status`, the session and
+///   worktree noun groups, the fetch/merge/push/diff handoff verbs,
+///   `attach`, `ssh-pubkey`) read or write the HOST sidecar and the
+///   host repo's session/worktree state — exactly what once-mode
+///   promises not to touch.
+///
+/// Everything else — the bare form, `run -- CMD`, `gui`, `doctor`,
+/// `version`/`help`, `--dry-run`, `--multiplexer` (a session in the
+/// temp root is as ephemeral as the run itself) — runs: `version`/
+/// `help` and `doctor` are host-side read-only, `gui` opens the
+/// terminal that runs the ONCE form's own inner invocation (the
+/// inner re-invokes the same argv[0], so it stays in once-mode by
+/// itself).
+fn once_gate(flags: &Flags, rest: &[String]) -> Option<i32> {
+    let what: Option<String> = if flags.session.is_some() {
+        Some("--session is refused in once-mode".to_owned())
+    } else if flags.result {
+        Some("--result is refused in once-mode".to_owned())
+    } else if flags.timeout.is_some() {
+        Some("--timeout is refused in once-mode".to_owned())
+    } else if flags.detach || flags.detachable {
+        Some("--detach/--detachable are refused in once-mode".to_owned())
+    } else {
+        match rest.first().map(String::as_str) {
+            Some(verb) if once::REFUSED.contains(&verb) => Some(match verb {
+                "session" => "the `session` group is refused in once-mode".to_owned(),
+                "worktree" => "the `worktree` group is refused in once-mode".to_owned(),
+                other => format!("`{other}` is refused in once-mode"),
+            }),
+            _ => None,
+        }
+    };
+    what.map(|w| once::refuse(&w))
 }
 
 /// The global flags of a sandbox run (cli.md D9, D10, D14, D16).
@@ -1213,6 +1282,18 @@ fn run_command(global: Flags, selections: &Selections, args: &[String]) -> i32 {
         eprintln!("usage: {RUN_USAGE}");
         return 2;
     }
+    // The once gate runs a SECOND time here (cli.md D22): the
+    // run-only flags parsed AFTER the verb (`--result`,
+    // `--timeout`, `--session`) were not on the command line when
+    // [`run`]'s first pass refused the once forms, so this run's own
+    // parse result must pass the same gate before the pipeline
+    // starts. `rest` is the verb-less tail — the gate only looks at
+    // its first word, and the verb is known here.
+    if once::active() {
+        if let Some(code) = once_gate(&flags, &[]) {
+            return code;
+        }
+    }
     // A timeout without the result mode is the one combination the
     // flags allow syntactically but cannot act on: a plain run ends
     // in an `exec`, there is no mysbx left to enforce a budget. It
@@ -1226,7 +1307,9 @@ fn run_command(global: Flags, selections: &Selections, args: &[String]) -> i32 {
         eprintln!("usage: {RUN_USAGE}");
         return 2;
     }
-    let mode = if flags.result {
+    let mode = if once::active() {
+        RunMode::Once
+    } else if flags.result {
         RunMode::Result
     } else {
         RunMode::Exec
@@ -1271,6 +1354,13 @@ enum RunMode {
     /// outcome is recorded in the registry state file (B5) and the
     /// per-run host state is cleaned up after it.
     DetachedInner,
+    /// Once-mode (`mysbx-once`, cli.md D22): the whole pipeline with
+    /// the sidecar and worktrees redirected at a TEMP ROOT, and the
+    /// backend spawned and WAITED for (not exec'd) so the temp root
+    /// can be torn down after the payload — the data-loss guard, the
+    /// host-repo worktree prune and the removal — before exiting
+    /// with the payload's own code (D8 unchanged).
+    Once,
 }
 
 /// `mysbx gui ARG...` — start the terminal emulator and run `mysbx`
@@ -1356,6 +1446,13 @@ fn gui(flags: Flags, args: &[String]) -> i32 {
     // script below is POSIX.
     let shell = env_or("MYSBX_GUI_SHELL", "sh");
     let mut cmd = std::process::Command::new(&terminal);
+    // Once-mode survives the re-invocation (cli.md D22): the inner
+    // mysbx the window runs is located by `current_exe`, which loses
+    // the `mysbx-once` argv[0] spelling — the marker carries the mode
+    // instead, exactly like a test invocation does.
+    if once::active() {
+        cmd.env("MYSBX_ONCE", "1");
+    }
     cmd.arg("--working-directory")
         .arg(&cwd)
         // `--hold` keeps the window open after the inner mysbx exits,
@@ -1715,6 +1812,24 @@ fn podman_trusted_git_paths(
                 push(&mut paths, worktrees);
             }
         }
+        bwrap::Workspace::Once { .. } => {
+            // The live set plus the worktrees bind's DEST: the temp
+            // root's directory is bound at the host sibling's path
+            // (cli.md D22), and a worktree the payload adds there is
+            // git-trusted under that spelling.
+            push(&mut paths, &repo.root);
+            for git_dir in &repo.git_dirs {
+                let s = git_dir.to_string_lossy().into_owned();
+                if !paths.contains(&s) {
+                    paths.push(s);
+                }
+            }
+            if let Some(dest) = crate::session::Session::worktrees_dest(repo) {
+                if dest != repo.root {
+                    push(&mut paths, &dest);
+                }
+            }
+        }
         bwrap::Workspace::Clone { worktrees, .. } => {
             // The clone is bound AT the repo's own path (bd
             // myconfig-6di.5.4) — one workspace surface — and the
@@ -1767,6 +1882,10 @@ fn libgit2_trusted_paths(repo: &repo::Repo, workspace: bwrap::Workspace<'_>) -> 
     // D3). Only existing checkouts are named, by exact path.
     let (sibling, prefix) = match workspace {
         bwrap::Workspace::Live => (repo.worktrees.as_deref(), None),
+        bwrap::Workspace::Once { worktrees } => (
+            Some(worktrees),
+            crate::session::Session::worktrees_dest(repo),
+        ),
         bwrap::Workspace::Clone { worktrees, .. } => (
             Some(worktrees),
             crate::session::Session::worktrees_dest(repo),
@@ -2026,6 +2145,65 @@ fn sweep_krun_run_dirs(dir: &std::path::Path) -> Result<(), String> {
 /// Nothing here creates the sidecar (cli.md D13): a run that finds no
 /// sidecar config fails with the `mysbx init` hint.
 fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
+    // Once-mode's lifecycle wrapper (cli.md D22): the temp root must
+    // not outlive THIS process on ANY path — the early failure
+    // returns of the pipeline below (no backend configured, a
+    // refused mount, ssh-keygen missing, …) would otherwise leak
+    // it. The pipeline owns the root once it reaches the backend
+    // spawn (the Once arm waits, then tears down); every return
+    // before that lands HERE, where a root that a payload never
+    // populated is removed unconditionally (the dirty-worktree
+    // guard could not find work to lose — nothing ran).
+    if !matches!(mode, RunMode::Once) {
+        return sandbox_pipeline(flags, payload, mode, None, &mut false);
+    }
+    if flags.dry_run {
+        // A dry run creates nothing (D9): the placeholder paths
+        // only. It cannot fail after this point in a way a root
+        // would outlive.
+        return sandbox_pipeline(
+            flags,
+            payload,
+            mode,
+            Some(once::TempRoot::placeholder()),
+            &mut false,
+        );
+    }
+    let temp = match once::TempRoot::create() {
+        Ok(t) => t,
+        Err(msg) => {
+            eprintln!("{msg}");
+            return EXIT_INFRASTRUCTURE;
+        }
+    };
+    let mut kept = false;
+    let exit = sandbox_pipeline(flags, payload, mode, Some(temp.clone()), &mut kept);
+    // The pipeline's teardown either removed the root (a real run:
+    // its Once arm owns the dirty-worktree guard and the removal)
+    // or KEPT it for the operator (a dirty worktree — *kept* is the
+    // guard's answer, never removed here), or the run never reached
+    // the backend (an early failure return: the root is empty of
+    // payload work, removed unconditionally).
+    if !kept && temp.root.exists() {
+        if let Err(e) = std::fs::remove_dir_all(&temp.root) {
+            eprintln!(
+                "mysbx-once: cannot remove the temp root {}: {e}",
+                temp.root.display()
+            );
+        }
+    }
+    exit
+}
+
+/// The pipeline every run mode shares — [`sandbox`] above owns the
+/// once-mode lifecycle around it.
+fn sandbox_pipeline(
+    flags: Flags,
+    payload: bwrap::Payload,
+    mode: RunMode,
+    once: Option<once::TempRoot>,
+    once_kept: &mut bool,
+) -> i32 {
     let dry_run = flags.dry_run;
     // The outer mysbx of `--detach`/`--detachable` (docs/design/
     // detach.md B4) runs the same pipeline a dry run runs — every
@@ -2072,6 +2250,16 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             return EXIT_INFRASTRUCTURE;
         }
     };
+    // 1a-once. the temp-root redirect of once-mode (cli.md D22): the
+    // sidecar the rest of the pipeline sees is the EPHEMERAL one and
+    // the worktrees sibling the TEMP directory, so the host's
+    // `<repo>.mysbx/` and `<repo>__worktrees` are neither read nor
+    // written. A `--dry-run` redirects nothing — it creates no temp
+    // root (D9) and prints the argv with the placeholder paths the
+    // resolution found.
+    if let Some(temp) = &once {
+        temp.redirect(&mut repo);
+    }
     // 1a. the session of a clone run (workspace.md D1/D2): the named
     // clone and its derived paths, from the resolved repo. A run
     // without `--session` never constructs one and stays in the
@@ -2085,10 +2273,16 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // dry — creates nothing: `mysbx init` is the one command that
     // writes to the host filesystem here. The check runs for
     // `--dry-run` too, so the argv a dry run prints is always the argv
-    // of a run that could actually happen.
-    if let Err(msg) = require_initialized_sidecar(&repo) {
-        eprintln!("mysbx: {msg}");
-        return EXIT_INFRASTRUCTURE;
+    // of a run that could actually happen. ONCE-mode is D13's
+    // explicit exception (cli.md D22): a real once-run carries its
+    // own ephemeral config (created above), and a once `--dry-run`
+    // skips the check — the argv it prints is the argv of a run that
+    // needs no host sidecar at all.
+    if !matches!(mode, RunMode::Once) {
+        if let Err(msg) = require_initialized_sidecar(&repo) {
+            eprintln!("mysbx: {msg}");
+            return EXIT_INFRASTRUCTURE;
+        }
     }
     // Always true past the check; kept as the value the report shows so
     // the report keeps describing what the run FOUND.
@@ -2722,7 +2916,11 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     // `preflight_only` never creates here. Checked after the merge
     // and the backend refusals, like the session clone, so a broken
     // configuration creates nothing.
-    if !preflight_only && session.is_none() && matches!(payload, bwrap::Payload::Shell) {
+    if !preflight_only
+        && session.is_none()
+        && once.is_none()
+        && matches!(payload, bwrap::Payload::Shell)
+    {
         match repo::ensure_worktrees(&mut repo) {
             Ok(Some(worktrees)) => {
                 println!("## created: {} (worktrees sibling)", worktrees.display())
@@ -2877,13 +3075,18 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
     .map(|(_, path)| trusted_policy(path))
     .collect();
     // Build argv based on backend
-    // Also determine workspace for the report
-    let workspace = match &session {
-        Some(s) => bwrap::Workspace::Clone {
+    // Also determine workspace for the report. Once-mode (cli.md D22)
+    // is a third shape beside live and clone: the repo bound rw like
+    // a live run, the TEMP ROOT's worktrees at the sibling path.
+    let workspace = match (&session, &once) {
+        (_, Some(temp)) => bwrap::Workspace::Once {
+            worktrees: &temp.worktrees,
+        },
+        (Some(s), _) => bwrap::Workspace::Clone {
             clone: &s.clone,
             worktrees: &s.worktrees,
         },
-        None => bwrap::Workspace::Live,
+        (None, None) => bwrap::Workspace::Live,
     };
     // The report renders the common run parameters (shell, tool PATH,
     // pins) through the bwrap-shaped `Params` — every backend shares
@@ -4378,6 +4581,33 @@ fn sandbox(flags: Flags, payload: bwrap::Payload, mode: RunMode) -> i32 {
             }
             EXIT_INFRASTRUCTURE
         }
+        RunMode::Once => {
+            // cli.md D22: mysbx-once stays the PARENT — no exec — so
+            // the temp root can be torn down after the payload. The
+            // wait reuses the `--result` signal dance (SIGINT/SIGTERM
+            // caught, forwarded to the process group, no timeout, no
+            // result file — the temp sidecar dies with the run), then
+            // the per-run state cleanup and the ONCE teardown run:
+            // the dirty-worktree guard, the host-repo worktree prune
+            // and the temp-root removal. The exit code is the
+            // payload's own (D8 unchanged).
+            let exit = once_run_wait(cmd);
+            cleanup_per_run_state(
+                waypipe_child,
+                merged
+                    .display
+                    .is_waypipe()
+                    .then_some(waypipe_socket_dir.as_path()),
+                git_trust_file.as_deref(),
+                krun_stage_dir.as_deref(),
+                krun_gcroot_dir.as_deref(),
+                krun_scratch_file.as_deref(),
+            );
+            if let Some(temp) = &once {
+                *once_kept = once::teardown(temp, &repo);
+            }
+            exit
+        }
         RunMode::Result => {
             let exit = run_with_result(
                 cmd,
@@ -4482,9 +4712,72 @@ fn cleanup_per_run_state(
 /// signal named, and the exit code is the shell's `128 + signum`
 /// (130 for SIGINT, 143 for SIGTERM). The record distinguishes the
 /// signals a terminal sends (a cancellation) from everything else:
-/// anything else is NOT recorded — mysbx dies with the default
-/// action and no file is written, exactly like a plain run that is
 /// killed mid-exec.
+///
+/// The waited half of an once-run (cli.md D22): the same signal
+/// dance — SIGINT/SIGTERM caught with the flag handler, delivered
+/// to the whole process GROUP so a shell payload's children die too
+/// — but no timeout, no result record (the temp sidecar is removed
+/// with the run, a result file in it would be deleted before anyone
+/// could read it, the very reason `--result` is refused in
+/// once-mode) and no state derivation: the exit code is the child's
+/// own, `128 + signum` for a cancellation (the shell's convention,
+/// D8's `130`/`143`), `70` for a backend that never started.
+fn once_run_wait(mut cmd: std::process::Command) -> i32 {
+    CANCELLED.store(0, std::sync::atomic::Ordering::SeqCst);
+    unsafe {
+        libc_signal_catch(SIGINT);
+        libc_signal_catch(SIGTERM);
+    }
+    let mut child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(e) => {
+            unsafe { libc_signal_restore() };
+            eprintln!("mysbx-once: cannot exec the backend: {e}");
+            return EXIT_INFRASTRUCTURE;
+        }
+    };
+    let mut signum: i32;
+    loop {
+        signum = CANCELLED.load(std::sync::atomic::Ordering::SeqCst);
+        if signum != 0 {
+            break;
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                unsafe { libc_signal_restore() };
+                return status.code().unwrap_or_else(|| {
+                    use std::os::unix::process::ExitStatusExt;
+                    // Died by a signal that was NOT our handled
+                    // cancellation — the backend's own crash. The
+                    // shell's convention again, matching the exec
+                    // passthrough a plain run gives.
+                    128 + status.signal().unwrap_or(0)
+                });
+            }
+            Ok(None) => std::thread::sleep(std::time::Duration::from_millis(50)),
+            Err(e) => {
+                unsafe { libc_signal_restore() };
+                eprintln!("mysbx-once: cannot wait for the backend: {e}");
+                return EXIT_INFRASTRUCTURE;
+            }
+        }
+    }
+    // A cancellation: forward it to the process group — the backend
+    // is in it, a shell payload's children too — reap, and report
+    // the shell's `128 + signum`. The teardown in the caller still
+    // runs (that is once-mode's point: the temp root must not
+    // outlive a killed run).
+    unsafe {
+        libc_kill(-libc_getpgrp(), signum);
+    }
+    let _ = child.wait();
+    128 + signum
+}
+
+/// The waited, recorded half of a `--result` run (cli.md D8/D17):
+/// spawn, forward signals, enforce the timeout, write the outcome
+/// record and interpret it into the exit code.
 fn run_with_result(
     mut cmd: std::process::Command,
     repo: &repo::Repo,

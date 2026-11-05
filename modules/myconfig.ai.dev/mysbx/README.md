@@ -45,6 +45,21 @@ initialization is explicit, and no run (`mysbx`, `mysbx run -- CMD`,
 with or without `--dry-run`) ever writes the sidecar for you
 ([`docs/design/cli.md`](./docs/design/cli.md) D13).
 
+For a checkout you do NOT want to initialize there is a second
+name: `mysbx-once` (the same binary, bd myconfig-7zwt,
+[`docs/design/cli.md`](./docs/design/cli.md) D22) runs
+`mysbx $ARGS` — the bare form, `run -- CMD...`, `gui`, `doctor` —
+against the repo the cwd resolves to, with the sidecar and the
+`__worktrees` sibling created inside a private temporary directory
+for the one run and removed when it ends: nothing persistent on
+the host, an existing `<repo>.mysbx` is ignored, not loaded. The
+forms whose state that cannot carry (`init`, `edit`, `status`, the
+session/worktree groups, `fetch`/`merge`/`push`/`diff`, `attach`,
+`--session`, `--result`/`--timeout`, `--detach`) are refused with
+exit `70`. When the teardown finds a linked worktree with
+uncommitted changes it keeps the whole temp root and names it on
+stdout (`## mysbx-once: kept <path>`), so no working tree is lost.
+
 `mysbx --session <name>` (global flag, run forms only) switches the
 run to the CLONE session of that name
 ([`docs/design/workspace.md`](./docs/design/workspace.md) D1-D5): the

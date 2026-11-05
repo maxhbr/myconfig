@@ -14356,3 +14356,290 @@ fn session_destroy_dry_run_words_a_starting_record_as_starting_or_stale() {
     );
     assert!(stderr.contains("mysbx attach --session fix-1"), "{stderr}");
 }
+
+// ---- mysbx-once (cli.md D22, bd myconfig-7zwt) -----------------------------
+
+/// One once-mode invocation: the fixture's environment plus
+/// `MYSBX_ONCE=1` (the argv[0] spelling is the Nix symlink's; the
+/// tests reach the same mode through the marker) and a PRIVATE
+/// `$XDG_RUNTIME_DIR`, so the temp root lands where the test can
+/// assert it is gone afterwards.
+fn spawn_once(inv: &Invocation, args: &[&str]) -> Command {
+    let runtime = inv.home.join("runtime");
+    std::fs::create_dir_all(&runtime).unwrap();
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_with_args(inv, args);
+    cmd.env("MYSBX_ONCE", "1").env("XDG_RUNTIME_DIR", &runtime);
+    cmd
+}
+
+fn run_once(inv: &Invocation, args: &[&str]) -> (i32, String, String) {
+    let out = spawn_once(inv, args)
+        .output()
+        .expect("failed to spawn the mysbx binary");
+    (
+        out.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+/// The repo WITHOUT a sidecar: once-mode must run where the plain
+/// form refuses (D13's exception, cli.md D22), and the host must be
+/// untouched afterwards — no `<repo>.mysbx`, no `<repo>__worktrees`.
+#[test]
+fn once_dry_run_prints_the_temp_binds_and_creates_nothing() {
+    // `--dry-run` creates NO directory (D9/D22): the placeholder
+    // names the would-be temp root, and neither the runtime dir
+    // under it nor the host sidecar exists afterwards.
+    let (inv, repo, sidecar) = fixture_uninited("once-dry", &["--dry-run"]);
+    let (code, stdout, stderr) = run_once(&inv, &["--dry-run"]);
+    assert_eq!(code, 0, "stdout: {stdout} stderr: {stderr}");
+    let argv: Vec<&str> = stdout.lines().collect();
+    // The argv is ONCE-shaped: the temp worktrees bind at the host
+    // sibling's path, not the host sibling itself.
+    let worktrees = format!("{}__worktrees", repo.display());
+    let temp_bind = argv
+        .iter()
+        .position(|a| a.contains("mysbx-once/dry-run/worktrees"));
+    let Some(temp_bind) = temp_bind else {
+        panic!("the dry-run argv binds the temp worktrees: {stdout}");
+    };
+    // bind triples: flag, src, dest
+    assert_eq!(
+        argv.get(temp_bind + 1),
+        Some(&&*worktrees),
+        "the temp worktrees bind at the host sibling's path: {stdout}"
+    );
+    // Nothing was created: no runtime temp root, no host sidecar
+    // config (the fixture's sidecar DIRECTORY exists — the file is
+    // what D13 counts), no host worktrees sibling.
+    assert!(
+        !inv.home.join("runtime/mysbx-once").exists(),
+        "the dry run created no temp root"
+    );
+    assert!(
+        !sidecar.join("config.toml").exists(),
+        "the dry run created no host sidecar config"
+    );
+    assert!(
+        !std::path::Path::new(&worktrees).exists(),
+        "the dry run created no host worktrees sibling"
+    );
+}
+
+#[test]
+fn once_refuses_the_persistent_verbs_and_flags() {
+    // The once gate (cli.md D22): exit 70, a `mysbx-once:` message —
+    // for every verb and flag whose state the temp root cannot
+    // carry. One representative per rule; the full sets live in the
+    // unit tests of src/once.rs and lib.rs's once_gate.
+    let (inv, _repo, _sidecar) = fixture_uninited("once-refuse", &[]);
+    for (args, what) in [
+        (&["init"][..], "`init`"),
+        (&["status"][..], "`status`"),
+        (&["--session", "s", "--dry-run"][..], "--session"),
+        (&["run", "--result", "--", "true"][..], "--result"),
+        (&["--detach", "--dry-run"][..], "--detach"),
+    ] {
+        let (code, _stdout, stderr) = run_once(&inv, args);
+        assert_eq!(code, 70, "args: {args:?} stderr: {stderr}");
+        assert!(stderr.contains("mysbx-once:"), "stderr: {stderr}");
+        assert!(stderr.contains(what), "the refusal names {what}: {stderr}");
+    }
+}
+
+#[test]
+fn once_run_command_exits_with_the_payload_code_and_removes_the_temp_root() {
+    // `mysbx-once run -- true` / `-- false` exit 0 / 1 (D8), the
+    // host is untouched, and the temp root is GONE after the run.
+    // Needs a runnable bwrap — the same self-skip the other
+    // execution tests use.
+    if !is_bwrap_available() {
+        eprintln!("skipping: bwrap not available in this environment");
+        return;
+    }
+    // A sandbox-reachable true/false (the base binds /nix/store and
+    // /usr/bin only), the same discovery `verbose_bare_form_reports...`
+    // uses.
+    let true_path = std::env::var_os("PATH").and_then(|path| {
+        std::env::split_paths(&path).find_map(|dir| {
+            if !(dir.starts_with("/nix/store") || dir.starts_with("/usr/bin")) {
+                return None;
+            }
+            let candidate = dir.join("true");
+            candidate.is_file().then_some(candidate)
+        })
+    });
+    let Some(true_path) = true_path else {
+        eprintln!("skipping: no sandbox-reachable true");
+        return;
+    };
+    let true_str = true_path.to_string_lossy().into_owned();
+    let false_path = true_path.with_file_name("false");
+    let (inv, repo, sidecar) = fixture_uninited("once-run", &[]);
+
+    let run = |payload: &str| {
+        let out = spawn_once(&inv, &["run", "--", payload])
+            .env("MYSBX_TOOLS_PATH", "/usr/bin")
+            .output()
+            .expect("failed to spawn mysbx-once");
+        (
+            out.status.code().unwrap_or(-1),
+            String::from_utf8_lossy(&out.stdout).into_owned(),
+            String::from_utf8_lossy(&out.stderr).into_owned(),
+        )
+    };
+    let (code, _o, e) = run(&true_str);
+    assert_eq!(code, 0, "stderr: {e}");
+    let (code, _o, e) = run(&false_path.to_string_lossy());
+    assert_eq!(code, 1, "stderr: {e}");
+
+    // The teardown held: no temp root, no host sidecar, no sibling.
+    assert!(
+        !inv.home.join("runtime/mysbx-once").exists(),
+        "the temp root was removed"
+    );
+    assert!(
+        !sidecar.join("config.toml").exists(),
+        "the host sidecar was not created: {e}"
+    );
+    let sibling = format!("{}__worktrees", repo.display());
+    assert!(
+        !std::path::Path::new(&sibling).exists(),
+        "the host worktrees sibling was not created"
+    );
+}
+
+#[test]
+fn once_ignores_an_existing_host_sidecar() {
+    // The sidecar layer is EMPTY in once-mode: a repo WITH a sidecar
+    // carrying mounts (or a whole backend) runs on the USER layer +
+    // defaults only — the sidecar config must not be loaded. Proven
+    // by --dry-run: the printed argv has NO bind the host sidecar
+    // declared, and the report's sidecar path names the TEMP config.
+    let (inv, repo, sidecar) = fixture_uninited("once-ignore", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\n[[mounts]]\npath = \"/etc\"\nmode = \"ro\"\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_once(&inv, &["--verbose", "--dry-run"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        !stdout.contains("--ro-bind /etc"),
+        "the host sidecar's mount was not bound: {stdout}"
+    );
+    // The report names the TEMP sidecar config, not the host's.
+    assert!(
+        stdout.contains("mysbx-once/dry-run/sidecar/config.toml"),
+        "the report shows the ephemeral sidecar: {stdout}"
+    );
+    assert!(
+        !stdout.contains(&format!("{}", sidecar.join("config.toml").display())),
+        "the report does not name the host sidecar: {stdout}"
+    );
+    let _ = repo;
+}
+
+#[test]
+fn once_sigterm_forwards_tears_down_and_reports_the_signal() {
+    // The once lifecycle's middle (cli.md D22): mysbx-once is the
+    // PARENT, so a SIGTERM reaches it, not the payload's bwrap. It
+    // must forward the signal to the child's group, tear the temp
+    // root down, and exit `128 + signum` — D8's cancellation code,
+    // the same number the result mode uses.
+    if !is_bwrap_available() {
+        eprintln!("skipping: bwrap not available in this environment");
+        return;
+    }
+    // A payload that stays alive until the signal: the bare form's
+    // shell replaced by a script that traps nothing and sleeps —
+    // inside the sandbox only /nix/store and /usr/bin are bound, so
+    // sleep must be taken from a base-bound directory.
+    let sleep = std::env::var_os("PATH").and_then(|path| {
+        std::env::split_paths(&path).find_map(|dir| {
+            if !(dir.starts_with("/nix/store") || dir.starts_with("/usr/bin")) {
+                return None;
+            }
+            let candidate = dir.join("sleep");
+            candidate.is_file().then_some(candidate)
+        })
+    });
+    let Some(sleep) = sleep else {
+        eprintln!("skipping: no sandbox-reachable sleep");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture_uninited("once-sigterm", &[]);
+    let mut cmd = spawn_once(&inv, &["--verbose"]);
+    cmd.env("MYSBX_SHELL", &sleep)
+        .env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    // SIGTERM of the PARENT (the wrapped mysbx-once), not the child.
+    let mut child = cmd.spawn().expect("failed to spawn mysbx-once");
+    std::thread::sleep(std::time::Duration::from_secs(3));
+    let pid = child.id();
+    // SIGTERM of the PARENT (the wrapped mysbx-once), not the child
+    // — std has no signal API, and the suite keeps its zero-dep
+    // discipline, so the shell's `kill` carries it.
+    std::process::Command::new("kill")
+        .arg("-15")
+        .arg(pid.to_string())
+        .status()
+        .expect("failed to signal mysbx-once");
+    let out = child.wait_with_output().expect("failed to reap mysbx-once");
+    assert_eq!(
+        out.status.code(),
+        Some(143),
+        "128 + SIGTERM(15); stdout: {} stderr: {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        !inv.home.join("runtime/mysbx-once").exists(),
+        "the temp root was removed after the signal"
+    );
+}
+
+#[test]
+fn once_failure_paths_do_not_leak_the_temp_root() {
+    // The lifecycle wrapper's own contract (cli.md D22): the temp
+    // root must not outlive the process on ANY path. The pipeline's
+    // early failure returns — here: no backend configured, a
+    // refusal-style exit BEFORE the backend ever spawns — are the
+    // paths the Once arm's teardown never reaches; the wrapper
+    // removes the root after them. The spawn paths are covered by
+    // `once_run_command_...` above.
+    let runtime = std::env::temp_dir().join(format!("mysbx-once-leak-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&runtime);
+    std::fs::create_dir_all(&runtime).unwrap();
+    let (inv, _repo, _sidecar) = fixture_uninited("once-leak", &[]);
+    let mut cmd = spawn_with_args(&inv, &["--verbose"]);
+    cmd.env("MYSBX_ONCE", "1").env("XDG_RUNTIME_DIR", &runtime);
+    // NO user config is written: `backend` unset — the run fails
+    // after the temp root was created ("no backend configured",
+    // exit 70).
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(70),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        !runtime.join("mysbx-once").exists()
+            || std::fs::read_dir(runtime.join("mysbx-once"))
+                .map(|d| d.count() == 0)
+                .unwrap_or(false),
+        "the temp root of the failed run was removed: {}",
+        runtime.display()
+    );
+    let _ = std::fs::remove_dir_all(&runtime);
+}

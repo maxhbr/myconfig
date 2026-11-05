@@ -821,6 +821,40 @@ pub fn podman_run_argv(
                         .collect(),
                 )
             }
+            Workspace::Once { worktrees } => {
+                // Once mode: the repo like a live run (state dirs in
+                // the ephemeral sidecar included), the TEMP ROOT's
+                // worktrees at the sibling's path (cli.md D22).
+                bind_mount(&mut argv, &root, &root, true);
+                for git_dir in &repo.git_dirs {
+                    check_git_dir(git_dir, &cfg.git_dirs)?;
+                    bind_mount(
+                        &mut argv,
+                        &git_dir.to_string_lossy(),
+                        &git_dir.to_string_lossy(),
+                        true,
+                    );
+                }
+                let dest = Session::worktrees_dest(repo).unwrap_or_else(|| repo.root.clone());
+                bind_mount(
+                    &mut argv,
+                    &worktrees.to_string_lossy(),
+                    &dest.to_string_lossy(),
+                    true,
+                );
+                (
+                    root.clone(),
+                    root.clone(),
+                    std::iter::once(normalize(&root))
+                        .chain(
+                            repo.git_dirs
+                                .iter()
+                                .map(|g| normalize(&g.to_string_lossy())),
+                        )
+                        .chain(std::iter::once(normalize(&worktrees.to_string_lossy())))
+                        .collect(),
+                )
+            }
             Workspace::Clone { clone, worktrees } => {
                 // Clone mode: session's clone at repo's path
                 bind_mount(&mut argv, &clone.to_string_lossy(), &root, true);
@@ -905,7 +939,7 @@ pub fn podman_run_argv(
     for src in cfg
         .mounts
         .iter()
-        .filter(|m| m.mode == Mode::Rw && matches!(params.workspace, Workspace::Live))
+        .filter(|m| m.mode == Mode::Rw && !matches!(params.workspace, Workspace::Clone { .. }))
         .map(|m| normalize(&m.path))
         .chain(implicit_rw_sources.into_iter())
     {
@@ -962,16 +996,18 @@ pub fn podman_run_argv(
     // A clone run binds no git dirs and no state dirs (workspace.md
     // D3/D4), but it does bind ITS OWN worktrees directory, at the
     // same `<repo>__worktrees` dest the live run uses — so the guards
-    // below see that path in both modes.
+    // below see that path in both modes. An once run is the live set
+    // with the temp-root worktrees at the sibling dest (cli.md D22).
     let clone_worktrees_dest: Option<PathBuf> = match params.workspace {
         Workspace::Live => None,
-        Workspace::Clone { worktrees, .. } => {
+        Workspace::Once { worktrees } | Workspace::Clone { worktrees, .. } => {
             Some(Session::worktrees_dest(repo).unwrap_or_else(|| worktrees.to_path_buf()))
         }
     };
     let (implicit_git_dirs, implicit_worktrees): (&[PathBuf], Option<&Path>) =
         match params.workspace {
             Workspace::Live => (&repo.git_dirs, repo.worktrees.as_deref()),
+            Workspace::Once { .. } => (&repo.git_dirs, clone_worktrees_dest.as_deref()),
             Workspace::Clone { .. } => (&[], clone_worktrees_dest.as_deref()),
         };
     check_hidden_mounts(

@@ -1470,20 +1470,37 @@ fn effective_config() -> Result<(merge::Merged, Check), String> {
     let xdg = std::env::var("XDG_CONFIG_HOME").ok();
     match repo::resolve_cwd() {
         Ok(repo) => {
-            let layers = merge::load_layers(home, xdg.as_deref(), &repo.sidecar)
-                .map_err(|e| e.to_string())?;
-            let merged = merge::merge(
-                layers.user.0,
-                layers.sidecar.0,
-                &layers.user.1,
-                &layers.sidecar.1,
-                home,
-            )
-            .map_err(|e| e.to_string())?;
-            let state = if repo.sidecar.join("config.toml").is_file() {
-                "sidecar inited"
+            // Once-mode (cli.md D22): the sidecar layer is EMPTY — an
+            // existing host `<repo>.mysbx/config.toml` is ignored, so
+            // the effective configuration is the user layer plus the
+            // defaults, and the check line says exactly that.
+            let (merged, state) = if crate::once::active() {
+                let user_path = merge::user_config_path(home, xdg.as_deref());
+                let user = if user_path.exists() {
+                    Config::load(&user_path).map_err(|e| e.to_string())?
+                } else {
+                    Config::default()
+                };
+                let merged = merge::merge(user, Config::default(), &user_path, &user_path, home)
+                    .map_err(|e| e.to_string())?;
+                (merged, "once-mode: sidecar ignored, user layer only")
             } else {
-                "sidecar not inited, user layer only"
+                let layers = merge::load_layers(home, xdg.as_deref(), &repo.sidecar)
+                    .map_err(|e| e.to_string())?;
+                let merged = merge::merge(
+                    layers.user.0,
+                    layers.sidecar.0,
+                    &layers.user.1,
+                    &layers.sidecar.1,
+                    home,
+                )
+                .map_err(|e| e.to_string())?;
+                let state = if repo.sidecar.join("config.toml").is_file() {
+                    "sidecar inited"
+                } else {
+                    "sidecar not inited, user layer only"
+                };
+                (merged, state)
             };
             let scope = format!("repo {} ({state})", repo.root.display());
             Ok((merged, Check::ok("configuration", scope)))

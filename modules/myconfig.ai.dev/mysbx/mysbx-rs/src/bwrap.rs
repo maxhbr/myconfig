@@ -44,6 +44,14 @@ use std::path::{Component, Path, PathBuf};
 ///   mount is downgraded to read-only (D4): the clone and the
 ///   session's worktrees directory are the only writable binds of a
 ///   clone run.
+/// - [`Once`] is selected by once-mode (`mysbx-once`, cli.md D22): the
+///   repo itself is bound rw like a live run — plus the approved git
+///   dirs and the state-dirs, which live in the EPHEMERAL sidecar of
+///   the temp root — but the worktrees sibling is the run's TEMP
+///   root directory, bound rw at the host's `<repo>__worktrees` path
+///   (the clone-run precedent: `workmux add` inside computes that
+///   path from the repo, so the bind must be there). The host's own
+///   sibling is never created, read or touched.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum Workspace<'a> {
     /// The default: the repo itself, always rw (config.md D13).
@@ -59,6 +67,14 @@ pub enum Workspace<'a> {
         /// The session's own worktrees directory,
         /// `<repo>.mysbx/clones/NAME__worktrees`, bound rw at the
         /// host's `<repo>__worktrees` path (D3).
+        worktrees: &'a Path,
+    },
+    /// Once-mode (`mysbx-once`, cli.md D22): the repo bound rw like
+    /// a live run, the TEMP-root worktrees directory bound rw at the
+    /// host's `<repo>__worktrees` path.
+    Once {
+        /// The temp root's worktrees directory, bound rw at the
+        /// host's `<repo>__worktrees` path.
         worktrees: &'a Path,
     },
 }
@@ -697,6 +713,15 @@ pub fn bwrap_argv(
     // the live checkout), and the git-dirs approvals do not apply
     // either: the clone carries its own `.git` DIRECTORY, not a
     // pointer, so there is nothing external to approve.
+    //
+    // In an ONCE run (cli.md D22) the section is the LIVE shape plus
+    // one redirected bind: the repo, the approved git dirs and the
+    // state-dirs all bind exactly like a live run (the sidecar they
+    // live in is the run's EPHEMERAL one), but the worktrees
+    // sibling is the TEMP ROOT's directory, bound rw at the host's
+    // `<repo>__worktrees` path — the clone-run dest (D3), so the
+    // payload's `workmux add` / `git worktree add` land somewhere
+    // the teardown's data-loss guard looks.
     let (workspace_src, workspace_dest, implicit_rw_sources): (String, String, Vec<PathBuf>) =
         match params.workspace {
             Workspace::Live => {
@@ -733,6 +758,38 @@ pub fn bwrap_argv(
                                 .map(|w| normalize(&w.to_string_lossy()))
                                 .into_iter(),
                         )
+                        .collect(),
+                )
+            }
+            Workspace::Once { worktrees } => {
+                bind(&mut argv, false, &root, None);
+                for git_dir in &repo.git_dirs {
+                    check_git_dir(git_dir, &cfg.git_dirs, params.inner.is_some())?;
+                    bind(&mut argv, false, &git_dir.to_string_lossy(), None);
+                }
+                // The temp root's worktrees directory at the host
+                // sibling's PATH (D3's dest rule, the clone-run
+                // precedent): the host path is never created or
+                // bound — the run's worktrees vanish with the temp
+                // root at teardown.
+                let dest =
+                    Session::worktrees_dest(repo).unwrap_or_else(|| PathBuf::from(root.clone()));
+                bind(
+                    &mut argv,
+                    false,
+                    &worktrees.to_string_lossy(),
+                    Some(&dest.to_string_lossy()),
+                );
+                (
+                    root.clone(),
+                    root.clone(),
+                    std::iter::once(normalize(&root))
+                        .chain(
+                            repo.git_dirs
+                                .iter()
+                                .map(|g| normalize(&g.to_string_lossy())),
+                        )
+                        .chain(std::iter::once(normalize(&worktrees.to_string_lossy())))
                         .collect(),
                 )
             }
@@ -870,7 +927,7 @@ pub fn bwrap_argv(
     for src in cfg
         .mounts
         .iter()
-        .filter(|m| m.mode == Mode::Rw && matches!(params.workspace, Workspace::Live))
+        .filter(|m| m.mode == Mode::Rw && !matches!(params.workspace, Workspace::Clone { .. }))
         .map(|m| normalize(&m.path))
         .chain(implicit_rw_sources.into_iter())
     {
@@ -990,16 +1047,18 @@ pub fn bwrap_argv(
     // state dirs (D3/D4), but it does bind ITS OWN worktrees
     // directory, at the same `<repo>__worktrees` dest — so the guard
     // sees that path in both modes and a configured mount may never
-    // cover it.
+    // cover it. An ONCE run is the live set with the temp-root
+    // worktrees at the sibling dest: same guard path, same rule.
     let clone_worktrees_dest: Option<PathBuf> = match params.workspace {
         Workspace::Live => None,
-        Workspace::Clone { worktrees, .. } => {
+        Workspace::Once { worktrees } | Workspace::Clone { worktrees, .. } => {
             Some(Session::worktrees_dest(repo).unwrap_or_else(|| worktrees.to_path_buf()))
         }
     };
     let (implicit_git_dirs, implicit_worktrees): (&[PathBuf], Option<&Path>) =
         match params.workspace {
             Workspace::Live => (&repo.git_dirs, repo.worktrees.as_deref()),
+            Workspace::Once { .. } => (&repo.git_dirs, clone_worktrees_dest.as_deref()),
             Workspace::Clone { .. } => (&[], clone_worktrees_dest.as_deref()),
         };
     check_hidden_mounts(

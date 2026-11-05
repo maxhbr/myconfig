@@ -830,6 +830,65 @@ implemented. The required live parallel-run matrix is still
 [unrecorded](../detach-validation-log.md), so CLI acceptance is not
 live lifecycle validation.
 
+### D22: `mysbx-once` — one run, no persistent per-repo setup
+
+`mysbx-once` is the SAME binary as `mysbx` under a second name (a
+second wrapped program beside it, carrying the identical `MYSBX_*`
+pins plus the `MYSBX_ONCE=1` marker; argv[0] cannot carry the
+dispatch through a makeBinaryWrapper chain). It starts `mysbx
+$ARGS` for the repo the cwd resolves to — resolution is unchanged
+(D1) — but neither reads nor writes the host's `<repo>.mysbx/` and
+`<repo>__worktrees`: both are created in a private temporary
+directory for one run and removed when it ends.
+
+**This is D13's one explicit exception, and it keeps D13's
+intent**: nothing persistent is created on the host. The sidecar
+LAYER is empty (built-in defaults + user config + flags); an
+existing host `<repo>.mysbx/config.toml` is ignored, not loaded.
+The worktrees sibling a D13 interactive run creates is redirected
+the same way — the run binds its temp directory at the host
+sibling's PATH inside the sandbox (the clone-run dest precedent of
+workspace.md D3a), so `workmux add` / `git worktree add` work and
+the host path is never touched.
+
+**Temp root.** `$XDG_RUNTIME_DIR/mysbx-once/<pid>` (fallback
+`${TMPDIR:-/tmp}/mysbx-once/<pid>`), mode 0700, one root per
+process: `sidecar/` (an EMPTY `config.toml` — an empty policy
+layer, the exact state `mysbx init` leaves in a repo without
+policy), `state/` (the state-dirs and the per-run ssh keypair), and
+`worktrees/`. The VM backends' per-run scratch/state land there
+too — on tmpfs that is a RAM consideration, not worked around.
+
+**Lifecycle.** mysbx-once stays the PARENT — no `exec` (D8's
+passthrough is emulated: the exit code is the payload's own,
+`128 + signum` for a cancellation). SIGINT/SIGTERM are forwarded
+to the process group; after the payload, the teardown runs:
+
+1. the data-loss guard — every linked worktree under the temp
+   `worktrees/` is probed; one with uncommitted changes keeps the
+   whole temp root (named on stdout, `## mysbx-once: kept <path>`).
+   Commits are safe — a worktree branch lives in the host repo's
+git dir — but the working tree is only here;
+2. `git worktree prune` on the host repo — the entries that pointed
+   into the removed root;
+3. removal of the temp root.
+
+**Refused with exit `70` and a `mysbx-once:` message** (the forms
+whose state the temp root cannot carry): `init`, `edit`, `status`,
+the session and worktree noun groups, `fetch`/`merge`/`push`/
+`diff`, `attach`, `ssh-pubkey`, `--session`, `--result`/`--timeout`,
+`--detach`/`--detachable`. **Allowed**: the bare form, `run --
+CMD`, `gui` (the window's inner invocation carries the marker),
+`doctor` (it checks the user layer, reporting the sidecar as
+ignored), `version`/`help`, `--dry-run` — which creates nothing and
+prints the argv with a placeholder temp path — `--multiplexer`,
+`--backend`, `--ro`/`--rw`, `--verbose`.
+
+**Ephemeral consequences, documented not worked around**: the
+state-dirs do not persist; the sandbox ssh keypair is new for each
+run; krun/podman-krun scratch/state live in the temp root and die
+with it.
+
 ## Non-goals
 
 - No mysbx daemon — the dtach master is per run and ends with it —

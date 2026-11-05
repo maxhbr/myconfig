@@ -200,6 +200,10 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         Workspace::Live => {
             p("workspace:      live — the repo itself, bound rw (the default)".to_string())
         }
+        Workspace::Once { worktrees } => p(format!(
+            "workspace:      once — the repo itself, bound rw; the ephemeral worktrees {} bound rw at the host's `<repo>__worktrees` path",
+            worktrees.display(),
+        )),
         Workspace::Clone { clone, .. } => p(format!(
             "workspace:      clone run — {} bound rw at {} (the host repo is not mounted)",
             clone.display(),
@@ -227,7 +231,7 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
             }
     ));
     match r.params.workspace {
-        Workspace::Live => p(format!(
+        Workspace::Live | Workspace::Once { .. } => p(format!(
             "  rw {} -> {}  [repo, implicit]",
             r.repo.root.display(),
             r.repo.root.display()
@@ -249,6 +253,17 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
                     worktrees.display()
                 ));
             }
+        }
+        // An once run binds the TEMP ROOT's worktrees directory at the
+        // host sibling's path (cli.md D22) — the host path is never
+        // touched.
+        Workspace::Once { worktrees } => {
+            let dest = Session::worktrees_dest(r.repo).unwrap_or_else(|| worktrees.to_path_buf());
+            p(format!(
+                "  rw {} -> {}  [once worktrees, implicit]",
+                worktrees.display(),
+                dest.display()
+            ));
         }
         // A clone run binds the SESSION's own worktrees directory at the
         // host's sibling path (workspace.md D3) — never the host's.
@@ -569,6 +584,10 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
                         ),
                         (_, Workspace::Clone { .. }) => p(
                             "  worktrees:    herdr keeps its own default — a clone run binds no __worktrees sibling (workspace.md D3)"
+                                .to_string(),
+                        ),
+                        (_, Workspace::Once { .. }) => p(
+                            "  worktrees:    the once-run's temp worktrees are bound at `<repo>__worktrees` — herdr's checkouts land there and vanish with the run (cli.md D22)"
                                 .to_string(),
                         ),
                     }

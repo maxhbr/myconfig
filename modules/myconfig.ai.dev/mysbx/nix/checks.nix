@@ -1855,6 +1855,7 @@ in
   mysbx-completions =
     let
       completion = ../mysbx-rs/completions/mysbx.fish;
+      onceCompletion = ../mysbx-rs/completions/mysbx-once.fish;
       usage = ../mysbx-rs/src/usage.txt;
       lib = ../mysbx-rs/src/lib.rs;
     in
@@ -1874,12 +1875,17 @@ in
 
         installed="${pkg}/share/fish/vendor_completions.d/mysbx.fish"
         test -f "$installed" || fail "not installed at: $installed"
+        onceInstalled="${pkg}/share/fish/vendor_completions.d/mysbx-once.fish"
+        test -f "$onceInstalled" || fail "not installed at: $onceInstalled"
 
-        # the installed file is the maintained source, byte for byte
+        # the installed files are the maintained sources, byte for byte
         cmp ${completion} "$installed" || fail "installed completion differs from ${completion}"
+        cmp ${onceCompletion} "$onceInstalled" \
+          || fail "installed once completion differs from ${onceCompletion}"
 
-        # it must parse as fish
+        # they must parse as fish
         fish --no-execute "$installed" || fail "fish -n rejects the completion"
+        fish --no-execute "$onceInstalled" || fail "fish -n rejects the once completion"
 
         # Every dispatch word of usage.txt is offered as a subcommand —
         # the verbs of the dispatcher (src/lib.rs) plus the closed
@@ -1912,6 +1918,27 @@ in
         dispatchers=$(sed -n 's/^        Some("\([a-z][a-z-]*\)") .*/\1/p' "$lib" | sort -u)
         [ "$verbs" = "$dispatchers" ] \
           || fail "usage.txt verbs and src/lib.rs dispatcher differ:$verbs | $dispatchers"
+
+        # The once completion pins the SAME contract for the second
+        # name (bd myconfig-7zwt): every verb of the once line's
+        # bracketed verb list is offered, and NONE of the refused
+        # forms (cli.md D22's exit-70 set) is — offering a verb the
+        # binary would refuse is worse than offering nothing. The
+        # extraction takes the FIRST word of every `|`-separated
+        # alternative (``run -- CMD``, ``gui``, …) and drops the
+        # alternatives that carry no verb at all (``the bare form``).
+        onceVerbs=$(sed -n 's/^  mysbx-once \[\(.*\)\].*/\1/p' "$usage" \
+          | tr '|' '\n' | sed 's/^[[:space:]]*//' \
+          | grep -vE '^the ' | grep -oE '^[a-z][a-z-]*' | sort -u)
+        for sub in $onceVerbs; do
+          grep -q -- "-a $sub" "$onceInstalled" \
+            || fail "no once completion for subcommand: $sub"
+        done
+        for refused in init edit status session worktree fetch merge push diff attach ssh-pubkey; do
+          if grep -q -- "-a $refused" "$onceInstalled"; then
+            fail "once completion offers the refused verb: $refused"
+          fi
+        done
 
         # the worktree handles come from the __worktrees registry
         # (docs/design/worktree.md W2)
