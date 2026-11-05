@@ -232,12 +232,17 @@ impl TempRoot {
 /// first — every linked worktree under `<root>/worktrees` is probed
 /// with `git status --porcelain`; one with uncommitted changes keeps
 /// the whole temp root, named on stdout so the operator knows where
-/// the work still lives. Then the host repo's stale worktree
-/// entries are pruned (`git worktree prune` removes exactly the
-/// entries whose worktree directory is gone — the entries that
-/// pointed into the removed temp root), and the temp root is
-/// removed. Best-effort by stage: a prune that fails does not
-/// block the removal, a removal that fails is reported.
+/// the work still lives. The host repo's worktree BOOKKEEPING is
+/// cleaned up surgically per worktree of THIS run — never with
+/// `git worktree prune`, which is repo-global and would also delete
+/// the registration of a KEPT worktree (its backlink names the
+/// sandbox-only `<repo>__worktrees` spelling, absent on the host)
+/// and of a CONCURRENT once-run (whose backlink names that same
+/// absent spelling while its temp root still exists). A kept
+/// worktree's backlink is REPAIRED to its real host path first, so
+/// the operator's own later `git worktree prune` keeps finding it.
+/// Best-effort by stage: a stage that fails does not block the
+/// next, and only the removal failure is reported.
 ///
 /// Returns whether the temp root was KEPT (a dirty worktree), so
 /// the caller can say so with the exit code unchanged — the run's
@@ -248,6 +253,7 @@ pub fn teardown(root: &TempRoot, repo: &Repo) -> bool {
     // lives in the host repo's git dir — but the working tree is
     // only here. Dirty ⇒ keep the root, name it, skip removal.
     let mut keep = false;
+    let mut dirty: Vec<PathBuf> = Vec::new();
     if let Some(entries) = read_worktree_dirs(&root.worktrees) {
         for wt in entries {
             if worktree_dirty(&wt) {
@@ -256,38 +262,94 @@ pub fn teardown(root: &TempRoot, repo: &Repo) -> bool {
                     root.root.display(),
                     wt.display()
                 );
+                dirty.push(wt);
                 keep = true;
             }
         }
     }
-    // The host repo's worktree bookkeeping: `git worktree prune`
-    // drops the entries whose worktree directories no longer exist
-    // — so it must run AFTER the removal below to see them gone
-    // (pruning before would be a no-op: the directories still
-    // exist). Best-effort: a git that cannot run is debris of the
-    // same class a crashed run leaves, reported but not fatal to
-    // the teardown.
-    if !keep {
-        if let Err(e) = std::fs::remove_dir_all(&root.root) {
-            eprintln!(
-                "mysbx-once: cannot remove the temp root {}: {e}",
-                root.root.display()
-            );
+    if keep {
+        // The kept worktrees' admin backlinks still name the SANDBOX
+        // spelling (`<repo>__worktrees/...`, the path the payload's
+        // git used) — a spelling that does not exist on the host, so
+        // the operator's next `git worktree prune` would delete
+        // their admin dirs (index, HEAD) and orphan the kept work.
+        // `git worktree repair <path>` repoints the backlink at the
+        // real kept path. Quiet and best-effort: a repair that fails
+        // leaves debris the operator can see with `git worktree
+        // list` — it does not lose work.
+        for wt in &dirty {
+            let _ = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&repo.root)
+                .args(["worktree", "repair"])
+                .arg(wt)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status();
+        }
+        return keep;
+    }
+    // All clean: the admin dirs are collected BEFORE the removal
+    // (they are read out of the worktrees' `.git` pointer files,
+    // which die with the root), then the temp root goes, then THIS
+    // run's registrations — surgically, one per worktree we found,
+    // each only when its own backlink names a path of THIS run (a
+    // concurrent once-run's backlink names ITS temp root, an
+    // operator's names a real host path — neither is ours). This is
+    // what `git worktree prune` would do to our entries, without its
+    // repo-global reach.
+    let admins = admin_dirs_of(&root.worktrees);
+    if let Err(e) = std::fs::remove_dir_all(&root.root) {
+        eprintln!(
+            "mysbx-once: cannot remove the temp root {}: {e}",
+            root.root.display()
+        );
+    }
+    for admin in admins {
+        let _ = remove_admin_if_ours(&admin, root, repo);
+    }
+    keep
+}
+
+/// The admin dirs (`<gitdir>/worktrees/<name>`) of every linked
+/// worktree under `<dir>`, read from each worktree's `.git` pointer
+/// file — the pointer IS the admin path (`gitdir:
+/// <repo>/.git/worktrees/<name>`). Worktrees whose pointer cannot be
+/// read are skipped: their admin dir is left for the operator's own
+/// `git worktree prune` — a missed cleanup, never a lost worktree.
+fn admin_dirs_of(dir: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if let Some(worktrees) = read_worktree_dirs(dir) {
+        for wt in worktrees {
+            if let Ok(pointer) = std::fs::read_to_string(wt.join(".git")) {
+                // `gitdir: <path>` — git's own format, no quoting.
+                if let Some(path) = pointer.strip_prefix("gitdir: ") {
+                    let path = path.trim();
+                    if !path.is_empty() {
+                        out.push(PathBuf::from(path));
+                    }
+                }
+            }
         }
     }
-    // Prune is best-effort and quiet: it talks to the HOST repo's
-    // git, stderr included — a repo whose git cannot run (or is not
-    // even a git checkout) is debris of the class a crashed run
-    // leaves, never the run's own output.
-    let _ = std::process::Command::new("git")
-        .arg("-C")
-        .arg(&repo.root)
-        .arg("worktree")
-        .arg("prune")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status();
-    keep
+    out
+}
+
+/// Remove one admin registration when it belongs to THIS run: its
+/// `gitdir` backlink file must name a worktree path that lived
+/// under this run's temp root or at this run's sandbox spelling of
+/// it. Anything else — a concurrent run's root, an operator's own
+/// worktree — is left alone.
+fn remove_admin_if_ours(admin: &Path, root: &TempRoot, repo: &Repo) -> std::io::Result<()> {
+    let backlink = std::fs::read_to_string(admin.join("gitdir"))?;
+    let backlink = backlink.trim();
+    let ours = Path::new(backlink).starts_with(&root.worktrees)
+        || crate::repo::sibling_worktrees(&repo.root)
+            .is_some_and(|s| Path::new(backlink).starts_with(&s));
+    if !ours {
+        return Ok(());
+    }
+    std::fs::remove_dir_all(admin)
 }
 
 /// The linked worktrees under `<dir>` — at EVERY depth: a
@@ -340,7 +402,7 @@ fn worktree_dirty(worktree: &Path) -> bool {
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(worktree)
-        .args(["--untracked-files=all", "status", "--porcelain"])
+        .args(["status", "--porcelain", "--untracked-files=all"])
         .stderr(std::process::Stdio::null())
         .output();
     match out {
@@ -472,6 +534,58 @@ mod tests {
         };
         assert!(teardown(&temp, &repo), "a dirty worktree keeps the root");
         assert!(temp.root.exists());
+    }
+
+    #[test]
+    fn remove_admin_if_ours_never_touches_a_foreign_registration() {
+        // The surgical cleanup's own rule: an admin dir whose
+        // backlink names a path under THIS run's root (or this
+        // run's sandbox spelling of it) is removed; one naming a
+        // CONCURRENT run's root — or an operator's real worktree —
+        // is left alone. The old repo-global `git worktree prune`
+        // could not tell them apart.
+        let base = tmpdir("admin-ours");
+        let temp = TempRoot {
+            root: base.join("temp"),
+            sidecar: base.join("temp/sidecar"),
+            worktrees: base.join("temp/worktrees"),
+        };
+        let repo = Repo {
+            root: base.join("repo"),
+            sidecar: base.join("repo.mysbx"),
+            git_dirs: Vec::new(),
+            worktrees: None,
+        };
+        // Ours: the backlink names a path under the temp root.
+        let ours = base.join("git/worktrees/ours");
+        std::fs::create_dir_all(&ours).unwrap();
+        std::fs::write(
+            ours.join("gitdir"),
+            format!("{}", temp.worktrees.join("w").display()),
+        )
+        .unwrap();
+        // Foreign: a concurrent run's root (a different pid dir).
+        let theirs = base.join("git/worktrees/theirs");
+        std::fs::create_dir_all(&theirs).unwrap();
+        std::fs::write(
+            theirs.join("gitdir"),
+            format!("{}", base.join("other-root/worktrees/w").display()),
+        )
+        .unwrap();
+        // Foreign: an operator's real worktree.
+        let operator = base.join("git/worktrees/operator");
+        std::fs::create_dir_all(&operator).unwrap();
+        std::fs::write(
+            operator.join("gitdir"),
+            format!("{}", base.join("real-checkout").display()),
+        )
+        .unwrap();
+        remove_admin_if_ours(&ours, &temp, &repo).unwrap();
+        assert!(!ours.exists(), "our own registration is removed");
+        let _ = remove_admin_if_ours(&theirs, &temp, &repo);
+        assert!(theirs.exists(), "a concurrent run's registration is kept");
+        let _ = remove_admin_if_ours(&operator, &temp, &repo);
+        assert!(operator.exists(), "an operator's registration is kept");
     }
 
     #[test]

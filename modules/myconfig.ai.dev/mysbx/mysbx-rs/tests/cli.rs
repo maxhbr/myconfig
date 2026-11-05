@@ -14960,6 +14960,45 @@ fn once_keeps_the_temp_root_over_a_dirty_worktree() {
         !host_sidecar.join("config.toml").exists(),
         "no host sidecar was created"
     );
+    // The repair: the kept worktree's admin backlink must name the
+    // REAL kept path, not the sandbox spelling — the operator's own
+    // `git worktree prune` must keep finding the kept work. Proven
+    // by running that prune and asserting the registration and the
+    // dirty probe both survive it.
+    let backlink = std::fs::read_to_string(repo.join(".git/worktrees/fix-1/gitdir"))
+        .expect("the admin backlink exists");
+    assert!(
+        backlink
+            .trim()
+            .starts_with(&kept_root.display().to_string()),
+        "the backlink names the kept host path, not the sandbox spelling: {backlink}"
+    );
+    let prune = Command::new("git")
+        .arg("-C")
+        .arg(&repo)
+        .args(["worktree", "prune"])
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .status()
+        .expect("git worktree prune failed");
+    assert!(prune.success());
+    assert!(
+        repo.join(".git/worktrees/fix-1/gitdir").is_file(),
+        "the operator's prune does not destroy the kept worktree's registration"
+    );
+    let still_dirty = Command::new("git")
+        .arg("-C")
+        .arg(kept_root.join("worktrees/fix-1"))
+        .args(["status", "--porcelain", "--untracked-files=all"])
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .output()
+        .expect("git status of the kept worktree failed");
+    assert!(
+        !still_dirty.stdout.is_empty(),
+        "the kept worktree still works: {}",
+        String::from_utf8_lossy(&still_dirty.stderr)
+    );
     let _ = std::fs::remove_dir_all(&base);
 }
 
