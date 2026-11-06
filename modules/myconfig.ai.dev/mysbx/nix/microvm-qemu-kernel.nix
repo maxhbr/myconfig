@@ -27,6 +27,10 @@
 #                                                     accel gate keeps a plain run on
 #                                                     kvm:tcg), so ONE kernel serves
 #                                                     both modes.
+#   pvpanic                                            the cloud-hypervisor crash
+#                                                     signal (bd myconfig-9wkp.3):
+#                                                     INERT under qemu, which presents
+#                                                     no pvpanic device.
 #   8250 console                                      already =y, the serial console
 #   tmpfs, proc, sysfs                                 already =y, the init's mounts
 #
@@ -94,6 +98,15 @@ kernelPackages.kernel.override {
     KVM_INTEL = yes;
     KVM_AMD = yes;
     CRYPTO_DEV_CCP_DD = yes;
+    # The positive crash signal of the cloud-hypervisor backend
+    # (bd myconfig-9wkp.3): CH presents a pvpanic device when
+    # asked (--pvpanic), and the driver writes the panic to the
+    # device so CH's --event-monitor reports it and the launcher
+    # can kill a hung VM deterministically. The qemu microVM
+    # presents NO pvpanic device, so the driver is INERT there —
+    # the same kernel serves both backends (the same reasoning as
+    # KVM above).
+    PVPANIC = yes;
   };
   # Faster build, smaller bzImage: no modules to sign or strip.
   buildDTBs = false;

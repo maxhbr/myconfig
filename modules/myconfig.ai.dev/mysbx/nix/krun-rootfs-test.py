@@ -976,6 +976,63 @@ class InitTests(unittest.TestCase):
             self.assertIn(expected, result.stdout,
                           f"the {form!r} probe: {result.stdout!r}")
 
+    def test_serial16550_exit_channel_writes_the_code_and_powers_off(self):
+        # bd myconfig-9wkp.4 (the cloud-hypervisor bridge): CH has
+        # no multiport virtio-serial, so exit-channel=serial16550
+        # writes the payload's code to the 16550 as one
+        # mysbx-exit:N line and tears down with `poweroff -f` —
+        # never `exit` (CH has no -no-reboot: a PID-1 exit panics
+        # the kernel and HANGS the VM) and never panic=-1 (that
+        # would REBOOT and re-run the payload). The branch runs
+        # BEFORE the virtio-port one; krun/qemu stay unaffected.
+        start = INIT.index('if [ "$exit_channel" = serial16550 ]; then')
+        end = INIT.index('if [ -n "$exit_channel" ]; then', start)
+        branch = INIT[start:end]
+        self.assertIn("setsid -c", branch)
+        self.assertIn("mysbx-exit:%s", branch)
+        self.assertIn("poweroff -f", branch)
+        # No bare PID-1 exit on this path (the qemu shape ends in
+        # `exit 0`, whose kernel panic would HANG the VM): the
+        # poweroff must come first, and an `exit 0` may only trail
+        # it as the unreachable backstop.
+        self.assertLess(
+            branch.index("poweroff -f"),
+            branch.index("exit 0"),
+            "the poweroff must precede any exit",
+        )
+
+        # Live: the REAL generated branch, the baked busybox, a
+        # fake payload exiting 7, and a /dev/ttyS0 the poweroff
+        # stub writes its marker to — proving code, marker and
+        # teardown in order.
+        serial = self.base / "dev-ttyS0"
+        serial.write_text("")
+        poweroff = self.base / "poweroff-stub"
+        poweroff.write_text(
+            "#!/bin/sh\necho POWERED-OFF >> %s\n" % shlex.quote(str(self.base / "poweroff-log"))
+        )
+        poweroff.chmod(0o755)
+        block = branch
+        block = block.replace("/dev/ttyS0", str(serial))
+        block = block.replace('"$BB" poweroff -f', shlex.quote(str(poweroff)))
+        script = (
+            "set -eu\n"
+            f"BB={shlex.quote(str(ROOTFS / 'bin/busybox'))}\n"
+            'exit_channel=serial16550\n'
+            'step() { :; }\n'
+            f"set -- {shlex.quote(str(ROOTFS / 'bin/busybox'))} sh -c 'exit 7'\n"
+            + block
+        )
+        result = subprocess.run(
+            [str(ROOTFS / "bin/busybox"), "sh", "-c", script],
+            capture_output=True, text=True, env={"PATH": ""},
+            timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(serial.read_text(), "mysbx-exit:7\n",
+                         f"the serial file: {serial.read_text()!r}")
+        self.assertEqual((self.base / "poweroff-log").read_text(), "POWERED-OFF\n")
+
     def _ctty_probe(self, master, slave, launch):
         # A session-leader waiter drives the launch line VERBATIM
         # (via `set --`) over the console, exactly like the init.

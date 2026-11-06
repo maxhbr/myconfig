@@ -171,6 +171,30 @@
   esac
 
   step "exec-ing the payload: $1"
+  if [ "$exit_channel" = serial16550 ]; then
+      # The cloud-hypervisor bridge (bd myconfig-9wkp.4): CH has no
+      # multiport virtio-serial, so the exit code travels on the
+      # 16550 the launcher wired to --serial file= (the spike's Q4:
+      # one "N\n" line reaches the file). The node is fixed
+      # (/dev/ttyS0, no sysfs walk, no udev), and the teardown is
+      # `poweroff -f` — CH has no -no-reboot, so a PID-1 exit's
+      # kernel panic would HANG the VM (the spike's Q5), and
+      # panic=-1 would REBOOT and re-run the payload. The ACPI
+      # poweroff makes CH exit; the launcher maps the serial line
+      # to the run's exit code.
+      set +e
+      "$BB" setsid -c "$@"
+      _exit_code=$?
+      set -e
+      step "the payload exited with $_exit_code"
+      printf 'mysbx-exit:%s\n' "$_exit_code" > /dev/ttyS0 2>/dev/null \
+          || echo "mysbx-init: cannot write the exit code to the 16550" >&2
+      "$BB" poweroff -f
+      # poweroff -f never returns; if it ever does, the code is
+      # already on the serial and the panic that follows can only
+      # hang — the launcher's teardown timeout owns that case.
+      exit 0
+  fi
   if [ -n "$exit_channel" ]; then
       # The exit channel (the qemu bridge): the payload runs as a
       # CHILD so this PID 1 can observe its exit code, hand it to
