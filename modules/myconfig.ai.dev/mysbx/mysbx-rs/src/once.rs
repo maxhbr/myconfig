@@ -277,12 +277,28 @@ pub fn teardown(root: &TempRoot, repo: &Repo) -> bool {
         // real kept path. Quiet and best-effort: a repair that fails
         // leaves debris the operator can see with `git worktree
         // list` — it does not lose work.
-        // The repair runs on the HOST, against a repo whose config
-        // the payload may have written (it was bound rw inside the
-        // sandbox) — the same hardening the guard's probe carries,
-        // so no configured command of the repaired repo executes
-        // with host access.
         for wt in &dirty {
+            // The repair's OWN gate (review blocker 3 of bd
+            // myconfig-jhfo): a KEPT worktree whose `.git` pointer
+            // the payload forged at another repository's admin
+            // directory must not reach `git worktree repair` —
+            // repair rewrites the registration's backlink, and a
+            // FOREIGN one is the payload's vandalism, not our
+            // cleanup. A pointer that fails the canonical-ownership
+            // check skips the repair: the debris stays visible to
+            // the operator (`git worktree list`), no work is lost.
+            if !worktree_pointer_is_ours(wt, repo) {
+                eprintln!(
+                    "mysbx-once: kept {}: its .git pointer names a registration this repo does not own — not repaired",
+                    wt.display()
+                );
+                continue;
+            }
+            // The repair runs on the HOST, against a repo whose config
+            // the payload may have written (it was bound rw inside the
+            // sandbox) — the same hardening the guard's probe carries,
+            // so no configured command of the repaired repo executes
+            // with host access.
             let mut repair = std::process::Command::new("git");
             repair.arg("-C").arg(&repo.root);
             for arg in hardened_git_args() {
@@ -306,7 +322,7 @@ pub fn teardown(root: &TempRoot, repo: &Repo) -> bool {
     // operator's names a real host path — neither is ours). This is
     // what `git worktree prune` would do to our entries, without its
     // repo-global reach.
-    let admins = admin_dirs_of(&root.worktrees);
+    let admins = admin_dirs_of(&root.worktrees, repo);
     if let Err(e) = std::fs::remove_dir_all(&root.root) {
         eprintln!(
             "mysbx-once: cannot remove the temp root {}: {e}",
@@ -322,10 +338,16 @@ pub fn teardown(root: &TempRoot, repo: &Repo) -> bool {
 /// The admin dirs (`<gitdir>/worktrees/<name>`) of every linked
 /// worktree under `<dir>`, read from each worktree's `.git` pointer
 /// file — the pointer IS the admin path (`gitdir:
-/// <repo>/.git/worktrees/<name>`). Worktrees whose pointer cannot be
-/// read are skipped: their admin dir is left for the operator's own
-/// `git worktree prune` — a missed cleanup, never a lost worktree.
-fn admin_dirs_of(dir: &Path) -> Vec<PathBuf> {
+/// <repo>/.git/worktrees/<name>`). Only pointers whose admin dir
+/// THIS repository canonically owns pass (review blocker 3 of bd
+/// myconfig-jhfo): a payload-forged `.git` file naming another
+/// repository's admin directory must not flow into the teardown —
+/// not into the repair, not into the registration removal — or the
+/// teardown would rewrite or delete a FOREIGN registration.
+/// Worktrees whose pointer cannot be read are skipped: their admin
+/// dir is left for the operator's own `git worktree prune` — a
+/// missed cleanup, never a lost worktree.
+fn admin_dirs_of(dir: &Path, repo: &Repo) -> Vec<PathBuf> {
     let mut out = Vec::new();
     if let Some(worktrees) = read_worktree_dirs(dir) {
         for wt in worktrees {
@@ -333,7 +355,7 @@ fn admin_dirs_of(dir: &Path) -> Vec<PathBuf> {
                 // `gitdir: <path>` — git's own format, no quoting.
                 if let Some(path) = pointer.strip_prefix("gitdir: ") {
                     let path = path.trim();
-                    if !path.is_empty() {
+                    if !path.is_empty() && admin_is_canonical_for_repo(Path::new(path), repo) {
                         out.push(PathBuf::from(path));
                     }
                 }
@@ -343,12 +365,58 @@ fn admin_dirs_of(dir: &Path) -> Vec<PathBuf> {
     out
 }
 
-/// Remove one admin registration when it belongs to THIS run: its
-/// `gitdir` backlink file must name a worktree path that lived
-/// under this run's temp root or at this run's sandbox spelling of
-/// it. Anything else — a concurrent run's root, an operator's own
-/// worktree — is left alone.
+/// Whether `admin` is a worktree-registration directory THIS
+/// repository canonically owns: it must sit under the repo's own
+/// git metadata — `<root>/.git/worktrees` for a plain repository,
+/// plus `<gitdir>/worktrees` and `<commondir>/worktrees` for a
+/// linked worktree or submodule whose metadata lives outside the
+/// root (both are recorded on the [`Repo`]). Everything else — a
+/// forged pointer into ANOTHER repository's admin tree, an
+/// arbitrary host directory — is not ours to repair or remove.
+/// Both sides are canonicalized before the comparison, so path
+/// spellings (symlinks on the way, `..` segments) cannot smuggle a
+/// foreign dir under a prefix it does not really share. A
+/// non-existent `admin` fails the canonicalize and the check — the
+/// teardown only acts on directories that exist.
+fn admin_is_canonical_for_repo(admin: &Path, repo: &Repo) -> bool {
+    let Some(canon) = std::fs::canonicalize(admin).ok() else {
+        return false;
+    };
+    let mut candidates = vec![repo.root.join(".git").join("worktrees")];
+    for git_dir in &repo.git_dirs {
+        candidates.push(git_dir.join("worktrees"));
+    }
+    candidates.iter().any(|candidate| {
+        std::fs::canonicalize(candidate).is_ok_and(|canon_root| canon.starts_with(&canon_root))
+    })
+}
+
+/// Whether a discovered worktree's `.git` pointer names an admin
+/// registration THIS repo canonically owns — the repair gate's
+/// spelling of [`admin_is_canonical_for_repo`]: the pointer's
+/// `gitdir:` line IS the admin path.
+fn worktree_pointer_is_ours(wt: &Path, repo: &Repo) -> bool {
+    let Ok(pointer) = std::fs::read_to_string(wt.join(".git")) else {
+        return false;
+    };
+    pointer
+        .strip_prefix("gitdir: ")
+        .map(|p| admin_is_canonical_for_repo(Path::new(p.trim()), repo))
+        .unwrap_or(false)
+}
+
+/// Remove one admin registration when it belongs to THIS run: the
+/// admin dir must be canonically THIS repo's (review blocker 3 of
+/// bd myconfig-jhfo — a forged pointer to another repository's
+/// registration never reaches here), and its `gitdir` backlink file
+/// must name a worktree path that lived under this run's temp root
+/// or at this run's sandbox spelling of it. Anything else — a
+/// concurrent run's root, an operator's own worktree — is left
+/// alone.
 fn remove_admin_if_ours(admin: &Path, root: &TempRoot, repo: &Repo) -> std::io::Result<()> {
+    if !admin_is_canonical_for_repo(admin, repo) {
+        return Ok(());
+    }
     let backlink = std::fs::read_to_string(admin.join("gitdir"))?;
     let backlink = backlink.trim();
     let ours = Path::new(backlink).starts_with(&root.worktrees)
@@ -360,39 +428,70 @@ fn remove_admin_if_ours(admin: &Path, root: &TempRoot, repo: &Repo) -> std::io::
     std::fs::remove_dir_all(admin)
 }
 
-/// The linked worktrees under `<dir>` — at EVERY depth: a
+/// The linked worktrees under `<dir>` — at EVERY depth, and the
+/// directory ITSELF: `git worktree add` accepts any path, including
+/// the mount root `<dir>` itself (an initially empty directory —
+/// review blocker 5 of bd myconfig-jhfo: uncommitted files in a
+/// worktree AT the root were deleted without a guard), and a
 /// workmux-style layout groups them (`<repo>__worktrees/<team>/<fix>`,
-/// nested by topic), and `git worktree add` takes any path, so no
-/// depth is more correct than another. The walk is cheap (the temp
-/// root dies with the run, nobody else writes it) and it must not
-/// MISS one: a missed worktree's uncommitted changes are deleted
-/// with the root. An entry with a `.git` FILE is a linked worktree's
-/// pointer; a `.git` DIRECTORY is a plain repository someone put
-/// there, a missing one is debris — both are removed with the root
-/// without a guard: neither carries uncommitted WORKTREE state git
-/// could still commit.
+/// nested by topic), so no depth is more correct than another.
+/// The walk never follows SYMLINKS (review blocker 4): a payload
+/// could symlink a path inside the temp root at a CLEAN, EXISTING
+/// host worktree — its admin dir would then flow into the teardown
+/// and the sibling-prefix check would authorize deleting a
+/// registration this run never owned. A symlink is skipped
+/// outright, both as a worktree candidate and as a directory to
+/// recurse into. The walk must not MISS a real worktree: a missed
+/// one's uncommitted changes are deleted with the root. An entry
+/// with a `.git` FILE is a linked worktree's pointer; a `.git`
+/// DIRECTORY is a plain repository someone put there, a missing
+/// one is debris — both are removed with the root without a guard:
+/// neither carries uncommitted WORKTREE state git could still
+/// commit.
 fn read_worktree_dirs(dir: &Path) -> Option<Vec<PathBuf>> {
     let mut out = Vec::new();
     walk_worktree_dirs(dir, &mut out);
     out.sort();
+    out.dedup();
     Some(out)
 }
 
 fn walk_worktree_dirs(dir: &Path, out: &mut Vec<PathBuf>) {
+    if is_linked_worktree(dir) {
+        out.push(dir.to_path_buf());
+    }
     for entry in std::fs::read_dir(dir).ok().into_iter().flatten() {
         let Ok(entry) = entry else { continue };
         let path = entry.path();
-        let is_dir = path.is_dir();
-        if path.join(".git").is_file() {
+        // `symlink_metadata` is the symlink-refusing half of the
+        // walk: a link to a directory elsewhere looks like one to
+        // `is_dir()` (which follows), but the metadata of the
+        // LINK itself says otherwise. Payload-created symlinks are
+        // skipped as candidates AND as recursion targets.
+        let Ok(md) = std::fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if md.file_type().is_symlink() {
+            continue;
+        }
+        if is_linked_worktree(&path) {
             out.push(path.clone());
         }
-        // A linked worktree can hold nested ones in its own tree
-        // (a repo checked out inside a worktree — git does not
-        // care), and the plain grouping directories between them
-        // are walked either way.
-        if is_dir {
+        if md.is_dir() {
             walk_worktree_dirs(&path, out);
         }
+    }
+}
+
+/// Whether `dir` carries a linked-worktree `.git` POINTER — a
+/// regular FILE, never a symlink (a payload could link `.git` at
+/// another checkout's pointer file; the teardown must not read
+/// through it) and never a directory (a plain repo's own `.git`,
+/// whose state is not worktree state git could commit elsewhere).
+fn is_linked_worktree(dir: &Path) -> bool {
+    match std::fs::symlink_metadata(dir.join(".git")) {
+        Ok(md) => md.is_file(),
+        Err(_) => false,
     }
 }
 
@@ -589,12 +688,15 @@ mod tests {
 
     #[test]
     fn remove_admin_if_ours_never_touches_a_foreign_registration() {
-        // The surgical cleanup's own rule: an admin dir whose
+        // The surgical cleanup's own rule: an admin dir CANONICALLY
+        // this repo's (under its own `.git/worktrees`) whose
         // backlink names a path under THIS run's root (or this
         // run's sandbox spelling of it) is removed; one naming a
         // CONCURRENT run's root — or an operator's real worktree —
-        // is left alone. The old repo-global `git worktree prune`
-        // could not tell them apart.
+        // is left alone, and so is any admin dir OUTSIDE this
+        // repo's git metadata (review blocker 3: a forged pointer).
+        // The old repo-global `git worktree prune` could not tell
+        // them apart.
         let base = tmpdir("admin-ours");
         let temp = TempRoot {
             root: base.join("temp"),
@@ -607,28 +709,44 @@ mod tests {
             git_dirs: Vec::new(),
             worktrees: None,
         };
-        // Ours: the backlink names a path under the temp root.
-        let ours = base.join("git/worktrees/ours");
+        // Ours: canonically this repo's registration, backlink
+        // under the temp root.
+        std::fs::create_dir_all(repo.root.join(".git")).unwrap();
+        let ours = repo.root.join(".git/worktrees/ours");
         std::fs::create_dir_all(&ours).unwrap();
         std::fs::write(
             ours.join("gitdir"),
             format!("{}", temp.worktrees.join("w").display()),
         )
         .unwrap();
-        // Foreign: a concurrent run's root (a different pid dir).
-        let theirs = base.join("git/worktrees/theirs");
+        // Foreign: canonically this repo's, but the backlink names a
+        // CONCURRENT run's root (a different pid dir).
+        let theirs = repo.root.join(".git/worktrees/theirs");
         std::fs::create_dir_all(&theirs).unwrap();
         std::fs::write(
             theirs.join("gitdir"),
             format!("{}", base.join("other-root/worktrees/w").display()),
         )
         .unwrap();
-        // Foreign: an operator's real worktree.
-        let operator = base.join("git/worktrees/operator");
+        // Foreign: an operator's real worktree (the sandbox-spelling
+        // check would match — the removal needs the ADMIN ownership
+        // plus backlink pair, and this one names a real host path).
+        let operator = repo.root.join(".git/worktrees/operator");
         std::fs::create_dir_all(&operator).unwrap();
         std::fs::write(
             operator.join("gitdir"),
             format!("{}", base.join("real-checkout").display()),
+        )
+        .unwrap();
+        // Foreign: a FORGED pointer — an admin dir of ANOTHER repo,
+        // with a backlink crafted to name this run's temp root
+        // (review blocker 3: the pointer text alone must not be
+        // enough to authorize the removal).
+        let forged = base.join("other-repo/.git/worktrees/victim");
+        std::fs::create_dir_all(&forged).unwrap();
+        std::fs::write(
+            forged.join("gitdir"),
+            format!("{}", temp.worktrees.join("w").display()),
         )
         .unwrap();
         remove_admin_if_ours(&ours, &temp, &repo).unwrap();
@@ -637,6 +755,11 @@ mod tests {
         assert!(theirs.exists(), "a concurrent run's registration is kept");
         let _ = remove_admin_if_ours(&operator, &temp, &repo);
         assert!(operator.exists(), "an operator's registration is kept");
+        let _ = remove_admin_if_ours(&forged, &temp, &repo);
+        assert!(
+            forged.exists(),
+            "a forged pointer into another repo's registration is kept"
+        );
     }
 
     #[test]
@@ -653,6 +776,103 @@ mod tests {
         std::fs::create_dir_all(plain.join(".git")).unwrap();
         let found = read_worktree_dirs(&base.join("worktrees")).unwrap();
         assert_eq!(found, vec![deep], "only the linked worktree is found");
+    }
+
+    #[test]
+    fn read_worktree_dirs_sees_a_worktree_at_the_root_itself() {
+        // Review blocker 5 of bd myconfig-jhfo: `git worktree add
+        // <repo>__worktrees` puts the worktree AT the mount root —
+        // an initially empty directory git accepts. The guard's
+        // discovery must inspect the traversal ROOT itself, or the
+        // uncommitted files of such a worktree are deleted without
+        // ever being probed.
+        let base = tmpdir("at-root");
+        let root = base.join("worktrees");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join(".git"), "gitdir: somewhere\n").unwrap();
+        std::fs::write(root.join("uncommitted"), "work").unwrap();
+        let found = read_worktree_dirs(&root).unwrap();
+        assert_eq!(found, vec![root], "the root worktree is found");
+    }
+
+    #[test]
+    fn read_worktree_dirs_never_follows_symlinks() {
+        // Review blocker 4 of bd myconfig-jhfo: a symlink planted in
+        // the temp worktrees dir at a clean EXISTING host worktree
+        // must not be discovered — through it, the teardown would
+        // probe a foreign worktree and could reach its admin dir.
+        // Neither a directory symlink nor a `.git` symlink counts.
+        let base = tmpdir("symlinks");
+        let worktrees = base.join("worktrees");
+        std::fs::create_dir_all(&worktrees).unwrap();
+        let foreign = base.join("host-worktrees/operator");
+        std::fs::create_dir_all(&foreign).unwrap();
+        std::fs::write(foreign.join(".git"), "gitdir: somewhere\n").unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&foreign, worktrees.join("operator")).unwrap();
+        // A `.git` SYMLINK is not a pointer file either.
+        let real = base.join("real-pointer");
+        std::fs::write(&real, "gitdir: somewhere\n").unwrap();
+        let linked_git = worktrees.join("dangling-git-symlink");
+        std::fs::create_dir_all(&linked_git).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&real, linked_git.join(".git")).unwrap();
+        let found = read_worktree_dirs(&worktrees).unwrap();
+        assert!(
+            !found.contains(&foreign),
+            "a symlinked foreign worktree is not discovered: {found:?}"
+        );
+        assert!(
+            !found.contains(&linked_git),
+            "a worktree whose .git is a symlink is not discovered: {found:?}"
+        );
+    }
+
+    #[test]
+    fn admin_dirs_of_rejects_a_forged_pointer_to_a_foreign_repo() {
+        // Review blocker 3 of bd myconfig-jhfo: the admin path read
+        // out of a `.git` pointer is only accepted when THIS repo
+        // canonically owns it — a payload-forged pointer naming
+        // ANOTHER repo's admin directory must not flow into the
+        // teardown.
+        let base = tmpdir("forged-pointer");
+        let temp = TempRoot {
+            root: base.join("temp"),
+            sidecar: base.join("temp/sidecar"),
+            worktrees: base.join("temp/worktrees"),
+        };
+        let repo = Repo {
+            root: base.join("repo"),
+            sidecar: base.join("repo.mysbx"),
+            git_dirs: Vec::new(),
+            worktrees: None,
+        };
+        std::fs::create_dir_all(repo.root.join(".git")).unwrap();
+        // A genuine one: this repo's admin dir, backlinked at the
+        // temp root.
+        let ours = repo.root.join(".git/worktrees/ours");
+        std::fs::create_dir_all(&ours).unwrap();
+        std::fs::write(ours.join("gitdir"), "backlink\n").unwrap();
+        // A forged one: another repo's admin dir.
+        let victim = base.join("other-repo/.git/worktrees/victim");
+        std::fs::create_dir_all(&victim).unwrap();
+        std::fs::write(victim.join("gitdir"), "backlink\n").unwrap();
+        let worktrees = temp.worktrees.join("w");
+        std::fs::create_dir_all(&worktrees).unwrap();
+        std::fs::write(
+            worktrees.join(".git"),
+            format!("gitdir: {}\n", ours.display()),
+        )
+        .unwrap();
+        let forged_wt = temp.worktrees.join("f");
+        std::fs::create_dir_all(&forged_wt).unwrap();
+        std::fs::write(
+            forged_wt.join(".git"),
+            format!("gitdir: {}\n", victim.display()),
+        )
+        .unwrap();
+        let admins = admin_dirs_of(&temp.worktrees, &repo);
+        assert_eq!(admins, vec![ours], "only the repo-owned admin dir passes");
     }
 
     #[test]
