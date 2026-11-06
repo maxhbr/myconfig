@@ -277,10 +277,18 @@ pub fn teardown(root: &TempRoot, repo: &Repo) -> bool {
         // real kept path. Quiet and best-effort: a repair that fails
         // leaves debris the operator can see with `git worktree
         // list` — it does not lose work.
+        // The repair runs on the HOST, against a repo whose config
+        // the payload may have written (it was bound rw inside the
+        // sandbox) — the same hardening the guard's probe carries,
+        // so no configured command of the repaired repo executes
+        // with host access.
         for wt in &dirty {
-            let _ = std::process::Command::new("git")
-                .arg("-C")
-                .arg(&repo.root)
+            let mut repair = std::process::Command::new("git");
+            repair.arg("-C").arg(&repo.root);
+            for arg in hardened_git_args() {
+                repair.arg(arg);
+            }
+            let _ = repair
                 .args(["worktree", "repair"])
                 .arg(wt)
                 .stdout(std::process::Stdio::null())
@@ -388,6 +396,40 @@ fn walk_worktree_dirs(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
+/// The argv prefix every HOST-side git invocation of the teardown
+/// carries: `-c` overrides that neutralize the config keys a
+/// payload-controlled repository could arm with executable
+/// content — the sandbox binds the repo rw, and the teardown
+/// inspects it OUTSIDE the sandbox, with unrestricted host access.
+/// `core.fsmonitor` is the proven vector (a repo-config script runs
+/// during `git status`, even worktree-local), so it is forced off.
+/// Neither command the teardown runs (`status --porcelain`,
+/// `worktree repair`) executes a hook, a pager or an editor, and an
+/// alias cannot shadow a builtin (git refuses an alias spelling a
+/// built-in subcommand's name) — the remaining overrides are the
+/// belt on top: `core.hooksPath`, `core.attributesFile`,
+/// `core.excludesFile` (an attributes file can drive filter
+/// processes), `core.editor` and `core.pager` pinned to inerts.
+/// Command-line `-c` beats every config scope, including the
+/// worktree-local `config.worktree` and the repo's own config the
+/// payload may have written.
+fn hardened_git_args() -> [&'static str; 12] {
+    [
+        "-c",
+        "core.fsmonitor=false",
+        "-c",
+        "core.hooksPath=",
+        "-c",
+        "core.attributesFile=",
+        "-c",
+        "core.excludesFile=",
+        "-c",
+        "core.editor=:",
+        "-c",
+        "core.pager=cat",
+    ]
+}
+
 /// Whether a worktree has uncommitted changes — `git status
 /// --porcelain` with any output counts (the handoff verbs' own
 /// probe, `handoff::host_tree_dirty`) — with `--untracked-files=all`
@@ -398,10 +440,19 @@ fn walk_worktree_dirs(dir: &Path, out: &mut Vec<PathBuf>) {
 /// nowhere else and would be deleted. Fails CLOSED: a `git` that
 /// cannot run counts as dirty — the root must not be removed over
 /// work whose state cannot be inspected.
+///
+/// The probe runs OUTSIDE the sandbox, so it must not honor
+/// executable config the payload may have written into the
+/// writable repo (the sandbox bound it rw): the
+/// [`hardened_git_args`] prefix neutralizes every config key
+/// `git status` consults that could execute anything.
 fn worktree_dirty(worktree: &Path) -> bool {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(worktree)
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("-C").arg(worktree);
+    for arg in hardened_git_args() {
+        cmd.arg(arg);
+    }
+    let out = cmd
         .args(["status", "--porcelain", "--untracked-files=all"])
         .stderr(std::process::Stdio::null())
         .output();
@@ -640,6 +691,91 @@ mod tests {
         assert!(
             worktree_dirty(&dirty),
             "an untracked-only worktree counts as dirty despite status.showUntrackedFiles=no"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn worktree_dirty_neutralizes_the_repo_config_fsmonitor() {
+        // The probe runs OUTSIDE the sandbox on a repo the payload
+        // could write (review blocker 1): `core.fsmonitor` is the
+        // proven execution vector — a repo-config script RUNS
+        // during `git status`. The probe's `-c core.fsmonitor=false`
+        // must neutralize it: the marker script never runs, and the
+        // probe still answers (a clean tree is clean, not
+        // fail-closed — the guard must not KEEP a root over a
+        // poisoned-but-clean worktree either, or the keep is the
+        // payload's denial primitive).
+        let dir = tmpdir("fsmonitor");
+        let repo = dir.join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        let marker = dir.join("PWNED");
+        let script = dir.join("fsmon.sh");
+        std::fs::write(
+            &script,
+            format!("#!/bin/sh\ntouch '{}'\n", marker.display()),
+        )
+        .unwrap();
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(&repo)
+                .args(args)
+                .env("GIT_CONFIG_GLOBAL", "/dev/null")
+                .env("GIT_CONFIG_SYSTEM", "/dev/null")
+                .env("GIT_AUTHOR_NAME", "mysbx-tests")
+                .env("GIT_AUTHOR_EMAIL", "mysbx-tests@invalid")
+                .env("GIT_COMMITTER_NAME", "mysbx-tests")
+                .env("GIT_COMMITTER_EMAIL", "mysbx-tests@invalid")
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
+        };
+        if !git(&["init", "-b", "main"]) {
+            eprintln!("skipping: no git on PATH");
+            return;
+        }
+        git(&["config", "user.name", "mysbx-tests"]);
+        git(&["config", "user.email", "mysbx-tests@invalid"]);
+        std::fs::write(repo.join("f"), "x").unwrap();
+        if !git(&["add", "f"]) || !git(&["commit", "-m", "base"]) {
+            eprintln!("skipping: commit failed");
+            return;
+        }
+        // The armed repo: fsmonitor points at the marker script.
+        // A HAND-ROLLED `git status` runs it (the vector is real)…
+        assert!(git(&[
+            "config",
+            "core.fsmonitor",
+            &format!("{}", script.display())
+        ]));
+        let _ = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args(["status", "--porcelain"])
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .output()
+            .unwrap();
+        if !marker.exists() {
+            eprintln!("skipping: this git does not honor repo-config fsmonitor");
+            let _ = std::fs::remove_dir_all(&dir);
+            return;
+        }
+        let _ = std::fs::remove_file(&marker);
+        // …and the PROBE does not: the marker stays absent, the
+        // clean tree answers clean.
+        assert!(
+            !worktree_dirty(&repo),
+            "the neutralized probe still answers: the armed repo counts as clean"
+        );
+        assert!(
+            !marker.exists(),
+            "the probe's -c core.fsmonitor=false stopped the repo-config script"
         );
         let _ = std::fs::remove_dir_all(&dir);
     }
