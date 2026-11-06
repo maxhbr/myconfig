@@ -176,7 +176,7 @@ fn checked_git_dirs(
     cfg: &Merged,
     workspace: &Workspace<'_>,
 ) -> Result<Vec<PathBuf>, Error> {
-    if !matches!(workspace, Workspace::Live) {
+    if !matches!(workspace, Workspace::Live | Workspace::Once { .. }) {
         return Ok(Vec::new());
     }
     for git_dir in &repo.git_dirs {
@@ -669,7 +669,7 @@ pub fn stage_binds(
         binds.push(("/nix/store".to_owned(), true, "store".to_owned()));
     }
     let workspace_dir = match &params.workspace {
-        Workspace::Live => repo.root.clone(),
+        Workspace::Live | Workspace::Once { .. } => repo.root.clone(),
         Workspace::Clone { clone, .. } => clone.to_path_buf(),
     };
     binds.push((
@@ -692,10 +692,12 @@ pub fn stage_binds(
     }
     // The worktrees slot's HOST source: the host sibling in a live run,
     // the session's own worktrees directory in a clone run (its
-    // sandbox path is the `<repo>__worktrees` sibling either way).
+    // sandbox path is the `<repo>__worktrees` sibling either way),
+    // the TEMP ROOT's directory in an once run (same sandbox path,
+    // cli.md D22).
     let worktrees_source: Option<&Path> = match &params.workspace {
         Workspace::Live => repo.worktrees.as_deref(),
-        Workspace::Clone { worktrees, .. } => Some(worktrees),
+        Workspace::Once { worktrees } | Workspace::Clone { worktrees, .. } => Some(worktrees),
     };
     if let Some(worktrees) = worktrees_source {
         binds.push((
@@ -718,7 +720,7 @@ pub fn stage_binds(
             format!("m-{}", crate::repo::fnv1a10(&sandbox_path)),
         ));
     }
-    if matches!(params.workspace, Workspace::Live) {
+    if !matches!(params.workspace, Workspace::Clone { .. }) {
         for entry in cfg.effective_state_dirs() {
             binds.push((
                 repo.sidecar
@@ -804,15 +806,16 @@ fn krun_shares(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Result<Vec<Sha
     // same rule as the bwrap/podman binds: in a LIVE run the host's
     // sibling (present when the run created it, config.md D13), in a
     // CLONE run the session's own worktrees directory bound there
-    // (workspace.md D3).
+    // (workspace.md D3), in an ONCE run the TEMP ROOT's directory
+    // (cli.md D22, same dest).
     let worktrees_source: Option<&Path> = match &params.workspace {
         Workspace::Live => repo.worktrees.as_deref(),
-        Workspace::Clone { worktrees, .. } => Some(worktrees),
+        Workspace::Once { worktrees } | Workspace::Clone { worktrees, .. } => Some(worktrees),
     };
     if let Some(worktrees) = worktrees_source {
         let sandbox_path = match &params.workspace {
             Workspace::Live => worktrees.to_string_lossy().into_owned(),
-            Workspace::Clone { .. } => Session::worktrees_dest(repo)
+            Workspace::Once { .. } | Workspace::Clone { .. } => Session::worktrees_dest(repo)
                 .unwrap_or_else(|| repo.root.clone())
                 .to_string_lossy()
                 .into_owned(),
@@ -828,7 +831,7 @@ fn krun_shares(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Result<Vec<Sha
     // before every configured mount, like bwrap's bind order: the init
     // places the shares in this order, so a mount below a state dir
     // lands on top of it, and a mount at or above one is refused.
-    if matches!(params.workspace, Workspace::Live) {
+    if !matches!(params.workspace, Workspace::Clone { .. }) {
         for entry in cfg.effective_state_dirs() {
             shares.push(Share {
                 slot: state_tag(&entry),

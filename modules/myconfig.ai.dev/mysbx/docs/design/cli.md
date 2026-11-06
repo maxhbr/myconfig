@@ -830,6 +830,76 @@ implemented. The required live parallel-run matrix is still
 [unrecorded](../detach-validation-log.md), so CLI acceptance is not
 live lifecycle validation.
 
+### D22: `mysbx-once` — one run, no persistent per-repo setup
+
+`mysbx-once` is the SAME binary as `mysbx` under a second name (a
+second wrapped program beside it, carrying the identical `MYSBX_*`
+pins plus the `MYSBX_ONCE=1` marker; argv[0] cannot carry the
+dispatch through a makeBinaryWrapper chain). It starts `mysbx
+$ARGS` for the repo the cwd resolves to — resolution is unchanged
+(D1) — but neither reads nor writes the host's `<repo>.mysbx/` and
+`<repo>__worktrees`: both are created in a private temporary
+directory for one run and removed when it ends.
+
+**This is D13's one explicit exception, and it keeps D13's
+intent**: nothing persistent is created on the host. The sidecar
+LAYER is empty (built-in defaults + user config + flags); an
+existing host `<repo>.mysbx/config.toml` is ignored, not loaded.
+The worktrees sibling a D13 interactive run creates is redirected
+the same way — the run binds its temp directory at the host
+sibling's PATH inside the sandbox (the clone-run dest precedent of
+workspace.md D3a), so `workmux add` / `git worktree add` work and
+the host path is never touched.
+
+**Temp root.** `$XDG_RUNTIME_DIR/mysbx-once/<pid>` (fallback
+`${TMPDIR:-/tmp}/mysbx-once/<pid>`), mode 0700, one root per
+process: `sidecar/` (an EMPTY `config.toml` — an empty policy
+layer, the exact state `mysbx init` leaves in a repo without
+policy), `state/` (the state-dirs and the per-run ssh keypair), and
+`worktrees/`. The VM backends' per-run scratch/state land there
+too — on tmpfs that is a RAM consideration, not worked around.
+
+**Lifecycle.** mysbx-once stays the PARENT — no `exec` (D8's
+passthrough is emulated: the exit code is the payload's own,
+`128 + signum` for a cancellation). The backend runs in its OWN
+process group — a cancellation (SIGINT/SIGTERM/SIGHUP, including a
+closed terminal's HUP) is caught by mysbx-once and forwarded to
+that RUN's group only, never to the group mysbx-once itself
+inherited from its caller; after the payload, the teardown runs:
+
+1. the data-loss guard — every linked worktree under the temp
+   `worktrees/` (at every depth, `git status --porcelain
+   --untracked-files=all`, failing closed) is probed; one with
+   uncommitted changes keeps the whole temp root (named on stdout,
+   `## mysbx-once: kept <path>`). Commits are safe — a worktree
+   branch lives in the host repo's git dir — but the working tree
+   is only here; a KEPT worktree's admin backlink is repaired to
+   its real host path (`git worktree repair`), so the operator's
+   own `git worktree prune` keeps finding it;
+2. removal of the temp root, then THIS run's worktree
+   registrations — surgically, one per worktree the run created,
+   each only when its backlink names a path of this run. Never a
+   repo-global `git worktree prune`: a once registration's backlink
+   names the sandbox-only `<repo>__worktrees` spelling, so a global
+   prune would also delete the registrations of a KEPT worktree and
+   of a CONCURRENT once-run.
+
+**Refused with exit `70` and a `mysbx-once:` message** (the forms
+whose state the temp root cannot carry): `init`, `edit`, `status`,
+the session and worktree noun groups, `fetch`/`merge`/`push`/
+`diff`, `attach`, `ssh-pubkey`, `--session`, `--result`/`--timeout`,
+`--detach`/`--detachable`. **Allowed**: the bare form, `run --
+CMD`, `gui` (the window's inner invocation carries the marker),
+`doctor` (it checks the user layer, reporting the sidecar as
+ignored), `version`/`help`, `--dry-run` — which creates nothing and
+prints the argv with a placeholder temp path — `--multiplexer`,
+`--backend`, `--ro`/`--rw`, `--verbose`.
+
+**Ephemeral consequences, documented not worked around**: the
+state-dirs do not persist; the sandbox ssh keypair is new for each
+run; krun/podman-krun scratch/state live in the temp root and die
+with it.
+
 ## Non-goals
 
 - No mysbx daemon — the dtach master is per run and ends with it —

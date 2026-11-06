@@ -12,6 +12,7 @@
 //! gracefully instead of failing.
 
 use mysbx::config::Multiplexer;
+use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -6284,6 +6285,10 @@ fn an_over_the_budget_run_is_timed_out_exit_124() {
         eprintln!("skipping: no sandbox-reachable bash");
         return;
     };
+    let Some(sleep) = sandbox_sleep() else {
+        eprintln!("skipping: no sandbox-reachable sleep");
+        return;
+    };
     let (inv, _, sidecar) = fixture_with_backend("result-timeout", &[]);
     let args = [
         "run".to_owned(),
@@ -6293,7 +6298,7 @@ fn an_over_the_budget_run_is_timed_out_exit_124() {
         "--".to_owned(),
         bash.to_string_lossy().into_owned(),
         "-c".to_owned(),
-        "sleep 30".to_owned(),
+        format!("exec {} 30", sleep.display()),
     ];
     let mut cmd = spawn_with_args(&inv, &args);
     cmd.env("MYSBX_TOOLS_PATH", "/usr/bin");
@@ -6319,12 +6324,26 @@ fn a_cancelled_result_run_exits_130_and_records_the_signal() {
     // the run exits `130` (the shell's 128 + 2) and the file records
     // `cancelled` naming SIGINT. `kill(2)` from the test is the
     // operator's Ctrl-C.
+    //
+    // The run gets its OWN process group (run_with_result makes the
+    // backend its leader, the once_run_wait rule): the kill reaches
+    // the run's processes only. The canary below is the test's own
+    // group sibling — a caller's process that shares mysbx's
+    // inherited group — and must SURVIVE the cancellation. The
+    // pre-fix kill aimed at that inherited group and took the
+    // caller's processes with it.
     if !is_bwrap_available() {
         eprintln!("skipping: bwrap not available in this environment");
         return;
     }
     let Some(bash) = sandbox_bash() else {
         eprintln!("skipping: no sandbox-reachable bash");
+        return;
+    };
+    // `sleep` by its ABSOLUTE store path (the once sigterm test's
+    // rule): the sandbox's PATH holds only the tools closure.
+    let Some(sleep) = sandbox_sleep() else {
+        eprintln!("skipping: no sandbox-reachable sleep");
         return;
     };
     let (inv, _, sidecar) = fixture_with_backend("result-cancel", &[]);
@@ -6334,20 +6353,39 @@ fn a_cancelled_result_run_exits_130_and_records_the_signal() {
         "--".to_owned(),
         bash.to_string_lossy().into_owned(),
         "-c".to_owned(),
-        "sleep 30".to_owned(),
+        format!("exec {} 30", sleep.display()),
     ];
     let mut cmd = spawn_with_args(&inv, &args);
     cmd.env("MYSBX_TOOLS_PATH", "/usr/bin");
     cmd.stdin(std::process::Stdio::piped());
     let child = cmd.spawn().expect("failed to spawn mysbx");
+    // The canary: a process of the CALLER's group (the harness's —
+    // what mysbx inherited), alive across the cancellation. The
+    // pre-fix group-kill reached exactly this process.
+    let mut canary = std::process::Command::new(&sleep)
+        .arg("30")
+        .spawn()
+        .expect("failed to spawn the group canary");
     // Give the run time to reach the wait loop, then send SIGINT to
     // the mysbx process — the handler records it, the loop kills the
-    // group, the record is written.
+    // run's group, the record is written.
     std::thread::sleep(std::time::Duration::from_millis(700));
     unsafe {
         libc_kill(child.id(), 2);
     }
     let out = child.wait_with_output().expect("mysbx died unexpectedly");
+    // The canary was never signaled: the kill reached the run's OWN
+    // group, not the caller's.
+    let canary_alive = canary
+        .try_wait()
+        .expect("cannot probe the canary")
+        .is_none();
+    let _ = canary.kill();
+    let _ = canary.wait();
+    assert!(
+        canary_alive,
+        "the cancellation kill never reaches the caller's group"
+    );
     assert_eq!(
         out.status.code(),
         Some(130),
@@ -6360,6 +6398,23 @@ fn a_cancelled_result_run_exits_130_and_records_the_signal() {
     assert!(result.contains("\"exitCode\": 130"), "{result}");
     assert!(result.contains("\"cancelledBy\": \"SIGINT\""), "{result}");
     assert!(!result.contains("payloadExitCode"), "{result}");
+}
+
+/// `sleep` by its ABSOLUTE store path: the sandbox's PATH holds only
+/// the tools closure (`MYSBX_TOOLS_PATH`), so a plain `sleep` lookup
+/// depends on what that closure ships — the tests pin the binary
+/// itself (the once sigterm test's rule). `None` when no candidate
+/// sits in a sandbox-reachable dir.
+fn sandbox_sleep() -> Option<PathBuf> {
+    std::env::var_os("PATH").and_then(|path| {
+        std::env::split_paths(&path).find_map(|dir| {
+            if !(dir.starts_with("/nix/store") || dir.starts_with("/usr/bin")) {
+                return None;
+            }
+            let candidate = dir.join("sleep");
+            candidate.is_file().then_some(candidate)
+        })
+    })
 }
 
 /// `kill(2)` from the tests, the zero-dependency way: a raw extern like
@@ -14355,4 +14410,968 @@ fn session_destroy_dry_run_words_a_starting_record_as_starting_or_stale() {
         "the advisory wording never claims a running sandbox: {stderr}"
     );
     assert!(stderr.contains("mysbx attach --session fix-1"), "{stderr}");
+}
+
+// ---- mysbx-once (cli.md D22, bd myconfig-7zwt) -----------------------------
+
+/// One once-mode invocation: the fixture's environment plus
+/// `MYSBX_ONCE=1` (the argv[0] spelling is the Nix symlink's; the
+/// tests reach the same mode through the marker) and a PRIVATE
+/// `$XDG_RUNTIME_DIR`, so the temp root lands where the test can
+/// assert it is gone afterwards.
+fn spawn_once(inv: &Invocation, args: &[&str]) -> Command {
+    let runtime = inv.home.join("runtime");
+    std::fs::create_dir_all(&runtime).unwrap();
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_with_args(inv, args);
+    cmd.env("MYSBX_ONCE", "1").env("XDG_RUNTIME_DIR", &runtime);
+    cmd
+}
+
+fn run_once(inv: &Invocation, args: &[&str]) -> (i32, String, String) {
+    let out = spawn_once(inv, args)
+        .output()
+        .expect("failed to spawn the mysbx binary");
+    (
+        out.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+/// The repo WITHOUT a sidecar: once-mode must run where the plain
+/// form refuses (D13's exception, cli.md D22), and the host must be
+/// untouched afterwards — no `<repo>.mysbx`, no `<repo>__worktrees`.
+#[test]
+fn once_dry_run_prints_the_temp_binds_and_creates_nothing() {
+    // `--dry-run` creates NO directory (D9/D22): the placeholder
+    // names the would-be temp root, and neither the runtime dir
+    // under it nor the host sidecar exists afterwards.
+    let (inv, repo, sidecar) = fixture_uninited("once-dry", &["--dry-run"]);
+    let (code, stdout, stderr) = run_once(&inv, &["--dry-run"]);
+    assert_eq!(code, 0, "stdout: {stdout} stderr: {stderr}");
+    let argv: Vec<&str> = stdout.lines().collect();
+    // The argv is ONCE-shaped: the temp worktrees bind at the host
+    // sibling's path, not the host sibling itself.
+    let worktrees = format!("{}__worktrees", repo.display());
+    let temp_bind = argv
+        .iter()
+        .position(|a| a.contains("mysbx-once/dry-run/worktrees"));
+    let Some(temp_bind) = temp_bind else {
+        panic!("the dry-run argv binds the temp worktrees: {stdout}");
+    };
+    // bind triples: flag, src, dest
+    assert_eq!(
+        argv.get(temp_bind + 1),
+        Some(&&*worktrees),
+        "the temp worktrees bind at the host sibling's path: {stdout}"
+    );
+    // Nothing was created: no runtime temp root, no host sidecar
+    // config (the fixture's sidecar DIRECTORY exists — the file is
+    // what D13 counts), no host worktrees sibling.
+    assert!(
+        !inv.home.join("runtime/mysbx-once").exists(),
+        "the dry run created no temp root"
+    );
+    assert!(
+        !sidecar.join("config.toml").exists(),
+        "the dry run created no host sidecar config"
+    );
+    assert!(
+        !std::path::Path::new(&worktrees).exists(),
+        "the dry run created no host worktrees sibling"
+    );
+}
+
+#[test]
+fn once_refuses_the_persistent_verbs_and_flags() {
+    // The once gate (cli.md D22): exit 70, a `mysbx-once:` message —
+    // for every verb and flag whose state the temp root cannot
+    // carry. One representative per rule; the full sets live in the
+    // unit tests of src/once.rs and lib.rs's once_gate.
+    let (inv, _repo, _sidecar) = fixture_uninited("once-refuse", &[]);
+    for (args, what) in [
+        (&["init"][..], "`init`"),
+        (&["status"][..], "`status`"),
+        (&["--session", "s", "--dry-run"][..], "--session"),
+        (&["run", "--result", "--", "true"][..], "--result"),
+        (&["--detach", "--dry-run"][..], "--detach"),
+    ] {
+        let (code, _stdout, stderr) = run_once(&inv, args);
+        assert_eq!(code, 70, "args: {args:?} stderr: {stderr}");
+        assert!(stderr.contains("mysbx-once:"), "stderr: {stderr}");
+        assert!(stderr.contains(what), "the refusal names {what}: {stderr}");
+    }
+}
+
+#[test]
+fn once_run_command_exits_with_the_payload_code_and_removes_the_temp_root() {
+    if !is_ssh_keygen_available() {
+        eprintln!("skipping: no usable ssh-keygen in this environment");
+        return;
+    }
+    // `mysbx-once run -- true` / `-- false` exit 0 / 1 (D8), the
+    // host is untouched, and the temp root is GONE after the run.
+    // Needs a runnable bwrap — the same self-skip the other
+    // execution tests use.
+    if !is_bwrap_available() {
+        eprintln!("skipping: bwrap not available in this environment");
+        return;
+    }
+    // A sandbox-reachable true/false (the base binds /nix/store and
+    // /usr/bin only), the same discovery `verbose_bare_form_reports...`
+    // uses.
+    let true_path = std::env::var_os("PATH").and_then(|path| {
+        std::env::split_paths(&path).find_map(|dir| {
+            if !(dir.starts_with("/nix/store") || dir.starts_with("/usr/bin")) {
+                return None;
+            }
+            let candidate = dir.join("true");
+            candidate.is_file().then_some(candidate)
+        })
+    });
+    let Some(true_path) = true_path else {
+        eprintln!("skipping: no sandbox-reachable true");
+        return;
+    };
+    let true_str = true_path.to_string_lossy().into_owned();
+    let false_path = true_path.with_file_name("false");
+    let (inv, repo, sidecar) = fixture_uninited("once-run", &[]);
+
+    let run = |payload: &str| {
+        let out = spawn_once(&inv, &["run", "--", payload])
+            .env("MYSBX_TOOLS_PATH", "/usr/bin")
+            .output()
+            .expect("failed to spawn mysbx-once");
+        (
+            out.status.code().unwrap_or(-1),
+            String::from_utf8_lossy(&out.stdout).into_owned(),
+            String::from_utf8_lossy(&out.stderr).into_owned(),
+        )
+    };
+    let (code, _o, e) = run(&true_str);
+    assert_eq!(code, 0, "stderr: {e}");
+    let (code, _o, e) = run(&false_path.to_string_lossy());
+    assert_eq!(code, 1, "stderr: {e}");
+
+    // The teardown held: the base dir may remain (empty), but the
+    // pid-named temp roots are gone; no host sidecar, no sibling.
+    let base = inv.home.join("runtime/mysbx-once");
+    assert!(
+        !base.exists()
+            || std::fs::read_dir(&base)
+                .map(|d| d.count() == 0)
+                .unwrap_or(false),
+        "the temp root was removed"
+    );
+    assert!(
+        !sidecar.join("config.toml").exists(),
+        "the host sidecar was not created: {e}"
+    );
+    let sibling = format!("{}__worktrees", repo.display());
+    assert!(
+        !std::path::Path::new(&sibling).exists(),
+        "the host worktrees sibling was not created"
+    );
+}
+
+#[test]
+fn once_ignores_an_existing_host_sidecar() {
+    // The sidecar layer is EMPTY in once-mode: a repo WITH a sidecar
+    // carrying mounts (or a whole backend) runs on the USER layer +
+    // defaults only — the sidecar config must not be loaded. Proven
+    // by --dry-run: the printed argv has NO bind the host sidecar
+    // declared, and the report's sidecar path names the TEMP config.
+    let (inv, repo, sidecar) = fixture_uninited("once-ignore", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\n[[mounts]]\npath = \"/etc\"\nmode = \"ro\"\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_once(&inv, &["--verbose", "--dry-run"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        !stdout.contains("--ro-bind /etc"),
+        "the host sidecar's mount was not bound: {stdout}"
+    );
+    // The report names the TEMP sidecar config, not the host's.
+    assert!(
+        stdout.contains("mysbx-once/dry-run/sidecar/config.toml"),
+        "the report shows the ephemeral sidecar: {stdout}"
+    );
+    assert!(
+        !stdout.contains(&format!("{}", sidecar.join("config.toml").display())),
+        "the report does not name the host sidecar: {stdout}"
+    );
+    let _ = repo;
+}
+
+#[test]
+fn once_sigterm_forwards_tears_down_and_reports_the_signal() {
+    if !is_ssh_keygen_available() {
+        eprintln!("skipping: no usable ssh-keygen in this environment");
+        return;
+    }
+    // The once lifecycle's middle (cli.md D22): mysbx-once is the
+    // PARENT, so a SIGTERM reaches it, not the payload's bwrap. It
+    // must forward the signal to the child's group, tear the temp
+    // root down, and exit `128 + signum` — D8's cancellation code,
+    // the same dance the `--result` wait runs (the
+    // `a_cancelled_result_run_...` precedent, SIGTERM instead of
+    // SIGINT).
+    if !is_bwrap_available() {
+        eprintln!("skipping: bwrap not available in this environment");
+        return;
+    }
+    let Some(bash) = sandbox_bash() else {
+        eprintln!("skipping: no sandbox-reachable bash");
+        return;
+    };
+    // `sleep` by its ABSOLUTE store path: the sandbox's PATH holds
+    // only the tools closure (`MYSBX_TOOLS_PATH`), and a plain
+    // `sleep` lookup would depend on what that closure ships.
+    let Some(sleep) = sandbox_sleep() else {
+        eprintln!("skipping: no sandbox-reachable sleep");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture_uninited("once-sigterm", &[]);
+    let bash = bash.to_string_lossy().into_owned();
+    let cmd_line = format!("exec {} 30", sleep.display());
+    let args = ["run", "--", &bash, "-c", &cmd_line];
+    let mut cmd = spawn_once(&inv, &args);
+    cmd.env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .stdin(std::process::Stdio::piped());
+    // SIGTERM of the PARENT (the mysbx-once process), not the child
+    // — `kill(2)` the same way the result-mode test signals mysbx.
+    // NO external process-group isolation: production must manage
+    // the run group itself (once_run_wait makes the backend its own
+    // group leader), and the forwarded SIGTERM must reach the run's
+    // processes only — never the caller that started mysbx-once.
+    // The canary below is this test's own group sibling: it shares
+    // the test harness's group (what a calling script's sibling
+    // processes look like) and must SURVIVE the cancellation.
+    let mut child = cmd.spawn().expect("failed to spawn mysbx-once");
+    // The canary: a process of the CALLER's group (the harness's —
+    // what mysbx-once inherited), alive across the cancellation.
+    let mut canary = std::process::Command::new(&sleep)
+        .arg("30")
+        .spawn()
+        .expect("failed to spawn the group canary");
+    std::thread::sleep(std::time::Duration::from_millis(700));
+    unsafe {
+        libc_kill(child.id(), 15);
+    }
+    let out = child.wait_with_output().expect("failed to reap mysbx-once");
+    // The canary was never signaled: the forward reached the run's
+    // OWN group, not the caller's.
+    let canary_alive = canary
+        .try_wait()
+        .expect("cannot probe the canary")
+        .is_none();
+    let _ = canary.kill();
+    let _ = canary.wait();
+    assert!(
+        canary_alive,
+        "the forwarded signal never reaches the caller's group"
+    );
+    assert_eq!(
+        out.status.code(),
+        Some(143),
+        "128 + SIGTERM(15); stdout: {} stderr: {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let base = inv.home.join("runtime/mysbx-once");
+    assert!(
+        !base.exists()
+            || std::fs::read_dir(&base)
+                .map(|d| d.count() == 0)
+                .unwrap_or(false),
+        "the temp root was removed after the signal"
+    );
+}
+#[test]
+fn once_failure_paths_do_not_leak_the_temp_root() {
+    // The lifecycle wrapper's own contract (cli.md D22): the temp
+    // root must not outlive the process on ANY path. The pipeline's
+    // early failure returns — here: no backend configured, a
+    // refusal-style exit BEFORE the backend ever spawns — are the
+    // paths the Once arm's teardown never reaches; the wrapper
+    // removes the root after them. The spawn paths are covered by
+    // `once_run_command_...` above.
+    let runtime = std::env::temp_dir().join(format!("mysbx-once-leak-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&runtime);
+    std::fs::create_dir_all(&runtime).unwrap();
+    let (inv, _repo, _sidecar) = fixture_uninited("once-leak", &[]);
+    let mut cmd = spawn_with_args(&inv, &["--verbose"]);
+    cmd.env("MYSBX_ONCE", "1").env("XDG_RUNTIME_DIR", &runtime);
+    // NO user config is written: `backend` unset — the run fails
+    // after the temp root was created ("no backend configured",
+    // exit 70).
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(70),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        !runtime.join("mysbx-once").exists()
+            || std::fs::read_dir(runtime.join("mysbx-once"))
+                .map(|d| d.count() == 0)
+                .unwrap_or(false),
+        "the temp root of the failed run was removed: {}",
+        runtime.display()
+    );
+    let _ = std::fs::remove_dir_all(&runtime);
+}
+
+#[test]
+fn once_worktrees_live_in_the_temp_root_and_leave_no_stale_entries() {
+    if !is_ssh_keygen_available() {
+        eprintln!("skipping: no usable ssh-keygen in this environment");
+        return;
+    }
+    // cli.md D22's worktree acceptance: `git worktree add` INSIDE
+    // the once sandbox lands in the TEMP root (bound at the host
+    // sibling's path), a branch committed there persists in the host
+    // repo (a branch lives in the git dir, never in the worktree),
+    // and after the run the host has no sibling, no temp root, and
+    // no stale `git worktree list` entry (the teardown prunes the
+    // entries whose directories died with the root).
+    if !is_bwrap_available() {
+        eprintln!("skipping: bwrap not available in this environment");
+        return;
+    }
+    let Some(bash) = sandbox_bash() else {
+        eprintln!("skipping: no sandbox-reachable bash");
+        return;
+    };
+    // git reachable INSIDE the sandbox, the same discovery rule
+    // sandbox_bash uses for bash.
+    let Some(git) = std::env::var_os("PATH").and_then(|path| {
+        std::env::split_paths(&path).find_map(|dir| {
+            let candidate = dir.join("git");
+            if !candidate.is_file() {
+                return None;
+            }
+            let real = std::fs::canonicalize(&candidate).ok()?;
+            (real.starts_with("/nix/store") || real.starts_with("/usr/bin")).then_some(real)
+        })
+    }) else {
+        eprintln!("skipping: no sandbox-reachable git");
+        return;
+    };
+    // A real repo at the fixture's cwd — git_repo skips when no
+    // host git exists, but we already required one above.
+    let (inv, _repo, _sidecar) = fixture_uninited("once-worktree", &[]);
+    let Some(repo) = git_repo(inv.cwd.parent().unwrap(), "repo") else {
+        return;
+    };
+    let repo_name = repo.file_name().unwrap().to_string_lossy().into_owned();
+    let sibling = repo
+        .parent()
+        .unwrap()
+        .join(format!("{repo_name}__worktrees"));
+    // The repo-local identity the sandbox git needs (the run's
+    // --clearenv leaves no GIT_AUTHOR_* behind; the repo-local
+    // config travels with the rw repo bind).
+    assert!(git_in(&repo, &["config", "user.name", "mysbx-tests",]));
+    assert!(git_in(
+        &repo,
+        &["config", "user.email", "mysbx-tests@invalid",]
+    ));
+    // The payload: one linked worktree at the path the SANDBOX sees
+    // (the host sibling's path — the temp root is bound there), one
+    // commit on its branch, nothing left dirty.
+    // The script's interpreter is the ABSOLUTE store bash (the
+    // sandbox has no /bin/sh without the `MYSBX_BINSH` pin).
+    let Some(sh) = sandbox_bash() else {
+        eprintln!("skipping: no sandbox-reachable bash");
+        return;
+    };
+    let script = format!(
+        // A GROUPED spelling (`<sibling>/team/fix-1`) proves the
+        // guard's discovery walks nested directories, not just the
+        // sibling's immediate children.
+        "#!{}\nset -e\n{} worktree add {sibling}/team/fix-1 -b fix-1\ncd {sibling}/team/fix-1\necho work > w.txt\n{} add w.txt\n{} commit -m worktree-work\n",
+        sh.display(),
+        git.display(),
+        git.display(),
+        git.display(),
+        sibling = sibling.display()
+    );
+    // The script lives IN THE REPO (bound rw — the payload's own
+    // filesystem): the host home is not mounted inside the sandbox.
+    let script_path = inv.cwd.join("once-worktree-payload.sh");
+    std::fs::write(&script_path, script).unwrap();
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let out = spawn_once(&inv, &["run", "--verbose", "--"])
+        .arg(&script_path)
+        .env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .output()
+        .expect("failed to spawn mysbx-once");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        out.status.success(),
+        "the payload ran clean; stdout: {stdout} stderr: {stderr}"
+    );
+    // The commit survives in the host repo (a branch is git-dir
+    // state, the worktree itself was ephemeral).
+    assert!(
+        git_in(&repo, &["rev-parse", "--verify", "fix-1"]),
+        "the branch committed in the temp worktree lives in the host repo"
+    );
+    // The host is untouched: no sibling, no temp root.
+    assert!(
+        !sibling.exists(),
+        "the host worktrees sibling was not created"
+    );
+    assert!(
+        !inv.home.join("runtime/mysbx-once").exists()
+            || std::fs::read_dir(inv.home.join("runtime/mysbx-once"))
+                .map(|d| d.count() == 0)
+                .unwrap_or(false),
+        "the temp root was removed"
+    );
+    // No stale worktree entry in the host repo.
+    let list = Command::new("git")
+        .arg("-C")
+        .arg(&repo)
+        .args(["worktree", "list"])
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .output()
+        .expect("git worktree list failed");
+    let list = String::from_utf8_lossy(&list.stdout);
+    assert!(
+        !list.contains(&sibling.display().to_string()),
+        "no stale entry points at the removed temp worktree: {list}"
+    );
+}
+
+#[test]
+fn once_bare_form_runs_without_a_sidecar_and_leaves_nothing_behind() {
+    // The primary acceptance of cli.md D22: the BARE form — the
+    // form D13 refuses for a not-inited repo — runs in once-mode
+    // for a repo with no sidecar at all, and the host keeps no
+    // trace: no sidecar config, no worktrees sibling, no temp root.
+    if !is_bwrap_available() {
+        eprintln!("skipping: bwrap not available in this environment");
+        return;
+    }
+    if !is_ssh_keygen_available() {
+        eprintln!("skipping: no usable ssh-keygen in this environment");
+        return;
+    }
+    // The bare form execs the payload shell with no arguments: a
+    // `true` binary exits 0 at once — the same trick the plain
+    // bare-form tests use.
+    let true_path = std::env::var_os("PATH").and_then(|path| {
+        std::env::split_paths(&path).find_map(|dir| {
+            if !(dir.starts_with("/nix/store") || dir.starts_with("/usr/bin")) {
+                return None;
+            }
+            let candidate = dir.join("true");
+            candidate.is_file().then_some(candidate)
+        })
+    });
+    let Some(true_path) = true_path else {
+        eprintln!("skipping: no sandbox-reachable true");
+        return;
+    };
+    let (inv, _repo, sidecar) = fixture_uninited("once-bare", &[]);
+    let out = spawn_once(&inv, &[])
+        .env("MYSBX_SHELL", &true_path)
+        .env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .output()
+        .expect("failed to spawn mysbx-once");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "the bare once run exits with the payload's code; stdout: {} stderr: {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let base = inv.home.join("runtime/mysbx-once");
+    assert!(
+        !base.exists()
+            || std::fs::read_dir(&base)
+                .map(|d| d.count() == 0)
+                .unwrap_or(false),
+        "the temp root was removed after the bare run"
+    );
+    assert!(
+        !sidecar.join("config.toml").exists(),
+        "the host sidecar was not created"
+    );
+}
+
+#[test]
+fn once_keeps_the_temp_root_over_a_dirty_worktree() {
+    // The data-loss guard, live (cli.md D22): a payload that leaves
+    // a linked worktree DIRTY keeps the whole temp root — named on
+    // stdout (`## mysbx-once: kept <path>: uncommitted changes in
+    // <worktree>`) — instead of deleting uncommitted work. The exit
+    // code stays the payload's own.
+    if !is_bwrap_available() {
+        eprintln!("skipping: bwrap not available in this environment");
+        return;
+    }
+    if !is_ssh_keygen_available() {
+        eprintln!("skipping: no usable ssh-keygen in this environment");
+        return;
+    }
+    let Some(git) = std::env::var_os("PATH").and_then(|path| {
+        std::env::split_paths(&path).find_map(|dir| {
+            let candidate = dir.join("git");
+            if !candidate.is_file() {
+                return None;
+            }
+            let real = std::fs::canonicalize(&candidate).ok()?;
+            (real.starts_with("/nix/store") || real.starts_with("/usr/bin")).then_some(real)
+        })
+    }) else {
+        eprintln!("skipping: no sandbox-reachable git");
+        return;
+    };
+    let Some(sh) = sandbox_bash() else {
+        eprintln!("skipping: no sandbox-reachable bash");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture_uninited("once-dirty", &[]);
+    let Some(repo) = git_repo(inv.cwd.parent().unwrap(), "repo") else {
+        return;
+    };
+    assert!(git_in(&repo, &["config", "user.name", "mysbx-tests"]));
+    assert!(git_in(
+        &repo,
+        &["config", "user.email", "mysbx-tests@invalid"]
+    ));
+    let repo_name = repo.file_name().unwrap().to_string_lossy().into_owned();
+    let sibling = repo
+        .parent()
+        .unwrap()
+        .join(format!("{repo_name}__worktrees"));
+    // Payload: a linked worktree, one commit (to have a clean base),
+    // then an UNCOMMITTED file — the worktree is dirty at exit.
+    let script = format!(
+        "#!{}\nset -e\n{} worktree add {sibling}/fix-1 -b fix-1\ncd {sibling}/fix-1\necho work > w.txt\n{} add w.txt\n{} commit -m base\necho dirty > uncommitted.txt\n",
+        sh.display(),
+        git.display(),
+        git.display(),
+        git.display(),
+        sibling = sibling.display()
+    );
+    let script_path = inv.cwd.join("once-dirty-payload.sh");
+    std::fs::write(&script_path, script).unwrap();
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let out = spawn_once(&inv, &["run", "--verbose", "--"])
+        .arg(&script_path)
+        .env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .output()
+        .expect("failed to spawn mysbx-once");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        out.status.success(),
+        "the payload ran clean; stdout: {stdout} stderr: {stderr}"
+    );
+    // The guard fired: the root is KEPT and named on stdout.
+    assert!(
+        stdout.contains("## mysbx-once: kept "),
+        "the kept message names the temp root: {stdout}"
+    );
+    assert!(
+        stdout.contains("uncommitted changes"),
+        "the kept message says why: {stdout}"
+    );
+    // The temp root still exists, with the dirty worktree inside.
+    let base = inv.home.join("runtime/mysbx-once");
+    let kept: Vec<_> = std::fs::read_dir(&base)
+        .expect("the base dir exists")
+        .filter_map(|e| e.ok())
+        .collect();
+    assert_eq!(kept.len(), 1, "exactly one kept root: {stdout}");
+    let kept_root = kept[0].path();
+    assert!(
+        kept_root.join("worktrees/fix-1/uncommitted.txt").is_file(),
+        "the dirty worktree still exists under the kept root: {}",
+        kept_root.display()
+    );
+    // And the host is still untouched.
+    assert!(!sibling.exists(), "no host worktrees sibling");
+    let host_sidecar = inv
+        .cwd
+        .parent()
+        .unwrap()
+        .join(format!("{}.mysbx", repo_name));
+    assert!(
+        !host_sidecar.join("config.toml").exists(),
+        "no host sidecar was created"
+    );
+    // The repair: the kept worktree's admin backlink must name the
+    // REAL kept path, not the sandbox spelling — the operator's own
+    // `git worktree prune` must keep finding the kept work. Proven
+    // by running that prune and asserting the registration and the
+    // dirty probe both survive it.
+    let backlink = std::fs::read_to_string(repo.join(".git/worktrees/fix-1/gitdir"))
+        .expect("the admin backlink exists");
+    assert!(
+        backlink
+            .trim()
+            .starts_with(&kept_root.display().to_string()),
+        "the backlink names the kept host path, not the sandbox spelling: {backlink}"
+    );
+    let prune = Command::new("git")
+        .arg("-C")
+        .arg(&repo)
+        .args(["worktree", "prune"])
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .status()
+        .expect("git worktree prune failed");
+    assert!(prune.success());
+    assert!(
+        repo.join(".git/worktrees/fix-1/gitdir").is_file(),
+        "the operator's prune does not destroy the kept worktree's registration"
+    );
+    let still_dirty = Command::new("git")
+        .arg("-C")
+        .arg(kept_root.join("worktrees/fix-1"))
+        .args(["status", "--porcelain", "--untracked-files=all"])
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .output()
+        .expect("git status of the kept worktree failed");
+    assert!(
+        !still_dirty.stdout.is_empty(),
+        "the kept worktree still works: {}",
+        String::from_utf8_lossy(&still_dirty.stderr)
+    );
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+#[test]
+fn once_dry_runs_of_the_other_backends_bind_the_temp_worktrees() {
+    // cli.md D22's validation clause: bwrap is live-validated, the
+    // other backends are validated by their dry-run argv — each
+    // backend's builder must carry the once shape (the temp
+    // worktrees bound at the host sibling's path), never the host
+    // sibling itself.
+    let (inv, repo, _sidecar) = fixture_uninited("once-backends", &["--dry-run"]);
+    let repo_name = repo.file_name().unwrap().to_string_lossy().into_owned();
+    let sibling = repo
+        .parent()
+        .unwrap()
+        .join(format!("{repo_name}__worktrees"))
+        .to_string_lossy()
+        .into_owned();
+    // krun is not in the list: its guest rootfs bakes no mountpoint
+    // for a repo under the test tempdir's first component (the
+    // krun backend refuses mounts below such roots by design), so a
+    // tmpdir fixture cannot reach its Once arm — the arm mirrors the
+    // clone arm the krun tests already cover.
+    for backend in ["nono", "podman-gvisor"] {
+        let mut cmd = spawn_once(&inv, &["--backend", backend, "--dry-run"]);
+        if backend == "podman-gvisor" {
+            cmd.env("MYSBX_PODMAN_IMAGE", "localhost/test:latest");
+        }
+        if backend == "krun" {
+            // The dry run needs only the pins' presence, the same
+            // stubs the krun argv tests use.
+            cmd.env("MYSBX_KRUN_LAUNCHER", "/usr/bin/krun-stub")
+                .env("MYSBX_KRUN_ROOTFS", "/var/lib/mysbx/rootfs-stub.img")
+                .env("MYSBX_KRUN_KERNEL", "/var/lib/mysbx/kernel-stub");
+        }
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        let (code, stdout, stderr) = (
+            out.status.code().unwrap_or(-1),
+            String::from_utf8_lossy(&out.stdout).into_owned(),
+            String::from_utf8_lossy(&out.stderr).into_owned(),
+        );
+        assert_eq!(code, 0, "{backend}: stderr: {stderr}");
+        let argv: Vec<&str> = stdout.lines().collect();
+        // The temp worktrees directory is a bind source...
+        let temp_src = argv
+            .iter()
+            .find(|a| a.contains("mysbx-once/dry-run/worktrees"))
+            .unwrap_or_else(|| panic!("{backend}: the temp worktrees are bound: {stdout}"));
+        // ...at the host sibling's path as its dest.
+        let idx = argv
+            .iter()
+            .position(|a| a == temp_src)
+            .unwrap_or_else(|| panic!("{backend}: {stdout}"));
+        // bwrap/krun spell the dest as its own argv word, podman
+        // embeds it in the `type=bind,src=...,dst=...,rw` option —
+        // both must name the host sibling's path.
+        assert!(
+            argv.iter().any(|a| a == &sibling) || stdout.contains(&format!(",dst={sibling}")),
+            "{backend}: the dest is the host sibling's path: {stdout}"
+        );
+        assert!(
+            !std::path::Path::new(&sibling).exists(),
+            "{backend}: the host sibling was not created"
+        );
+    }
+}
+
+#[test]
+fn once_a_terminal_reading_payload_completes_under_the_group_isolation() {
+    // Review blocker 2 of bd myconfig-jhfo: the run's own process
+    // group (the cancellation isolation) without the terminal
+    // FOREGROUND handoff stops a tty-reading payload with SIGTTIN —
+    // bwrap, the shell, everything in the run's group — while the
+    // wait loop spins forever. The handoff (`Foreground` in lib.rs)
+    // gives the run's group the terminal's foreground, so the
+    // payload reads the ctty exactly like a plain run's, and takes
+    // the foreground back when the run ends.
+    if !is_bwrap_available() {
+        eprintln!("skipping: bwrap not available in this environment");
+        return;
+    }
+    if !is_ssh_keygen_available() {
+        eprintln!("skipping: no usable ssh-keygen in this environment");
+        return;
+    }
+    let Some(bash) = sandbox_bash() else {
+        eprintln!("skipping: no sandbox-reachable bash");
+        return;
+    };
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture_uninited("once-tty", &[]);
+    let runtime = inv.home.join("runtime");
+    std::fs::create_dir_all(&runtime).unwrap();
+    // The backend the run needs (the same user layer `spawn_once`
+    // writes, spelled here because the pty child's env is built
+    // from scratch — `env_clear` keeps the fixture's HOME/XDG from
+    // leaking, so the config must be written and named too).
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+
+    // The mysbx-once child needs the pty's SLAVE as its controlling
+    // terminal — a session of its own (setsid) whose ctty the
+    // sandbox's tty reads go through — which std::process cannot
+    // spell: pre_exec runs between fork and exec, exactly where
+    // setsid + the ctty-acquiring open belong.
+    let bash = bash.to_string_lossy().into_owned();
+    let payload = "echo READY; read x; echo GOT:$x".to_owned();
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_mysbx"));
+    cmd.env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+        .env("HOME", &inv.home)
+        .env("XDG_CONFIG_HOME", &inv.xdg)
+        .env("XDG_RUNTIME_DIR", &runtime)
+        .env("MYSBX_ONCE", "1")
+        .env("MYSBX_SHELL", &bash)
+        .env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .current_dir(&inv.cwd)
+        .args(["run", "--", &bash, "-c", &payload]);
+    unsafe {
+        set_session_with_pty(&mut cmd, master.as_raw_fd());
+    }
+    let mut child = cmd.spawn().expect("failed to spawn mysbx-once under a pty");
+
+    // Drive the run through the pty: READY, a line, and the echo
+    // back — then the run must END, reaped with the payload's own
+    // exit code, and hand the foreground back.
+    use std::io::{Read, Write};
+    let mut master = master;
+    let mut buf = [0u8; 4096];
+    let mut seen = String::new();
+    let mut sent = false;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let ended = loop {
+        if std::time::Instant::now() > deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("the tty-reading payload never completed; pty said: {seen}");
+        }
+        let mut fds = [master.as_raw_fd()];
+        let ready = pty_readable(&mut fds, 300);
+        if ready {
+            let n = master.read(&mut buf).unwrap_or(0);
+            if n == 0 {
+                break true;
+            }
+            seen.push_str(&String::from_utf8_lossy(&buf[..n]));
+        }
+        if !sent && seen.contains("READY") {
+            master.write_all(b"hello\n").unwrap();
+            sent = true;
+        }
+        if seen.contains("GOT:hello") {
+            break true;
+        }
+    };
+    assert!(ended, "the pty closed");
+    let out = pty_wait_with_deadline(&mut child, std::time::Duration::from_secs(10))
+        .unwrap_or_else(|| {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("mysbx-once did not end after the tty exchange; pty said: {seen}")
+        });
+    assert!(
+        out.success(),
+        "the payload exits with its own code; pty said: {seen}"
+    );
+}
+
+/// Whether one of `fds` is readable within `millis` — `select(2)`
+/// through the raw libc symbol, the pty test's read budget.
+fn pty_readable(fds: &mut [std::os::fd::RawFd; 1], millis: u64) -> bool {
+    unsafe {
+        let mut set = std::mem::zeroed::<FdSetRaw>();
+        set.fds_bits[0] = 1u64 << (fds[0] % 64);
+        let mut tv = TimeValRaw {
+            secs: (millis / 1000) as i64,
+            micros: ((millis % 1000) * 1000) as i64,
+        };
+        select_raw(
+            fds[0] + 1,
+            &mut set,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut tv,
+        ) > 0
+    }
+}
+
+#[repr(C)]
+struct FdSetRaw {
+    fds_bits: [u64; 16],
+}
+
+#[repr(C)]
+struct TimeValRaw {
+    secs: i64,
+    micros: i64,
+}
+
+unsafe fn select_raw(
+    n: i32,
+    readfds: *mut FdSetRaw,
+    writefds: *mut FdSetRaw,
+    exceptfds: *mut FdSetRaw,
+    timeout: *mut TimeValRaw,
+) -> i32 {
+    extern "C" {
+        fn select(
+            n: i32,
+            readfds: *mut FdSetRaw,
+            writefds: *mut FdSetRaw,
+            exceptfds: *mut FdSetRaw,
+            timeout: *mut TimeValRaw,
+        ) -> i32;
+    }
+    select(n, readfds, writefds, exceptfds, timeout)
+}
+
+/// `waitpid(pid, WNOHANG)` in a poll loop with a deadline — the
+/// std `Child::try_wait` spelling, with a budget so a regression
+/// (a stopped payload, a spinning wait loop) FAILS the test
+/// instead of hanging it.
+fn pty_wait_with_deadline(
+    child: &mut std::process::Child,
+    budget: std::time::Duration,
+) -> Option<std::process::ExitStatus> {
+    let deadline = std::time::Instant::now() + budget;
+    loop {
+        if let Ok(Some(status)) = child.try_wait() {
+            return Some(status);
+        }
+        if std::time::Instant::now() > deadline {
+            return None;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
+/// Give the child of `cmd` the session shape the tty test needs: its
+/// own session (a controlling terminal of its own — what an
+/// operator's interactive run sits in) with the slave of
+/// `master_fd` as that ctty, on stdio. Called as a `pre_exec` step,
+/// i.e. between fork and exec, where setsid and the ctty-acquiring
+/// open belong.
+///
+/// # Safety
+///
+/// `master_fd` must be an open pty master whose slave path can be
+/// resolved; the child inherits and dups the freshly-opened slave.
+unsafe fn set_session_with_pty(cmd: &mut Command, master_fd: std::os::fd::RawFd) {
+    use std::os::unix::process::CommandExt;
+    let ptsname = ptsname_of(master_fd);
+    let Ok(ptsname) = ptsname else {
+        panic!("no slave for the pty master");
+    };
+    cmd.pre_exec(move || {
+        extern "C" {
+            fn setsid() -> i32;
+            fn open(path: *const std::os::raw::c_char, flags: i32, ...) -> i32;
+            fn dup2(old: i32, new: i32) -> i32;
+            fn close(fd: i32) -> i32;
+        }
+        const O_RDWR: i32 = 2;
+        // A session of one's own, the slave opened WITH the ctty
+        // acquisition (no O_NOCTTY), stdio on it.
+        if setsid() < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        let path = ptsname.as_os_str().as_encoded_bytes();
+        let mut with_nul = [0u8; 256];
+        if path.len() >= with_nul.len() {
+            return Err(std::io::Error::from(std::io::ErrorKind::InvalidInput));
+        }
+        with_nul[..path.len()].copy_from_slice(path);
+        let slave = open(with_nul.as_ptr().cast(), O_RDWR);
+        if slave < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        for fd in [0, 1, 2] {
+            if dup2(slave, fd) < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+        }
+        if slave > 2 {
+            close(slave);
+        }
+        Ok(())
+    });
+}
+
+/// The slave path of a pty master — `ptsname_r` through the raw
+/// libc symbol, [`open_test_pty`]'s own helper spelled again (its
+/// binding is local to it).
+fn ptsname_of(master_fd: std::os::fd::RawFd) -> Result<std::path::PathBuf, std::io::Error> {
+    extern "C" {
+        fn ptsname_r(fd: i32, buf: *mut u8, buflen: usize) -> i32;
+    }
+    let mut name = [0u8; 256];
+    if unsafe { ptsname_r(master_fd, name.as_mut_ptr(), name.len()) } != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    let end = name.iter().position(|b| *b == 0).unwrap_or(name.len());
+    use std::os::unix::ffi::OsStrExt;
+    Ok(std::path::PathBuf::from(std::ffi::OsStr::from_bytes(
+        &name[..end],
+    )))
 }

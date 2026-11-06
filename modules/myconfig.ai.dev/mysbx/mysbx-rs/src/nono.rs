@@ -264,6 +264,25 @@ pub fn nono_run_argv(
             }
             argv.extend(["--allow".into(), worktrees.to_string_lossy().into_owned()]);
         }
+    } else if let Workspace::Once { worktrees } = params.workspace {
+        // Once (cli.md D22): the temp root's worktrees directory is
+        // bound rw at the host sibling's PATH — the spelling the
+        // payload's `git worktree add` computes — so the Landlock
+        // grant must cover THAT visible dest, never just the hidden
+        // temp source (the pre-fix grant: the visible path stayed
+        // ungranted and `git worktree add` died with EACCES). The
+        // hidden source spelling is granted too, mirroring the
+        // clone arm — harmless where it is not mounted.
+        let dest = crate::session::Session::worktrees_dest(repo);
+        if let Some(dest) = dest {
+            if dest != repo.root {
+                argv.extend(["--allow".into(), dest.to_string_lossy().into_owned()]);
+            }
+        }
+        argv.extend(["--allow".into(), worktrees.to_string_lossy().into_owned()]);
+        for git_dir in &repo.git_dirs {
+            argv.extend(["--allow".into(), git_dir.to_string_lossy().into_owned()]);
+        }
     } else {
         for git_dir in &repo.git_dirs {
             argv.extend(["--allow".into(), git_dir.to_string_lossy().into_owned()]);

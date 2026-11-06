@@ -1,0 +1,1099 @@
+// Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
+// SPDX-License-Identifier: MIT
+//! `mysbx-once` — the one-shot form (bd myconfig-7zwt, cli.md D22):
+//! a sandbox run without any persistent per-repo setup.
+//!
+//! `mysbx-once` is the SAME binary as `mysbx`, dispatched on argv[0]
+//! or on the `MYSBX_ONCE=1` marker the Nix package's second wrapped
+//! program sets (argv[0] cannot carry the dispatch through a
+//! makeBinaryWrapper chain — each `exec` resets it to the literal
+//! program path). It starts `mysbx $ARGS` for the repo the cwd
+//! resolves to (cli.md D1 — resolution is unchanged), but neither
+//! reads nor writes the host's `<repo>.mysbx/` and
+//! `<repo>__worktrees`: both are created in a private temporary
+//! directory for one run and removed when it ends. An existing
+//! host sidecar config is ignored, not loaded — the sidecar LAYER
+//! is empty, so the effective configuration is built-in defaults
+//! + user config + flags, exactly like a repo whose sidecar is not
+//! inited.
+//!
+//! That is an explicit exception to cli.md D13 (a run never creates
+//! the sidecar) which keeps D13's intent: nothing persistent is
+//! created on the host. The one thing D13 lets an interactive run
+//! create — the `<repo>__worktrees` sibling — is redirected the same
+//! way: the run binds its TEMPORARY worktrees directory at the
+//! sibling's path inside the sandbox (the clone-run precedent of
+//! workspace.md D3a: bind a non-sibling source at the path the
+//! payload computes), so `workmux add` / `git worktree add` work,
+//! and the host path itself is never touched.
+//!
+//! Lifecycle (cli.md D22): mysbx-once stays the PARENT — no `exec`
+//! — so it can tear the temp root down after the payload. It
+//! forwards SIGINT/SIGTERM/SIGHUP to the child, waits, runs the
+//! data-loss guard (a linked worktree under the temp root with
+//! uncommitted changes keeps the root and names it), prunes the
+//! host repo's stale worktree entries, removes the temp root, and
+//! exits with the payload's own exit code (D8 unchanged; `70` when
+//! the setup itself fails).
+
+use crate::repo::Repo;
+use std::path::{Path, PathBuf};
+
+/// The marker the wrapper (or a test) can set instead of the
+/// argv[0] spelling: `MYSBX_ONCE=1` selects once-mode for an
+/// invocation of the plain binary. An empty value counts as unset,
+/// the same treatment every `MYSBX_*` pin gets.
+const ONCE_ENV: &str = "MYSBX_ONCE";
+
+/// The basename of the symlink the Nix package installs beside
+/// `mysbx` — the argv[0] spelling of once-mode.
+const ONCE_ARGV0: &str = "mysbx-once";
+
+/// Whether THIS invocation is a once-mode one: argv[0] is the
+/// `mysbx-once` symlink, or `MYSBX_ONCE=1` is set. Called once at
+/// the top of `run` (lib.rs), so every later decision — the verb
+/// gate, the sidecar override, the wait — branches on one fact.
+pub fn active() -> bool {
+    if let Some(raw) = std::env::var_os(ONCE_ENV) {
+        if !raw.is_empty() {
+            return true;
+        }
+    }
+    std::env::args_os()
+        .next()
+        .and_then(|a| Path::new(&a).file_name().map(|n| n == ONCE_ARGV0))
+        .unwrap_or(false)
+}
+
+/// The verbs and flags once-mode refuses (cli.md D22): everything
+/// that would need state the temp root does not carry, or that
+/// would outlive it. `init`/`edit`/`status` write or report the
+/// HOST sidecar; `run --result` writes result.json into the temp
+/// sidecar (deleted with it — no consumable outcome); `--session`
+/// creates the clone in the temp sidecar (the session registry is
+/// the host's, the clone would vanish); the session/worktree noun
+/// groups and the fetch/merge/push/diff handoff verbs are host-side
+/// state machines over the sidecar; `attach` and `--detach`/
+/// `--detachable` detach the run from the parent that owns the
+/// teardown.
+pub const REFUSED: &[&str] = &[
+    "init",
+    "edit",
+    "status",
+    "session",
+    "worktree",
+    "fetch",
+    "merge",
+    "push",
+    "diff",
+    "attach",
+    "ssh-pubkey",
+];
+
+/// The refusal message of once-mode: `mysbx-once: <what>` on stderr,
+/// exit `70` (cli.md D8 — the command line was fine, the form it
+/// names does not exist here).
+pub fn refuse(what: &str) -> i32 {
+    eprintln!("mysbx-once: {what}");
+    eprintln!(
+        "  once-mode runs a sandbox and tears it down — use plain `mysbx` for the persistent forms"
+    );
+    crate::EXIT_INFRASTRUCTURE
+}
+
+/// The temporary root of one once-run: `<root>/sidecar/` (an EMPTY
+/// `config.toml` — an empty layer, like a not-inited repo's would
+/// be) and `<root>/worktrees/` (the directory bound at the host's
+/// `<repo>__worktrees` path).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TempRoot {
+    /// The private root, mode 0700, under
+    /// `$XDG_RUNTIME_DIR/mysbx-once/` (fallback `${TMPDIR:-/tmp}`).
+    pub root: PathBuf,
+    /// `<root>/sidecar` — the ephemeral sidecar, `config.toml` an
+    /// EMPTY file (a real, empty policy layer, not a missing one:
+    /// the run report must show the sidecar config as existing and
+    /// empty, the exact state `mysbx init` leaves in a repo without
+    /// policy).
+    pub sidecar: PathBuf,
+    /// `<root>/worktrees` — the ephemeral worktrees sibling,
+    /// bound rw at the host's `<repo>__worktrees` path.
+    pub worktrees: PathBuf,
+    /// The CANONICAL admin-ownership roots of the run's repository,
+    /// captured BEFORE the payload runs
+    /// ([`TempRoot::capture_admin_roots`]): the resolved
+    /// `<repo>/.git` plus every git metadata dir the resolution
+    /// recorded (a linked worktree's gitdir and common dir). The
+    /// teardown's ownership gate compares against THESE roots,
+    /// never against a fresh canonicalization of the
+    /// payload-writable repo — a payload that replaces `<repo>/.git`
+    /// with a symlink into another repository's admin tree must not
+    /// make the foreign tree count as ours. Empty for a `--dry-run`
+    /// placeholder (it runs no teardown) and for the hand-rolled unit
+    /// fixtures that exercise the teardown's own rules in isolation.
+    pub admin_roots: Vec<PathBuf>,
+}
+
+impl TempRoot {
+    /// Create the temp root of one once-run (cli.md D22): under
+    /// `$XDG_RUNTIME_DIR/mysbx-once/` (fallback `${TMPDIR:-/tmp}`),
+    /// named by the pid — one root per process, never reused, and
+    /// a crashed run leaves debris whose owner is identifiable
+    /// (the same lifecycle the krun per-run dirs follow under the
+    /// sidecar). Private, mode 0700, carrying `sidecar/config.toml`
+    /// (empty) and `worktrees/`.
+    pub fn create() -> Result<TempRoot, String> {
+        let base = match std::env::var_os("XDG_RUNTIME_DIR") {
+            Some(dir) if Path::new(&dir).is_absolute() => Path::new(&dir).join("mysbx-once"),
+            _ => std::env::var_os("TMPDIR")
+                .filter(|t| Path::new(t).is_absolute())
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from("/tmp"))
+                .join("mysbx-once"),
+        };
+        Self::create_under(&base)
+    }
+
+    /// [`create`] at a caller-chosen base: the shape-building half,
+    /// separated so the unit tests can give each invocation its own
+    /// directory (the pid-named root is per PROCESS, and the tests
+    /// share one — the same reason `repo::tests` hand-rolls its
+    /// tmpdirs).
+    pub fn create_under(base: &Path) -> Result<TempRoot, String> {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::create_dir_all(base).map_err(|e| {
+            format!(
+                "mysbx-once: cannot create the temp-root base {}: {e}",
+                base.display()
+            )
+        })?;
+        let root = base.join(std::process::id().to_string());
+        std::fs::create_dir(&root).map_err(|e| {
+            format!(
+                "mysbx-once: cannot create the temp root {}: {e}",
+                root.display()
+            )
+        })?;
+        std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700))
+            .map_err(|e| format!("mysbx-once: cannot make {} private: {e}", root.display()))?;
+        let sidecar = root.join("sidecar");
+        std::fs::create_dir(&sidecar).map_err(|e| {
+            format!(
+                "mysbx-once: cannot create the ephemeral sidecar {}: {e}",
+                sidecar.display()
+            )
+        })?;
+        let worktrees = root.join("worktrees");
+        std::fs::create_dir(&worktrees).map_err(|e| {
+            format!(
+                "mysbx-once: cannot create the ephemeral worktrees dir {}: {e}",
+                worktrees.display()
+            )
+        })?;
+        let config = sidecar.join("config.toml");
+        std::fs::write(&config, "").map_err(|e| {
+            format!(
+                "mysbx-once: cannot create the ephemeral config {}: {e}",
+                config.display()
+            )
+        })?;
+        Ok(TempRoot {
+            root,
+            sidecar,
+            worktrees,
+            admin_roots: Vec::new(),
+        })
+    }
+
+    /// The placeholder of a once `--dry-run` (cli.md D22): the paths
+    /// a real run's [`create`] would make, WITHOUT making them — a
+    /// dry run creates nothing (D9) and prints the argv of the run
+    /// that would happen, temp-root binds included. The per-run name
+    /// is the literal `dry-run`, so two dry runs print the same argv
+    /// (a pid would make them differ for no reason).
+    pub fn placeholder() -> TempRoot {
+        let base = match std::env::var_os("XDG_RUNTIME_DIR") {
+            Some(dir) if Path::new(&dir).is_absolute() => Path::new(&dir).join("mysbx-once"),
+            _ => std::env::var_os("TMPDIR")
+                .filter(|t| Path::new(t).is_absolute())
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from("/tmp"))
+                .join("mysbx-once"),
+        };
+        let root = base.join("dry-run");
+        TempRoot {
+            sidecar: root.join("sidecar"),
+            worktrees: root.join("worktrees"),
+            admin_roots: Vec::new(),
+            root,
+        }
+    }
+
+    /// Redirect the resolved repo's sidecar and worktrees at the
+    /// temp root (the seam of bd myconfig-7zwt): the sidecar layer
+    /// the run loads is the EMPTY one just created — an existing
+    /// host `<repo>.mysbx/config.toml` is never read — and the
+    /// worktrees sibling the run binds rw is the temp directory,
+    /// which the argv binds at the host sibling's PATH inside the
+    /// sandbox (workspace.md D3a precedent), so the host path
+    /// itself is neither created nor touched.
+    pub fn redirect(&self, repo: &mut Repo) {
+        repo.sidecar = self.sidecar.clone();
+        repo.worktrees = Some(self.worktrees.clone());
+    }
+
+    /// The canonical admin-ownership roots of `repo`, captured
+    /// BEFORE the payload runs: the resolved `<repo>/.git` (when it
+    /// is a directory — a plain repository's own metadata, which
+    /// the run binds rw) plus every git metadata dir the resolution
+    /// recorded on the [`Repo`] (a linked worktree's gitdir and
+    /// common dir). Unresolvable entries are DROPPED, not spelled
+    /// raw: a raw spelling could resolve through a symlink a later
+    /// payload planted, and a root the pre-payload filesystem
+    /// cannot vouch for is no root at all.
+    pub fn capture_admin_roots(&mut self, repo: &Repo) {
+        let mut roots = vec![repo.root.join(".git")];
+        roots.extend(repo.git_dirs.iter().cloned());
+        self.admin_roots = roots
+            .into_iter()
+            .filter_map(|r| std::fs::canonicalize(r).ok())
+            .filter(|r| r.is_dir())
+            .collect();
+    }
+}
+
+/// The teardown of one once-run (cli.md D22): the data-loss guard
+/// first — every linked worktree under `<root>/worktrees` is probed
+/// with `git status --porcelain`; one with uncommitted changes keeps
+/// the whole temp root, named on stdout so the operator knows where
+/// the work still lives. The host repo's worktree BOOKKEEPING is
+/// cleaned up surgically per worktree of THIS run — never with
+/// `git worktree prune`, which is repo-global and would also delete
+/// the registration of a KEPT worktree (its backlink names the
+/// sandbox-only `<repo>__worktrees` spelling, absent on the host)
+/// and of a CONCURRENT once-run (whose backlink names that same
+/// absent spelling while its temp root still exists). A kept
+/// worktree's backlink is REPAIRED to its real host path first, so
+/// the operator's own later `git worktree prune` keeps finding it.
+/// Best-effort by stage: a stage that fails does not block the
+/// next, and only the removal failure is reported.
+///
+/// Returns whether the temp root was KEPT (a dirty worktree), so
+/// the caller can say so with the exit code unchanged — the run's
+/// outcome is the payload's, not the teardown's.
+pub fn teardown(root: &TempRoot, repo: &Repo) -> bool {
+    // The guard: uncommitted changes in a linked worktree would be
+    // DELETED with the root. Commits are safe — a worktree's branch
+    // lives in the host repo's git dir — but the working tree is
+    // only here. Dirty ⇒ keep the root, name it, skip removal.
+    let mut keep = false;
+    let mut dirty: Vec<PathBuf> = Vec::new();
+    if let Some(entries) = read_worktree_dirs(&root.worktrees) {
+        for wt in entries {
+            if worktree_dirty(&wt) {
+                println!(
+                    "## mysbx-once: kept {}: uncommitted changes in {}",
+                    root.root.display(),
+                    wt.display()
+                );
+                dirty.push(wt);
+                keep = true;
+            }
+        }
+    }
+    if keep {
+        // The kept worktrees' admin backlinks still name the SANDBOX
+        // spelling (`<repo>__worktrees/...`, the path the payload's
+        // git used) — a spelling that does not exist on the host, so
+        // the operator's next `git worktree prune` would delete
+        // their admin dirs (index, HEAD) and orphan the kept work.
+        // `git worktree repair <path>` repoints the backlink at the
+        // real kept path. Quiet and best-effort: a repair that fails
+        // leaves debris the operator can see with `git worktree
+        // list` — it does not lose work.
+        for wt in &dirty {
+            // The repair's OWN gate (review blocker 3 of bd
+            // myconfig-jhfo): a KEPT worktree whose `.git` pointer
+            // the payload forged at another repository's admin
+            // directory must not reach `git worktree repair` —
+            // repair rewrites the registration's backlink, and a
+            // FOREIGN one is the payload's vandalism, not our
+            // cleanup. A pointer that fails the canonical-ownership
+            // check skips the repair: the debris stays visible to
+            // the operator (`git worktree list`), no work is lost.
+            if !worktree_pointer_is_ours(wt, root) {
+                eprintln!(
+                    "mysbx-once: kept {}: its .git pointer names a registration this repo does not own — not repaired",
+                    wt.display()
+                );
+                continue;
+            }
+            // The repair runs on the HOST, against a repo whose config
+            // the payload may have written (it was bound rw inside the
+            // sandbox) — the same hardening the guard's probe carries,
+            // so no configured command of the repaired repo executes
+            // with host access.
+            let mut repair = std::process::Command::new("git");
+            repair.arg("-C").arg(&repo.root);
+            for arg in hardened_git_args() {
+                repair.arg(arg);
+            }
+            let _ = repair
+                .args(["worktree", "repair"])
+                .arg(wt)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status();
+        }
+        return keep;
+    }
+    // All clean: the admin dirs are collected BEFORE the removal
+    // (they are read out of the worktrees' `.git` pointer files,
+    // which die with the root), then the temp root goes, then THIS
+    // run's registrations — surgically, one per worktree we found,
+    // each only when its own backlink names a path of THIS run (a
+    // concurrent once-run's backlink names ITS temp root, an
+    // operator's names a real host path — neither is ours). This is
+    // what `git worktree prune` would do to our entries, without its
+    // repo-global reach.
+    let admins = admin_dirs_of(&root.worktrees, root);
+    if let Err(e) = std::fs::remove_dir_all(&root.root) {
+        eprintln!(
+            "mysbx-once: cannot remove the temp root {}: {e}",
+            root.root.display()
+        );
+    }
+    for admin in admins {
+        let _ = remove_admin_if_ours(&admin, root, repo);
+    }
+    keep
+}
+
+/// The admin dirs (`<gitdir>/worktrees/<name>`) of every linked
+/// worktree under `<dir>`, read from each worktree's `.git` pointer
+/// file — the pointer IS the admin path (`gitdir:
+/// <repo>/.git/worktrees/<name>`). Only pointers whose admin dir
+/// THIS repository canonically owns pass (review blocker 3 of bd
+/// myconfig-jhfo): a payload-forged `.git` file naming another
+/// repository's admin directory must not flow into the teardown —
+/// not into the repair, not into the registration removal — or the
+/// teardown would rewrite or delete a FOREIGN registration.
+/// Worktrees whose pointer cannot be read are skipped: their admin
+/// dir is left for the operator's own `git worktree prune` — a
+/// missed cleanup, never a lost worktree.
+fn admin_dirs_of(dir: &Path, root: &TempRoot) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if let Some(worktrees) = read_worktree_dirs(dir) {
+        for wt in worktrees {
+            if let Ok(pointer) = std::fs::read_to_string(wt.join(".git")) {
+                // `gitdir: <path>` — git's own format, no quoting.
+                if let Some(path) = pointer.strip_prefix("gitdir: ") {
+                    let path = path.trim();
+                    if !path.is_empty() && admin_is_canonical(Path::new(path), root) {
+                        out.push(PathBuf::from(path));
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Whether `admin` is a worktree-registration directory THIS run's
+/// repository owns: it must canonicalize under one of the
+/// PRE-PAYLOAD admin roots the run captured when it redirected the
+/// repo ([`TempRoot::capture_admin_roots`], review follow-up of bd
+/// myconfig-jhfo). The roots were resolved BEFORE the sandbox ever
+/// started, so a payload that replaces the rw-bound `<repo>/.git`
+/// with a symlink into another repository's admin tree cannot make
+/// that tree count as ours — at teardown the comparison runs
+/// against the captured roots, never against a fresh
+/// canonicalization of the payload-writable repository. `admin`
+/// itself is still canonicalized (the pointer's spelling may be
+/// non-canonical), but the bar it must clear is fixed. A
+/// non-existent `admin` fails the canonicalize — the teardown only
+/// acts on directories that exist. An empty root list (a hand-rolled
+/// fixture that exercises the teardown's own rules in isolation)
+/// rejects everything, the fail-closed default.
+fn admin_is_canonical(admin: &Path, root: &TempRoot) -> bool {
+    let Some(canon) = std::fs::canonicalize(admin).ok() else {
+        return false;
+    };
+    root.admin_roots
+        .iter()
+        .any(|r| canon.starts_with(r.join("worktrees")))
+}
+
+/// Whether a discovered worktree's `.git` pointer names an admin
+/// registration THIS repo canonically owns — the repair gate's
+/// spelling of [`admin_is_canonical`]: the pointer's `gitdir:` line
+/// IS the admin path.
+fn worktree_pointer_is_ours(wt: &Path, root: &TempRoot) -> bool {
+    let Ok(pointer) = std::fs::read_to_string(wt.join(".git")) else {
+        return false;
+    };
+    pointer
+        .strip_prefix("gitdir: ")
+        .map(|p| admin_is_canonical(Path::new(p.trim()), root))
+        .unwrap_or(false)
+}
+
+/// Remove one admin registration when it belongs to THIS run: the
+/// admin dir must be canonically THIS repo's (review blocker 3 of
+/// bd myconfig-jhfo — a forged pointer to another repository's
+/// registration never reaches here), and its `gitdir` backlink file
+/// must name a worktree path that lived under this run's temp root
+/// or at this run's sandbox spelling of it. Anything else — a
+/// concurrent run's root, an operator's own worktree — is left
+/// alone.
+fn remove_admin_if_ours(admin: &Path, root: &TempRoot, repo: &Repo) -> std::io::Result<()> {
+    if !admin_is_canonical(admin, root) {
+        return Ok(());
+    }
+    let backlink = std::fs::read_to_string(admin.join("gitdir"))?;
+    let backlink = backlink.trim();
+    let ours = Path::new(backlink).starts_with(&root.worktrees)
+        || crate::repo::sibling_worktrees(&repo.root)
+            .is_some_and(|s| Path::new(backlink).starts_with(&s));
+    if !ours {
+        return Ok(());
+    }
+    std::fs::remove_dir_all(admin)
+}
+
+/// The linked worktrees under `<dir>` — at EVERY depth, and the
+/// directory ITSELF: `git worktree add` accepts any path, including
+/// the mount root `<dir>` itself (an initially empty directory —
+/// review blocker 5 of bd myconfig-jhfo: uncommitted files in a
+/// worktree AT the root were deleted without a guard), and a
+/// workmux-style layout groups them (`<repo>__worktrees/<team>/<fix>`,
+/// nested by topic), so no depth is more correct than another.
+/// The walk never follows SYMLINKS (review blocker 4): a payload
+/// could symlink a path inside the temp root at a CLEAN, EXISTING
+/// host worktree — its admin dir would then flow into the teardown
+/// and the sibling-prefix check would authorize deleting a
+/// registration this run never owned. A symlink is skipped
+/// outright, both as a worktree candidate and as a directory to
+/// recurse into. The walk must not MISS a real worktree: a missed
+/// one's uncommitted changes are deleted with the root. An entry
+/// with a `.git` FILE is a linked worktree's pointer; a `.git`
+/// DIRECTORY is a plain repository someone put there, a missing
+/// one is debris — both are removed with the root without a guard:
+/// neither carries uncommitted WORKTREE state git could still
+/// commit.
+fn read_worktree_dirs(dir: &Path) -> Option<Vec<PathBuf>> {
+    let mut out = Vec::new();
+    walk_worktree_dirs(dir, &mut out);
+    out.sort();
+    out.dedup();
+    Some(out)
+}
+
+fn walk_worktree_dirs(dir: &Path, out: &mut Vec<PathBuf>) {
+    if is_linked_worktree(dir) {
+        out.push(dir.to_path_buf());
+    }
+    for entry in std::fs::read_dir(dir).ok().into_iter().flatten() {
+        let Ok(entry) = entry else { continue };
+        let path = entry.path();
+        // `symlink_metadata` is the symlink-refusing half of the
+        // walk: a link to a directory elsewhere looks like one to
+        // `is_dir()` (which follows), but the metadata of the
+        // LINK itself says otherwise. Payload-created symlinks are
+        // skipped as candidates AND as recursion targets.
+        let Ok(md) = std::fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if md.file_type().is_symlink() {
+            continue;
+        }
+        if is_linked_worktree(&path) {
+            out.push(path.clone());
+        }
+        if md.is_dir() {
+            walk_worktree_dirs(&path, out);
+        }
+    }
+}
+
+/// Whether `dir` carries a linked-worktree `.git` POINTER — a
+/// regular FILE, never a symlink (a payload could link `.git` at
+/// another checkout's pointer file; the teardown must not read
+/// through it) and never a directory (a plain repo's own `.git`,
+/// whose state is not worktree state git could commit elsewhere).
+fn is_linked_worktree(dir: &Path) -> bool {
+    match std::fs::symlink_metadata(dir.join(".git")) {
+        Ok(md) => md.is_file(),
+        Err(_) => false,
+    }
+}
+
+/// The argv prefix every HOST-side git invocation of the teardown
+/// carries: `-c` overrides that neutralize the config keys a
+/// payload-controlled repository could arm with executable
+/// content — the sandbox binds the repo rw, and the teardown
+/// inspects it OUTSIDE the sandbox, with unrestricted host access.
+/// `core.fsmonitor` is the proven vector (a repo-config script runs
+/// during `git status`, even worktree-local), so it is forced off.
+/// Neither command the teardown runs (`status --porcelain`,
+/// `worktree repair`) executes a hook, a pager or an editor, and an
+/// alias cannot shadow a builtin (git refuses an alias spelling a
+/// built-in subcommand's name) — the remaining overrides are the
+/// belt on top: `core.hooksPath`, `core.attributesFile`,
+/// `core.excludesFile` (an attributes file can drive filter
+/// processes), `core.editor` and `core.pager` pinned to inerts.
+/// Command-line `-c` beats every config scope, including the
+/// worktree-local `config.worktree` and the repo's own config the
+/// payload may have written.
+fn hardened_git_args() -> [&'static str; 12] {
+    [
+        "-c",
+        "core.fsmonitor=false",
+        "-c",
+        "core.hooksPath=",
+        "-c",
+        "core.attributesFile=",
+        "-c",
+        "core.excludesFile=",
+        "-c",
+        "core.editor=:",
+        "-c",
+        "core.pager=cat",
+    ]
+}
+
+/// Whether a worktree has uncommitted changes — `git status
+/// --porcelain` with any output counts (the handoff verbs' own
+/// probe, `handoff::host_tree_dirty`) — with `--untracked-files=all`
+/// FORCED on: this probe is a DELETION guard, and a repo (or the
+/// operator's global config) with `status.showUntrackedFiles = no`
+/// would otherwise make porcelain print nothing for a worktree
+/// whose only work is new files — exactly the work that exists
+/// nowhere else and would be deleted. Fails CLOSED: a `git` that
+/// cannot run counts as dirty — the root must not be removed over
+/// work whose state cannot be inspected.
+///
+/// The probe runs OUTSIDE the sandbox, so it must not honor
+/// executable config the payload may have written into the
+/// writable repo (the sandbox bound it rw): the
+/// [`hardened_git_args`] prefix neutralizes every config key
+/// `git status` consults that could execute anything.
+fn worktree_dirty(worktree: &Path) -> bool {
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("-C").arg(worktree);
+    for arg in hardened_git_args() {
+        cmd.arg(arg);
+    }
+    let out = cmd
+        .args(["status", "--porcelain", "--untracked-files=all"])
+        .stderr(std::process::Stdio::null())
+        .output();
+    match out {
+        Ok(out) if out.status.success() => !out.stdout.is_empty(),
+        _ => true,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A fresh temporary directory per test; hand-rolled, the crate
+    /// has no dependencies.
+    fn tmpdir(name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("mysbx-once-test-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn create_makes_a_private_root_with_an_empty_sidecar_layer() {
+        // The shape D22 requires: a 0700 root, an empty config.toml
+        // (a real EMPTY policy layer — `require_initialized_sidecar`
+        // reads existence, the merge reads emptiness), and the
+        // worktrees dir the run will bind.
+        let base = tmpdir("create");
+        let root = TempRoot::create_under(&base).unwrap();
+        let md = std::fs::symlink_metadata(&root.root).unwrap();
+        use std::os::unix::fs::MetadataExt;
+        assert_eq!(md.mode() & 0o777, 0o700);
+        assert!(root.sidecar.join("config.toml").is_file());
+        assert_eq!(
+            std::fs::read_to_string(root.sidecar.join("config.toml")).unwrap(),
+            ""
+        );
+        assert!(root.worktrees.is_dir());
+        let _ = std::fs::remove_dir_all(&root.root);
+    }
+
+    #[test]
+    fn create_refuses_a_second_root_for_the_same_pid() {
+        // One process, one root: the second create finds the first
+        // one's directory and refuses instead of reusing it.
+        let base = tmpdir("create-twice");
+        let root = TempRoot::create_under(&base).unwrap();
+        assert!(TempRoot::create_under(&base).is_err());
+        let _ = std::fs::remove_dir_all(&root.root);
+    }
+
+    #[test]
+    fn redirect_replaces_sidecar_and_worktrees() {
+        // The seam of bd myconfig-7zwt: whatever the host layout is
+        // (here: an EXISTING sidecar and sibling, which must be
+        // ignored), the redirect points the run at the temp root.
+        let base = tmpdir("redirect");
+        let repo_root = base.join("repo");
+        std::fs::create_dir_all(&repo_root).unwrap();
+        let host_sidecar = base.join("repo.mysbx");
+        std::fs::create_dir_all(&host_sidecar).unwrap();
+        std::fs::write(host_sidecar.join("config.toml"), "backend = \"krun\"\n").unwrap();
+        let host_worktrees = base.join("repo__worktrees");
+        std::fs::create_dir_all(&host_worktrees).unwrap();
+        let mut repo = Repo {
+            root: repo_root,
+            sidecar: host_sidecar,
+            git_dirs: Vec::new(),
+            worktrees: Some(host_worktrees),
+        };
+        let temp = TempRoot {
+            root: base.join("temp"),
+            sidecar: base.join("temp/sidecar"),
+            worktrees: base.join("temp/worktrees"),
+            admin_roots: Vec::new(),
+        };
+        temp.redirect(&mut repo);
+        assert_eq!(repo.sidecar, temp.sidecar);
+        assert_eq!(repo.worktrees, Some(temp.worktrees));
+    }
+
+    #[test]
+    fn teardown_removes_a_clean_root_and_prunes_the_repo() {
+        let base = tmpdir("teardown-clean");
+        let repo_root = base.join("repo");
+        std::fs::create_dir_all(&repo_root.join(".git")).unwrap();
+        let temp = TempRoot {
+            root: base.join("temp"),
+            sidecar: base.join("temp/sidecar"),
+            worktrees: base.join("temp/worktrees"),
+            admin_roots: Vec::new(),
+        };
+        std::fs::create_dir_all(&temp.sidecar).unwrap();
+        std::fs::create_dir_all(&temp.worktrees).unwrap();
+        let repo = Repo {
+            root: repo_root,
+            sidecar: base.join("repo.mysbx"),
+            git_dirs: Vec::new(),
+            worktrees: None,
+        };
+        assert!(!teardown(&temp, &repo), "a clean root is removed");
+        assert!(!temp.root.exists());
+    }
+
+    #[test]
+    fn teardown_keeps_a_root_with_a_dirty_worktree() {
+        // The data-loss guard: an uncommitted worktree must keep the
+        // root. No git fixture is needed for the GUARD's wiring — a
+        // `.git` FILE entry whose `git status` cannot run fails
+        // closed, i.e. counts as dirty.
+        let base = tmpdir("teardown-dirty");
+        let repo_root = base.join("repo");
+        std::fs::create_dir_all(&repo_root.join(".git")).unwrap();
+        let temp = TempRoot {
+            root: base.join("temp"),
+            sidecar: base.join("temp/sidecar"),
+            worktrees: base.join("temp/worktrees"),
+            admin_roots: Vec::new(),
+        };
+        std::fs::create_dir_all(&temp.sidecar).unwrap();
+        std::fs::create_dir_all(&temp.worktrees.join("wt")).unwrap();
+        // A linked-worktree pointer at a NONEXISTENT gitdir: the
+        // entry looks like a worktree, `git status` fails, the
+        // guard fails closed → the root is kept.
+        std::fs::write(temp.worktrees.join("wt/.git"), "gitdir: /nonexistent/x\n").unwrap();
+        let repo = Repo {
+            root: repo_root,
+            sidecar: base.join("repo.mysbx"),
+            git_dirs: Vec::new(),
+            worktrees: None,
+        };
+        assert!(teardown(&temp, &repo), "a dirty worktree keeps the root");
+        assert!(temp.root.exists());
+    }
+
+    #[test]
+    fn remove_admin_if_ours_never_touches_a_foreign_registration() {
+        // The surgical cleanup's own rule: an admin dir CANONICALLY
+        // this repo's (under its own `.git/worktrees`) whose
+        // backlink names a path under THIS run's root (or this
+        // run's sandbox spelling of it) is removed; one naming a
+        // CONCURRENT run's root — or an operator's real worktree —
+        // is left alone, and so is any admin dir OUTSIDE this
+        // repo's git metadata (review blocker 3: a forged pointer).
+        // The old repo-global `git worktree prune` could not tell
+        // them apart.
+        let base = tmpdir("admin-ours");
+        let repo = Repo {
+            root: base.join("repo"),
+            sidecar: base.join("repo.mysbx"),
+            git_dirs: Vec::new(),
+            worktrees: None,
+        };
+        // The roots captured the way the run captures them — BEFORE
+        // the payload could touch anything.
+        std::fs::create_dir_all(repo.root.join(".git")).unwrap();
+        let mut temp = TempRoot {
+            root: base.join("temp"),
+            sidecar: base.join("temp/sidecar"),
+            worktrees: base.join("temp/worktrees"),
+            admin_roots: Vec::new(),
+        };
+        temp.capture_admin_roots(&repo);
+        // Ours: canonically this repo's registration, backlink
+        // under the temp root.
+        let ours = repo.root.join(".git/worktrees/ours");
+        std::fs::create_dir_all(&ours).unwrap();
+        std::fs::write(
+            ours.join("gitdir"),
+            format!("{}", temp.worktrees.join("w").display()),
+        )
+        .unwrap();
+        // Foreign: canonically this repo's, but the backlink names a
+        // CONCURRENT run's root (a different pid dir).
+        let theirs = repo.root.join(".git/worktrees/theirs");
+        std::fs::create_dir_all(&theirs).unwrap();
+        std::fs::write(
+            theirs.join("gitdir"),
+            format!("{}", base.join("other-root/worktrees/w").display()),
+        )
+        .unwrap();
+        // Foreign: an operator's real worktree (the sandbox-spelling
+        // check would match — the removal needs the ADMIN ownership
+        // plus backlink pair, and this one names a real host path).
+        let operator = repo.root.join(".git/worktrees/operator");
+        std::fs::create_dir_all(&operator).unwrap();
+        std::fs::write(
+            operator.join("gitdir"),
+            format!("{}", base.join("real-checkout").display()),
+        )
+        .unwrap();
+        // Foreign: a FORGED pointer — an admin dir of ANOTHER repo,
+        // with a backlink crafted to name this run's temp root
+        // (review blocker 3: the pointer text alone must not be
+        // enough to authorize the removal).
+        let forged = base.join("other-repo/.git/worktrees/victim");
+        std::fs::create_dir_all(&forged).unwrap();
+        std::fs::write(
+            forged.join("gitdir"),
+            format!("{}", temp.worktrees.join("w").display()),
+        )
+        .unwrap();
+        remove_admin_if_ours(&ours, &temp, &repo).unwrap();
+        assert!(!ours.exists(), "our own registration is removed");
+        let _ = remove_admin_if_ours(&theirs, &temp, &repo);
+        assert!(theirs.exists(), "a concurrent run's registration is kept");
+        let _ = remove_admin_if_ours(&operator, &temp, &repo);
+        assert!(operator.exists(), "an operator's registration is kept");
+        let _ = remove_admin_if_ours(&forged, &temp, &repo);
+        assert!(
+            forged.exists(),
+            "a forged pointer into another repo's registration is kept"
+        );
+    }
+
+    #[test]
+    fn read_worktree_dirs_finds_nested_worktrees() {
+        // A workmux-style grouped layout: `<worktrees>/<team>/<fix>`
+        // is a linked worktree two levels down, and a `.git`
+        // DIRECTORY (a plain repo someone put there) is not one —
+        // the guard must see the first and not the second.
+        let base = tmpdir("nested");
+        let deep = base.join("worktrees/team/fix");
+        std::fs::create_dir_all(&deep).unwrap();
+        std::fs::write(deep.join(".git"), "gitdir: somewhere\n").unwrap();
+        let plain = base.join("worktrees/plain-repo");
+        std::fs::create_dir_all(plain.join(".git")).unwrap();
+        let found = read_worktree_dirs(&base.join("worktrees")).unwrap();
+        assert_eq!(found, vec![deep], "only the linked worktree is found");
+    }
+
+    #[test]
+    fn read_worktree_dirs_sees_a_worktree_at_the_root_itself() {
+        // Review blocker 5 of bd myconfig-jhfo: `git worktree add
+        // <repo>__worktrees` puts the worktree AT the mount root —
+        // an initially empty directory git accepts. The guard's
+        // discovery must inspect the traversal ROOT itself, or the
+        // uncommitted files of such a worktree are deleted without
+        // ever being probed.
+        let base = tmpdir("at-root");
+        let root = base.join("worktrees");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join(".git"), "gitdir: somewhere\n").unwrap();
+        std::fs::write(root.join("uncommitted"), "work").unwrap();
+        let found = read_worktree_dirs(&root).unwrap();
+        assert_eq!(found, vec![root], "the root worktree is found");
+    }
+
+    #[test]
+    fn read_worktree_dirs_never_follows_symlinks() {
+        // Review blocker 4 of bd myconfig-jhfo: a symlink planted in
+        // the temp worktrees dir at a clean EXISTING host worktree
+        // must not be discovered — through it, the teardown would
+        // probe a foreign worktree and could reach its admin dir.
+        // Neither a directory symlink nor a `.git` symlink counts.
+        let base = tmpdir("symlinks");
+        let worktrees = base.join("worktrees");
+        std::fs::create_dir_all(&worktrees).unwrap();
+        let foreign = base.join("host-worktrees/operator");
+        std::fs::create_dir_all(&foreign).unwrap();
+        std::fs::write(foreign.join(".git"), "gitdir: somewhere\n").unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&foreign, worktrees.join("operator")).unwrap();
+        // A `.git` SYMLINK is not a pointer file either.
+        let real = base.join("real-pointer");
+        std::fs::write(&real, "gitdir: somewhere\n").unwrap();
+        let linked_git = worktrees.join("dangling-git-symlink");
+        std::fs::create_dir_all(&linked_git).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&real, linked_git.join(".git")).unwrap();
+        let found = read_worktree_dirs(&worktrees).unwrap();
+        assert!(
+            !found.contains(&foreign),
+            "a symlinked foreign worktree is not discovered: {found:?}"
+        );
+        assert!(
+            !found.contains(&linked_git),
+            "a worktree whose .git is a symlink is not discovered: {found:?}"
+        );
+    }
+
+    #[test]
+    fn admin_dirs_of_rejects_a_forged_pointer_to_a_foreign_repo() {
+        // Review blocker 3 of bd myconfig-jhfo: the admin path read
+        // out of a `.git` pointer is only accepted when THIS repo
+        // canonically owns it — a payload-forged pointer naming
+        // ANOTHER repo's admin directory must not flow into the
+        // teardown.
+        let base = tmpdir("forged-pointer");
+        let repo = Repo {
+            root: base.join("repo"),
+            sidecar: base.join("repo.mysbx"),
+            git_dirs: Vec::new(),
+            worktrees: None,
+        };
+        std::fs::create_dir_all(repo.root.join(".git")).unwrap();
+        let mut temp = TempRoot {
+            root: base.join("temp"),
+            sidecar: base.join("temp/sidecar"),
+            worktrees: base.join("temp/worktrees"),
+            admin_roots: Vec::new(),
+        };
+        temp.capture_admin_roots(&repo);
+        // A genuine one: this repo's admin dir, backlinked at the
+        // temp root.
+        let ours = repo.root.join(".git/worktrees/ours");
+        std::fs::create_dir_all(&ours).unwrap();
+        std::fs::write(ours.join("gitdir"), "backlink\n").unwrap();
+        // A forged one: another repo's admin dir.
+        let victim = base.join("other-repo/.git/worktrees/victim");
+        std::fs::create_dir_all(&victim).unwrap();
+        std::fs::write(victim.join("gitdir"), "backlink\n").unwrap();
+        let worktrees = temp.worktrees.join("w");
+        std::fs::create_dir_all(&worktrees).unwrap();
+        std::fs::write(
+            worktrees.join(".git"),
+            format!("gitdir: {}\n", ours.display()),
+        )
+        .unwrap();
+        let forged_wt = temp.worktrees.join("f");
+        std::fs::create_dir_all(&forged_wt).unwrap();
+        std::fs::write(
+            forged_wt.join(".git"),
+            format!("gitdir: {}\n", victim.display()),
+        )
+        .unwrap();
+        let admins = admin_dirs_of(&temp.worktrees, &temp);
+        assert_eq!(admins, vec![ours], "only the repo-owned admin dir passes");
+    }
+
+    #[test]
+    fn a_payload_swapped_git_dir_symlink_is_not_trusted_at_teardown() {
+        // The review follow-up of bd myconfig-jhfo: the sandbox
+        // binds the repository rw, so the payload can REPLACE
+        // `<repo>/.git` with a symlink into ANOTHER repository's
+        // admin tree — a teardown-time canonicalization of the
+        // repo's own metadata would then trust the FOREIGN tree as
+        // an ownership root. The run therefore captures the
+        // canonical roots BEFORE the payload runs; at teardown the
+        // gate compares against the captured roots only, and the
+        // swap changes nothing.
+        let base = tmpdir("swapped-git");
+        let repo = Repo {
+            root: base.join("repo"),
+            sidecar: base.join("repo.mysbx"),
+            git_dirs: Vec::new(),
+            worktrees: None,
+        };
+        std::fs::create_dir_all(repo.root.join(".git")).unwrap();
+        let mut temp = TempRoot {
+            root: base.join("temp"),
+            sidecar: base.join("temp/sidecar"),
+            worktrees: base.join("temp/worktrees"),
+            admin_roots: Vec::new(),
+        };
+        temp.capture_admin_roots(&repo);
+        // The payload's swap: `<repo>/.git` becomes a symlink at
+        // the FOREIGN repo's admin tree. The genuine registration
+        // of THIS repo exists first, at its REAL pre-swap path —
+        // and passes the gate exactly as it did before the swap.
+        let foreign = base.join("other-repo/.git/worktrees/victim");
+        std::fs::create_dir_all(&foreign).unwrap();
+        std::fs::write(foreign.join("gitdir"), "backlink\n").unwrap();
+        let ours = repo.root.join(".git/worktrees/ours");
+        std::fs::create_dir_all(&ours).unwrap();
+        std::fs::write(ours.join("gitdir"), "backlink\n").unwrap();
+        assert!(
+            admin_is_canonical(&ours, &temp),
+            "the genuine registration passes before the swap"
+        );
+        std::fs::remove_dir_all(repo.root.join(".git")).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(base.join("other-repo/.git"), repo.root.join(".git")).unwrap();
+        // The pointer, spelled through the swapped path — it
+        // canonicalizes into the FOREIGN tree, which the captured
+        // roots do not contain. A teardown-time re-canonicalization
+        // of `<repo>/.git` would have trusted the swap; the
+        // captured roots do not.
+        let through_swap = repo.root.join(".git/worktrees/victim");
+        assert!(
+            !admin_is_canonical(&through_swap, &temp),
+            "an admin path reached through the payload-swapped .git is rejected"
+        );
+    }
+
+    #[test]
+    fn worktree_dirty_forces_untracked_files_all_over_the_config() {
+        // A repo (or a global config) with `status.showUntrackedFiles
+        // = no` must NOT hide a worktree whose only work is new
+        // files — the guard would delete them. `--untracked-files=all`
+        // on the command line overrides the config.
+        let dir = tmpdir("untracked");
+        let dirty = dir.join("dirty");
+        std::fs::create_dir_all(&dirty).unwrap();
+        let git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(&dirty)
+                .args(args)
+                .env("GIT_CONFIG_GLOBAL", "/dev/null")
+                .env("GIT_CONFIG_SYSTEM", "/dev/null")
+                .env("GIT_AUTHOR_NAME", "mysbx-tests")
+                .env("GIT_AUTHOR_EMAIL", "mysbx-tests@invalid")
+                .env("GIT_COMMITTER_NAME", "mysbx-tests")
+                .env("GIT_COMMITTER_EMAIL", "mysbx-tests@invalid")
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
+        };
+        if !git(&["init", "-b", "main"]) {
+            eprintln!("skipping: no git on PATH");
+            return;
+        }
+        if !git(&["config", "status.showUntrackedFiles", "no"]) {
+            return;
+        }
+        std::fs::write(dirty.join("uncommitted"), "work").unwrap();
+        // The probe sees the untracked file despite the config.
+        assert!(
+            worktree_dirty(&dirty),
+            "an untracked-only worktree counts as dirty despite status.showUntrackedFiles=no"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn worktree_dirty_neutralizes_the_repo_config_fsmonitor() {
+        // The probe runs OUTSIDE the sandbox on a repo the payload
+        // could write (review blocker 1): `core.fsmonitor` is the
+        // proven execution vector — a repo-config script RUNS
+        // during `git status`. The probe's `-c core.fsmonitor=false`
+        // must neutralize it: the marker script never runs, and the
+        // probe still answers (a clean tree is clean, not
+        // fail-closed — the guard must not KEEP a root over a
+        // poisoned-but-clean worktree either, or the keep is the
+        // payload's denial primitive).
+        let dir = tmpdir("fsmonitor");
+        let repo = dir.join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        let marker = dir.join("PWNED");
+        let script = dir.join("fsmon.sh");
+        std::fs::write(
+            &script,
+            format!("#!/bin/sh\ntouch '{}'\n", marker.display()),
+        )
+        .unwrap();
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(&repo)
+                .args(args)
+                .env("GIT_CONFIG_GLOBAL", "/dev/null")
+                .env("GIT_CONFIG_SYSTEM", "/dev/null")
+                .env("GIT_AUTHOR_NAME", "mysbx-tests")
+                .env("GIT_AUTHOR_EMAIL", "mysbx-tests@invalid")
+                .env("GIT_COMMITTER_NAME", "mysbx-tests")
+                .env("GIT_COMMITTER_EMAIL", "mysbx-tests@invalid")
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
+        };
+        if !git(&["init", "-b", "main"]) {
+            eprintln!("skipping: no git on PATH");
+            return;
+        }
+        git(&["config", "user.name", "mysbx-tests"]);
+        git(&["config", "user.email", "mysbx-tests@invalid"]);
+        std::fs::write(repo.join("f"), "x").unwrap();
+        if !git(&["add", "f"]) || !git(&["commit", "-m", "base"]) {
+            eprintln!("skipping: commit failed");
+            return;
+        }
+        // The armed repo: fsmonitor points at the marker script.
+        // A HAND-ROLLED `git status` runs it (the vector is real)…
+        assert!(git(&[
+            "config",
+            "core.fsmonitor",
+            &format!("{}", script.display())
+        ]));
+        let _ = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args(["status", "--porcelain"])
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .output()
+            .unwrap();
+        if !marker.exists() {
+            eprintln!("skipping: this git does not honor repo-config fsmonitor");
+            let _ = std::fs::remove_dir_all(&dir);
+            return;
+        }
+        let _ = std::fs::remove_file(&marker);
+        // …and the PROBE does not: the marker stays absent, the
+        // clean tree answers clean.
+        assert!(
+            !worktree_dirty(&repo),
+            "the neutralized probe still answers: the armed repo counts as clean"
+        );
+        assert!(
+            !marker.exists(),
+            "the probe's -c core.fsmonitor=false stopped the repo-config script"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

@@ -13,6 +13,18 @@ Usage:
   mysbx ssh-pubkey
   mysbx [COMMAND]
 
+The same binary, second name:
+  mysbx-once [run -- CMD | gui | doctor | version | help | the bare form] \
+             [--dry-run] [--verbose] [--backend <name>] [--multiplexer <mux>] [--ro <path>]... [--rw <path>]...
+                one sandbox run for any checkout, with NO persistent
+                setup: the sidecar and the __worktrees sibling live in a
+                private temp dir for one run and are removed when it
+                ends (an existing <repo>.mysbx is ignored, not loaded);
+                the forms that need persistent state — init, edit,
+                status, the session/worktree groups, fetch/merge/push/
+                diff, attach, ssh-pubkey, --session, --result/--timeout,
+                --detach/--detachable — are refused with exit 70 (D22)
+
 Commands:
   (none)        enter an interactive sandbox shell for the current repo;
                 the repo must have been initialized with `mysbx init`

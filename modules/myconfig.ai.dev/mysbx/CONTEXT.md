@@ -65,6 +65,14 @@ instead of the terminal that started it, reached again with
 (the live repo or a session).
 _Avoid_: background job, daemon, server
 
+**Once run**:
+A run of `mysbx-once` — the same binary under a second name — that uses a
+private temporary directory for the sidecar and the `__worktrees` sibling
+and removes it when the run ends (cli.md D22). Nothing persistent is
+created on the host, and an existing `<repo>.mysbx` is ignored, not
+loaded: the sidecar LAYER of a once run is empty.
+_Avoid_: ephemeral mode, temp sandbox, one-off
+
 **State dir**:
 A sandbox-home-relative path declared in `state-dirs` (config.md D15):
 mysbx backs it with `<sidecar>/state/<entry>` and binds it rw at

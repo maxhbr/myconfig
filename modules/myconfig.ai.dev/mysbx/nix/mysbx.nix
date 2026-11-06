@@ -992,6 +992,16 @@ symlinkJoin {
       ${microvmQemuPins} \
       ${enabledBackendsPin}
 
+    # `mysbx-once` (bd myconfig-7zwt, cli.md D22): the SAME wrapped
+    # binary under a second name, with the once marker the Rust CLI
+    # reads (`src/once.rs::active`) — argv[0] does not survive a
+    # makeBinaryWrapper chain (each `exec` resets it to the literal
+    # program path), so the marker is the dispatch. Everything else
+    # is inherited from the wrapped `mysbx` beside it: the pins, the
+    # closure, the environment.
+    makeBinaryWrapper "$out/bin/mysbx" "$out/bin/mysbx-once" \
+      --set MYSBX_ONCE 1
+
     # Hand-written fish tab completion (../mysbx-rs/completions, kept in
     # sync with the CLI surface by the `mysbx-completions` check in
     # checks.nix). The crate stays
@@ -1000,6 +1010,8 @@ symlinkJoin {
     # fish's NixOS integration collects.
     install -Dm 0644 ${completions} \
       $out/share/fish/vendor_completions.d/mysbx.fish
+    install -Dm 0644 ${./../mysbx-rs/completions/mysbx-once.fish} \
+      $out/share/fish/vendor_completions.d/mysbx-once.fish
   '';
 
   meta = {

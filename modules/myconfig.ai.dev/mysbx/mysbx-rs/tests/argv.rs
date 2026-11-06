@@ -5878,6 +5878,46 @@ fn nono_refuses_url_form_allow_domains() {
 }
 
 #[test]
+fn nono_once_grants_the_visible_worktrees_dest() {
+    // cli.md D22, the once-mode remap: bwrap binds the TEMP root's
+    // worktrees directory at the host sibling's PATH — the spelling
+    // the payload's `git worktree add` computes — so the Landlock
+    // grants must cover that VISIBLE dest. The pre-fix emitter
+    // granted only the hidden temp source (the redirected
+    // repo.worktrees), leaving the visible path ungranted: every
+    // worktree write died with EACCES.
+    let cfg = nono_base(true);
+    let repo = synth_repo();
+    let once_params = NonoParams {
+        workspace: Workspace::Once {
+            worktrees: Path::new("/synth/xdg-runtime/mysbx-once/42/worktrees"),
+        },
+        profile: "default",
+        waypipe_socket_dir: None,
+    };
+    let argv = nono_run_argv(&cfg, &repo, &Payload::Shell, &once_params)
+        .expect("the once-mode nono argv builds");
+    // The grant list: --allow <path> pairs. The dest grant must be
+    // there (the payload-visible spelling), the temp source grant
+    // too (mirroring the clone arm).
+    let allows: Vec<&str> = argv.iter().map(|a| a.as_str()).collect();
+    let granted = |p: &str| {
+        allows
+            .iter()
+            .position(|a| *a == p)
+            .is_some_and(|i| allows.get(i - 1) == Some(&"--allow"))
+    };
+    assert!(
+        granted("/synth/repo__worktrees"),
+        "the VISIBLE dest is granted — the spelling the payload writes: {argv:?}"
+    );
+    assert!(
+        granted("/synth/xdg-runtime/mysbx-once/42/worktrees"),
+        "the hidden temp source is granted too (the clone arm's shape): {argv:?}"
+    );
+}
+
+#[test]
 fn nono_golden_mounts_with_dests() {
     // The test-f13 shape (docs/design/backends.md D1, "Grants follow
     // the resolved layout"): mounts with a dest BELOW `/mysbx-home`
