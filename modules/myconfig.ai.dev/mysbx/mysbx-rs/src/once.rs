@@ -119,6 +119,19 @@ pub struct TempRoot {
     /// `<root>/worktrees` — the ephemeral worktrees sibling,
     /// bound rw at the host's `<repo>__worktrees` path.
     pub worktrees: PathBuf,
+    /// The CANONICAL admin-ownership roots of the run's repository,
+    /// captured BEFORE the payload runs
+    /// ([`TempRoot::capture_admin_roots`]): the resolved
+    /// `<repo>/.git` plus every git metadata dir the resolution
+    /// recorded (a linked worktree's gitdir and common dir). The
+    /// teardown's ownership gate compares against THESE roots,
+    /// never against a fresh canonicalization of the
+    /// payload-writable repo — a payload that replaces `<repo>/.git`
+    /// with a symlink into another repository's admin tree must not
+    /// make the foreign tree count as ours. Empty for a `--dry-run`
+    /// placeholder (it runs no teardown) and for the hand-rolled unit
+    /// fixtures that exercise the teardown's own rules in isolation.
+    pub admin_roots: Vec<PathBuf>,
 }
 
 impl TempRoot {
@@ -188,6 +201,7 @@ impl TempRoot {
             root,
             sidecar,
             worktrees,
+            admin_roots: Vec::new(),
         })
     }
 
@@ -210,6 +224,7 @@ impl TempRoot {
         TempRoot {
             sidecar: root.join("sidecar"),
             worktrees: root.join("worktrees"),
+            admin_roots: Vec::new(),
             root,
         }
     }
@@ -225,6 +240,25 @@ impl TempRoot {
     pub fn redirect(&self, repo: &mut Repo) {
         repo.sidecar = self.sidecar.clone();
         repo.worktrees = Some(self.worktrees.clone());
+    }
+
+    /// The canonical admin-ownership roots of `repo`, captured
+    /// BEFORE the payload runs: the resolved `<repo>/.git` (when it
+    /// is a directory — a plain repository's own metadata, which
+    /// the run binds rw) plus every git metadata dir the resolution
+    /// recorded on the [`Repo`] (a linked worktree's gitdir and
+    /// common dir). Unresolvable entries are DROPPED, not spelled
+    /// raw: a raw spelling could resolve through a symlink a later
+    /// payload planted, and a root the pre-payload filesystem
+    /// cannot vouch for is no root at all.
+    pub fn capture_admin_roots(&mut self, repo: &Repo) {
+        let mut roots = vec![repo.root.join(".git")];
+        roots.extend(repo.git_dirs.iter().cloned());
+        self.admin_roots = roots
+            .into_iter()
+            .filter_map(|r| std::fs::canonicalize(r).ok())
+            .filter(|r| r.is_dir())
+            .collect();
     }
 }
 
@@ -287,7 +321,7 @@ pub fn teardown(root: &TempRoot, repo: &Repo) -> bool {
             // cleanup. A pointer that fails the canonical-ownership
             // check skips the repair: the debris stays visible to
             // the operator (`git worktree list`), no work is lost.
-            if !worktree_pointer_is_ours(wt, repo) {
+            if !worktree_pointer_is_ours(wt, root) {
                 eprintln!(
                     "mysbx-once: kept {}: its .git pointer names a registration this repo does not own — not repaired",
                     wt.display()
@@ -322,7 +356,7 @@ pub fn teardown(root: &TempRoot, repo: &Repo) -> bool {
     // operator's names a real host path — neither is ours). This is
     // what `git worktree prune` would do to our entries, without its
     // repo-global reach.
-    let admins = admin_dirs_of(&root.worktrees, repo);
+    let admins = admin_dirs_of(&root.worktrees, root);
     if let Err(e) = std::fs::remove_dir_all(&root.root) {
         eprintln!(
             "mysbx-once: cannot remove the temp root {}: {e}",
@@ -347,7 +381,7 @@ pub fn teardown(root: &TempRoot, repo: &Repo) -> bool {
 /// Worktrees whose pointer cannot be read are skipped: their admin
 /// dir is left for the operator's own `git worktree prune` — a
 /// missed cleanup, never a lost worktree.
-fn admin_dirs_of(dir: &Path, repo: &Repo) -> Vec<PathBuf> {
+fn admin_dirs_of(dir: &Path, root: &TempRoot) -> Vec<PathBuf> {
     let mut out = Vec::new();
     if let Some(worktrees) = read_worktree_dirs(dir) {
         for wt in worktrees {
@@ -355,7 +389,7 @@ fn admin_dirs_of(dir: &Path, repo: &Repo) -> Vec<PathBuf> {
                 // `gitdir: <path>` — git's own format, no quoting.
                 if let Some(path) = pointer.strip_prefix("gitdir: ") {
                     let path = path.trim();
-                    if !path.is_empty() && admin_is_canonical_for_repo(Path::new(path), repo) {
+                    if !path.is_empty() && admin_is_canonical(Path::new(path), root) {
                         out.push(PathBuf::from(path));
                     }
                 }
@@ -365,43 +399,42 @@ fn admin_dirs_of(dir: &Path, repo: &Repo) -> Vec<PathBuf> {
     out
 }
 
-/// Whether `admin` is a worktree-registration directory THIS
-/// repository canonically owns: it must sit under the repo's own
-/// git metadata — `<root>/.git/worktrees` for a plain repository,
-/// plus `<gitdir>/worktrees` and `<commondir>/worktrees` for a
-/// linked worktree or submodule whose metadata lives outside the
-/// root (both are recorded on the [`Repo`]). Everything else — a
-/// forged pointer into ANOTHER repository's admin tree, an
-/// arbitrary host directory — is not ours to repair or remove.
-/// Both sides are canonicalized before the comparison, so path
-/// spellings (symlinks on the way, `..` segments) cannot smuggle a
-/// foreign dir under a prefix it does not really share. A
-/// non-existent `admin` fails the canonicalize and the check — the
-/// teardown only acts on directories that exist.
-fn admin_is_canonical_for_repo(admin: &Path, repo: &Repo) -> bool {
+/// Whether `admin` is a worktree-registration directory THIS run's
+/// repository owns: it must canonicalize under one of the
+/// PRE-PAYLOAD admin roots the run captured when it redirected the
+/// repo ([`TempRoot::capture_admin_roots`], review follow-up of bd
+/// myconfig-jhfo). The roots were resolved BEFORE the sandbox ever
+/// started, so a payload that replaces the rw-bound `<repo>/.git`
+/// with a symlink into another repository's admin tree cannot make
+/// that tree count as ours — at teardown the comparison runs
+/// against the captured roots, never against a fresh
+/// canonicalization of the payload-writable repository. `admin`
+/// itself is still canonicalized (the pointer's spelling may be
+/// non-canonical), but the bar it must clear is fixed. A
+/// non-existent `admin` fails the canonicalize — the teardown only
+/// acts on directories that exist. An empty root list (a hand-rolled
+/// fixture that exercises the teardown's own rules in isolation)
+/// rejects everything, the fail-closed default.
+fn admin_is_canonical(admin: &Path, root: &TempRoot) -> bool {
     let Some(canon) = std::fs::canonicalize(admin).ok() else {
         return false;
     };
-    let mut candidates = vec![repo.root.join(".git").join("worktrees")];
-    for git_dir in &repo.git_dirs {
-        candidates.push(git_dir.join("worktrees"));
-    }
-    candidates.iter().any(|candidate| {
-        std::fs::canonicalize(candidate).is_ok_and(|canon_root| canon.starts_with(&canon_root))
-    })
+    root.admin_roots
+        .iter()
+        .any(|r| canon.starts_with(r.join("worktrees")))
 }
 
 /// Whether a discovered worktree's `.git` pointer names an admin
 /// registration THIS repo canonically owns — the repair gate's
-/// spelling of [`admin_is_canonical_for_repo`]: the pointer's
-/// `gitdir:` line IS the admin path.
-fn worktree_pointer_is_ours(wt: &Path, repo: &Repo) -> bool {
+/// spelling of [`admin_is_canonical`]: the pointer's `gitdir:` line
+/// IS the admin path.
+fn worktree_pointer_is_ours(wt: &Path, root: &TempRoot) -> bool {
     let Ok(pointer) = std::fs::read_to_string(wt.join(".git")) else {
         return false;
     };
     pointer
         .strip_prefix("gitdir: ")
-        .map(|p| admin_is_canonical_for_repo(Path::new(p.trim()), repo))
+        .map(|p| admin_is_canonical(Path::new(p.trim()), root))
         .unwrap_or(false)
 }
 
@@ -414,7 +447,7 @@ fn worktree_pointer_is_ours(wt: &Path, repo: &Repo) -> bool {
 /// concurrent run's root, an operator's own worktree — is left
 /// alone.
 fn remove_admin_if_ours(admin: &Path, root: &TempRoot, repo: &Repo) -> std::io::Result<()> {
-    if !admin_is_canonical_for_repo(admin, repo) {
+    if !admin_is_canonical(admin, root) {
         return Ok(());
     }
     let backlink = std::fs::read_to_string(admin.join("gitdir"))?;
@@ -628,6 +661,7 @@ mod tests {
             root: base.join("temp"),
             sidecar: base.join("temp/sidecar"),
             worktrees: base.join("temp/worktrees"),
+            admin_roots: Vec::new(),
         };
         temp.redirect(&mut repo);
         assert_eq!(repo.sidecar, temp.sidecar);
@@ -643,6 +677,7 @@ mod tests {
             root: base.join("temp"),
             sidecar: base.join("temp/sidecar"),
             worktrees: base.join("temp/worktrees"),
+            admin_roots: Vec::new(),
         };
         std::fs::create_dir_all(&temp.sidecar).unwrap();
         std::fs::create_dir_all(&temp.worktrees).unwrap();
@@ -669,6 +704,7 @@ mod tests {
             root: base.join("temp"),
             sidecar: base.join("temp/sidecar"),
             worktrees: base.join("temp/worktrees"),
+            admin_roots: Vec::new(),
         };
         std::fs::create_dir_all(&temp.sidecar).unwrap();
         std::fs::create_dir_all(&temp.worktrees.join("wt")).unwrap();
@@ -698,20 +734,24 @@ mod tests {
         // The old repo-global `git worktree prune` could not tell
         // them apart.
         let base = tmpdir("admin-ours");
-        let temp = TempRoot {
-            root: base.join("temp"),
-            sidecar: base.join("temp/sidecar"),
-            worktrees: base.join("temp/worktrees"),
-        };
         let repo = Repo {
             root: base.join("repo"),
             sidecar: base.join("repo.mysbx"),
             git_dirs: Vec::new(),
             worktrees: None,
         };
+        // The roots captured the way the run captures them — BEFORE
+        // the payload could touch anything.
+        std::fs::create_dir_all(repo.root.join(".git")).unwrap();
+        let mut temp = TempRoot {
+            root: base.join("temp"),
+            sidecar: base.join("temp/sidecar"),
+            worktrees: base.join("temp/worktrees"),
+            admin_roots: Vec::new(),
+        };
+        temp.capture_admin_roots(&repo);
         // Ours: canonically this repo's registration, backlink
         // under the temp root.
-        std::fs::create_dir_all(repo.root.join(".git")).unwrap();
         let ours = repo.root.join(".git/worktrees/ours");
         std::fs::create_dir_all(&ours).unwrap();
         std::fs::write(
@@ -836,11 +876,6 @@ mod tests {
         // ANOTHER repo's admin directory must not flow into the
         // teardown.
         let base = tmpdir("forged-pointer");
-        let temp = TempRoot {
-            root: base.join("temp"),
-            sidecar: base.join("temp/sidecar"),
-            worktrees: base.join("temp/worktrees"),
-        };
         let repo = Repo {
             root: base.join("repo"),
             sidecar: base.join("repo.mysbx"),
@@ -848,6 +883,13 @@ mod tests {
             worktrees: None,
         };
         std::fs::create_dir_all(repo.root.join(".git")).unwrap();
+        let mut temp = TempRoot {
+            root: base.join("temp"),
+            sidecar: base.join("temp/sidecar"),
+            worktrees: base.join("temp/worktrees"),
+            admin_roots: Vec::new(),
+        };
+        temp.capture_admin_roots(&repo);
         // A genuine one: this repo's admin dir, backlinked at the
         // temp root.
         let ours = repo.root.join(".git/worktrees/ours");
@@ -871,8 +913,63 @@ mod tests {
             format!("gitdir: {}\n", victim.display()),
         )
         .unwrap();
-        let admins = admin_dirs_of(&temp.worktrees, &repo);
+        let admins = admin_dirs_of(&temp.worktrees, &temp);
         assert_eq!(admins, vec![ours], "only the repo-owned admin dir passes");
+    }
+
+    #[test]
+    fn a_payload_swapped_git_dir_symlink_is_not_trusted_at_teardown() {
+        // The review follow-up of bd myconfig-jhfo: the sandbox
+        // binds the repository rw, so the payload can REPLACE
+        // `<repo>/.git` with a symlink into ANOTHER repository's
+        // admin tree — a teardown-time canonicalization of the
+        // repo's own metadata would then trust the FOREIGN tree as
+        // an ownership root. The run therefore captures the
+        // canonical roots BEFORE the payload runs; at teardown the
+        // gate compares against the captured roots only, and the
+        // swap changes nothing.
+        let base = tmpdir("swapped-git");
+        let repo = Repo {
+            root: base.join("repo"),
+            sidecar: base.join("repo.mysbx"),
+            git_dirs: Vec::new(),
+            worktrees: None,
+        };
+        std::fs::create_dir_all(repo.root.join(".git")).unwrap();
+        let mut temp = TempRoot {
+            root: base.join("temp"),
+            sidecar: base.join("temp/sidecar"),
+            worktrees: base.join("temp/worktrees"),
+            admin_roots: Vec::new(),
+        };
+        temp.capture_admin_roots(&repo);
+        // The payload's swap: `<repo>/.git` becomes a symlink at
+        // the FOREIGN repo's admin tree. The genuine registration
+        // of THIS repo exists first, at its REAL pre-swap path —
+        // and passes the gate exactly as it did before the swap.
+        let foreign = base.join("other-repo/.git/worktrees/victim");
+        std::fs::create_dir_all(&foreign).unwrap();
+        std::fs::write(foreign.join("gitdir"), "backlink\n").unwrap();
+        let ours = repo.root.join(".git/worktrees/ours");
+        std::fs::create_dir_all(&ours).unwrap();
+        std::fs::write(ours.join("gitdir"), "backlink\n").unwrap();
+        assert!(
+            admin_is_canonical(&ours, &temp),
+            "the genuine registration passes before the swap"
+        );
+        std::fs::remove_dir_all(repo.root.join(".git")).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(base.join("other-repo/.git"), repo.root.join(".git")).unwrap();
+        // The pointer, spelled through the swapped path — it
+        // canonicalizes into the FOREIGN tree, which the captured
+        // roots do not contain. A teardown-time re-canonicalization
+        // of `<repo>/.git` would have trusted the swap; the
+        // captured roots do not.
+        let through_swap = repo.root.join(".git/worktrees/victim");
+        assert!(
+            !admin_is_canonical(&through_swap, &temp),
+            "an admin path reached through the payload-swapped .git is rejected"
+        );
     }
 
     #[test]

@@ -2203,7 +2203,7 @@ fn sandbox_pipeline(
     flags: Flags,
     payload: bwrap::Payload,
     mode: RunMode,
-    once: Option<once::TempRoot>,
+    mut once: Option<once::TempRoot>,
     once_kept: &mut bool,
 ) -> i32 {
     let dry_run = flags.dry_run;
@@ -2258,8 +2258,12 @@ fn sandbox_pipeline(
     // `<repo>.mysbx/` and `<repo>__worktrees` are neither read nor
     // written. A `--dry-run` redirects nothing — it creates no temp
     // root (D9) and prints the argv with the placeholder paths the
-    // resolution found.
-    if let Some(temp) = &once {
+    // resolution found. The admin-ownership roots are captured HERE,
+    // before anything the payload could influence exists on disk:
+    // the teardown's canonicalization gate must trust the
+    // PRE-payload filesystem, never the payload-writable repo.
+    if let Some(temp) = &mut once {
+        temp.capture_admin_roots(&repo);
         temp.redirect(&mut repo);
     }
     // 1a. the session of a clone run (workspace.md D1/D2): the named
