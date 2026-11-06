@@ -147,6 +147,17 @@ pub const REGISTRY: &[Backend] = &[
         detach_refused: false,
         waypipe_refused: true,
     },
+    Backend {
+        name: "microvm-ch",
+        always_on: false,
+        enable_option: Some("myconfig.ai.dev.mysbx.microvm-ch.enable"),
+        vm: true,
+        store_disk: true,
+        sizes_sandbox: true,
+        nested_virt: true,
+        detach_refused: false,
+        waypipe_refused: true,
+    },
 ];
 
 /// The ordered backend-name universe — the doctor's listing, the
@@ -160,6 +171,7 @@ pub const NAMES: &[&str] = &[
     "podman-krun",
     "krun",
     "microvm-qemu",
+    "microvm-ch",
 ];
 
 /// The row of a backend name, if the registry knows it — the ONE
@@ -244,7 +256,7 @@ mod tests {
     fn find_answers_every_name_and_refuses_the_rest() {
         assert_eq!(find("bubblewrap").map(|b| b.name), Some("bubblewrap"));
         assert_eq!(find("microvm-qemu").map(|b| b.name), Some("microvm-qemu"));
-        assert!(find("microvm-ch").is_none());
+        assert_eq!(find("microvm-ch").map(|b| b.name), Some("microvm-ch"));
         assert!(find("").is_none());
         // The ordered universe, in registry order.
         assert_eq!(
@@ -256,12 +268,13 @@ mod tests {
                 "podman-krun",
                 "krun",
                 "microvm-qemu",
+                "microvm-ch",
             ]
         );
         // The refusal-message spelling is byte-stable.
         assert_eq!(
             names_backticked(),
-            "`bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`, `krun`, `microvm-qemu`"
+            "`bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`, `krun`, `microvm-qemu`, `microvm-ch`"
         );
     }
 }

@@ -8581,7 +8581,9 @@ fn doctor_without_a_backend_fails_unless_one_is_named() {
         "{stdout}"
     );
     assert!(
-        stdout.contains("OK   not checked: podman-gvisor, nono, podman-krun, krun, microvm-qemu (check one with"),
+        stdout.contains(
+            "OK   not checked: podman-gvisor, nono, podman-krun, krun, microvm-qemu, microvm-ch (check one with"
+        ),
         "{stdout}"
     );
     assert!(!stdout.contains("not configured"), "{stdout}");
@@ -10307,7 +10309,8 @@ fn the_microvm_qemu_backend_dry_run_audits_the_kernel_pair() {
     );
     let stderr_lossy = String::from_utf8_lossy(&out.stderr).into_owned();
     assert!(
-        stderr_lossy.contains("no kernel configured (MYSBX_MICROVM_QEMU_KERNEL)"),
+        stderr_lossy
+            .contains("no kernel configured (MYSBX_MICROVM_QEMU_KERNEL / MYSBX_MICROVM_CH_KERNEL)"),
         "{stderr_lossy}"
     );
 
@@ -10384,6 +10387,95 @@ fn the_microvm_qemu_backend_dry_run_audits_the_kernel_pair() {
     );
     assert!(
         stdout_lossy.contains("MYSBX_BACKEND=microvm-qemu"),
+        "the backend identity env names the run's backend: {stdout_lossy}"
+    );
+}
+
+#[test]
+fn the_microvm_ch_backend_dry_run_audits_the_kernel_pair() {
+    // bd myconfig-9wkp.7: the CH twin's run arm — the SAME krun
+    // chain with the backend's own pins. The dry-run argv must name
+    // the kernel (MYSBX_MICROVM_CH_KERNEL — the SAME kernel the
+    // qemu arm pins, one kernel serves both VM backends, bd
+    // myconfig-9wkp.3) and the exit-channel switch (the 16550
+    // serial channel the CH launcher wires); a missing kernel pin
+    // refuses with the shared wording.
+    let Some((inv, _, sidecar)) = krun_fixture("microvm-ch-dry-run-argv", &[]) else {
+        return; // no placeable fixture root here
+    };
+    std::fs::write(sidecar.join("config.toml"), "backend = \"microvm-ch\"\n").unwrap();
+    let rootfs = sidecar.join("rootfs-stub");
+    std::fs::create_dir_all(rootfs.join("bin")).unwrap();
+    std::fs::write(rootfs.join("bin/mysbx-init"), "#!/bin/sh\n").unwrap();
+    let kernel = sidecar.join("bzImage-stub");
+    std::fs::write(&kernel, "stub\n").unwrap();
+
+    // A missing kernel pin refuses — even with launcher and rootfs
+    // pinned (no PATH fallback, the pin rule).
+    let mut cmd = spawn_with_args(&inv, &["run", "--dry-run", "--", "/bin/true"]);
+    cmd.env("MYSBX_MICROVM_CH_LAUNCHER", "/does/not/matter/dry-run")
+        .env(
+            "MYSBX_MICROVM_CH_ROOTFS",
+            rootfs.to_str().unwrap().to_string(),
+        );
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_ne!(
+        out.status.code(),
+        Some(0),
+        "the missing kernel pin must refuse the run: {}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr_lossy = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        stderr_lossy
+            .contains("no kernel configured (MYSBX_MICROVM_QEMU_KERNEL / MYSBX_MICROVM_CH_KERNEL)"),
+        "{stderr_lossy}"
+    );
+
+    // The full dry run audits the argv: kernel right after the
+    // rootfs, the exit-channel switch, the shared spec (shares,
+    // manifest) around them — and the backend identity env.
+    let mut cmd = spawn_with_args(&inv, &["run", "--dry-run", "--", "/bin/true"]);
+    cmd.env("MYSBX_MICROVM_CH_LAUNCHER", "/does/not/matter/dry-run")
+        .env(
+            "MYSBX_MICROVM_CH_ROOTFS",
+            rootfs.to_str().unwrap().to_string(),
+        )
+        .env(
+            "MYSBX_MICROVM_CH_KERNEL",
+            kernel.to_str().unwrap().to_string(),
+        );
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout_lossy = String::from_utf8_lossy(&out.stdout).into_owned();
+    let lines: Vec<&str> = stdout_lossy.lines().collect();
+    let rootfs_i = lines
+        .iter()
+        .position(|l| *l == "--rootfs")
+        .expect("the dry run names --rootfs");
+    let _ = rootfs_i;
+    let kernel_i = lines
+        .iter()
+        .position(|l| *l == "--kernel")
+        .expect("the dry run names --kernel");
+    assert_eq!(lines[kernel_i + 1], kernel.to_str().unwrap());
+    assert!(
+        lines.iter().any(|l| *l == "--exit-channel"),
+        "the dry run names --exit-channel: {stdout_lossy}"
+    );
+    assert!(
+        stdout_lossy.contains("--manifest"),
+        "the shared manifest pointer rides: {stdout_lossy}"
+    );
+    assert!(
+        stdout_lossy.contains("MYSBX_BACKEND=microvm-ch"),
         "the backend identity env names the run's backend: {stdout_lossy}"
     );
 }

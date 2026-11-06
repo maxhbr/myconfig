@@ -32,6 +32,7 @@ pub mod handoff;
 pub mod krun;
 pub mod loadimage;
 pub mod merge;
+pub mod microvm_ch;
 pub mod microvm_qemu;
 pub mod nono;
 pub mod once;
@@ -3696,21 +3697,22 @@ fn sandbox_pipeline(
         // is the INNER argv: the outer argv here is bwrap's, so the
         // `--dry-run` audit shows both layers, like the nono
         // backend's (backends.md D1).
-        "krun" | "microvm-qemu" => {
+        "krun" | "microvm-qemu" | "microvm-ch" => {
             use std::borrow::Cow;
 
             // The backend's own spelling of the two launchers' pins
-            // (backends.md D9): the microvm-qemu variant names its
-            // own launcher, its own rootfs and the kernel libkrun
-            // bundles — the same no-fallback pin rule for both.
-            let (launcher_pin, rootfs_pin, kernel_pin) = if backend == "microvm-qemu" {
-                (
+            // (backends.md D9): the microvm-qemu and microvm-ch
+            // variants name their own launcher, their own rootfs
+            // and the kernel libkrun bundles — the same no-fallback
+            // pin rule for all three.
+            let (launcher_pin, rootfs_pin, kernel_pin) = match backend {
+                "microvm-qemu" => (
                     "MYSBX_MICROVM_QEMU_LAUNCHER",
                     "MYSBX_MICROVM_QEMU_ROOTFS",
                     true,
-                )
-            } else {
-                ("MYSBX_KRUN_LAUNCHER", "MYSBX_KRUN_ROOTFS", false)
+                ),
+                "microvm-ch" => ("MYSBX_MICROVM_CH_LAUNCHER", "MYSBX_MICROVM_CH_ROOTFS", true),
+                _ => ("MYSBX_KRUN_LAUNCHER", "MYSBX_KRUN_ROOTFS", false),
             };
 
             // The /dev/kvm pre-flight (the spike's finding 7: libkrun
@@ -3781,14 +3783,19 @@ fn sandbox_pipeline(
             // kernel, qemu needs one handed over — the one
             // qemu-specific refusal of the backend.
             let Some(microvm_qemu_kernel) = (if kernel_pin {
-                env_opt("MYSBX_MICROVM_QEMU_KERNEL")
+                env_opt(if backend == "microvm-ch" {
+                    "MYSBX_MICROVM_CH_KERNEL"
+                } else {
+                    "MYSBX_MICROVM_QEMU_KERNEL"
+                })
             } else {
                 Some(String::new())
             }) else {
-                eprintln!("mysbx: microvm-qemu: no kernel configured (MYSBX_MICROVM_QEMU_KERNEL)");
+                eprintln!("mysbx: {backend}: no kernel configured (MYSBX_MICROVM_QEMU_KERNEL / MYSBX_MICROVM_CH_KERNEL)");
                 eprintln!(
-                    "  the Nix wrapper pins MYSBX_MICROVM_QEMU_KERNEL when the host \
-                     builds the microvm-qemu backend (myconfig.ai.dev.mysbx.microvmQemu.kernel); \
+                    "  the Nix wrapper pins the kernel env when the host \
+                     builds the microvm-qemu or microvm-ch backend \
+                     (myconfig.ai.dev.mysbx.microvmQemu.kernel / microvmCh.kernel); \
                      an unwrapped build sets none"
                 );
                 return EXIT_INFRASTRUCTURE;
@@ -3797,9 +3804,7 @@ fn sandbox_pipeline(
             // package (a directory is EISDIR at qemu's -kernel):
             // the same rule doctor applies (bd myconfig-q3se).
             if kernel_pin && !std::path::Path::new(&microvm_qemu_kernel).is_file() {
-                eprintln!(
-                    "mysbx: microvm-qemu: the kernel pin is not a file: {microvm_qemu_kernel}"
-                );
+                eprintln!("mysbx: {backend}: the kernel pin is not a file: {microvm_qemu_kernel}");
                 eprintln!("  pin the image (\"${{kernel}}/bzImage\"), not the kernel package");
                 return EXIT_INFRASTRUCTURE;
             }
@@ -4014,7 +4019,37 @@ fn sandbox_pipeline(
                 // lib, the manifest, the fd limits).
                 verbose: flags.verbose,
             };
-            let krun_argv = if backend == "microvm-qemu" {
+            let krun_argv = if backend == "microvm-ch" {
+                // Backend-specific env pins (MYSBX_MICROVM_CH_ENV, the
+                // qemu twin's rule): the passt guest's loopback is its
+                // own, so the model endpoint rides the pin repointed
+                // at the 10.0.2.2 gateway.
+                let ch_env: Vec<String> = env_or("MYSBX_MICROVM_CH_ENV", "")
+                    .split_whitespace()
+                    .filter(|entry| entry.contains('='))
+                    .map(|entry| entry.to_owned())
+                    .collect();
+                match microvm_ch::microvm_ch_argv(
+                    &merged,
+                    &repo,
+                    &payload,
+                    &host_env,
+                    &krun_params,
+                    &microvm_qemu_kernel,
+                    &ch_env,
+                ) {
+                    Ok(a) => a,
+                    Err(e) => {
+                        eprintln!("mysbx: {e}");
+                        if let Some(f) = &git_trust_file {
+                            let _ = std::fs::remove_dir_all(
+                                f.parent().expect("trust file lives in its dir"),
+                            );
+                        }
+                        return EXIT_INFRASTRUCTURE;
+                    }
+                }
+            } else if backend == "microvm-qemu" {
                 // Backend-specific env pins (MYSBX_MICROVM_QEMU_ENV, bd
                 // myconfig-mzys): the qemu twin of the podman arm's
                 // MYSBX_PODMAN_ENV below — the SLiRP guest's loopback

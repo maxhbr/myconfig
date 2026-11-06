@@ -468,6 +468,7 @@ let
     "podman-krun"
     "krun"
     "microvm-qemu"
+    "microvm-ch"
   ];
   # The dev-tool `PATH` value the argv builder uses (bwrap.rs):
   # a single store tree whose /bin is the union of the tools' bins,
