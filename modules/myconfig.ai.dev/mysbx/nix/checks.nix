@@ -2197,4 +2197,40 @@ in
       export GIT_COMMITTER_EMAIL=mysbx-tests@invalid
     '';
   });
+
+  # The backend-registry sync gate (bd myconfig-9wkp.2): the
+  # nix-side universe (nix/mysbx.nix's backendUniverse — the list
+  # enabledBackends is validated against) and the BUILT crate's
+  # registry (mysbx-rs/src/backends.rs) must name the same
+  # backends. The cargo suite pins the crate's own two spellings
+  # (REGISTRY vs NAMES); this check pins the THIRD, the nix one —
+  # a backend added to the Rust table without its nix twin (or
+  # vice versa) fails here, never silently ships a
+  # validated-but-unknown name or an enabled-but-unlistable one.
+  mysbx-backends-sync-test =
+    let
+      universe = pkg.passthru.backendUniverse;
+      # The binary's own refusal listing — `mysbx doctor bogus`
+      # prints `  backends: a, b, c` (doctor.rs), the crate's
+      # universe verbatim. A wrong exit is fine; the listing is the
+      # contract under test.
+      listing = pkgs.runCommand "mysbx-backends-listing" { } ''
+        ${crate}/bin/mysbx doctor bogus-backend-for-sync 2>&1 | grep -F 'backends:' > $out || true
+      '';
+    in
+    pkgs.runCommand "mysbx-backends-sync-test"
+      {
+        nativeBuildInputs = [ pkgs.gnugrep ];
+      }
+      ''
+        fail() {
+          echo "mysbx-backends-sync-test: $*" >&2
+          exit 1
+        }
+        expected="${lib.concatStringsSep ", " universe}"
+        got=$(cat ${listing} | sed -e 's/^ *backends: //')
+        [ "$got" = "$expected" ] \
+          || fail "the crate lists '$got' but nix expects '$expected' — the registry (mysbx-rs/src/backends.rs) and nix/mysbx.nix's backendUniverse drifted"
+        mkdir $out
+      '';
 }

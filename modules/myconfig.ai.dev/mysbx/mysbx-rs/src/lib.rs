@@ -23,6 +23,7 @@
 //! overrides the merged `multiplexer` of the layers for THIS run —
 //! per D6's precedence, a flag wins over the configuration.
 
+pub mod backends;
 pub mod bwrap;
 pub mod config;
 pub mod detach;
@@ -2348,12 +2349,12 @@ fn sandbox_pipeline(
     // valid values (D8: the command line was fine, the backend it
     // names does not exist).
     if let Some(name) = &flags.backend {
-        if !matches!(
-            name.as_str(),
-            "bubblewrap" | "podman-gvisor" | "nono" | "podman-krun" | "krun" | "microvm-qemu"
-        ) {
+        // The accepted set is the REGISTRY's (bd myconfig-9wkp.2) — one
+        // table instead of a hard-coded name list.
+        if backends::find(name).is_none() {
             eprintln!(
-                "mysbx: unknown backend `{name}` (from --backend) — available: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`, `krun`, `microvm-qemu`"
+                "mysbx: unknown backend `{name}` (from --backend) — available: {}",
+                backends::names_backticked()
             );
             return EXIT_INFRASTRUCTURE;
         }
@@ -2564,25 +2565,35 @@ fn sandbox_pipeline(
     // `merged.backend` alike; the flag's own refusal one merge above
     // echoed it early, this arm is the authoritative one.
     let backend = match merged.backend.as_deref() {
-        Some("bubblewrap" | "podman-gvisor" | "nono" | "podman-krun" | "krun" | "microvm-qemu") => {
+        // The accepted set is the REGISTRY's for both sources alike
+        // (bd myconfig-9wkp.2): a config layer and `--backend` put the
+        // value into `merged.backend` identically.
+        Some(name) if backends::find(name).is_some() => {
+            let name = merged.backend.as_deref().unwrap();
             // The authoritative availability gate: the early flag check
             // above already refused a disabled --backend, this arm covers
             // the config layers (user layer and sidecar) and the
             // --<backend> shorthands routed through `doctor::BACKENDS`.
-            if !doctor::enabled_backends().contains(&merged.backend.as_deref().unwrap()) {
-                return doctor::refuse_disabled(merged.backend.as_deref().unwrap());
+            if !doctor::enabled_backends().contains(&name) {
+                return doctor::refuse_disabled(name);
             }
-            merged.backend.as_deref().unwrap()
+            name
         }
         Some(other) => {
             eprintln!(
-                "mysbx: unsupported backend `{other}` — available: `bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`, `krun`, `microvm-qemu`"
+                "mysbx: unsupported backend `{other}` — available: {}",
+                backends::names_backticked()
             );
             return EXIT_INFRASTRUCTURE;
         }
         None => {
             eprintln!(
-                "mysbx: no backend configured — set `backend = \"bubblewrap\"`, `backend = \"podman-gvisor\"`, `backend = \"nono\"`, `backend = \"podman-krun\"`, `backend = \"krun\"` or `backend = \"microvm-qemu\"` in the user or sidecar config"
+                "mysbx: no backend configured — set {} in the user or sidecar config",
+                backends::REGISTRY
+                    .iter()
+                    .map(|b| format!("`backend = \"{}\"`", b.name))
+                    .collect::<Vec<_>>()
+                    .join(", ")
             );
             return EXIT_INFRASTRUCTURE;
         }
@@ -2600,7 +2611,7 @@ fn sandbox_pipeline(
     if matches!(
         mode,
         RunMode::Detached | RunMode::Detachable | RunMode::DetachedInner
-    ) && matches!(backend, "podman-gvisor" | "podman-krun")
+    ) && backends::find(backend).is_some_and(|row| row.detach_refused)
     {
         eprintln!(
             "mysbx: {} is not supported on the `{backend}` backend \
@@ -2641,11 +2652,12 @@ fn sandbox_pipeline(
     // dropped below, where the krun limits are mapped.
     let unenforced_limits: Vec<&str> = match backend {
         "podman-gvisor" => Vec::new(),
-        // The direct krun backend enforces memory/cpus (they size the
-        // VM itself, krun.rs) and REFUSES pids-limit in the builder
-        // (no pids controller is wired for a whole VM) — no warning
-        // arm, the builder's refusal is the audit.
-        "podman-krun" | "krun" | "microvm-qemu" => {
+        // The VM tiers (backends.md D2/D3/D9) enforce memory/cpus
+        // (they size the VM itself, krun.rs) and REFUSE pids-limit
+        // in the builder (no pids controller is wired for a whole
+        // VM) — no warning arm, the builder's refusal is the audit.
+        // Asked of the registry (bd myconfig-9wkp.2).
+        b if backends::find(b).is_some_and(|row| row.sizes_sandbox) => {
             [merged.pids_limit.is_some().then_some("pids-limit")]
                 .into_iter()
                 .flatten()
@@ -2680,7 +2692,9 @@ fn sandbox_pipeline(
     // defaults `baked` onto a non-VM backend, so reaching this gate
     // `baked` means a layer asked for it (or a VM run took the baked
     // default).
-    if merged.resolved_store().is_baked() && backend != "krun" && backend != "microvm-qemu" {
+    if merged.resolved_store().is_baked()
+        && !backends::find(backend).is_some_and(|row| row.store_disk)
+    {
         eprintln!(
             "mysbx: warning: store = \"baked\" needs a store disk the sandbox owns — only the `krun` and `microvm-qemu` backends attach one; the `{backend}` backend cannot"
         );
@@ -2744,17 +2758,18 @@ fn sandbox_pipeline(
     }
 
     // The nested-virt backend gate (docs/design/config.md D27):
-    // `nested-virt = true` is honored ONLY by the `microvm-qemu`
-    // backend — every other backend refuses the key, never silently
-    // drops it. krun: libkrun 1.17.4's `krun_set_nested_virt` is
-    // macOS-only and libkrunfw 5.3.0 ships CONFIG_KVM unset, so the
-    // guest could not run a nested VM; podman-krun and the
-    // container/bwrap tiers have no virtio KVM passthrough at all.
+    // `nested-virt = true` is honored ONLY by the backends whose
+    // registry row says so (today `microvm-qemu`) — every other
+    // backend refuses the key, never silently drops it. krun:
+    // libkrun 1.17.4's `krun_set_nested_virt` is macOS-only and
+    // libkrunfw 5.3.0 ships CONFIG_KVM unset, so the guest could
+    // not run a nested VM; podman-krun and the container/bwrap
+    // tiers have no virtio KVM passthrough at all.
     // A refused run sits BEFORE the session clone and before the
     // `--dry-run` early return, so a dry run audits it too — the
     // same accepted-never-ignored rule the allowlist refusal
     // follows.
-    if merged.nested_virt && backend != "microvm-qemu" {
+    if merged.nested_virt && !backends::find(backend).is_some_and(|row| row.nested_virt) {
         eprintln!(
             "mysbx: nested-virt = true is not supported on the `{backend}` backend \
              (docs/design/config.md D27)"
@@ -2841,7 +2856,8 @@ fn sandbox_pipeline(
     // The microvm-qemu backend shares the refusal (backends.md D9):
     // its virtiofsd servers are the SAME passthrough kind, so the
     // AF_UNIX-over-virtio-fs gap applies verbatim.
-    if matches!(backend, "podman-krun" | "microvm-qemu") && merged.display.is_waypipe() {
+    if merged.display.is_waypipe() && backends::find(backend).is_some_and(|row| row.waypipe_refused)
+    {
         eprintln!(
             "mysbx: display = \"waypipe\" is not supported on the `{backend}` backend \
              (first cut, docs/design/backends.md D2)"
@@ -2953,7 +2969,11 @@ fn sandbox_pipeline(
     // gone (ESRCH): a LIVE parallel run's dirs are never touched,
     // and the sweep is !dry_run-gated (a dry run creates and
     // removes nothing).
-    if matches!(backend, "podman-krun" | "krun" | "microvm-qemu") && !preflight_only {
+    // The sweep runs for every backend with krun-stage debris of its
+    // own — the registry's VM-runtime tier (podman-krun's crun/libkrun
+    // and the two direct VMs; the predicate keeps the same set the
+    // old match arm listed, bd myconfig-9wkp.2).
+    if backends::find(backend).is_some_and(|row| row.sizes_sandbox) && !preflight_only {
         for dir in [
             repo.sidecar.join("gittrust"),
             repo.sidecar.join("krun-stage"),
@@ -3179,7 +3199,7 @@ fn sandbox_pipeline(
         // (step 4d, first cut) — the krun arm of this conditional is
         // unreachable for a refused run and treats the backend like
         // gvisor for the in-image pin either way.
-        let guest_bin = if matches!(backend, "podman-gvisor" | "podman-krun") {
+        let guest_bin = if backends::find(backend).is_some_and(|row| row.podman()) {
             gvisor_waypipe.as_deref()
         } else {
             waypipe_client.as_deref()
@@ -3193,7 +3213,7 @@ fn sandbox_pipeline(
     };
     let report_waypipe: Option<bwrap::Waypipe<'_>> = waypipe_params.clone();
     let (report_shell, report_tools_path, report_mux_entry) =
-        if matches!(backend, "podman-gvisor" | "podman-krun") {
+        if backends::find(backend).is_some_and(|row| row.podman()) {
             (
                 gvisor_shell.clone(),
                 gvisor_tools_path.clone(),
@@ -3205,17 +3225,17 @@ fn sandbox_pipeline(
     let report_params = bwrap::Params {
         shell: &report_shell,
         tools_path: &report_tools_path,
-        bin_sh: if matches!(backend, "podman-gvisor" | "podman-krun") {
+        bin_sh: if backends::find(backend).is_some_and(|row| row.podman()) {
             None
         } else {
             bin_sh.as_deref()
         },
-        nix_conf: if matches!(backend, "podman-gvisor" | "podman-krun") {
+        nix_conf: if backends::find(backend).is_some_and(|row| row.podman()) {
             None
         } else {
             nix_conf.as_deref()
         },
-        ca_bundle: if matches!(backend, "podman-gvisor" | "podman-krun") {
+        ca_bundle: if backends::find(backend).is_some_and(|row| row.podman()) {
             None
         } else {
             ca_bundle.as_deref()
@@ -3316,7 +3336,8 @@ fn sandbox_pipeline(
                 );
                 if !doctor::enabled_backends()
                     .iter()
-                    .any(|b| *b == "podman-gvisor" || *b == "podman-krun")
+                    .filter_map(|name: &&str| crate::backends::find(name))
+                    .any(crate::backends::Backend::podman)
                 {
                     eprintln!(
                         "  the podman backends are disabled on this host — enable \
@@ -4488,7 +4509,7 @@ fn sandbox_pipeline(
             None => {
                 eprintln!(
                     "mysbx: display = \"waypipe\" but this build pinned no waypipe {}",
-                    if matches!(backend, "podman-gvisor" | "podman-krun") {
+                    if backends::find(backend).is_some_and(|row| row.podman()) {
                         "for the image (MYSBX_PODMAN_WAYPIPE)"
                     } else {
                         "client (MYSBX_WAYPIPE)"
@@ -4496,7 +4517,7 @@ fn sandbox_pipeline(
                 );
                 eprintln!(
                     "  {}",
-                    if matches!(backend, "podman-gvisor" | "podman-krun") {
+                    if backends::find(backend).is_some_and(|row| row.podman()) {
                         "bake waypipe into the podman image (myconfig.ai.dev.mysbx.display.package threads it into podman.imagePackages)"
                     } else {
                         "install mysbx on a host that carries waypipe (myconfig.ai.dev.mysbx.display.package)"
@@ -6363,7 +6384,7 @@ const SIDECAR_TEMPLATE_ROOT: &str = r#"# mysbx sidecar config
 # /mysbx-home: HOME is /mysbx-home inside the sandbox, so a config
 # bound at its host path is invisible there (config.md D14).
 #
-# backend = "bubblewrap"         # bubblewrap | nono | podman-gvisor | podman-krun | krun
+# backend = "bubblewrap"         # bubblewrap | nono | podman-gvisor | podman-krun | krun | microvm-qemu
 # network = false                # the network is shared unless a layer denies
 #                                # it; a sidecar may deny, never re-enable (D7)
 # display = "off"                # off | waypipe, a Wayland channel (D18)

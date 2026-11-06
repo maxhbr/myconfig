@@ -214,7 +214,14 @@ impl Merged {
         match self.store {
             Some(s) => s,
             None => {
-                let vm = matches!(self.backend.as_deref(), Some("krun") | Some("microvm-qemu"));
+                // The two VM backends that can attach the disk — asked
+                // of the registry (bd myconfig-9wkp.2), never a local
+                // name list.
+                let vm = self
+                    .backend
+                    .as_deref()
+                    .and_then(crate::backends::find)
+                    .is_some_and(|row| row.store_disk);
                 let pinned = std::env::var_os("MYSBX_VM_STORE_DISK").is_some_and(|v| !v.is_empty());
                 if vm && pinned {
                     Store::Baked

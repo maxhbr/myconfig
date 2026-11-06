@@ -42,26 +42,20 @@ use std::time::{Duration, Instant};
 
 const USAGE_DOCTOR: &str = "usage: mysbx doctor [BACKEND...]";
 
-/// The backends the doctor knows, the same set the run pipeline accepts.
-pub const BACKENDS: &[&str] = &[
-    "bubblewrap",
-    "podman-gvisor",
-    "nono",
-    "podman-krun",
-    "krun",
-    "microvm-qemu",
-];
+/// The backends the doctor knows, the same set the run pipeline
+/// accepts — RE-EXPORTED from the registry (`backends::NAMES`, bd
+/// myconfig-9wkp.2): one table, never a second list. A `const`
+/// re-spelling (not a re-derivation) so the existing `BACKENDS`
+/// consumers — the doctor listing, the `--<backend>` shorthands
+/// and the tests that pin the universe — keep their exact type.
+pub use crate::backends::NAMES as BACKENDS;
 
 /// The module option that enables a backend — the hint the disabled
 /// refusals print. `bubblewrap` and `nono` are always on, so they have
-/// none (and can never be refused).
+/// none (and can never be refused). Asked of the registry, never a
+/// local match arm (bd myconfig-9wkp.2).
 fn enable_option(backend: &str) -> Option<&'static str> {
-    match backend {
-        "podman-gvisor" | "podman-krun" => Some("myconfig.ai.dev.mysbx.podman.enable"),
-        "krun" => Some("myconfig.ai.dev.mysbx.krun.enable"),
-        "microvm-qemu" => Some("myconfig.ai.dev.mysbx.microvm-qemu.enable"),
-        _ => None,
-    }
+    crate::backends::find(backend).and_then(|b| b.enable_option)
 }
 
 /// The backends THIS host carries: `MYSBX_ENABLED_BACKENDS` (set by the
