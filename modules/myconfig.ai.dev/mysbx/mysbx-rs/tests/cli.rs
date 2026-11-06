@@ -12,6 +12,7 @@
 //! gracefully instead of failing.
 
 use mysbx::config::Multiplexer;
+use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -15125,4 +15126,252 @@ fn once_dry_runs_of_the_other_backends_bind_the_temp_worktrees() {
             "{backend}: the host sibling was not created"
         );
     }
+}
+
+#[test]
+fn once_a_terminal_reading_payload_completes_under_the_group_isolation() {
+    // Review blocker 2 of bd myconfig-jhfo: the run's own process
+    // group (the cancellation isolation) without the terminal
+    // FOREGROUND handoff stops a tty-reading payload with SIGTTIN —
+    // bwrap, the shell, everything in the run's group — while the
+    // wait loop spins forever. The handoff (`Foreground` in lib.rs)
+    // gives the run's group the terminal's foreground, so the
+    // payload reads the ctty exactly like a plain run's, and takes
+    // the foreground back when the run ends.
+    if !is_bwrap_available() {
+        eprintln!("skipping: bwrap not available in this environment");
+        return;
+    }
+    if !is_ssh_keygen_available() {
+        eprintln!("skipping: no usable ssh-keygen in this environment");
+        return;
+    }
+    let Some(bash) = sandbox_bash() else {
+        eprintln!("skipping: no sandbox-reachable bash");
+        return;
+    };
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture_uninited("once-tty", &[]);
+    let runtime = inv.home.join("runtime");
+    std::fs::create_dir_all(&runtime).unwrap();
+    // The backend the run needs (the same user layer `spawn_once`
+    // writes, spelled here because the pty child's env is built
+    // from scratch — `env_clear` keeps the fixture's HOME/XDG from
+    // leaking, so the config must be written and named too).
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+
+    // The mysbx-once child needs the pty's SLAVE as its controlling
+    // terminal — a session of its own (setsid) whose ctty the
+    // sandbox's tty reads go through — which std::process cannot
+    // spell: pre_exec runs between fork and exec, exactly where
+    // setsid + the ctty-acquiring open belong.
+    let bash = bash.to_string_lossy().into_owned();
+    let payload = "echo READY; read x; echo GOT:$x".to_owned();
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_mysbx"));
+    cmd.env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+        .env("HOME", &inv.home)
+        .env("XDG_CONFIG_HOME", &inv.xdg)
+        .env("XDG_RUNTIME_DIR", &runtime)
+        .env("MYSBX_ONCE", "1")
+        .env("MYSBX_SHELL", &bash)
+        .env("MYSBX_TOOLS_PATH", "/usr/bin")
+        .current_dir(&inv.cwd)
+        .args(["run", "--", &bash, "-c", &payload]);
+    unsafe {
+        set_session_with_pty(&mut cmd, master.as_raw_fd());
+    }
+    let mut child = cmd.spawn().expect("failed to spawn mysbx-once under a pty");
+
+    // Drive the run through the pty: READY, a line, and the echo
+    // back — then the run must END, reaped with the payload's own
+    // exit code, and hand the foreground back.
+    use std::io::{Read, Write};
+    let mut master = master;
+    let mut buf = [0u8; 4096];
+    let mut seen = String::new();
+    let mut sent = false;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let ended = loop {
+        if std::time::Instant::now() > deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("the tty-reading payload never completed; pty said: {seen}");
+        }
+        let mut fds = [master.as_raw_fd()];
+        let ready = pty_readable(&mut fds, 300);
+        if ready {
+            let n = master.read(&mut buf).unwrap_or(0);
+            if n == 0 {
+                break true;
+            }
+            seen.push_str(&String::from_utf8_lossy(&buf[..n]));
+        }
+        if !sent && seen.contains("READY") {
+            master.write_all(b"hello\n").unwrap();
+            sent = true;
+        }
+        if seen.contains("GOT:hello") {
+            break true;
+        }
+    };
+    assert!(ended, "the pty closed");
+    let out = pty_wait_with_deadline(&mut child, std::time::Duration::from_secs(10))
+        .unwrap_or_else(|| {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("mysbx-once did not end after the tty exchange; pty said: {seen}")
+        });
+    assert!(
+        out.success(),
+        "the payload exits with its own code; pty said: {seen}"
+    );
+}
+
+/// Whether one of `fds` is readable within `millis` — `select(2)`
+/// through the raw libc symbol, the pty test's read budget.
+fn pty_readable(fds: &mut [std::os::fd::RawFd; 1], millis: u64) -> bool {
+    unsafe {
+        let mut set = std::mem::zeroed::<FdSetRaw>();
+        set.fds_bits[0] = 1u64 << (fds[0] % 64);
+        let mut tv = TimeValRaw {
+            secs: (millis / 1000) as i64,
+            micros: ((millis % 1000) * 1000) as i64,
+        };
+        select_raw(
+            fds[0] + 1,
+            &mut set,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut tv,
+        ) > 0
+    }
+}
+
+#[repr(C)]
+struct FdSetRaw {
+    fds_bits: [u64; 16],
+}
+
+#[repr(C)]
+struct TimeValRaw {
+    secs: i64,
+    micros: i64,
+}
+
+unsafe fn select_raw(
+    n: i32,
+    readfds: *mut FdSetRaw,
+    writefds: *mut FdSetRaw,
+    exceptfds: *mut FdSetRaw,
+    timeout: *mut TimeValRaw,
+) -> i32 {
+    extern "C" {
+        fn select(
+            n: i32,
+            readfds: *mut FdSetRaw,
+            writefds: *mut FdSetRaw,
+            exceptfds: *mut FdSetRaw,
+            timeout: *mut TimeValRaw,
+        ) -> i32;
+    }
+    select(n, readfds, writefds, exceptfds, timeout)
+}
+
+/// `waitpid(pid, WNOHANG)` in a poll loop with a deadline — the
+/// std `Child::try_wait` spelling, with a budget so a regression
+/// (a stopped payload, a spinning wait loop) FAILS the test
+/// instead of hanging it.
+fn pty_wait_with_deadline(
+    child: &mut std::process::Child,
+    budget: std::time::Duration,
+) -> Option<std::process::ExitStatus> {
+    let deadline = std::time::Instant::now() + budget;
+    loop {
+        if let Ok(Some(status)) = child.try_wait() {
+            return Some(status);
+        }
+        if std::time::Instant::now() > deadline {
+            return None;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
+/// Give the child of `cmd` the session shape the tty test needs: its
+/// own session (a controlling terminal of its own — what an
+/// operator's interactive run sits in) with the slave of
+/// `master_fd` as that ctty, on stdio. Called as a `pre_exec` step,
+/// i.e. between fork and exec, where setsid and the ctty-acquiring
+/// open belong.
+///
+/// # Safety
+///
+/// `master_fd` must be an open pty master whose slave path can be
+/// resolved; the child inherits and dups the freshly-opened slave.
+unsafe fn set_session_with_pty(cmd: &mut Command, master_fd: std::os::fd::RawFd) {
+    use std::os::unix::process::CommandExt;
+    let ptsname = ptsname_of(master_fd);
+    let Ok(ptsname) = ptsname else {
+        panic!("no slave for the pty master");
+    };
+    cmd.pre_exec(move || {
+        extern "C" {
+            fn setsid() -> i32;
+            fn open(path: *const std::os::raw::c_char, flags: i32, ...) -> i32;
+            fn dup2(old: i32, new: i32) -> i32;
+            fn close(fd: i32) -> i32;
+        }
+        const O_RDWR: i32 = 2;
+        // A session of one's own, the slave opened WITH the ctty
+        // acquisition (no O_NOCTTY), stdio on it.
+        if setsid() < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        let path = ptsname.as_os_str().as_encoded_bytes();
+        let mut with_nul = [0u8; 256];
+        if path.len() >= with_nul.len() {
+            return Err(std::io::Error::from(std::io::ErrorKind::InvalidInput));
+        }
+        with_nul[..path.len()].copy_from_slice(path);
+        let slave = open(with_nul.as_ptr().cast(), O_RDWR);
+        if slave < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        for fd in [0, 1, 2] {
+            if dup2(slave, fd) < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+        }
+        if slave > 2 {
+            close(slave);
+        }
+        Ok(())
+    });
+}
+
+/// The slave path of a pty master — `ptsname_r` through the raw
+/// libc symbol, [`open_test_pty`]'s own helper spelled again (its
+/// binding is local to it).
+fn ptsname_of(master_fd: std::os::fd::RawFd) -> Result<std::path::PathBuf, std::io::Error> {
+    extern "C" {
+        fn ptsname_r(fd: i32, buf: *mut u8, buflen: usize) -> i32;
+    }
+    let mut name = [0u8; 256];
+    if unsafe { ptsname_r(master_fd, name.as_mut_ptr(), name.len()) } != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    let end = name.iter().position(|b| *b == 0).unwrap_or(name.len());
+    use std::os::unix::ffi::OsStrExt;
+    Ok(std::path::PathBuf::from(std::ffi::OsStr::from_bytes(
+        &name[..end],
+    )))
 }

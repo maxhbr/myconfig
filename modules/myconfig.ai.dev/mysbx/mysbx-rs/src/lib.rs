@@ -41,6 +41,8 @@ pub mod result;
 pub mod session;
 pub mod sessionverbs;
 pub mod status;
+
+use std::path::Path;
 pub mod toml;
 pub mod worktreeverbs;
 
@@ -4755,6 +4757,19 @@ fn once_run_wait(mut cmd: std::process::Command) -> i32 {
             return EXIT_INFRASTRUCTURE;
         }
     };
+    // The terminal half of the group isolation (review blocker 2
+    // of bd myconfig-jhfo): the run's group has the terminal's
+    // FOREGROUND too, or a backend that reads the tty is stopped by
+    // SIGTTIN and never reaped — the wait loop would spin forever.
+    // Only when mysbx itself is the foreground group (an
+    // interactive run); a piped/scripted invocation has no terminal
+    // to hand. `Foreground` takes the foreground back on every
+    // return path (drop).
+    let fg = Foreground {
+        tty: Foreground::ours(),
+        ours: unsafe { libc_getpgrp() } as u32,
+    };
+    fg.give(child.id());
     let mut signum: i32;
     loop {
         signum = CANCELLED.load(std::sync::atomic::Ordering::SeqCst);
@@ -4875,6 +4890,15 @@ fn run_with_result(
             return spawn_failed(e);
         }
     };
+    // The same terminal handoff as `once_run_wait` (review blocker
+    // 2 of bd myconfig-jhfo): the run's group must own the
+    // terminal's foreground, or a terminal-reading backend is
+    // SIGTTIN-stopped and the wait never reaps it.
+    let fg = Foreground {
+        tty: Foreground::ours(),
+        ours: unsafe { libc_getpgrp() } as u32,
+    };
+    fg.give(child.id());
 
     // The wait loop: poll the child, watch the cancellation flag.
     // SIGALRM (the exhausted budget) sets the flag like a
@@ -5068,6 +5092,143 @@ unsafe fn libc_kill(pgrp: i32, signum: i32) {
         fn kill(pid: i32, signum: i32) -> i32;
     }
     kill(pgrp, signum);
+}
+
+// The terminal-handoff signals: SIGTTOU/SIGTTIN are what the kernel
+// sends a BACKGROUND process that writes to / reads from the terminal,
+// and — the trap — what `tcsetpgrp(3)` itself raises when the CALLER
+// is not the foreground group. Ignoring them for the handoff window
+// is the canonical `tcsetpgrp` idiom.
+const SIGTTOU: i32 = 21;
+const SIGTTIN: i32 = 22;
+
+/// Give the run's process group the terminal's FOREGROUND, and take
+/// it back on drop (review blocker 2 of bd myconfig-jhfo): the
+/// process-group isolation (`Command::process_group(0)`) puts the
+/// backend in its own group, but the terminal's foreground group
+/// stays mysbx's — a backend that reads the terminal is then stopped
+/// by SIGTTIN and the wait loop spins forever over a child that will
+/// never be reaped.
+///
+/// The handoff only happens when mysbx itself is the foreground
+/// group of a real terminal: a piped/scripted invocation (no tty, or
+/// another pipeline stage in the foreground) must not steal a
+/// terminal it does not own — its child inherits the same
+/// non-interactive situation, exactly what a plain run gives it.
+/// Both `tcsetpgrp` calls run with SIGTTOU/SIGTTIN ignored (the
+/// kernel raises SIGTTOU at a background `tcsetpgrp` — ignoring it
+/// lets the call succeed), and the restore ignores failures: the
+/// terminal may die with the run (SIGHUP path), and a foreground
+/// nobody holds is the terminal's own business then.
+struct Foreground {
+    tty: Option<std::path::PathBuf>,
+    ours: u32,
+}
+
+impl Foreground {
+    /// Whether mysbx's own group owns the foreground of its
+    /// controlling terminal. `/dev/tty` — the ctty of the session,
+    /// whatever stdio is redirected to — is the device that
+    /// matters: a `run -- CMD` with piped stdio still hands a
+    /// shell payload the interactive terminal through its ctty, so
+    /// the gate is the ctty's OWNERSHIP, never stdio's shape. The
+    /// comparison is against mysbx's own PROCESS GROUP (not its
+    /// pid): a foregrounded group whose leader is not mysbx (a
+    /// shell pipeline stage) is still mysbx's group, and the
+    /// handoff is ours to make; the foreground of some OTHER group
+    /// is not ours to take. No ctty at all (a scripted/CI
+    /// invocation, the test harness) opens no `/dev/tty` and
+    /// yields `None` — nothing to hand, nothing to restore.
+    fn ours() -> Option<std::path::PathBuf> {
+        let tty = std::path::PathBuf::from("/dev/tty");
+        let fg = unsafe { libc_tcgetpgrp(&tty) }?;
+        (fg == unsafe { libc_getpgrp() }).then_some(tty)
+    }
+
+    /// Hand the foreground of the terminal to `pgid`. Best-effort:
+    /// a tty that dies mid-run takes its foreground with it.
+    fn give(&self, pgid: u32) {
+        let Some(tty) = &self.tty else { return };
+        unsafe { libc_tcsetpgrp(tty, pgid as i32) };
+    }
+
+    /// Take the foreground back before exiting — the operator's
+    /// next command expects to type at a shell that owns the
+    /// terminal again.
+    fn take_back(&self) {
+        self.give(self.ours);
+    }
+}
+
+impl Drop for Foreground {
+    fn drop(&mut self) {
+        self.take_back();
+    }
+}
+
+/// `getpgrp(3)`: mysbx's own process group — the group the terminal
+/// handoff must be able to take the foreground back for.
+unsafe fn libc_getpgrp() -> i32 {
+    extern "C" {
+        fn getpgrp() -> i32;
+    }
+    getpgrp()
+}
+
+/// `tcgetpgrp(3)` on `/dev/tty`: the terminal's foreground process
+/// group, or `None` when the path is no terminal (or cannot be
+/// opened).
+unsafe fn libc_tcgetpgrp(tty: &Path) -> Option<i32> {
+    extern "C" {
+        fn open(path: *const std::os::raw::c_char, flags: i32, ...) -> i32;
+        fn tcgetpgrp(fd: i32) -> i32;
+        fn close(fd: i32) -> i32;
+    }
+    const O_RDONLY: i32 = 0;
+    let path = tty.as_os_str().as_encoded_bytes();
+    let mut with_nul = [0u8; 16];
+    if path.len() >= with_nul.len() {
+        return None;
+    }
+    with_nul[..path.len()].copy_from_slice(path);
+    let fd = open(with_nul.as_ptr().cast(), O_RDONLY);
+    if fd < 0 {
+        return None;
+    }
+    let pgrp = tcgetpgrp(fd);
+    close(fd);
+    (pgrp >= 0).then_some(pgrp)
+}
+
+/// `tcsetpgrp(3)` on `/dev/tty` with SIGTTOU/SIGTTIN ignored — the
+/// caller of a foreground handoff is backgrounded by its own call,
+/// and the kernel's SIGTTOU would stop it otherwise.
+unsafe fn libc_tcsetpgrp(tty: &Path, pgrp: i32) {
+    extern "C" {
+        fn open(path: *const std::os::raw::c_char, flags: i32, ...) -> i32;
+        fn tcsetpgrp(fd: i32, pgrp: i32) -> i32;
+        fn close(fd: i32) -> i32;
+        fn signal(signum: i32, handler: usize) -> usize;
+    }
+    const O_RDONLY: i32 = 0;
+    const SIG_IGN: usize = 1;
+    const SIG_DFL: usize = 0;
+    let path = tty.as_os_str().as_encoded_bytes();
+    let mut with_nul = [0u8; 16];
+    if path.len() >= with_nul.len() {
+        return;
+    }
+    with_nul[..path.len()].copy_from_slice(path);
+    let fd = open(with_nul.as_ptr().cast(), O_RDONLY);
+    if fd < 0 {
+        return;
+    }
+    signal(SIGTTOU, SIG_IGN);
+    signal(SIGTTIN, SIG_IGN);
+    tcsetpgrp(fd, pgrp);
+    signal(SIGTTOU, SIG_DFL);
+    signal(SIGTTIN, SIG_DFL);
+    close(fd);
 }
 
 /// Everything that must stay unwritable for `path` to still be THIS
