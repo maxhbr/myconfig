@@ -1,0 +1,10 @@
+[package]
+name = "mysbx-microvm-ch"
+version = "0.1.0"
+edition = "2021"
+
+# The launcher is ZERO-DEPENDENCY by design (the microvm-qemu-rs
+# twin, bd myconfig-9wkp.6): cloud-hypervisor, virtiofsd and passt
+# are separate PROCESSES invoked by absolute paths, so nothing
+# needs linking beyond std.
+[dependencies]
