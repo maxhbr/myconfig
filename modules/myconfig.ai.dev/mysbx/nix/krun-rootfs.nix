@@ -169,6 +169,15 @@ let
             || fail "cannot bring up lo as pid 1"
     fi
 
+    # Quiet the serial console below KERN_WARNING: under a loaded
+    # 1-2 vCPU guest the clocksource watchdog's timer softirq misses
+    # its window ("Long readout interval, skipping watchdog check")
+    # and the pr_warn lands on the caller's stdio over console=ttyS0.
+    # Errors (loglevel <=3) still print; dmesg keeps everything.
+    # Best-effort: /proc/sys exists on both backends, but a read-only
+    # or absent procfs must not fail the boot.
+    echo 3 > /proc/sys/kernel/printk 2> /dev/null || true
+
     # The mysbx.* cmdline params (the qemu bridge): libkrun hands the
     # guest its settings through envp; qemu has no envp — the kernel
     # cmdline carries them instead (mysbx.trace=, mysbx.manifest=,
