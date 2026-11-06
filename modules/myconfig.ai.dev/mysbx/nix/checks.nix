@@ -308,7 +308,7 @@ in
         grep -qF '"MYSBX_VM_STORE_DISK=1"' \
           ${../mysbx-rs/src/lib.rs} \
           || fail "the crate's store-disk env record changed"
-        grep -qF 'MYSBX_VM_STORE_DISK' ${../nix/krun-rootfs.nix} \
+        grep -qF 'MYSBX_VM_STORE_DISK' ${../nix/mysbx-init/store.nix} \
           || fail "the guest init lost the MYSBX_VM_STORE_DISK gate"
 
         touch $out

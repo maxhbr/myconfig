@@ -75,23 +75,26 @@
   bash,
 }:
 let
-  # The guest entry script (bd myconfig-dak.5) — the long
-  # mysbxInit indented string, extracted verbatim to mysbx-init.nix
-  # (a function of the two interpolations the text carries, both
-  # generated HERE because the indented-string '' rules make inlining
-  # them error-prone: the shell-quoted reconcile SQL, and the `#` of
-  # the step timer's `10#` base prefix — a bare `#` would open a Nix
-  # comment and a bare `${` would interpolate inside the string).
-  # The extraction is byte-identical by contract: passthru.mysbxInit
+  # The guest entry script (bd myconfig-dak.5) — the assembly of the
+  # functional parts in ./mysbx-init/ (one file per phase, concatenated
+  # IN ORDER into the ONE script the guest runs; see mysbx-init/default.nix
+  # for why the parts are source modules, not guest scripts). The two
+  # interpolations the fragments carry are generated HERE because the
+  # indented-string '' rules make inlining them error-prone: the
+  # shell-quoted reconcile SQL, and the `#` of the step timer's `10#`
+  # base prefix (a bare `#` would open a Nix comment and a bare `${`
+  # would interpolate inside the string).
+  # The assembly is byte-identical by contract: passthru.mysbxInit
   # and the baked bin/mysbx-init must keep producing the SAME bytes.
-  mysbxInit = import ./mysbx-init.nix {
-    basePrefix = "#";
-    # The db reconcile's SQL, shell-quoted by Nix (the init text
-    # interpolates it verbatim): the pattern needs SQL single
-    # quotes. A store path's name carries no quote, so no escaping
-    # of VALUES is needed (only the LIKE pattern here is a literal).
-    reconcileSelect = lib.strings.escapeShellArg "SELECT path FROM ValidPaths WHERE path LIKE '/nix/store/%'";
-  };
+  mysbxInit =
+    (import ./mysbx-init {
+      basePrefix = "#";
+      # The db reconcile's SQL, shell-quoted by Nix (the init text
+      # interpolates it verbatim): the pattern needs SQL single
+      # quotes. A store path's name carries no quote, so no escaping
+      # of VALUES is needed (only the LIKE pattern here is a literal).
+      reconcileSelect = lib.strings.escapeShellArg "SELECT path FROM ValidPaths WHERE path LIKE '/nix/store/%'";
+    }).text;
 in
 runCommand "mysbx-krun-rootfs"
   {
