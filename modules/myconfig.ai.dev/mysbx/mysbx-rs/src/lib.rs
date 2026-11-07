@@ -4162,17 +4162,25 @@ fn sandbox_pipeline(
                     "--tmpfs".into(),
                     "/tmp".into(),
                 ]);
-                // The host resolver for libslirp (bd myconfig-m0to):
-                // the SLiRP DNS proxy reads the HOST upstream from
-                // /etc/resolv.conf through qemu's OWN filesystem
-                // view — this bwrap view has no /etc at all without
-                // the bind. -try: a host without the file must
-                // still boot (the guest resolver is the init's
-                // business, not qemu's).
+                // The host resolver for libslirp (bd myconfig-m0to)
+                // and the user DB passt needs to drop to nobody (bd
+                // myconfig-9wkp.1's spike: "Can't get password file
+                // entry for nobody" — a daemon that would die on
+                // every run): the bwrap view has no /etc at all
+                // without the binds. -try: a host without either
+                // file must still boot (the guest resolver is the
+                // init's business, not the VMM's, and passt keeps
+                // its (root) uid when nobody is unnamed).
                 argv.extend([
                     "--ro-bind-try".into(),
                     "/etc/resolv.conf".into(),
                     "/etc/resolv.conf".into(),
+                    "--ro-bind-try".into(),
+                    "/etc/passwd".into(),
+                    "/etc/passwd".into(),
+                    "--ro-bind-try".into(),
+                    "/etc/group".into(),
+                    "/etc/group".into(),
                 ]);
             }
             argv.extend([
