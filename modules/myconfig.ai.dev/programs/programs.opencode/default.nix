@@ -323,6 +323,13 @@ in
             "http://10.0.2.2:${toString osconfig.services.litellm.port}/v1";
         };
       };
+      # The microvm-ch backend's passt guest uses the same address plan.
+      microvm-ch.env = lib.mkIf osconfig.services.litellm.enable {
+        OPENCODE_CONFIG_CONTENT = builtins.toJSON {
+          providers."${osconfig.networking.hostName}-litellm".settings.baseURL =
+            "http://10.0.2.2:${toString osconfig.services.litellm.port}/v1";
+        };
+      };
     };
 
     home-manager.sharedModules = [

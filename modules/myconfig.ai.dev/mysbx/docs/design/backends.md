@@ -514,7 +514,7 @@ between guest and VMM.
 | Alternative | Why rejected |
 | --- | --- |
 | qemu + virtiofsd + passt, native | originally deferred to avoid a second argv builder and daemon/network wiring; D9 later shipped the native QEMU fallback with SLiRP, NOT passt |
-| cloud-hypervisor directly | no user-mode networking — it needs a TAP device on a bridge, and a bridge/tap is a root-owned host device, which this design refuses |
+| cloud-hypervisor directly | originally rejected: no user-mode networking — a TAP device on a bridge is a root-owned host device. SHIPPED LATER as the `microvm-ch` backend (D11): passt's vhost-user mode (bd myconfig-9wkp.1's spike) supplies rootless user-mode networking without any TAP, so the original rejection's sole ground is gone |
 | firecracker | disks only, no virtio-fs — no live repo mounts, which the whole mysbx workspace model (`live` repo bind) depends on |
 | reusing the `myconfig.ai.microvm` slots | root-owned prebuilt slot pool whose mounts are fixed at NixOS eval time — incompatible with the runtime TOML config merge that decides mounts per run; also far heavier than a per-run microVM |
 | kata containers | containerd-based and root-oriented; heavy, and the rootless story is weaker than podman+crun/libkrun |
@@ -1351,11 +1351,80 @@ matrix for them. The static CI gate is
 three closure pins and the dry-run flags, on STUB pins — the real
 kernel stays a host build.
 
+### D11: The `microvm-ch` backend is `microvm-qemu` with qemu swapped for cloud-hypervisor + passt (bd myconfig-9wkp)
+
+`backend = "microvm-ch"` is the alternatives table's
+cloud-hypervisor row, shipped once passt's vhost-user mode removed
+the original rejection's sole ground (rootless user-mode
+networking without a TAP). The SAME contract as D9 on a third VMM:
+the shared guest rootfs, the shared kernel, the shared init and
+manifest — only the VMM and the network daemon differ.
+
+The chain:
+
+```
+bwrap → mysbx-microvm-ch → virtiofsd ×N + passt + cloud-hypervisor → VM
+```
+
+The builder is the qemu builder's twin (`mysbx-rs/src/microvm_ch.rs`);
+the launcher is the qemu launcher's twin
+(`microvm-ch-rs`, packaged by `nix/microvm-ch-launcher.nix`, which
+pins cloud-hypervisor, virtiofsd and passt).
+
+What differs from `microvm-qemu` (D9), stated honestly:
+
+| | `microvm-qemu` (D9) | `microvm-ch` (D11) |
+| --- | --- | --- |
+| VMM | qemu-system, out-of-process | cloud-hypervisor, out-of-process (Rust, per-thread seccomp default-on) |
+| network = shared | SLiRP in-process (`-netdev user`) | one passt `--vhost-user` child per run, CH connecting as the socket CLIENT (`vhost_mode=client`); passt mimics SLiRP's exact plan (`10.0.2.15/24`, gateway `10.0.2.2`, DNS `10.0.2.3`, `--ipv4-only`), so the guest's static NIC config and the `10.0.2.2` model-endpoint pins carry over unchanged. The guest MAC is PINNED to passt's banner value (`9a:55:9a:55:9a:55`, the `mac=` CH flag) — the spike proved the pin load-bearing: passt frames for its own banner MAC and silently drops anything else |
+| exit code | a virtio-serial port (`mysbx-exit`, bd myconfig-dnmk) | the 16550: CH has no multiport virtio-serial, so `--serial file=` wires ttyS0 to a runtime file and the init writes one `mysbx-exit:N` line there (bd myconfig-9wkp.4); the launcher reads the file AFTER the VM exits — a file, unlike the qemu twin's chardev socket, so there is no live-reader connect race |
+| teardown | `reboot=t panic=-1` + `-no-reboot`: a PID-1 exit panics and qemu EXITS | `poweroff -f` from the init (the serial16550 branch): CH has NO `-no-reboot`, so `panic=-1` would REBOOT and re-run the payload, and a PID-1 exit's kernel panic would HANG the VM. `--pvpanic` + `--event-monitor` arm the crash signal: the launcher's crash watch polls the event monitor for CH's `"event": "panic"` record and kills the hung VM the moment it appears, with a teardown timeout as the backstop for a VM that neither powers off nor panics — a hung VM is killed and reported, never a wedged session |
+| nested-virt (D27) | `-cpu max,vmx=off,svm=off` masks, `-cpu host` opt-in | `nested=off` FORCED on every plain run — CH defaults nested ON, the exact inverse of qemu; `--nested-virt` switches to `nested=on`. The run path pre-flights `/dev/kvm` and the host's nested parameter identically |
+| crash signal | panic → exit (no device needed) | pvpanic: the kernel pin builds `PVPANIC=y` + `PVPANIC_PCI=y` in (CH presents the pvpanic device on the PCI bus; the transports default to modules the static init can never load). Inert under qemu, which presents no pvpanic device — one kernel serves both VM backends |
+| console | `-serial mon:stdio` + `console=ttyS0`; NO winsize (the manifest `MYSBX_MICROVM_CONSOLE_SIZE` snapshot only) | `--console tty` (the virtio console hvc0): the kernel console, the init's step trace and the payload's stdio ride it; CH propagates its stdio's winsize to the guest tty (the resize the 16550 cannot carry — though a mid-session host resize still depends on the launcher's pty) |
+| kernel pin | `microvm-qemu.kernel` | `microvm-ch.kernel` — DEFAULTS TO THE SAME IMAGE (`cfg.microvm-qemu.kernel`): one kernel serves both VM backends (bd myconfig-9wkp.3, the spike booted it as-is) |
+| doctor / pins | `MYSBX_MICROVM_QEMU_{LAUNCHER,ROOTFS,KERNEL,ENV}` | `MYSBX_MICROVM_CH_{LAUNCHER,ROOTFS,KERNEL,ENV}` — the same four-pin shape; the doctor section is one parameterized function serving both |
+
+Everything else carries verbatim from D9: the staged spec, the
+manifest channel (the payload argv rides it losslessly, bd
+myconfig-hq7k), the trust-shares-on-stage-ro rule (no
+`--krun-overlay` on either VM backend), the scratch and store-disk
+virtio-blk devices, the fd-ceiling raise/gate (bd myconfig-qq3i's
+virtiofsd accounting applies identically), the Daemons-guard
+cleanup, `network = false` (no net device + `--unshare-net`), the
+refusals (pids-limit, waypipe, allowlists, share roots), and the
+threat model — a guest escape reaches the CH, virtiofsd and passt
+processes, the invoking user's uid, the same single security
+context D9 states. passt adds one more file server to that context;
+its self-isolation (its own user namespace drop to nobody) was
+proven live inside the bwrap wrap (the spike).
+
+Live evidence (bd myconfig-9wkp.1's spike, commit fd22138c91, in a
+microvm-qemu sandbox with nested-virt): the shared rootfs boots on
+cloud-hypervisor 54.0 (the locked nixpkgs build) inside the bwrap
+wrap; passt's self-isolation works under bwrap; the SLiRP plan
+carries (wget to a host-loopback service through the 10.0.2.2
+gateway); the serial16550 channel propagates payload codes
+(7/127/137 observed); poweroff exits CH 0 in ~2 s per run; a
+crashed init hangs CH (no reboot loop). The SCRIPTED validation run
+(bd myconfig-9wkp.9, [log](../microvm-ch-validation-log.md),
+2026-11-07) re-proves all of that through the REAL wrapped mysbx —
+boot, pinned kernel, exit codes 7/137, the virtio console, the
+workspace bind, the ro root, the passt NIC with the pinned MAC and
+the applied SLiRP plan, the guest bootstrap, the nested=off
+inversion. Its egress probe SKIPS on that host for the same
+nested-sandbox reason (the host interface is 10.0.2.15/24 itself):
+a host interface inside the guest plan is a refuse-or-remap case
+for the run pipeline, and the egress probe is a clean-host run
+away. The static CI gate is
+`mysbx-microvm-ch-wrapper-test` (nix/checks.nix), the qemu check's
+twin.
+
 ### D10: Backend availability is a host opt-in; a disabled backend is refused, never fallen back from (bd myconfig-dq2w)
 
-The four heavy backends — `podman-gvisor`, `podman-krun`, `krun`,
-`microvm-qemu` — are OFF by default and opt-in per host through the
-module:
+The five heavy backends — `podman-gvisor`, `podman-krun`, `krun`,
+`microvm-qemu`, `microvm-ch` — are OFF by default and opt-in per host
+through the module:
 
 - `myconfig.ai.dev.mysbx.podman.enable` — BOTH podman backends: the
   shared agent image, the rootless podman + gvisor host setup
@@ -1363,6 +1432,12 @@ module:
 - `myconfig.ai.dev.mysbx.krun.enable` — the DIRECT-libkrun backend
   only (`krun.direct.*`; the podman-krun runtime and guest-nix
   features ride `podman.enable` with the image they need).
+- `myconfig.ai.dev.mysbx.microvm-ch.enable` — the cloud-hypervisor
+  backend (D11): the mysbx-microvm-ch launcher, passt's
+  vhost-user networking, the SHARED guest rootfs and kernel. Off by
+  default: cloud-hypervisor + passt + virtiofsd + the kernel are a
+  heavy closure. Off means REFUSED, never a fallback (the message
+  names `myconfig.ai.dev.mysbx.microvm-ch.enable`).
 - `myconfig.ai.dev.mysbx.microvm-qemu.enable` — the native-qemu
   backend (launcher, rootfs, kernel, env pins).
 

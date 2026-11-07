@@ -13,7 +13,7 @@ below; static tests and `doctor` do not establish live enforcement.
 For design rationale, see [backend decisions](design/backends.md) and
 [configuration decisions](design/config.md). The
 [older-tier comparison](feature-comparison.md) also contains historical
-snapshots; use this page for the current six-backend comparison.
+snapshots; use this page for the current seven-backend comparison.
 
 ## Backend families
 
@@ -25,6 +25,7 @@ snapshots; use this page for the current six-backend comparison.
 | `podman-krun` | Rootless Podman with crun's libkrun VM handler; payload is guest root | Image-owned store; no implicit host-store bind | Guest socket proxy through the container network namespace |
 | `krun` | Host bubblewrap, then an in-process libkrun VM and file server; payload is guest root | Host or baked store, as selected below | libkrun TSI socket proxy through the launcher's namespace |
 | `microvm-qemu` | Host bubblewrap, QEMU and separate virtiofsd file servers; payload is guest root | The same host/baked choice and guest init as direct krun | SLiRP user-mode NAT |
+| `microvm-ch` | Host bubblewrap, cloud-hypervisor and separate virtiofsd file servers; payload is guest root | The same host/baked choice and guest init as direct krun | passt over vhost-user, on SLiRP's address plan |
 
 These are different boundaries, not a proven security ranking. VM host
 processes run as the invoking user. A guest-kernel, VMM or file-server
@@ -33,10 +34,10 @@ on the enclosing bubblewrap view. Baked mode narrows the store delivered
 to the guest; the host-side VM wrapper still exposes the whole host store
 for its own runtime dependencies.
 
-Both direct VM backends require KVM in the normal mysbx path. QEMU's
+The direct VM backends require KVM in the normal mysbx path. QEMU's
 launcher argument `kvm:tcg` does not make software emulation a supported
 mysbx fallback. Direct krun uses libkrun's kernel; QEMU has a separate
-kernel pin.
+kernel pin, which cloud-hypervisor shares by default.
 
 Enabling a backend in Nix makes it available; it does not select it.
 Selection is `backend` or `--backend`. The generated user configuration
@@ -57,6 +58,7 @@ kernel support still matter.
 | `podman-krun` | Refused | Refused | Refused | Image entries; Orca refused |
 | `krun` | Refused | **Not implemented, but currently accepted in error** | Accepted; no recorded live detach matrix | Direct guest entries; Orca refused |
 | `microvm-qemu` | Refused | Refused | Accepted; no recorded live detach matrix | Direct guest entries; Orca refused |
+| `microvm-ch` | Refused | Refused | Accepted; no recorded live detach matrix | Direct guest entries; Orca refused |
 
 Direct krun's waypipe acceptance is a known implementation gap: it can
 start the host client without a guest server or transport. Do not select
@@ -127,7 +129,7 @@ shares.
 | `bubblewrap`, `nono` | Warned and ignored | Warned and ignored |
 | `podman-gvisor` | Podman flags only when cgroups are enabled; rootless default `ignore-cgroups` warns and omits them | Same cgroup requirement |
 | `podman-krun` | VM RAM/vCPU sizing, independent of cgroups | Configured value warns and is dropped; an explicit `MYSBX_PODMAN_PIDS_LIMIT` override is refused |
-| `krun`, `microvm-qemu` | VM RAM/vCPU sizing, independent of cgroups | Refused; the earlier generic warning may misleadingly say ignored |
+| `krun`, `microvm-qemu`, `microvm-ch` | VM RAM/vCPU sizing, independent of cgroups | Refused; the earlier generic warning may misleadingly say ignored |
 
 VM CPU counts must be whole vCPUs, at least one. Memory must resolve to
 whole MiB and be greater than 128 MiB. The direct VM builder defaults to
@@ -141,11 +143,11 @@ path, which explains the configured-versus-environment PID distinction.
 
 ## Direct VM store and writable-Nix choices
 
-These choices apply to `krun` and `microvm-qemu`, not the Podman image
-backends. Every other backend, including `podman-krun`, refuses
+These choices apply to `krun`, `microvm-qemu` and `microvm-ch`, not the
+Podman image backends. Every other backend, including `podman-krun`, refuses
 `store = "baked"`. On Podman, `store = "host"` does not add a host-store
-bind. Explicit `store` wins on the two direct VM backends. If it is omitted, a nonempty
-`MYSBX_VM_STORE_DISK` pin selects `baked` for these two backends;
+bind. Explicit `store` wins on the direct VM backends. If it is omitted, a nonempty
+`MYSBX_VM_STORE_DISK` pin selects `baked` for these backends;
 otherwise the result is `host`.
 
 | Store | Scratch attached | Guest result |
@@ -216,7 +218,10 @@ file-descriptor-retention explanation is a hypothesis, not a confirmed
 root cause. The [QEMU log](microvm-qemu-validation-log.md) records eleven
 KVM probes and manual interactive use. It does not establish baked-store,
 scratch stress, nested-Podman or detach coverage. QEMU transports initial
-terminal size but not mid-session resize events.
+terminal size but not mid-session resize events. The
+[cloud-hypervisor log](microvm-ch-validation-log.md) records one live
+probe run; egress through passt, baked-store, scratch stress, detach and
+nested-virt=on are not yet covered there.
 
 The early 282 ms krun spike, later direct/Podman smoke-suite durations,
 and QEMU one-shot durations measure different workloads. They do not

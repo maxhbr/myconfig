@@ -517,6 +517,40 @@ let
       throw "mysbx generated-config test: a host without litellm pinned qemu backend env (${builtins.toJSON off.env})"
     else
       "ok";
+  # The microvm-ch twin of `qemuEnvGate`: the launcher runs passt on
+  # SLiRP's address plan, so the same gateway endpoint is pinned —
+  # gated on the backend's own flag.
+  chEnvGate =
+    let
+      chOf = extraModules: (evaluated extraModules).myconfig.ai.dev.mysbx.microvm-ch;
+      on = chOf [
+        {
+          myconfig.ai.dev.mysbx.microvm-ch.enable = true;
+          services.litellm = {
+            enable = true;
+            port = 4000;
+          };
+        }
+      ];
+      litellmOnly = chOf [
+        {
+          services.litellm = {
+            enable = true;
+            port = 4000;
+          };
+        }
+      ];
+      off = chOf [ { } ];
+      expected = "http://10.0.2.2:4000/v1";
+    in
+    if (on.env.OPENAI_BASE_URL or null) != expected then
+      throw "mysbx generated-config test: the CH backend env does not carry the gateway endpoint (got ${builtins.toJSON on.env})"
+    else if litellmOnly.env != { } then
+      throw "mysbx generated-config test: a host without microvm-ch.enable pinned CH backend env (${builtins.toJSON litellmOnly.env})"
+    else if off.env != { } then
+      throw "mysbx generated-config test: a host without litellm pinned CH backend env (${builtins.toJSON off.env})"
+    else
+      "ok";
   # The podman-krun runtime pin (docs/design/backends.md D2, bd
   # myconfig-6di.5.2): the wrapper must carry the crun+libkrun store
   # path (MYSBX_KRUN_RUNTIME), so `backend = "podman-krun"` runs the
@@ -677,6 +711,7 @@ pkgs.runCommand "mysbx-generated-config-test"
       assertionGate
       gvisorPinGate
       qemuEnvGate
+      chEnvGate
       krunPinGate
       krunNestedPodmanGate
       krunNixGate

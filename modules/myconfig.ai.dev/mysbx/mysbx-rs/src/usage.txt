@@ -306,10 +306,10 @@ Options:
                 `backend` of the config layers for one invocation —
                 the next run uses the configuration again. <name> is
                 one of: bubblewrap, podman-gvisor, nono, podman-krun,
-                krun, microvm-qemu (the same accepted set the
-                pipeline enforces on the configuration, the registry
-                of mysbx-rs/src/backends.rs); anything else is a
-                refused run (exit 70) naming the set, never a silent
+                krun, microvm-qemu, microvm-ch (the same accepted
+                set the pipeline enforces on the configuration, the
+                registry of mysbx-rs/src/backends.rs); anything else
+                is a refused run (exit 70) naming the set, never a silent
                 fallback — and neither layer has to name a backend
                 for the flag to select one. `podman-krun` is `podman-gvisor` under
                 the OCI runtime crun built against libkrun — a

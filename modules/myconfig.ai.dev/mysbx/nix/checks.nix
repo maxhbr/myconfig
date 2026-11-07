@@ -871,6 +871,148 @@ in
         touch $out
       '';
 
+  # The cloud-hypervisor wrapper test (bd myconfig-9wkp.8, the qemu
+  # twin's): the SAME pin wiring over the CH spelling — a stub
+  # launcher/rootfs/kernel package set goes in, the wrapper pins
+  # all three (plus the env pins), the dry run carries the
+  # --kernel/--exit-channel pair and both the pinned env records
+  # and the shared markers, and NO overlay flag ever rides (the
+  # launcher refuses it). The kernel stub is SHARED with the qemu
+  # check's (one kernel serves both VM backends, bd
+  # myconfig-9wkp.3).
+  mysbx-microvm-ch-wrapper-test =
+    let
+      stubLauncher = pkgs.runCommand "mysbx-microvm-ch-stub-launcher" { } ''
+        mkdir -p $out/bin
+        printf '#!/bin/sh\necho "mysbx-microvm-ch: unknown argument $1" >&2\nexit 2\n' > $out/bin/mysbx-microvm-ch
+        chmod +x $out/bin/mysbx-microvm-ch
+      '';
+      stubRootfs = pkgs.runCommand "mysbx-microvm-ch-stub-rootfs" { } ''
+        mkdir -p $out/bin
+        printf '#!/bin/sh\n' > $out/bin/mysbx-init
+        chmod +x $out/bin/mysbx-init
+      '';
+      stubKernelPkg = pkgs.runCommand "mysbx-microvm-ch-stub-kernel" { } ''
+        mkdir $out
+        printf 'stub-bzImage' > $out/bzImage
+      '';
+      stubKernel = "${stubKernelPkg}/bzImage";
+      pkgCh = pkgs.callPackage ../nix/mysbx.nix {
+        microvmChLauncher = stubLauncher;
+        microvmChRootfs = stubRootfs;
+        microvmChKernel = stubKernel;
+        microvmChEnv = {
+          OPENAI_BASE_URL = "http://10.0.2.2:4000/v1";
+          MYCONFIG_LITELLM_BASE_URL = "http://10.0.2.2:4000/v1";
+        };
+        ssh-keygen = pkgs.openssh;
+      };
+    in
+    pkgs.runCommand "mysbx-microvm-ch-wrapper-test"
+      {
+        nativeBuildInputs = [
+          pkgs.git
+        ];
+      }
+      ''
+        fail() {
+          echo "mysbx-microvm-ch-wrapper-test: $*" >&2
+          exit 1
+        }
+
+        content=$(cat "${pkgCh}/bin/mysbx")
+        for pin in MYSBX_MICROVM_CH_LAUNCHER MYSBX_MICROVM_CH_ROOTFS MYSBX_MICROVM_CH_KERNEL; do
+          echo "$content" | grep -q -- "$pin" \
+            || fail "the wrapper does not pin $pin"
+        done
+        launcher=$(echo "$content" | tr -d "'" | awk '/--set MYSBX_MICROVM_CH_LAUNCHER/ {print $3; exit}')
+        case "$launcher" in
+          /nix/store/*-mysbx-microvm-ch-stub-launcher/bin/mysbx-microvm-ch) ;;
+          *) fail "the pinned launcher is not the stub: $launcher" ;;
+        esac
+        test -x "$launcher" || fail "the pinned launcher does not exist: $launcher"
+        kernel=$(echo "$content" | tr -d "'" | awk '/--set MYSBX_MICROVM_CH_KERNEL/ {print $3; exit}')
+        case "$kernel" in
+          /nix/store/*-mysbx-microvm-ch-stub-kernel/bzImage) ;;
+          *) fail "the pinned kernel is not the stub bzImage: $kernel" ;;
+        esac
+        test -f "$kernel" || fail "the pinned kernel is not a file: $kernel"
+        wiring=$(grep -n 'microvmChKernel = ' ${../default.nix} \
+          || fail "the module wiring (default.nix microvmChKernel) is gone")
+        echo "$wiring" | grep -q '/bzImage"' \
+          || fail "the module wiring does not pin the bzImage member: $wiring"
+
+        content=$(echo "$content" | tr -d "'")
+        echo "$content" | grep -aq -- '--set-default MYSBX_MICROVM_CH_ENV' \
+          || fail "the wrapper does not pin MYSBX_MICROVM_CH_ENV"
+        ch_env=$(echo "$content" | awk '/--set-default MYSBX_MICROVM_CH_ENV/ {$1=""; $2=""; print; exit}' | sed 's/^  //')
+        case "$ch_env" in
+          "MYCONFIG_LITELLM_BASE_URL=http://10.0.2.2:4000/v1 OPENAI_BASE_URL=http://10.0.2.2:4000/v1") ;;
+          *) fail "the pinned MYSBX_MICROVM_CH_ENV is not the expected list: $ch_env" ;;
+        esac
+
+        if ! mkdir -p /tmp/mysbx-microvm-ch-wrapper-test-$$ 2>/dev/null; then
+          fail "cannot create a fixture root under /tmp (the one placeable share root)"
+        fi
+        work=/tmp/mysbx-microvm-ch-wrapper-test-$$
+        trap 'rm -rf "$work"' EXIT
+        repo="$work/repo"
+        mkdir -p "$repo" "$work/repo.mysbx"
+        printf 'backend = "microvm-ch"\n' > "$work/repo.mysbx/config.toml"
+        git -C "$repo" init -q
+        git -C "$repo" config user.email t@invalid
+        git -C "$repo" config user.name t
+        touch "$repo/README"
+        git -C "$repo" add . && git -C "$repo" commit -qm init
+        mkdir -p "$work/home"
+        argv=$( cd "$repo" && HOME="$work/home" "${pkgCh}/bin/mysbx" run --dry-run -- true ) \
+          || fail "the wrapped dry run refused: run it verbosely for the diagnosis"
+        echo "$argv" | grep -qx -- '--kernel' \
+          || fail "the dry run does not name --kernel"
+        echo "$argv" | grep -qx -- '--exit-channel' \
+          || fail "the dry run does not name --exit-channel (the 16550 exit channel is the default contract)"
+        echo "$argv" | grep -qx -- '--rootfs' \
+          || fail "the dry run does not name --rootfs"
+        echo "$argv" | grep -qx -- '--init' \
+          || fail "the dry run does not name --init"
+        echo "$argv" | grep -qx -- '/bin/mysbx-init' \
+          || fail "the dry run does not pin the guest init"
+        if echo "$argv" | grep -q -- '--krun-overlay'; then
+          fail "the dry run carries a --krun-overlay flag — the launcher refuses it, every real run would exit 125"
+        fi
+        echo "$argv" | grep -q -- '--manifest' \
+          || fail "the dry run does not carry the manifest pointer"
+        echo "$argv" | grep -qx -- '--env' \
+          || fail "the dry run carries no --env records"
+        echo "$argv" | grep -qx -- 'OPENAI_BASE_URL=http://10.0.2.2:4000/v1' \
+          || fail "the dry run does not carry the pinned OPENAI_BASE_URL"
+        echo "$argv" | grep -qx -- 'MYCONFIG_LITELLM_BASE_URL=http://10.0.2.2:4000/v1' \
+          || fail "the dry run does not carry the pinned MYCONFIG_LITELLM_BASE_URL"
+        if grep -n -q -- 'MYSBX_MICROVM_NET=1' <<<"$argv"; then
+          pin_line=$(grep -n -- 'MYCONFIG_LITELLM_BASE_URL=' <<<"$argv" | head -1 | cut -d: -f1)
+          net_line=$(grep -n -- 'MYSBX_MICROVM_NET=1' <<<"$argv" | head -1 | cut -d: -f1)
+          [ "$pin_line" -lt "$net_line" ] \
+            || fail "the env pins must precede the SLiRP NIC marker"
+        fi
+        if echo "$argv" | grep -q -- '--nested-virt'; then
+          fail "the plain dry run carries --nested-virt — the key is off by default (config.md D27)"
+        fi
+        printf 'backend = "microvm-ch"\nnested-virt = true\n' > "$work/repo.mysbx/config.toml"
+        argv_nested=$( cd "$repo" && HOME="$work/home" "${pkgCh}/bin/mysbx" run --dry-run -- true ) \
+          || fail "the nested-virt dry run refused — run it verbosely for the diagnosis"
+        echo "$argv_nested" | grep -qx -- '--nested-virt' \
+          || fail "a sidecar nested-virt = true does not reach the launcher as --nested-virt"
+        echo "$argv_nested" | grep -qx -- 'MYSBX_MICROVM_NESTED_VIRT=1' \
+          || fail "a nested-virt run carries no MYSBX_MICROVM_NESTED_VIRT=1 marker — the guest init could not refuse a kvm-less host"
+
+        touch $out
+      '';
+
+  # The cloud-hypervisor launcher itself, with its cargo suite (the
+  # teardown tests drive stub cloud-hypervisor binaries) — built
+  # whether or not any host enables microvm-ch.
+  mysbx-microvm-ch-launcher = pkgs.callPackage ./microvm-ch-launcher.nix { };
+
   # The backend opt-in gate (bd myconfig-dq2w, wrapper half bd
   # myconfig-vc8k): a flags-off host's wrapper carries the availability
   # pin (MYSBX_ENABLED_BACKENDS 'bubblewrap nono') and NONE of the
@@ -900,6 +1042,10 @@ in
         microvmQemuRootfs = null;
         microvmQemuKernel = null;
         microvmQemuEnv = { };
+        microvmChLauncher = null;
+        microvmChRootfs = null;
+        microvmChKernel = null;
+        microvmChEnv = { };
         podmanWaypipe = null;
         podmanMuxEntries = { };
         nono = pkgs.nono;
@@ -941,7 +1087,9 @@ in
           MYSBX_PODMAN_WAYPIPE MYSBX_KRUN_RUNTIME \
           MYSBX_KRUN_LAUNCHER MYSBX_KRUN_ROOTFS MYSBX_VM_STORE_DISK \
           MYSBX_MICROVM_QEMU_LAUNCHER MYSBX_MICROVM_QEMU_ROOTFS \
-          MYSBX_MICROVM_QEMU_KERNEL MYSBX_MICROVM_QEMU_ENV; do
+          MYSBX_MICROVM_QEMU_KERNEL MYSBX_MICROVM_QEMU_ENV \
+          MYSBX_MICROVM_CH_LAUNCHER MYSBX_MICROVM_CH_ROOTFS \
+          MYSBX_MICROVM_CH_KERNEL MYSBX_MICROVM_CH_ENV; do
           echo "$wrapped" | grep -aq -- "$pin" \
             && fail "a disabled backend's pin survived: $pin"
         done

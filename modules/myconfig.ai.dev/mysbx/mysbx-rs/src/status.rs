@@ -228,10 +228,11 @@ pub fn run(args: &[String], dry_run: bool) -> i32 {
     // fallback instead of a baked state that cannot hold.
     {
         let pinned = std::env::var_os("MYSBX_VM_STORE_DISK").is_some();
-        let vm_backend = matches!(
-            merged.backend.as_deref(),
-            Some("krun") | Some("microvm-qemu")
-        );
+        let vm_backend = merged
+            .backend
+            .as_deref()
+            .and_then(crate::backends::find)
+            .is_some_and(|row| row.store_disk);
         let state = if merged.resolved_store().is_baked() && vm_backend {
             if pinned {
                 "baked — the guest-own store disk (pinned)".to_string()

@@ -1050,9 +1050,35 @@ fn krun_checks(checks: &mut Vec<Check>) {
 /// as the krun arm — the shared /dev/kvm gate, the shared rootfs
 /// shape (the guest side is shared) — with the backend's own three
 /// pins: launcher, rootfs and the KERNEL libkrun would have
-/// bundled. The full arm (the launcher self-probe over the real
-/// binary) lands with the launcher (bd myconfig-kvq8).
+/// bundled. The microvm-ch backend (bd myconfig-9wkp.8) runs the
+/// SAME section over its own pin spelling — the checks differ only
+/// in the env names and the option paths the hints name.
 fn microvm_qemu_checks(checks: &mut Vec<Check>) {
+    microvm_vm_checks(
+        checks,
+        "microvm-qemu",
+        "MYSBX_MICROVM_QEMU",
+        "myconfig.ai.dev.mysbx.microvm-qemu",
+    );
+}
+
+/// The microvm-ch doctor checks (bd myconfig-9wkp.8): the qemu
+/// section over the CH pin spelling.
+fn microvm_ch_checks(checks: &mut Vec<Check>) {
+    microvm_vm_checks(
+        checks,
+        "microvm-ch",
+        "MYSBX_MICROVM_CH",
+        "myconfig.ai.dev.mysbx.microvm-ch",
+    );
+}
+
+/// The shared VM-backend section (the qemu arm's original checks,
+/// parameterized over the pin spelling).
+fn microvm_vm_checks(checks: &mut Vec<Check>, backend: &str, pin: &str, option: &str) {
+    let launcher_var = format!("{pin}_LAUNCHER");
+    let rootfs_var = format!("{pin}_ROOTFS");
+    let kernel_var = format!("{pin}_KERNEL");
     checks.push(kvm_check(
         Path::new("/dev/kvm").exists(),
         crate::kvm_available(),
@@ -1067,7 +1093,7 @@ fn microvm_qemu_checks(checks: &mut Vec<Check>) {
             .ok()
             .as_deref(),
     ));
-    let launcher = match crate::env_opt("MYSBX_MICROVM_QEMU_LAUNCHER") {
+    let launcher = match crate::env_opt(&launcher_var) {
         Some(pin) => match resolve_executable(&pin, std::env::var_os("PATH").as_deref()) {
             Some(path) => {
                 checks.push(Check::ok("launcher", path.display().to_string()));
@@ -1076,10 +1102,11 @@ fn microvm_qemu_checks(checks: &mut Vec<Check>) {
             None => {
                 checks.push(Check::fail(
                     "launcher",
-                    format!("`{pin}` is not an executable file (MYSBX_MICROVM_QEMU_LAUNCHER)"),
-                    "the Nix wrapper pins it when the host builds the qemu backend \
-                     (myconfig.ai.dev.mysbx.microvmQemu.launcher), or set \
-                     MYSBX_MICROVM_QEMU_LAUNCHER",
+                    format!("`{pin}` is not an executable file ({launcher_var})"),
+                    format!(
+                        "the Nix wrapper pins it when the host builds the {backend} backend \
+                         ({option}.launcher), or set {launcher_var}"
+                    ),
                 ));
                 None
             }
@@ -1087,23 +1114,26 @@ fn microvm_qemu_checks(checks: &mut Vec<Check>) {
         None => {
             checks.push(Check::fail(
                 "launcher",
-                "no launcher pinned (MYSBX_MICROVM_QEMU_LAUNCHER)",
-                "the Nix wrapper pins it when the host builds the qemu backend \
-                 (myconfig.ai.dev.mysbx.microvmQemu.launcher), or set MYSBX_MICROVM_QEMU_LAUNCHER",
+                format!("no launcher pinned ({launcher_var})"),
+                format!(
+                    "the Nix wrapper pins it when the host builds the {backend} backend \
+                     ({option}.launcher), or set {launcher_var}"
+                ),
             ));
             None
         }
     };
-    let rootfs = crate::env_opt("MYSBX_MICROVM_QEMU_ROOTFS").map(PathBuf::from);
+    let rootfs = crate::env_opt(&rootfs_var).map(PathBuf::from);
     checks.push(krun_rootfs_check(rootfs));
     // The shared store disk pin (the guest side is shared, D9 —
     // the SAME MYSBX_KRUN_* variable, like the rootfs above).
     checks.push(krun_store_disk_check(
         crate::env_opt("MYSBX_VM_STORE_DISK").map(PathBuf::from),
     ));
-    // The one qemu-only pin: the kernel image. A file, not a dir —
-    // the bzImage the wrapper pins.
-    match crate::env_opt("MYSBX_MICROVM_QEMU_KERNEL") {
+    // The one VM-backend-only pin: the kernel image. A file, not a
+    // dir — the bzImage the wrapper pins (the SAME kernel serves
+    // both VM backends, bd myconfig-9wkp.3).
+    match crate::env_opt(&kernel_var) {
         Some(pin) => {
             let path = PathBuf::from(&pin);
             if path.is_file() {
@@ -1111,17 +1141,21 @@ fn microvm_qemu_checks(checks: &mut Vec<Check>) {
             } else {
                 checks.push(Check::fail(
                     "kernel",
-                    format!("`{pin}` is not a file (MYSBX_MICROVM_QEMU_KERNEL)"),
-                    "the Nix wrapper pins it when the host builds the qemu backend \
-                     (myconfig.ai.dev.mysbx.microvmQemu.kernel), or set MYSBX_MICROVM_QEMU_KERNEL",
+                    format!("`{pin}` is not a file ({kernel_var})"),
+                    format!(
+                        "the Nix wrapper pins it when the host builds the {backend} backend \
+                         ({option}.kernel), or set {kernel_var}"
+                    ),
                 ));
             }
         }
         None => checks.push(Check::fail(
             "kernel",
-            "no kernel pinned (MYSBX_MICROVM_QEMU_KERNEL)",
-            "the Nix wrapper pins it when the host builds the qemu backend \
-             (myconfig.ai.dev.mysbx.microvmQemu.kernel), or set MYSBX_MICROVM_QEMU_KERNEL",
+            format!("no kernel pinned ({kernel_var})"),
+            format!(
+                "the Nix wrapper pins it when the host builds the {backend} backend \
+                 ({option}.kernel), or set {kernel_var}"
+            ),
         )),
     }
     match &launcher {
@@ -1660,6 +1694,7 @@ pub fn run(args: &[String]) -> i32 {
             }
             "krun" => krun_checks(&mut checks),
             "microvm-qemu" => microvm_qemu_checks(&mut checks),
+            "microvm-ch" => microvm_ch_checks(&mut checks),
             _ => podman_checks(&mut checks, backend, &merged, &forwarded),
         }
         sections.push(Section {
@@ -1819,6 +1854,10 @@ mod tests {
         assert_eq!(
             enable_option("microvm-qemu"),
             Some("myconfig.ai.dev.mysbx.microvm-qemu.enable")
+        );
+        assert_eq!(
+            enable_option("microvm-ch"),
+            Some("myconfig.ai.dev.mysbx.microvm-ch.enable")
         );
         assert_eq!(enable_option("bubblewrap"), None);
         assert_eq!(enable_option("nono"), None);
