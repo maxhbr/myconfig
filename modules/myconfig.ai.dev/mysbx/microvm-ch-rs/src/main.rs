@@ -46,8 +46,9 @@
 //!    vhost_user=on,...,vhost_mode=client,mac=...` when shared,
 //!    `--console tty` (the virtio console hvc0), `--serial file=`
 //!    (the exit channel), `--pvpanic` + `--event-monitor`
-//! 6. wait for CH (the teardown timeout owns a hang), read the
-//!    exit code off the serial file, kill the daemons, propagate
+//! 6. wait for CH (the crash watch kills a panicked VM, the
+//!    teardown timeout any other hang), read the exit code off the
+//!    serial file, kill the daemons, propagate
 //!
 //! The binaries are PINNED (no PATH fallback — the run path's own
 //! rule): MYSBX_MICROVM_CH_VIRTIOFSD, MYSBX_MICROVM_CH_PASST and
@@ -196,6 +197,10 @@ const NET_MAC: &str = "9a:55:9a:55:9a:55";
 /// killed and reported, never a wedged session. Generous over the
 /// longest payload: the timeout is the BACKSTOP, not the norm.
 const TEARDOWN_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24);
+
+/// How often the crash watch re-reads the event monitor for the
+/// pvpanic event: the delay between a guest panic and the kill.
+const EVENT_POLL: Duration = Duration::from_millis(250);
 
 fn runtime_dir() -> PathBuf {
     std::env::temp_dir().join(format!("mysbx-microvm-ch-{}", std::process::id()))
@@ -1053,26 +1058,43 @@ fn run(cfg: Config, boot_started: Instant) -> i32 {
         }
     };
 
-    // The teardown timeout (the spike's Q5): CH NEVER exits on a
-    // guest panic — it hangs until killed. A waiter thread owns
-    // the bound: when it lapses and CH still lives, the VM is
-    // killed and the run reported as a timeout (a diagnosis, never
-    // a wedged session). The channel keeps the join cheap: the
-    // waiter's sleep is bounded by recv_timeout and ends the
-    // moment the VM exits (a plain sleep(TEARDOWN_TIMEOUT) thread
-    // would hold the join for the whole timeout, bd myconfig-9wkp.9).
-    // The qemu twin needs no such bound: its -no-reboot turns every
-    // panic into an exit.
-    let timeout_pid = ch_child.id();
+    // The crash watch (the spike's Q5): CH NEVER exits on a guest
+    // panic — it hangs until killed. A watcher thread polls the
+    // event monitor for the pvpanic event and kills the hung VM the
+    // moment it appears; the teardown timeout is the backstop for a
+    // VM that neither powers off nor panics. The channel keeps the
+    // join cheap: every wait is bounded by recv_timeout and ends the
+    // moment the VM exits. The qemu twin needs no such watch: its
+    // -no-reboot turns every panic into an exit.
+    let watch_pid = ch_child.id();
+    let watch_events = events_path.clone();
     let (done_tx, done_rx) = std::sync::mpsc::channel::<()>();
     let timeout_handle = std::thread::spawn(move || {
-        if done_rx.recv_timeout(TEARDOWN_TIMEOUT).is_ok() {
-            return false; // the VM exited first
+        let deadline = Instant::now() + TEARDOWN_TIMEOUT;
+        loop {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                break;
+            }
+            match done_rx.recv_timeout(EVENT_POLL.min(left)) {
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                _ => return false, // the VM exited first
+            }
+            if guest_panicked(&watch_events) {
+                eprintln!(
+                    "mysbx-microvm-ch: the guest PANICKED (pvpanic on the event monitor) — \
+                     killing the hung VM"
+                );
+                // kill(pid) only fails when the pid is gone — the
+                // race window is harmless (the waiter reaped it).
+                unsafe {
+                    kill(watch_pid, 15);
+                }
+                return false;
+            }
         }
-        // kill(pid) only fails when the pid is gone — the race
-        // window is harmless (the waiter reaped it first).
         unsafe {
-            kill(timeout_pid, 15);
+            kill(watch_pid, 15);
         }
         true
     });
@@ -1117,10 +1139,7 @@ fn run(cfg: Config, boot_started: Instant) -> i32 {
                 // The event monitor says whether the guest
                 // PANICKED (pvpanic): a panic is a crash report,
                 // never a silent zero.
-                let panicked = read_events(&events_path)
-                    .iter()
-                    .any(|l| l.contains("\"panicked\""));
-                if panicked {
+                if guest_panicked(&events_path) {
                     eprintln!(
                         "mysbx-microvm-ch: the guest PANICKED (pvpanic on the event \
                          monitor) — no exit code; the payload crashed the VM"
@@ -1163,12 +1182,15 @@ fn read_exit_code(serial: &Path) -> Option<i32> {
     None
 }
 
-/// Read the event monitor's JSON event lines (a plain file CH
-/// appends to — the spike's finding).
-fn read_events(path: &Path) -> Vec<String> {
-    std::fs::read_to_string(path)
-        .map(|t| t.lines().map(str::to_owned).collect())
-        .unwrap_or_default()
+/// Whether the event monitor (a plain file CH appends to — the
+/// spike's finding) recorded a guest panic. CH 54's pvpanic device
+/// emits `event!("guest", "panic", "event", "panic")`, serialized
+/// with serde_json's `to_string_pretty` (one event spans several
+/// lines), so the match runs over the whitespace-free text.
+fn guest_panicked(path: &Path) -> bool {
+    let text = std::fs::read_to_string(path).unwrap_or_default();
+    let compact: String = text.chars().filter(|c| !c.is_whitespace()).collect();
+    compact.contains("\"event\":\"panic\"")
 }
 
 unsafe extern "C" {
@@ -1570,21 +1592,26 @@ mod tests {
 
     #[test]
     fn the_event_reader_reports_panics() {
+        // CH 54's pvpanic event, as its event monitor writes it
+        // (serde_json's pretty form — one event spans lines).
         let dir = std::env::temp_dir().join(format!("mysbx-ch-test-events-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let events = dir.join("events.log");
         std::fs::write(
             &events,
-            "{\"event\": \"starting\"}\n{\"event\": \"booted\"}\n{\"event\": \"panicked\"}\n",
+            "{\n  \"timestamp\": {\n    \"secs\": 0,\n    \"nanos\": 1\n  },\n  \"source\": \"vm\",\n  \"event\": \"booted\",\n  \"properties\": null\n}\n\
+             {\n  \"timestamp\": {\n    \"secs\": 3,\n    \"nanos\": 2\n  },\n  \"source\": \"guest\",\n  \"event\": \"panic\",\n  \"properties\": {\n    \"event\": \"panic\"\n  }\n}\n",
         )
         .unwrap();
-        assert!(read_events(&events)
-            .iter()
-            .any(|l| l.contains("\"panicked\"")));
-        std::fs::write(&events, "{\"event\": \"shutdown\"}\n").unwrap();
-        assert!(!read_events(&events)
-            .iter()
-            .any(|l| l.contains("\"panicked\"")));
+        assert!(guest_panicked(&events));
+        std::fs::write(
+            &events,
+            "{\n  \"source\": \"vm\",\n  \"event\": \"shutdown\",\n  \"properties\": null\n}\n",
+        )
+        .unwrap();
+        assert!(!guest_panicked(&events));
+        // a missing file is no panic, never an error
+        assert!(!guest_panicked(&dir.join("nope.log")));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

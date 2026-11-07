@@ -258,3 +258,49 @@ fn no_stub_daemon_survives_a_failed_run() {
         std::thread::sleep(Duration::from_millis(100));
     }
 }
+
+/// A guest panic hangs cloud-hypervisor (no -no-reboot): a stub CH
+/// that writes CH 54's pvpanic event to its --event-monitor file and
+/// then hangs must be killed by the launcher's crash watch within
+/// seconds — the run reports the panic (125) instead of waiting out
+/// the teardown timeout, and the daemons and runtime dir are gone.
+#[test]
+fn a_guest_panic_kills_the_hung_vm_promptly() {
+    let _guard = suite_lock().lock().unwrap_or_else(|e| e.into_inner());
+    let dir = stub_dir("panic");
+    let virtiofsd = socket_stub(&dir, "virtiofsd");
+    let passt = socket_stub(&dir, "passt");
+    let ch = dir.join("ch-panic.sh");
+    std::fs::write(
+        &ch,
+        "#!/bin/sh
+# A stub CH whose guest panics: the pvpanic event lands on the
+# event monitor (serde_json's pretty form), then the VM hangs —
+# EXEC so the launcher's kill reaches the sleeper itself.
+for a in \"$@\"; do
+  case \"$a\" in
+    --event-monitor=path=*) ev=${a#--event-monitor=path=} ;;
+  esac
+done
+printf '{\\n  \"source\": \"guest\",\\n  \"event\": \"panic\",\\n  \"properties\": {\\n    \"event\": \"panic\"\\n  }\\n}\\n' >> \"$ev\"
+exec sleep 600
+",
+    )
+    .expect("the panic stub");
+    make_executable(&ch);
+    let started = Instant::now();
+    let output = run_launcher(
+        PathBuf::from(env!("CARGO_BIN_EXE_mysbx-microvm-ch")).as_path(),
+        &virtiofsd,
+        &passt,
+        ch.to_str().expect("a utf-8 stub path"),
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        started.elapsed() < Duration::from_secs(30),
+        "the hung VM was not killed promptly: {stderr}"
+    );
+    assert!(stderr.contains("the guest PANICKED"), "{stderr}");
+    assert_eq!(output.status.code(), Some(EXIT_SETUP), "{stderr}");
+    assert!(no_runtime_dir(), "the runtime dir survived the panic");
+}
