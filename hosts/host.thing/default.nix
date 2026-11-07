@@ -161,6 +161,7 @@
           krun.nix.scratchSize = "100g";
           vm.store.enable = true;
           microvm-qemu.enable = true;
+          microvm-ch.enable = true;
         };
         dev.lmstudio = {
           enable = true;

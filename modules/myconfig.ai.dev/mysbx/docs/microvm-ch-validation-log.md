@@ -1,12 +1,11 @@
 # mysbx microvm-ch live-validation log
 
-> **Scope / current status:** The probes below are one live run's
-> evidence for the configuration tested. Egress validation is
-> SKIPPED on the recorded host (it is itself a SLiRP guest whose
-> interface sits inside 10.0.2.0/24 — the spike's documented SNAT
-> collision), so egress through passt is pending a clean-host run.
-> Baked-store, scratch-stress, detach and nested-virt=on live runs
-> are unrecorded. See the canonical current
+> **Scope / current status:** The 2026-11-07 nested run below
+> covered boot/kernel/exit/console/plan probes; the 2026-11-08
+> clean-host run (bd myconfig-4mya) added the baked-store, scratch,
+> mux-session and egress acceptances. Remaining unrecorded:
+> scratch-stress, detach and nested-virt=on runs. See the canonical
+> current
 > [`backend-comparison.md`](./backend-comparison.md);
 > backends.md D11 is the decision record.
 
@@ -64,3 +63,35 @@ Live findings fixed during the run (each a commit on this branch):
 4. the teardown-timeout thread held the launcher's exit for the
    full timeout — a clean 2 s run never returned; the waiter now
    ends the moment the VM exits (a channel's recv_timeout)
+
+## 2026-11-08, host thing (clean host, x86_64 Framework AMD), bd myconfig-4mya
+
+A real working agent session (pi, herdr-muxed) on host thing's
+production wrapper, `microvm-ch` enabled via
+`hosts/host.thing/default.nix` (`myconfig.ai.dev.mysbx.microvm-ch.enable
+= true`, alongside krun + microvm-qemu, `vm.store.enable`), running
+inside a cloud-hypervisor microVM — the clean-host acceptance the
+nested run could not deliver:
+
+- PASS store=baked — `MYSBX_VM_STORE_DISK=1` pinned; the guest
+  mounts the erofs store image as /dev/vdb at /nix (erofs ro), the
+  store overlay's upper+work dirs live on the scratch
+- PASS scratch — `MYSBX_VM_SCRATCH=1` pinned; /dev/vda (ext4, 100g)
+  at /mysbx-nix, writable, carries the overlay upper
+- PASS mux session — `MYSBX_MULTIPLEXER=herdr`; the session runs
+  in a herdr pane, the server reachable via its socket
+- PASS 7b egress (clean host) — DNS via the pinned resolver
+  10.0.2.3, HTTPS 1.1.1.1:443 and github.com both 200, five for
+  five TCP connects; no SNAT collision (thing's LAN is outside
+  10.0.2.0/24)
+- PASS host-loopback mapping — in-guest curl
+  `http://10.0.2.2:4000/v1/models` returns thing's LiteLLM model
+  list; the evaluated `microvm-ch.env` (OPENAI_BASE_URL et al.)
+  matches the in-guest reality
+- PASS full nix eval inside the guest — `nix eval --raw
+  .#nixosConfigurations.test-thing.config.networking.hostName`
+  through the baked store + scratch + passt egress: `thing` in
+  1m51s, including fetching flake inputs over the network
+
+The session doubles as the acceptance for bd myconfig-4mya
+(closed); its duplicate myconfig-vhug closed with it.
