@@ -4144,10 +4144,14 @@ fn sandbox_pipeline(
                 krun_rootfs.clone(),
                 krun_rootfs.clone(),
             ]);
-            // The qemu arm's device + tmp surface (bd myconfig-ya1o,
-            // the comment above): the krun argv stays byte-identical
-            // without them.
-            if backend == "microvm-qemu" {
+            // The qemu and CH arms' device + tmp surface (bd
+            // myconfig-ya1o, the comment above): the krun argv stays
+            // byte-identical without them. The CH launcher spawns
+            // virtiofsd AND passt children the same way (the spike's
+            // bwrap view also needed /proc and /sys ro — CH and
+            // passt read both; the --proc bind below is shared, the
+            // sysfs bind is CH-arm-only).
+            if backend == "microvm-qemu" || backend == "microvm-ch" {
                 argv.extend([
                     "--dev-bind".into(),
                     "/dev/null".into(),
@@ -4178,6 +4182,15 @@ fn sandbox_pipeline(
                 "--proc".into(),
                 "/proc".into(),
             ]);
+            // The CH arm's extra view (the spike's Q7 answer, bd
+            // myconfig-9wkp.7): CH reads /sys (CPU topology, KVM
+            // probe) and passt reads the host resolver itself —
+            // the qemu arm's resolv.conf bind above covers passt
+            // through the same condition; the sysfs bind is
+            // CH-only.
+            if backend == "microvm-ch" {
+                argv.extend(["--ro-bind".into(), "/sys".into(), "/sys".into()]);
+            }
             // network = false (bd myconfig-dak.6): the guest layer is
             // the launcher's --network none (the vsock disabled — no
             // socket path at all), and this HOST layer takes the
