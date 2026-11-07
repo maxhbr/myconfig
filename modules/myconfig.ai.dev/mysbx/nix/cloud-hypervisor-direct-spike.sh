@@ -188,6 +188,9 @@ stop_fs() {
 # on purpose.
 root_rw=$runtime/root
 cp -a "$rootfs/." "$root_rw/"
+# the store's modes ride along (read-only dirs): the probes write
+# their init into the copy, and cleanup must be able to remove it
+chmod -R u+w "$root_rw"
 # the root copy keeps the shared rootfs's own nix/ symlinks; none
 # of the spike's probes needs /nix, and dangling absolute links
 # inside a copy are inert in the guest
@@ -325,13 +328,11 @@ run_ch() { # MODE [extra CH args...]
     done
     if kill -0 "$ch_pid" 2>/dev/null; then
         kill -9 -- -"$ch_pid" 2>/dev/null || :
-        wait "$ch_pid" 2>/dev/null || rc=$?
+        wait "$ch_pid" 2>/dev/null || :
         rc=124
         note "$mode: CH hit the 90s cap (a hung VM — the crash case)" >&2
     else
-        if ! wait "$ch_pid"; then
-            rc=$?
-        fi
+        wait "$ch_pid" || rc=$?
     fi
     stop_fs
     echo "$rc"

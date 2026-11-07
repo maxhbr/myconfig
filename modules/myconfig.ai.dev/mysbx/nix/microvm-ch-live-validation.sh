@@ -94,7 +94,7 @@ pass "3b signal death: 137"
 # 4. console (D11): the verbose run's boot log reaches the caller's
 # stdout — --console tty wires the virtio console to CH's stdio and
 # the kernel cmdline names console=hvc0.
-console_log=$(cd "$repo" && "$mysbx" run --backend microvm-ch --verbose -- true 2>&1 || true)
+console_log=$(cd "$repo" && { "$mysbx" run --backend microvm-ch --verbose -- true 2>&1 || true; })
 # CH's virtio console carries the kernel log from the driver's
 # bring-up onward (no early "Linux version" banner — the qemu arm's
 # 16550 carries the whole log; the virtio console starts when the
@@ -112,10 +112,10 @@ rm -f "$repo/$marker"
 pass "5 live-repo edit through the workspace bind"
 
 # 6. ro rootfs: / is not writable (virtiofsd --readonly on the root
-# device — the SERVER enforces the mode).
-if run sh -c ': > /PROBE' 2>/dev/null; then
-    fail "6 ro rootfs" "a write to / succeeded — the read-only contract is broken"
-fi
+# device — the SERVER enforces the mode). The guest decides, so a
+# failed VM run fails the probe instead of passing it.
+run sh -c 'if : >/PROBE 2>/dev/null; then exit 1; fi' ||
+    fail "6 ro rootfs" "a write to / succeeded (or the run failed) — the read-only contract is broken"
 pass "6 ro rootfs"
 
 # 7. network shared (bd 9wkp.5): the passt NIC exists, carries the
@@ -127,16 +127,15 @@ pass "6 ro rootfs"
 # ONLY when the host's own eth0 is outside the guest plan.
 host_no_collision() {
     # this validation host may itself be a SLiRP guest (the spike's
-    # nested-sandbox case): /proc/net/fib_trie or the sysfs naming
-    # would need tools; the QUIETest source is /proc/net/route's hex
-    # gateway — 10.0.2.2 = 0x0202000A little-endian ac0a... simpler:
-    # parse the addresses from /proc/net/fib_trie
+    # nested-sandbox case): any host address inside 10.0.2.0/24 in
+    # /proc/net/fib_trie is a collision
     grep -qE "32 host 10\.0\.2\.[0-9]+|-- 10\.0\.2\." /proc/net/fib_trie 2>/dev/null && return 1
     return 0
 }
 # /bin/busybox carries the ip/route applets (the guest PATH's
 # tools tree is not pinned in this minimal validation run, so the
 # applets are spelled through busybox explicitly)
+# shellcheck disable=SC2016 # $BB expands in the guest shell
 run /bin/busybox sh -c 'BB=/bin/busybox;
     $BB ip -o link | grep -q "link/ether 9a:55:9a:55:9a:55" &&
     $BB ip -o addr | grep -qw "10.0.2.15" &&
@@ -151,7 +150,8 @@ else
     printf 'SKIP 7b egress — this host interface sits inside 10.0.2.0/24 (the spike SNAT collision; live acceptance on a clean host)\n'
 fi
 
-# 8. dry-run surface: the launcher argv — the CH pins (--kernel,
+# 9. dry-run surface (the qemu suite's numbering; its 8 is
+# network=false): the launcher argv — the CH pins (--kernel,
 # --exit-channel), NO --krun-overlay (the launcher refuses it).
 printf '%s\n' "$dry" | grep -qx -- '--kernel' ||
     fail "9 dry-run surface" "the dry run does not name --kernel"
@@ -171,6 +171,7 @@ pass "9 dry-run surface: the CH pins, no overlay flags"
 # lo up — the shared init's PID-1 bootstrap, backend-agnostic.
 # /proc/mounts and the busybox applets — the guest PATH carries no
 # standalone tools in this minimal run (they ride the store share)
+# shellcheck disable=SC2016 # $BB expands in the guest shell
 run /bin/busybox sh -c 'BB=/bin/busybox;
     grep -q devpts /proc/mounts &&
     [ -d /dev/shm ] && [ -e /dev/fd ] &&
@@ -181,13 +182,10 @@ pass "10 guest bootstrap: the shared PID-1 bootstrap"
 # 11. nested=off (D27 on CH): the default CPU carries NO vmx/svm —
 # CH defaults nested ON, so this probe pins the launcher's forced
 # inversion. A nested-virt run MUST carry vmx (the nested half of
-# the contract is the qemu runbook's, live-accepted there).
-if run sh -c 'grep -qw vmx /proc/cpuinfo' 2>/dev/null; then
-    fail "11 nested=off" "the DEFAULT run exposes VMX — the launcher's forced nested=off is broken (D27)"
-fi
-if run sh -c 'grep -qw svm /proc/cpuinfo' 2>/dev/null; then
-    fail "11 nested=off" "the DEFAULT run exposes SVM — the launcher's forced nested=off is broken (D27)"
-fi
+# the contract is the qemu runbook's, live-accepted there). The
+# guest decides, so a failed VM run fails the probe.
+run sh -c '! grep -qwE "vmx|svm" /proc/cpuinfo' ||
+    fail "11 nested=off" "the DEFAULT run exposes VMX/SVM (or the run failed) — the launcher's forced nested=off is broken (D27)"
 pass "11 nested=off: the default CPU carries no vmx/svm (D27's inversion)"
 
 echo
