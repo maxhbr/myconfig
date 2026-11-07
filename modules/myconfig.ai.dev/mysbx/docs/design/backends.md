@@ -1406,12 +1406,17 @@ wrap; passt's self-isolation works under bwrap; the SLiRP plan
 carries (wget to a host-loopback service through the 10.0.2.2
 gateway); the serial16550 channel propagates payload codes
 (7/127/137 observed); poweroff exits CH 0 in ~2 s per run; a
-crashed init hangs CH (no reboot loop). DNS and egress through
-passt could not be proven in that sandbox (it is itself a SLiRP
-guest whose eth0 is 10.0.2.15/24 — the SNAT collision documented
-in the spike): a host interface inside the guest plan is a
-refuse-or-remap case for the run pipeline, live acceptance pending
-(bd myconfig-9wkp.9's runbook). The static CI gate is
+crashed init hangs CH (no reboot loop). The SCRIPTED validation run
+(bd myconfig-9wkp.9, [log](../microvm-ch-validation-log.md),
+2026-11-07) re-proves all of that through the REAL wrapped mysbx —
+boot, pinned kernel, exit codes 7/137, the virtio console, the
+workspace bind, the ro root, the passt NIC with the pinned MAC and
+the applied SLiRP plan, the guest bootstrap, the nested=off
+inversion. Its egress probe SKIPS on that host for the same
+nested-sandbox reason (the host interface is 10.0.2.15/24 itself):
+a host interface inside the guest plan is a refuse-or-remap case
+for the run pipeline, and the egress probe is a clean-host run
+away. The static CI gate is
 `mysbx-microvm-ch-wrapper-test` (nix/checks.nix), the qemu check's
 twin.
 
