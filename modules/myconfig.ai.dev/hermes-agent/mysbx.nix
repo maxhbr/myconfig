@@ -131,6 +131,10 @@ in
       microvm-qemu.env = lib.mkIf osconfig.services.litellm.enable {
         CUSTOM_BASE_URL = "http://10.0.2.2:${toString osconfig.services.litellm.port}/v1";
       };
+      # The microvm-ch backend's passt guest uses the same address plan.
+      microvm-ch.env = lib.mkIf osconfig.services.litellm.enable {
+        CUSTOM_BASE_URL = "http://10.0.2.2:${toString osconfig.services.litellm.port}/v1";
+      };
 
       config.stateDirs = [ ".hermes" ];
     };

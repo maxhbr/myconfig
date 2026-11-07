@@ -1008,6 +1008,11 @@ in
         touch $out
       '';
 
+  # The cloud-hypervisor launcher itself, with its cargo suite (the
+  # teardown tests drive stub cloud-hypervisor binaries) — built
+  # whether or not any host enables microvm-ch.
+  mysbx-microvm-ch-launcher = pkgs.callPackage ./microvm-ch-launcher.nix { };
+
   # The backend opt-in gate (bd myconfig-dq2w, wrapper half bd
   # myconfig-vc8k): a flags-off host's wrapper carries the availability
   # pin (MYSBX_ENABLED_BACKENDS 'bubblewrap nono') and NONE of the

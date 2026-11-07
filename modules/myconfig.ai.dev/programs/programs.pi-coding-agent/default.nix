@@ -1691,6 +1691,10 @@ in
       microvm-qemu.env = lib.mkIf osconfig.services.litellm.enable {
         ${litellmBaseUrlEnvVar} = "http://10.0.2.2:${toString osconfig.services.litellm.port}/v1";
       };
+      # The microvm-ch backend's passt guest uses the same address plan.
+      microvm-ch.env = lib.mkIf osconfig.services.litellm.enable {
+        ${litellmBaseUrlEnvVar} = "http://10.0.2.2:${toString osconfig.services.litellm.port}/v1";
+      };
       # pi's session store, backed by `<repo>.mysbx/state/.pi/agent/sessions`
       # (D15). No nesting conflict with the opencode/rtk entries
       # (`.local/...`) — `check_state_dirs` enforces that pairwise anyway.
