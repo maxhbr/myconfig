@@ -24,6 +24,7 @@
             krun.enable = true;
             vm.store.enable = true;
             microvm-qemu.enable = true;
+            microvm-ch.enable = true;
           };
 
           # agent-of-empires (`aoe`) is enabled by the `myconfig.ai.dev`
