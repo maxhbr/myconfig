@@ -533,10 +533,11 @@ Which backends a host carries is an opt-in there too (see
 [`docs/design/backends.md`](./docs/design/backends.md) D10): `bubblewrap`
 and `nono` are always on; `podman-gvisor` and `podman-krun` ride
 `myconfig.ai.dev.mysbx.podman.enable`, the direct `krun` backend
-`myconfig.ai.dev.mysbx.krun.enable`, and `microvm-qemu`
-`myconfig.ai.dev.mysbx.microvm-qemu.enable` — all three off by default,
-so a host that runs only bwrap/nono sandboxes carries none of the
-gvisor/podman/libkrun/qemu closures. A disabled backend is REFUSED
+`myconfig.ai.dev.mysbx.krun.enable`, `microvm-qemu`
+`myconfig.ai.dev.mysbx.microvm-qemu.enable`, and `microvm-ch`
+`myconfig.ai.dev.mysbx.microvm-ch.enable` — all off by default, so a
+host that runs only bwrap/nono sandboxes carries none of the
+gvisor/podman/libkrun/qemu/cloud-hypervisor closures. A disabled backend is REFUSED
 with a message naming the option (`mysbx: backend `krun` is disabled
 on this host …`), never fallen back from — for `podman-krun` the gate
 is what prevents a silent ordinary-container run via its bare `crun`

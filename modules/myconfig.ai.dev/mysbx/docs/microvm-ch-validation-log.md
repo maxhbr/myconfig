@@ -1,7 +1,7 @@
 # mysbx microvm-ch live-validation log
 
 > **Scope / current status:** The probes below are one live run's
-> evidence for the configuration tested. Eg­RESS validation is
+> evidence for the configuration tested. Egress validation is
 > SKIPPED on the recorded host (it is itself a SLiRP guest whose
 > interface sits inside 10.0.2.0/24 — the spike's documented SNAT
 > collision), so egress through passt is pending a clean-host run.
