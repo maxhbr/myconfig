@@ -690,19 +690,22 @@ fn ch_argv(
     }
     // The scratch disk (bd myconfig-dak.7): the per-run sparse raw
     // file as a real virtio-blk drive, the same id the init finds it
-    // by in /sys/block.
+    // by in /sys/block. `image_type=raw` (CH 54's spelling — the
+    // qemu twin's `format=raw` is not a CH option).
     if let Some(scratch) = &cfg.scratch {
         argv.push(format!(
-            "--disk=id={},format=raw,path={}",
+            "--disk=id={},path={},image_type=raw",
             SCRATCH_DRIVE_ID,
             scratch.display()
         ));
     }
     // The guest-own nix store disk (docs/design/guest-store.md):
-    // the erofs image as a second virtio-blk drive, read-only.
+    // the erofs image as a second virtio-blk drive, read-only —
+    // `image_type=raw` applies to the FILE (the erofs payload is
+    // raw bytes; the guest mounts it as erofs).
     if let Some(disk) = &cfg.store_disk {
         argv.push(format!(
-            "--disk=id={},format=raw,path={},readonly=on",
+            "--disk=id={},path={},image_type=raw,readonly=on",
             STORE_DRIVE_ID,
             disk.display()
         ));
@@ -1442,7 +1445,7 @@ mod tests {
         );
         assert!(argv
             .iter()
-            .any(|a| a == "--disk=id=nixstore,format=raw,path=/store/disk.img,readonly=on"));
+            .any(|a| a == "--disk=id=nixstore,path=/store/disk.img,image_type=raw,readonly=on"));
     }
 
     #[test]
@@ -1458,7 +1461,7 @@ mod tests {
         );
         assert!(argv
             .iter()
-            .any(|a| a == "--disk=id=scratch,format=raw,path=/run/scratch.img"));
+            .any(|a| a == "--disk=id=scratch,path=/run/scratch.img,image_type=raw"));
     }
 
     #[test]
