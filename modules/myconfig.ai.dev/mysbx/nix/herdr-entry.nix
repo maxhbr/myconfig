@@ -79,7 +79,9 @@
   # (`myconfig.ai.dev.mysbx.herdr.package`).
   herdr,
   # The agent every session starts (../default.nix `defaultAgent`):
-  # `null` starts none.
+  # `null` starts none. Not a session-config key — herdr has no option
+  # for an initial command (verified against its `--default-config`),
+  # only the socket API, which the relocation subshell below uses.
   defaultAgent ? null,
 }:
 let
@@ -100,6 +102,73 @@ let
     [terminal]
     new_cwd = "follow"
   '';
+
+  # The relocation tail of the subshell — create the repo-rooted
+  # workspace, close the stale ones, and (with a defaultAgent) start
+  # the agent in the new workspace's ROOT pane. Without a
+  # defaultAgent the create loop stays the plain create-and-retry
+  # loop, so a `null` config keeps rendering the byte-identical
+  # script the checks pin. The pane id comes from the
+  # `workspace create` JSON answer, `.result.root_pane.pane_id`
+  # (`pane split` answers a DIFFERENT shape, `.result.pane.pane_id`).
+  relocationTail =
+    if defaultAgent == null then
+      ''
+        for _ in $(seq 1 5); do
+                herdr workspace create \
+                    --cwd "$repo_root" \
+                    --label "$(basename "$repo_root")" \
+                    --focus >/dev/null 2>&1 && break
+                sleep 1
+            done
+            for ws in "''${initial_ws[@]}"; do
+                for _ in $(seq 1 3); do
+                    herdr workspace close "$ws" >/dev/null 2>&1 && break
+                    sleep 1
+                done
+            done''
+    else
+      ''
+        pane_id=""
+            for _ in $(seq 1 5); do
+                if out="$(herdr workspace create \
+                    --cwd "$repo_root" \
+                    --label "$(basename "$repo_root")" \
+                    --focus 2>/dev/null)"; then
+                    # shellcheck disable=SC2034 # read by the agent start block
+                    pane_id="$(printf '%s' "$out" | jq -r '.result.root_pane.pane_id // empty' 2>/dev/null)"
+                    break
+                fi
+                sleep 1
+            done
+            for ws in "''${initial_ws[@]}"; do
+                for _ in $(seq 1 3); do
+                    herdr workspace close "$ws" >/dev/null 2>&1 && break
+                    sleep 1
+                done
+            done
+            # Start the default agent in the new workspace's root pane.
+            # herdr has no config key for an initial command, so this is
+            # the socket API; it must stay in this background subshell
+            # because a foreground `agent start` blocks up to its 30 s
+            # readiness timeout before the `exec` below and leaves the
+            # TUI blank. `agent start` needs the pane's shell at its
+            # interactive prompt, so `agent_not_ready` right after the
+            # create is expected and retried — at a 1 s cadence, never
+            # faster: every `herdr` CLI costs mediated bind/connect
+            # tokens (nono bucket, bd myconfig-27o).
+            if [ -n "$pane_id" ]; then
+                for _ in $(seq 1 10); do
+                    herdr agent start ${lib.escapeShellArg defaultAgent.kind} \
+                        --kind ${lib.escapeShellArg defaultAgent.kind} \
+                        --pane "$pane_id" \
+                        ${
+                          lib.optionalString (defaultAgent.args != [ ]) "-- ${lib.escapeShellArgs defaultAgent.args}"
+                        } \
+                        >/dev/null 2>&1 && break
+                    sleep 1
+                done
+            fi'';
 in
 writeShellApplication {
   name = "mysbx-herdr-entry";
@@ -238,19 +307,7 @@ writeShellApplication {
         if [ "''${#initial_ws[@]}" -eq 0 ]; then
             exit 0
         fi
-        for _ in $(seq 1 5); do
-            herdr workspace create \
-                --cwd "$repo_root" \
-                --label "$(basename "$repo_root")" \
-                --focus >/dev/null 2>&1 && break
-            sleep 1
-        done
-        for ws in "''${initial_ws[@]}"; do
-            for _ in $(seq 1 3); do
-                herdr workspace close "$ws" >/dev/null 2>&1 && break
-                sleep 1
-            done
-        done
+        ${relocationTail}
     ) >/dev/null 2>&1 &
 
     # In a foreground run the `exec` form applies: `herdr` owns the
