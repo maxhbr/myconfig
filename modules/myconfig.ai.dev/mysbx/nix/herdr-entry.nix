@@ -78,6 +78,9 @@
   # The herdr package that runs inside the sandbox
   # (`myconfig.ai.dev.mysbx.herdr.package`).
   herdr,
+  # The agent every session starts (../default.nix `defaultAgent`):
+  # `null` starts none.
+  defaultAgent ? null,
 }:
 let
   muxLib = import ./mux-entry-lib.nix { inherit lib; };

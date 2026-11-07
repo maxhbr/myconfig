@@ -46,6 +46,9 @@
   # (`myconfig.ai.dev.mysbx.workmux.package`, normally
   # `myconfig.ai.dev.workmux.package`).
   workmux,
+  # The agent every session starts (../default.nix `defaultAgent`):
+  # `null` starts none.
+  defaultAgent ? null,
 }:
 let
   # The socket validation, the session name and the pane-shell pin are

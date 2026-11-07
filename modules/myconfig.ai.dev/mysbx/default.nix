@@ -299,6 +299,9 @@ let
   # to bash on a fish host (bd myconfig-l44).
   payloadShell = cfg.shell.path;
 
+  # Only herdr and workmux receive `defaultAgent` (as a callPackage
+  # argument): the other multiplexers have no agent concept for it to
+  # start anything in.
   muxEntries = {
     tmux = pkgs.callPackage ./nix/tmux-entry.nix {
       tmux = cfg.tmux.package;
@@ -310,6 +313,7 @@ let
           workmux = cfg.workmux.package;
           tmux = cfg.tmux.package;
           inherit payloadShell;
+          defaultAgent = cfg.defaultAgent;
         }
       else
         null;
@@ -319,6 +323,7 @@ let
           herdr = cfg.herdr.package;
           tmux = cfg.tmux.package;
           inherit payloadShell;
+          defaultAgent = cfg.defaultAgent;
         }
       else
         null;
@@ -663,6 +668,51 @@ in
         `null` means "this host does not carry herdr": no entry is
         pinned, and a configuration selecting it is a refused run
         instead of a silent plain shell.
+      '';
+    };
+
+    defaultAgent = mkOption {
+      type = types.nullOr (
+        types.submodule {
+          options = {
+            kind = mkOption {
+              type = types.str;
+              example = "pi";
+              description = ''
+                The agent's name: herdr's `agent start --kind` argument
+                AND the name it is registered under (workmux:
+                `agents.<kind>` in the in-sandbox config). herdr only
+                accepts a lowercase name (`[a-z][a-z0-9_-]{0,31}`), and
+                the kind IS that name here.
+              '';
+            };
+            command = mkOption {
+              type = types.str;
+              example = "pi";
+              description = ''
+                The executable to start. Must be on the sandbox PATH —
+                the sandbox never sees host binaries, so the module
+                setting this option must also add its package to
+                `extraTools`.
+              '';
+            };
+            args = mkOption {
+              type = types.listOf types.str;
+              default = [ ];
+              description = "Appended literally after `command`.";
+            };
+          };
+        }
+      );
+      default = null;
+      description = ''
+        The agent every INTERACTIVE session of this user starts, on
+        the multiplexers that have the concept: herdr starts it as
+        the initial command of the workspace the entry relocates to
+        $PWD; workmux starts it in a vertical split below the
+        dashboard. tmux, aoe and orca ignore it; `mysbx run -- CMD`
+        is unaffected. `null` starts no agent (pre-existing
+        behaviour).
       '';
     };
 
@@ -2098,6 +2148,18 @@ in
             workmux: myconfig.ai.dev.mysbx.workmux.enable, which
             ../myconfig.ai.workmux/mysbx.nix does), or select another
             multiplexer (docs/design/config.md D17).
+          '';
+        }
+        {
+          # herdr accepts only that name shape for an agent, and the
+          # kind IS the name it is registered under.
+          assertion =
+            cfg.defaultAgent == null || builtins.match "[a-z][a-z0-9_-]{0,31}" cfg.defaultAgent.kind != null;
+          message = ''
+            myconfig.ai.dev.mysbx.defaultAgent.kind is
+            "${toString (cfg.defaultAgent.kind or null)}", but herdr only
+            accepts a name matching "[a-z][a-z0-9_-]{0,31}" (and the kind
+            IS that name).
           '';
         }
         {
