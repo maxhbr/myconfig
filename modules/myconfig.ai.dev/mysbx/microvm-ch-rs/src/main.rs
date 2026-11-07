@@ -1057,32 +1057,42 @@ fn run(cfg: Config, boot_started: Instant) -> i32 {
     // guest panic — it hangs until killed. A waiter thread owns
     // the bound: when it lapses and CH still lives, the VM is
     // killed and the run reported as a timeout (a diagnosis, never
-    // a wedged session). The qemu twin needs no such bound: its
-    // -no-reboot turns every panic into an exit.
+    // a wedged session). The channel keeps the join cheap: the
+    // waiter's sleep is bounded by recv_timeout and ends the
+    // moment the VM exits (a plain sleep(TEARDOWN_TIMEOUT) thread
+    // would hold the join for the whole timeout, bd myconfig-9wkp.9).
+    // The qemu twin needs no such bound: its -no-reboot turns every
+    // panic into an exit.
     let timeout_pid = ch_child.id();
+    let (done_tx, done_rx) = std::sync::mpsc::channel::<()>();
     let timeout_handle = std::thread::spawn(move || {
-        std::thread::sleep(TEARDOWN_TIMEOUT);
+        if done_rx.recv_timeout(TEARDOWN_TIMEOUT).is_ok() {
+            return false; // the VM exited first
+        }
         // kill(pid) only fails when the pid is gone — the race
         // window is harmless (the waiter reaped it first).
         unsafe {
             kill(timeout_pid, 15);
         }
+        true
     });
 
     let vm = match ch_child.wait() {
         Ok(status) => status,
         Err(e) => {
             eprintln!("mysbx-microvm-ch: waiting on cloud-hypervisor failed: {e}");
+            let _ = done_tx.send(());
+            let _ = timeout_handle.join();
             return EXIT_SETUP;
         }
     };
+    let _ = done_tx.send(());
     eprintln!(
         "mysbx-microvm-ch: cloud-hypervisor exited with {} after {:?} total",
         vm.code().unwrap_or(-1),
         boot_started.elapsed()
     );
-    let timed_out = timeout_handle.is_finished();
-    let _ = timeout_handle.join();
+    let timed_out = timeout_handle.join().unwrap_or(false);
 
     if timed_out {
         eprintln!(
