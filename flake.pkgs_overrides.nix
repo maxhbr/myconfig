@@ -39,6 +39,10 @@
 # | opencode       | 2.2.5 bump shipped a stale `node_modules` FOD hash (computed  |
 # |                | before the bun 1.4.4 bump); every opencode-dependent build    |
 # |                | fails with a hash mismatch. Override pins the verified hash.  |
+# | neovide        | 0.17.1 bump clobbered `src.hash` and `cargoHash` with the     |
+# |                | skia-source hash, so the "neovide" fetch stores skia's tree |
+# |                | (no Cargo.lock) and the vendor-staging drv fails. Taken from |
+# |                | the `master` input, which has the corrected hashes.           |
 #
 # When removing an override, also drop its entry here and rebuild.
 
@@ -202,6 +206,27 @@
         doCheck = false;
         enableParallelBuilding = false;
       });
+    })
+
+    # neovide: the 0.17.1 bump (nixpkgs 1aeb44c24e, 2026-11-04) clobbered
+    # `src.hash` and `cargoHash` with the *skia* source hash
+    # (sha256-ahqSduR4…). Because a fixed-output fetch is keyed by its hash,
+    # the "neovide" src fetch collapses onto the skia store path, so the
+    # build unpacks skia's tree (no Cargo.lock) and fails at
+    # `fetch-cargo-vendor-util create-vendor-staging`:
+    #   FileNotFoundError: [Errno 2] No such file or directory: 'Cargo.lock'
+    # dragging every neovide-dependent closure (f13 home-manager, toplevel)
+    # into "Cannot build … dependency failed" cascades.
+    #
+    # Upstream fix: nixpkgs 2cc8df2292 ("neovide: fix source and cargo
+    # hashes", 2026-11-05) — on master, not yet in the pinned
+    # nixos-unstable branch head when this input was locked.
+    #
+    # See doc/TODOs/drop-neovide-master-pin.md.
+    #
+    # TODO: remove once the nixos-unstable input includes 2cc8df2292.
+    (self: _prev: {
+      neovide = self.master.neovide;
     })
   ];
 }
