@@ -385,7 +385,8 @@ pub fn run(args: &[String]) -> i32 {
             );
             if !crate::doctor::enabled_backends()
                 .iter()
-                .any(|b| *b == "podman-gvisor" || *b == "podman-krun")
+                .filter_map(|name: &&str| crate::backends::find(name))
+                .any(crate::backends::Backend::podman)
             {
                 eprintln!(
                     "  the podman backends are disabled on this host — enable \

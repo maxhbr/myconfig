@@ -455,6 +455,20 @@
 }:
 
 let
+  # The crate's backend universe, the nix-side spelling of
+  # mysbx-rs/src/backends.rs's REGISTRY (bd myconfig-9wkp.2):
+  # `mysbx-backends-sync-test` (nix/checks.nix) runs the BUILT
+  # binary and refuses a drift between the two — a backend added to
+  # the table without its nix twin (or vice versa) fails the check,
+  # never a silent mismatch.
+  backendUniverse = [
+    "bubblewrap"
+    "podman-gvisor"
+    "nono"
+    "podman-krun"
+    "krun"
+    "microvm-qemu"
+  ];
   # The dev-tool `PATH` value the argv builder uses (bwrap.rs):
   # a single store tree whose /bin is the union of the tools' bins,
   # so `toolsPath` stays one absolute path.
@@ -907,14 +921,10 @@ let
       ""
     else
       let
-        universe = [
-          "bubblewrap"
-          "podman-gvisor"
-          "nono"
-          "podman-krun"
-          "krun"
-          "microvm-qemu"
-        ];
+        # The single nix-side spelling of the registry (bd
+        # myconfig-9wkp.2), asserted against the BUILT crate by
+        # mysbx-backends-sync-test (nix/checks.nix).
+        universe = backendUniverse;
         unknown = builtins.filter (b: !builtins.elem b universe) enabledBackends;
       in
       if unknown != [ ] then
@@ -1022,6 +1032,9 @@ symlinkJoin {
 
   passthru = {
     inherit crate toolsEnv sandboxNixConfDir;
+    # The nix-side backend universe (the let binding above), exposed
+    # for checks.nix's sync test (bd myconfig-9wkp.2).
+    inherit backendUniverse;
     # The pin the wrapper sets (`<dir>/nix.conf`), for the checks.nix
     # shape assertion of bd myconfig-bf2.
     sandboxNixConfPin = sandboxNixConf;
