@@ -107,6 +107,12 @@ kernelPackages.kernel.override {
     # the same kernel serves both backends (the same reasoning as
     # KVM above).
     PVPANIC = yes;
+    # The transport CH presents (bd myconfig-9wkp.3): CH's
+    # --pvpanic device rides the PCI bus, and the transport options
+    # DEFAULT TO MODULES when PVPANIC flips to yes — a module the
+    # static-busybox guest init can never load, so without this
+    # line the device stays dead. Built in like the virtio stack.
+    PVPANIC_PCI = yes;
   };
   # Faster build, smaller bzImage: no modules to sign or strip.
   buildDTBs = false;

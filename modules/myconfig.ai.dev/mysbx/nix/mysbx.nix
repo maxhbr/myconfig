@@ -452,6 +452,25 @@
   microvmQemuLauncher ? null,
   microvmQemuRootfs ? null,
   microvmQemuKernel ? null,
+  # The cloud-hypervisor backend (bd myconfig-9wkp.8): the same
+  # three pins over the CH spelling — the mysbx-microvm-ch launcher
+  # (../microvm-ch-rs, packaged by ./microvm-ch-launcher.nix — it
+  # spawns one virtiofsd per device, one passt child and one
+  # cloud-hypervisor VM per run), the SHARED guest rootfs and the
+  # SAME kernel bzImage the qemu arm pins (one kernel serves both
+  # VM backends, bd myconfig-9wkp.3 — the file inside the package,
+  # never the package itself). `null` pins nothing and `backend =
+  # "microvm-ch"` runs are refused with a naming message.
+  microvmChLauncher ? null,
+  microvmChRootfs ? null,
+  microvmChKernel ? null,
+  # Backend-specific env pins of the microvm-ch backend
+  # (`MYSBX_MICROVM_CH_ENV`): the CH twin of `microvmQemuEnv` — the
+  # passt guest's loopback is its own (the same reasoning as the
+  # qemu arm's SLiRP gap), and the gateway `10.0.2.2` NATs to the
+  # host loopback (bd myconfig-9wkp.5's plan). Values must not
+  # contain whitespace.
+  microvmChEnv ? { },
 }:
 
 let
@@ -837,6 +856,18 @@ let
     ) microvmQemuEnv
   );
 
+  # The CH twin of `microvmQemuEnvValue` (the `microvmChEnv`
+  # argument), same encoding rule.
+  microvmChEnvValue = lib.concatStringsSep " " (
+    lib.mapAttrsToList (
+      name: value:
+      if builtins.match ".*[[:space:]].*" value != null then
+        throw "mysbx: microvmChEnv.${name} must not contain whitespace (MYSBX_MICROVM_CH_ENV is a space-separated list), got `${value}`"
+      else
+        "${name}=${value}"
+    ) microvmChEnv
+  );
+
   podmanPins =
     lib.optionalString (podmanImage != null) (
       "--set MYSBX_PODMAN_TARBALL '${podmanImage}' "
@@ -970,6 +1001,17 @@ let
     + lib.optionalString (
       microvmQemuEnv != { }
     ) "--set-default MYSBX_MICROVM_QEMU_ENV '${microvmQemuEnvValue}'";
+  # The cloud-hypervisor backend's pins (bd myconfig-9wkp.8): the
+  # same closure-pin idiom over the CH spelling.
+  microvmChPins =
+    lib.optionalString (
+      microvmChLauncher != null
+    ) "--set MYSBX_MICROVM_CH_LAUNCHER '${microvmChLauncher}/bin/mysbx-microvm-ch' "
+    + lib.optionalString (microvmChRootfs != null) "--set MYSBX_MICROVM_CH_ROOTFS '${microvmChRootfs}' "
+    + lib.optionalString (microvmChKernel != null) "--set MYSBX_MICROVM_CH_KERNEL '${microvmChKernel}' "
+    + lib.optionalString (
+      microvmChEnv != { }
+    ) "--set-default MYSBX_MICROVM_CH_ENV '${microvmChEnvValue}'";
 in
 symlinkJoin {
   # keep the crate's derivation name: build-pkg-for-host.sh matches on
@@ -1001,6 +1043,7 @@ symlinkJoin {
       ${sshKeygenPins} \
       ${krunDirectPins} \
       ${microvmQemuPins} \
+      ${microvmChPins} \
       ${enabledBackendsPin}
 
     # `mysbx-once` (bd myconfig-7zwt, cli.md D22): the SAME wrapped

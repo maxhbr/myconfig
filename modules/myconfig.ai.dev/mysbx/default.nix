@@ -265,7 +265,8 @@ let
     "podman-krun"
   ]
   ++ lib.optional cfg.krun.enable "krun"
-  ++ lib.optional cfg.microvm-qemu.enable "microvm-qemu";
+  ++ lib.optional cfg.microvm-qemu.enable "microvm-qemu"
+  ++ lib.optional cfg.microvm-ch.enable "microvm-ch";
 
   # `dest` is optional in the schema and there is no TOML null: a
   # `dest = null` key would be a type error in the strict parser, so it is
@@ -528,6 +529,14 @@ in
         # Backend-specific env pins (bd myconfig-mzys): the SLiRP
         # guest's model endpoint, the qemu twin of `podmanEnv`.
         microvmQemuEnv = if cfg.microvm-qemu.enable then cfg.microvm-qemu.env else { };
+        # The cloud-hypervisor backend (bd myconfig-9wkp.8): the
+        # same three pins over the CH spelling; the kernel is the
+        # SAME image the qemu arm pins (one kernel, both VM
+        # backends, bd myconfig-9wkp.3).
+        microvmChLauncher = if cfg.microvm-ch.enable then cfg.microvm-ch.launcher else null;
+        microvmChRootfs = if cfg.microvm-ch.enable then cfg.microvm-ch.rootfs else null;
+        microvmChKernel = if cfg.microvm-ch.enable then "${cfg.microvm-ch.kernel}/bzImage" else null;
+        microvmChEnv = if cfg.microvm-ch.enable then cfg.microvm-ch.env else { };
         waypipe = cfg.display.package;
         # The dtach master of detached runs (docs/design/detach.md
         # B10): pinned so `--detach` needs no host PATH lookup.
@@ -537,7 +546,7 @@ in
         nono = cfg.nono.package;
         ssh-keygen = pkgs.openssh;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries enabledBackends; alacritty = cfg.terminal.package; shell = cfg.shell.path; podmanImage = if cfg.podman.enable then cfg.podman.image else null; podmanShell = if cfg.podman.enable then cfg.podman.shell else null; podmanPastaSpec = if cfg.podman.enable then cfg.podman.pastaSpec else null; podmanEnv = if cfg.podman.enable then cfg.podman.env else { }; krunRuntime = if cfg.podman.enable then cfg.krun.runtime else null; krunLauncher = if cfg.krun.enable then cfg.krun.direct.launcher else null; krunRootfs = if cfg.krun.enable then cfg.krun.direct.rootfs else null; vmStoreBaked = cfg.vm.store.enable; vmStoreExtraRoots = lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages ++ lib.optionals hmDifftasticExternal [ gitDefaultDiff ]; microvmQemuLauncher = if cfg.microvm-qemu.enable then cfg.microvm-qemu.launcher else null; microvmQemuRootfs = if cfg.microvm-qemu.enable then cfg.microvm-qemu.rootfs else null; microvmQemuKernel = if cfg.microvm-qemu.enable then \"${cfg.microvm-qemu.kernel}/bzImage\" else null; microvmQemuEnv = if cfg.microvm-qemu.enable then cfg.microvm-qemu.env else { }; waypipe = cfg.display.package; dtach = pkgs.dtach; podmanWaypipe = if cfg.podman.enable then cfg.podman.waypipe else null; podmanMuxEntries = if cfg.podman.enable then cfg.podman.muxEntries else { }; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries enabledBackends; alacritty = cfg.terminal.package; shell = cfg.shell.path; podmanImage = if cfg.podman.enable then cfg.podman.image else null; podmanShell = if cfg.podman.enable then cfg.podman.shell else null; podmanPastaSpec = if cfg.podman.enable then cfg.podman.pastaSpec else null; podmanEnv = if cfg.podman.enable then cfg.podman.env else { }; krunRuntime = if cfg.podman.enable then cfg.krun.runtime else null; krunLauncher = if cfg.krun.enable then cfg.krun.direct.launcher else null; krunRootfs = if cfg.krun.enable then cfg.krun.direct.rootfs else null; vmStoreBaked = cfg.vm.store.enable; vmStoreExtraRoots = lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages ++ lib.optionals hmDifftasticExternal [ gitDefaultDiff ]; microvmQemuLauncher = if cfg.microvm-qemu.enable then cfg.microvm-qemu.launcher else null; microvmQemuRootfs = if cfg.microvm-qemu.enable then cfg.microvm-qemu.rootfs else null; microvmQemuKernel = if cfg.microvm-qemu.enable then \"${cfg.microvm-qemu.kernel}/bzImage\" else null; microvmQemuEnv = if cfg.microvm-qemu.enable then cfg.microvm-qemu.env else { }; microvmChLauncher = if cfg.microvm-ch.enable then cfg.microvm-ch.launcher else null; microvmChRootfs = if cfg.microvm-ch.enable then cfg.microvm-ch.rootfs else null; microvmChKernel = if cfg.microvm-ch.enable then \"${cfg.microvm-ch.kernel}/bzImage\" else null; microvmChEnv = if cfg.microvm-ch.enable then cfg.microvm-ch.env else { }; waypipe = cfg.display.package; dtach = pkgs.dtach; podmanWaypipe = if cfg.podman.enable then cfg.podman.waypipe else null; podmanMuxEntries = if cfg.podman.enable then cfg.podman.muxEntries else { }; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -1427,6 +1436,102 @@ in
           myconfig-qq3i). `null` keeps systemd's default (524288).
           Sessions not started under the user manager (a plain tty
           or ssh login) keep the system default.
+        '';
+      };
+    };
+
+    # The cloud-hypervisor backend (bd myconfig-9wkp): `backend =
+    # "microvm-ch"` execs bwrap → mysbx-microvm-ch → rootless
+    # virtiofsd ×N + passt --vhost-user + cloud-hypervisor — the
+    # SAME shared guest rootfs and kernel as the microvm-qemu
+    # backend (only the VMM differs: a Rust VMM with per-thread
+    # seccomp instead of qemu's larger surface). Requires rw
+    # /dev/kvm. The 16550 carries the exit channel; passt mimics
+    # SLiRP's address plan so the guest config carries over.
+    microvm-ch = {
+      enable = mkEnableOption ''
+        the cloud-hypervisor backend (`backend = "microvm-ch"`):
+        the mysbx-microvm-ch launcher, the SHARED guest rootfs and
+        the SAME microvm kernel the qemu arm pins (bd
+        myconfig-9wkp). Off by default: cloud-hypervisor, passt,
+        virtiofsd and the rebuilt kernel are a heavy closure a host
+        that never runs the backend should not carry.
+
+        Off means REFUSED, never absent-pin-by-accident: the
+        wrapper pins `MYSBX_ENABLED_BACKENDS` without
+        `microvm-ch` and the CLI refuses the run with a message
+        naming this option.
+      '';
+
+      launcher = mkOption {
+        type = types.package;
+        default = pkgs.callPackage ./nix/microvm-ch-launcher.nix {
+          # The cloud-hypervisor, virtiofsd and passt the runs
+          # invoke — pinned into the launcher wrapper, so a host
+          # swapping either rebuilds the backend (no PATH lookup
+          # under bwrap).
+          cloud-hypervisor = pkgs.cloud-hypervisor;
+          inherit (pkgs) virtiofsd passt;
+        };
+        defaultText = literalExpression "pkgs.callPackage ./nix/microvm-ch-launcher.nix { cloud-hypervisor = pkgs.cloud-hypervisor; virtiofsd = pkgs.virtiofsd; passt = pkgs.passt; }";
+        description = ''
+          The mysbx-microvm-ch launcher of the cloud-hypervisor
+          backend — the zero-dependency Rust binary
+          (../microvm-ch-rs) that spawns one rootless virtiofsd per
+          device, one passt child per shared-network run and one
+          cloud-hypervisor microVM per run. Pinned into the wrapper
+          as MYSBX_MICROVM_CH_LAUNCHER.
+        '';
+      };
+
+      rootfs = mkOption {
+        type = types.package;
+        # The guest side is SHARED, not forked — the SAME krun
+        # rootfs serves krun, microvm-qemu and microvm-ch.
+        default = cfg.krun.direct.rootfs;
+        defaultText = literalExpression "cfg.krun.direct.rootfs";
+        description = ''
+          The guest rootfs of the cloud-hypervisor backend — the
+          shared direct-krun rootfs consumed AS-IS. Pinned into
+          the wrapper as MYSBX_MICROVM_CH_ROOTFS.
+        '';
+      };
+
+      kernel = mkOption {
+        type = types.package;
+        # One kernel serves both VM backends (bd myconfig-9wkp.3):
+        # the SAME expression the qemu arm pins — the spike proved
+        # the bzImage boots CH as-is, and PVPANIC=y is inert under
+        # qemu (which presents no pvpanic device).
+        default = cfg.microvm-qemu.kernel;
+        defaultText = literalExpression "cfg.microvm-qemu.kernel";
+        description = ''
+          The guest kernel bzImage of the cloud-hypervisor
+          backend — the SAME kernel the microvm-qemu backend pins
+          (one kernel serves both VM backends; the microvm device
+          set is built in because the static-busybox guest init
+          loads no modules). Pinned into the wrapper as
+          MYSBX_MICROVM_CH_KERNEL; the launcher forwards it as the
+          CH --kernel.
+        '';
+      };
+
+      env = mkOption {
+        type = types.attrsOf types.str;
+        default = { };
+        example = literalExpression ''{ OPENAI_BASE_URL = "http://10.0.2.2:4000/v1"; }'';
+        description = ''
+          Environment variables handed to the payload of the
+          microvm-ch backend ALONE, pinned into the wrapper as
+          `MYSBX_MICROVM_CH_ENV` (the qemu arm's MYSBX_MICROVM_QEMU_ENV
+          rule). This is for environment that is only CORRECT
+          under this backend: the passt guest's loopback is its
+          OWN (nothing translates `127.0.0.1` to the host), so the
+          host loopback URLs the other backends share are dead
+          here. The SLiRP-plan gateway `10.0.2.2` NATs to the host
+          loopback, so the keyless host LiteLLM proxy is reachable
+          there directly. Values must not contain whitespace
+          (the variable is a space-separated list).
         '';
       };
     };
