@@ -304,3 +304,72 @@ exec sleep 600
     assert_eq!(output.status.code(), Some(EXIT_SETUP), "{stderr}");
     assert!(no_runtime_dir(), "the runtime dir survived the panic");
 }
+
+/// A stub virtiofsd that logs more than a pipe holds (64 KiB) BEFORE
+/// it serves: the launcher must drain the daemon's stderr, or the
+/// stub blocks on the full pipe, never creates its socket, and the
+/// run fails readiness.
+#[test]
+fn a_chatty_daemon_does_not_block_on_its_stderr_pipe() {
+    let _guard = suite_lock().lock().unwrap_or_else(|e| e.into_inner());
+    let dir = stub_dir("chatty");
+    let virtiofsd = dir.join("virtiofsd-chatty.sh");
+    std::fs::write(
+        &virtiofsd,
+        "#!/bin/sh
+yes 'virtiofsd chatter' | head -n 20000 >&2
+for a in \"$@\"; do
+  case \"$a\" in
+    --socket-path=*) s=${a#--socket-path=}; : > \"$s\" ;;
+  esac
+done
+exec sleep 600
+",
+    )
+    .expect("the chatty stub");
+    make_executable(&virtiofsd);
+    let passt = socket_stub(&dir, "passt");
+    let output = run_launcher(
+        PathBuf::from(env!("CARGO_BIN_EXE_mysbx-microvm-ch")).as_path(),
+        &virtiofsd,
+        &passt,
+        "/does/not/exist/cloud-hypervisor",
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("daemons ready"), "{stderr}");
+    assert!(!stderr.contains("virtiofsd chatter"), "{stderr}");
+    assert_eq!(output.status.code(), Some(EXIT_SETUP), "{stderr}");
+    assert!(no_runtime_dir(), "the runtime dir survived the refusal");
+}
+
+/// A daemon that fails to serve: its last stderr lines ride the
+/// readiness refusal, so the cause is visible without --verbose.
+#[test]
+fn a_readiness_failure_reports_the_daemons_stderr() {
+    let _guard = suite_lock().lock().unwrap_or_else(|e| e.into_inner());
+    let dir = stub_dir("readiness-log");
+    let virtiofsd = dir.join("virtiofsd-failing.sh");
+    std::fs::write(
+        &virtiofsd,
+        "#!/bin/sh
+echo 'virtiofsd-stub: cannot open the shared directory' >&2
+exec sleep 600
+",
+    )
+    .expect("the failing stub");
+    make_executable(&virtiofsd);
+    let passt = socket_stub(&dir, "passt");
+    let output = run_launcher(
+        PathBuf::from(env!("CARGO_BIN_EXE_mysbx-microvm-ch")).as_path(),
+        &virtiofsd,
+        &passt,
+        "/does/not/matter/while-readiness-fails",
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(EXIT_SETUP), "{stderr}");
+    assert!(
+        stderr.contains("virtiofsd-stub: cannot open the shared directory"),
+        "{stderr}"
+    );
+    assert!(no_runtime_dir(), "the runtime dir survived the refusal");
+}

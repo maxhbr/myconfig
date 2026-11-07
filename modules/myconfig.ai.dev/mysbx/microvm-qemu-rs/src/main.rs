@@ -49,10 +49,12 @@
 //! unsafe block is the raw setrlimit(2) fd-ceiling raise (the krun
 //! launcher's twin, bd myconfig-qq3i).
 
-use std::io::BufRead;
+use std::collections::VecDeque;
+use std::io::{BufRead, BufReader};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 // The fd ceiling of the virtiofsd children (bd myconfig-qq3i, the
@@ -827,7 +829,7 @@ fn pinned_bin(var: &str, what: &str) -> Option<PathBuf> {
 /// Ok(()) when the socket came up in the 100 × 10 ms budget, Err(())
 /// with the diagnosis printed — the CALLER returns the exit code so
 /// the Daemons guard still drops (bd myconfig-1ct7).
-fn wait_for_socket(path: &Path, what: &str) -> Result<(), ()> {
+fn wait_for_socket(path: &Path, what: &str, log: &DaemonLog) -> Result<(), ()> {
     // The builders.nix wait loop: qemu exits immediately on a dead
     // chardev socket, so every daemon must be serving first. 100 ×
     // 10 ms, the proven budget.
@@ -841,7 +843,52 @@ fn wait_for_socket(path: &Path, what: &str) -> Result<(), ()> {
         "mysbx-microvm-qemu: timed out waiting for the {what} socket {}",
         path.display()
     );
+    for line in log.lock().unwrap_or_else(|e| e.into_inner()).iter() {
+        eprintln!("mysbx-microvm-qemu: {what}: {line}");
+    }
     Err(())
+}
+
+/// How many of a daemon's last stderr lines a non-verbose run keeps
+/// for the readiness-failure diagnosis.
+const DAEMON_LOG_TAIL: usize = 20;
+
+/// The kept tail of one daemon's stderr (see `drain_stderr`).
+type DaemonLog = Arc<Mutex<VecDeque<String>>>;
+
+/// Reads a daemon's piped stderr on a thread for the daemon's whole
+/// life: an unread pipe fills (64 KiB) and blocks the daemon on its
+/// next log write. `--verbose` forwards every line to the launcher's
+/// stderr; otherwise the last DAEMON_LOG_TAIL lines are kept for
+/// `wait_for_socket` to print when the daemon never serves.
+fn drain_stderr(child: &mut Child, what: String, verbose: bool) -> DaemonLog {
+    let log = DaemonLog::default();
+    let Some(stderr) = child.stderr.take() else {
+        return log;
+    };
+    let kept = Arc::clone(&log);
+    std::thread::spawn(move || {
+        let mut reader = BufReader::new(stderr);
+        let mut buf = Vec::new();
+        loop {
+            buf.clear();
+            match reader.read_until(b'\n', &mut buf) {
+                Ok(0) | Err(_) => break,
+                Ok(_) => {}
+            }
+            let line = String::from_utf8_lossy(&buf).trim_end().to_owned();
+            if verbose {
+                eprintln!("mysbx-microvm-qemu: {what}: {line}");
+                continue;
+            }
+            let mut kept = kept.lock().unwrap_or_else(|e| e.into_inner());
+            if kept.len() == DAEMON_LOG_TAIL {
+                kept.pop_front();
+            }
+            kept.push_back(line);
+        }
+    });
+    log
 }
 
 struct Daemons {
@@ -1004,6 +1051,7 @@ fn run(cfg: Config, boot_started: Instant) -> i32 {
         read_only: true,
     }];
     all_devices.extend(cfg.devices.iter().cloned());
+    let mut device_logs = Vec::with_capacity(all_devices.len());
     for device in &all_devices {
         let socket = socket_of(&device.tag);
         let argv = virtiofsd_argv(&virtiofsd, &socket, device);
@@ -1016,7 +1064,14 @@ fn run(cfg: Config, boot_started: Instant) -> i32 {
             .stderr(Stdio::piped())
             .spawn()
         {
-            Ok(child) => daemons.children.push(child),
+            Ok(mut child) => {
+                device_logs.push(drain_stderr(
+                    &mut child,
+                    format!("virtiofsd {}", device.tag),
+                    cfg.verbose,
+                ));
+                daemons.children.push(child);
+            }
             Err(e) => {
                 eprintln!(
                     "mysbx-microvm-qemu: cannot spawn virtiofsd for {} ({}): {e}",
@@ -1027,10 +1082,11 @@ fn run(cfg: Config, boot_started: Instant) -> i32 {
             }
         }
     }
-    for device in &all_devices {
+    for (device, log) in all_devices.iter().zip(&device_logs) {
         if wait_for_socket(
             &socket_of(&device.tag),
             &format!("virtiofsd {}", device.tag),
+            log,
         )
         .is_err()
         {
