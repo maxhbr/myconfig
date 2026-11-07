@@ -3795,7 +3795,7 @@ fn sandbox_pipeline(
                 eprintln!(
                     "  the Nix wrapper pins the kernel env when the host \
                      builds the microvm-qemu or microvm-ch backend \
-                     (myconfig.ai.dev.mysbx.microvmQemu.kernel / microvmCh.kernel); \
+                     (myconfig.ai.dev.mysbx.microvm-qemu.kernel / microvm-ch.kernel); \
                      an unwrapped build sets none"
                 );
                 return EXIT_INFRASTRUCTURE;

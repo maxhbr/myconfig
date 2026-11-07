@@ -1058,7 +1058,7 @@ fn microvm_qemu_checks(checks: &mut Vec<Check>) {
         checks,
         "microvm-qemu",
         "MYSBX_MICROVM_QEMU",
-        "myconfig.ai.dev.mysbx.microvmQemu",
+        "myconfig.ai.dev.mysbx.microvm-qemu",
     );
 }
 
@@ -1069,7 +1069,7 @@ fn microvm_ch_checks(checks: &mut Vec<Check>) {
         checks,
         "microvm-ch",
         "MYSBX_MICROVM_CH",
-        "myconfig.ai.dev.mysbx.microvmCh",
+        "myconfig.ai.dev.mysbx.microvm-ch",
     );
 }
 
@@ -1854,6 +1854,10 @@ mod tests {
         assert_eq!(
             enable_option("microvm-qemu"),
             Some("myconfig.ai.dev.mysbx.microvm-qemu.enable")
+        );
+        assert_eq!(
+            enable_option("microvm-ch"),
+            Some("myconfig.ai.dev.mysbx.microvm-ch.enable")
         );
         assert_eq!(enable_option("bubblewrap"), None);
         assert_eq!(enable_option("nono"), None);

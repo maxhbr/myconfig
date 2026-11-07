@@ -173,7 +173,7 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         }
     ));
 
-    // Nested virt (docs/design/config.md D27), microvm-qemu only:
+    // Nested virt (docs/design/config.md D27), VM backends only:
     // said out loud because a repo sidecar ALONE can enable it — a
     // user who never wrote the key still gets a materially
     // different machine (the host's CPU model exposed by -cpu host,
@@ -182,11 +182,11 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     // failure. Every other backend would have refused the key, so
     // `false` needs no qualifier.
     if r.merged.nested_virt {
-        p(
+        p(format!(
             "nested-virt:    on — the guest gets /dev/kvm and the host CPU model \
-           (microvm-qemu, D27)"
-                .to_string(),
-        );
+           ({}, D27)",
+            r.backend
+        ));
     }
 
     // The workspace of this run (workspace.md D1): the live repo —
@@ -461,14 +461,18 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         // The direct-libkrun backend (backends.md D3): layered like
         // nono — bwrap builds the host-side view, the mysbx-krun
         // launcher inside it starts the VM — so the label names the
-        // chain, exactly like the nono line does. The qemu twin (D9)
-        // chains the same way with its own launcher.
+        // chain, exactly like the nono line does. The qemu (D9) and
+        // CH (D11) twins chain the same way with their own launchers.
         "krun" => p(format!(
             "krun:           {} (layered — bwrap builds the view, mysbx-krun starts the VM)",
             r.bwrap_bin
         )),
         "microvm-qemu" => p(format!(
             "microvm-qemu:   {} (layered — bwrap builds the view, mysbx-microvm-qemu starts the VM)",
+            r.bwrap_bin
+        )),
+        "microvm-ch" => p(format!(
+            "microvm-ch:     {} (layered — bwrap builds the view, mysbx-microvm-ch starts the VM)",
             r.bwrap_bin
         )),
         "nono" => p(format!(
