@@ -4244,7 +4244,10 @@ fn sandbox_pipeline(
                 // then serves the ro tree read-only like every
                 // other slot; the guest init's mount logic is
                 // unchanged. The MODE is the overlay's own 0644.
-                if backend == "microvm-qemu" {
+                // The microvm-ch backend shares the whole rule (bd
+                // myconfig-9wkp.7): its launcher refuses
+                // --krun-overlay too, its trust rides stage-ro.
+                if backend == "microvm-qemu" || backend == "microvm-ch" {
                     if let Some((global_text, system_text)) = krun_git_trust_paths.as_ref() {
                         let trust_stage_writes = [
                             ("gittrust-global", global_text),
