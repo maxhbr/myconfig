@@ -81,7 +81,7 @@ pub fn microvm_ch_argv(
     argv.push("--init".to_owned());
     argv.push(spec.init.clone());
     let ro_slots = spec.shares.iter().filter(|s| s.read_only).count();
-    let rw_slots = spec.shares.iter().filter(|s| s.read_only).count();
+    let rw_slots = spec.shares.iter().filter(|s| !s.read_only).count();
     // The manifest's device (the qemu twin's reasoning verbatim):
     // emitted whenever the manifest has records to carry.
     let manifest_needed = ro_slots > 0 || !spec.env.is_empty();
