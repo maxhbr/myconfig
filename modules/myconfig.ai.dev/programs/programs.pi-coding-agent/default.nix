@@ -1670,6 +1670,10 @@ in
     # genuinely un-sandboxed sessions (plain `pi`/`piBwrap`).
     myconfig.ai.dev.mysbx = lib.mkIf config.myconfig.ai.dev.mysbx.enable {
       extraTools = [ pi-coding-agent-pkg ];
+      defaultAgent = lib.mkDefault {
+        kind = "pi";
+        command = "pi";
+      };
       config.mounts = mysbxPiMounts;
       config.env.PI_JAIL_MARKER = "1";
       # The litellm endpoint of the podman-gvisor backend: pi's mounted

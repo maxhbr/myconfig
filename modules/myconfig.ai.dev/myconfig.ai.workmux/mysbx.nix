@@ -38,19 +38,25 @@ let
   aiCfg = config.myconfig.ai.dev;
 
   # The workmux configuration used *inside* the mysbx sandbox. Like the
-  # jail tier's `jailWorkmuxConfig` (./jail.nix), the `pi` named agent
-  # must be the PLAIN binary: mysbx is already the sandbox, and the
-  # host config's `pi` -> `pi-bwrap` would start a nested one with a
-  # fresh tmpfs home, losing pi's configuration and credentials.
+  # jail tier's `jailWorkmuxConfig` (./jail.nix), a named agent
+  # entry must name the PLAIN binary: mysbx is already the sandbox,
+  # and the host config's jailed launcher would start a nested one
+  # with a fresh tmpfs home, losing the agent's configuration and
+  # credentials.
   #
-  # The command is the bare name, resolved from the sandbox `PATH`:
-  # ../programs/programs.pi-coding-agent adds pi to `myconfig.ai.dev.mysbx.extraTools`
-  # under the same condition, so the binary the sandbox has is the
-  # binary this config names.
-  sandboxAgents = lib.optionalAttrs aiCfg.pi-coding-agent.enable {
-    pi = {
-      type = "pi";
-      command = "pi";
+  # The in-sandbox agent map is DERIVED from
+  # `myconfig.ai.dev.mysbx.defaultAgent` (the sandbox carries only the
+  # default agent — the host's other named agents are not in the
+  # sandbox's `extraTools` closure). The command is the bare name,
+  # resolved from the sandbox `PATH`: the module setting the option
+  # also adds its package to `extraTools`, so the binary the sandbox
+  # has is the binary this config names.
+  defaultAgent = aiCfg.mysbx.defaultAgent or null;
+  sandboxAgents = lib.optionalAttrs (defaultAgent != null) {
+    ${defaultAgent.kind} = lib.filterAttrs (_: v: v != null) {
+      type = defaultAgent.kind;
+      command = defaultAgent.command;
+      args = if defaultAgent.args == [ ] then null else defaultAgent.args;
     };
   };
 in
@@ -75,12 +81,17 @@ in
       enable = true;
       inherit (wmCfg) package;
       # Everything but the agents is inherited verbatim from the host
-      # settings (nerdfont, the `<agent>` pane layout, the default
-      # agent), exactly as ./jail.nix and ./sandbox.nix do.
+      # settings (nerdfont, the `<agent>` pane layout), exactly as
+      # ./jail.nix and ./sandbox.nix do. The derived `agent` key comes
+      # LAST, so the mysbx tier wins over
+      # `myconfig.ai.dev.workmux.settings.agent` for the in-sandbox
+      # config — intended: the sandbox agent map carries only the
+      # sandbox default agent.
       settings = {
         agents = sandboxAgents;
       }
-      // wmCfg.settings;
+      // wmCfg.settings
+      // lib.optionalAttrs (defaultAgent != null) { agent = defaultAgent.kind; };
       # The host's tmux configuration (`programs.tmux` writes
       # `/etc/tmux.conf`), so the in-sandbox server keeps the same
       # keybindings and theme. `null` when the host has none.
