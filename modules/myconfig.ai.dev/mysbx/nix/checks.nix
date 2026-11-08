@@ -1266,6 +1266,12 @@ in
           fail "an un-paced 0.1s API poll survived in the relocation subshell"
         fi
 
+        # This check builds the entry WITHOUT defaultAgent: no agent
+        # start may appear anywhere then (bd myconfig-hjwx.5).
+        if grep -q 'herdr agent start' "$entry"; then
+          fail "the entry starts an agent although defaultAgent is null"
+        fi
+
         # Scratch HOME for the live part of the check — nothing under
         # the builder's real HOME is read or written.
         htmp="$(mktemp -d)"
@@ -1785,6 +1791,119 @@ in
         mkdir "$out"
       '';
 
+  # The defaultAgent wiring of the two agent-capable entries (bd
+  # myconfig-hjwx.5): both are built WITH and WITHOUT a defaultAgent,
+  # and the rendered scripts must differ exactly as the epic pins
+  # them — herdr starts the agent over the socket API inside the
+  # relocation subshell (1s retry pacing), workmux opens a vertical
+  # split below the dashboard and sends the command to the pane the
+  # split created, and without the option neither entry mentions
+  # any of it (byte-identical to the pre-option scripts, which
+  # mysbx-herdr-entry-test and this check's grep guards pin).
+  mysbx-default-agent-test =
+    let
+      cfg = self.nixosConfigurations.test-f13.config.myconfig.ai.dev.mysbx;
+      stubs = {
+        workmux = pkgs.writeShellScriptBin "workmux" "exit 0";
+        herdr = pkgs.writeShellScriptBin "herdr" "exit 0";
+      };
+      agent = {
+        kind = "pi";
+        command = "pi";
+        args = [ "--continue" ];
+      };
+      herdrOn = pkgs.callPackage ./herdr-entry.nix {
+        herdr = stubs.herdr;
+        tmux = cfg.tmux.package;
+        defaultAgent = agent;
+      };
+      herdrOff = pkgs.callPackage ./herdr-entry.nix {
+        herdr = stubs.herdr;
+        tmux = cfg.tmux.package;
+      };
+      workmuxOn = pkgs.callPackage ./workmux-entry.nix {
+        workmux = stubs.workmux;
+        tmux = cfg.tmux.package;
+        defaultAgent = agent;
+      };
+      workmuxOff = pkgs.callPackage ./workmux-entry.nix {
+        workmux = stubs.workmux;
+        tmux = cfg.tmux.package;
+      };
+    in
+    pkgs.runCommand "mysbx-default-agent-test" { } ''
+      fail() {
+        echo "mysbx-default-agent-test: $*" >&2
+        exit 1
+      }
+
+      herdr_on='${lib.getExe herdrOn}'
+      herdr_off='${lib.getExe herdrOff}'
+      workmux_on='${lib.getExe workmuxOn}'
+      workmux_off='${lib.getExe workmuxOff}'
+      for e in "$herdr_on" "$herdr_off" "$workmux_on" "$workmux_off"; do
+        test -x "$e" || fail "entry not executable: $e"
+        bash -n "$e" || fail "bash -n rejects $e"
+      done
+
+      # herdr WITH the option: the agent start lives INSIDE the
+      # relocation subshell (a foreground start would block the
+      # exec and leave the TUI blank), names the kind twice, the
+      # captured root pane, and the literal args after `--`.
+      sed -n '/^($/,/^) >\/dev\/null 2>&1 &$/p' "$herdr_on" > herdr_sub.txt
+      grep -q 'herdr agent start' herdr_sub.txt \
+        || fail "the relocation subshell does not start the agent"
+      grep -q -- '--kind pi' herdr_sub.txt \
+        || fail "the agent start does not name the kind"
+      grep -q -- '-- --continue' herdr_sub.txt \
+        || fail "the agent start does not pass the literal args"
+      grep -q -- '--pane "$pane_id"' herdr_sub.txt \
+        || fail "the agent start does not target the captured root pane"
+      grep -qF "jq -r '.result.root_pane.pane_id // empty'" herdr_sub.txt \
+        || fail "the pane capture does not read .result.root_pane.pane_id"
+      grep -q '^        sleep 1$' herdr_sub.txt \
+        || fail "the agent start retry is not paced at 1s"
+      if grep -q 'sleep 0.1' herdr_sub.txt; then
+        fail "an un-paced 0.1s API poll survived in the relocation subshell"
+      fi
+      # herdr WITHOUT the option: no agent start anywhere.
+      if grep -q 'herdr agent start' "$herdr_off"; then
+        fail "the herdr entry starts an agent although defaultAgent is null"
+      fi
+      if grep -q 'pane_id=' "$herdr_off"; then
+        fail "the herdr entry captures a pane although defaultAgent is null"
+      fi
+
+      # workmux WITH the option: the vertical split, the gate, and
+      # the command sent to the pane the split created.
+      grep -qF "split-window -v -P -F" "$workmux_on" \
+        || fail "the workmux entry does not split vertically"
+      grep -qF "#{pane_id}" "$workmux_on" \
+        || fail "the split does not capture the pane id"
+      grep -q '@workmux_agent_started' "$workmux_on" \
+        || fail "the agent split is not gated on @workmux_agent_started"
+      grep -q -- 'send-keys -t "$agent_pane" pi --continue Enter' "$workmux_on" \
+        || fail "the agent command is not sent to the split pane"
+      # workmux WITHOUT the option: no split at all.
+      if grep -q 'split-window' "$workmux_off"; then
+        fail "the workmux entry splits although defaultAgent is null"
+      fi
+      if grep -q '@workmux_agent_started' "$workmux_off"; then
+        fail "the workmux entry gates an agent although defaultAgent is null"
+      fi
+
+      mkdir "$out"
+    '';
+
+  #   mysbx-default-agent-test
+  #                 the defaultAgent wiring of the two agent-capable
+  #                 entry scripts (bd myconfig-hjwx): built with and
+  #                 without the option, the herdr entry must start the
+  #                 agent over the socket API inside the relocation
+  #                 subshell (1s retry pacing) and the workmux entry in
+  #                 a gated vertical split below the dashboard, while a
+  #                 null config renders neither any of it.
+  #
   # The pi integration's mounts, evaluated against the REAL reference
   # host (`test-f13` enables both mysbx and pi-coding-agent, hosts/
   # host.f13/ai.f13.nix): since bd myconfig-576 the mounts bind from a

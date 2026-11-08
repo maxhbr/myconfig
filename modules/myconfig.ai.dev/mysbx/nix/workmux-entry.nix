@@ -46,12 +46,34 @@
   # (`myconfig.ai.dev.mysbx.workmux.package`, normally
   # `myconfig.ai.dev.workmux.package`).
   workmux,
+  # The agent every session starts (../default.nix `defaultAgent`):
+  # `null` starts none.
+  defaultAgent ? null,
 }:
 let
   # The socket validation, the session name and the pane-shell pin are
   # the same for every multiplexer entry (./mux-entry-lib.nix); only
   # the bootstrap below is workmux's own.
   muxLib = import ./mux-entry-lib.nix { inherit lib; };
+
+  # The vertical split that starts the session's default agent below
+  # the dashboard — workmux's own `split: vertical` shape, but applied
+  # to the session the entry boots (the declarative `panes` layout only
+  # affects `workmux add` for NEW worktrees). Gated on its own session
+  # option for the same reason as the bootstrap: a half-created session
+  # or a second attach must not start a second copy. `-P -F '#{pane_id}'`
+  # captures the pane THIS split created, so send-keys can never land
+  # in the dashboard pane.
+  agentBlock = ''
+
+    if [ "$(tmux show-options -t "=$session:" -qv @workmux_agent_started)" != 1 ]; then
+      tmux set-option -t "=$session:" @workmux_agent_started 1
+      agent_pane="$(tmux split-window -v -P -F '#{pane_id}' -t "=$session:")"
+      tmux send-keys -t "$agent_pane" ${
+        lib.escapeShellArgs ([ defaultAgent.command ] ++ defaultAgent.args)
+      } Enter
+    fi
+  '';
 in
 writeShellApplication {
   name = "mysbx-workmux-entry";
@@ -93,7 +115,7 @@ writeShellApplication {
       tmux set-option -t "=$session:" @workmux_bootstrapped 1
       tmux send-keys -t "=$session:" 'workmux sidebar --session; workmux dashboard' Enter
     fi
-
+    ${lib.optionalString (defaultAgent != null) agentBlock}
     # In a detached run (`MYSBX_DETACHABLE=1`, detach.md B7) the gate
     # loops instead of exec'ing the client, so a `prefix d` inside the
     # session does not end the sandbox. The attach form is SHORT

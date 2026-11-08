@@ -439,6 +439,15 @@ another sandbox of the same repository — no mount may land on it, no
 `state-dirs` entry may persist it, and `TMUX_TMPDIR` is set after
 `[env]` like `HOME` and `PATH` (`docs/design/config.md` D16/D17).
 
+`myconfig.ai.dev.mysbx.defaultAgent` names the agent every interactive
+session starts, on the multiplexers that have the concept: `herdr`
+starts it as the initial command of the relocated workspace,
+`workmux` in a vertical split below the dashboard. The default `null`
+starts none, and `tmux`, `aoe` and `orca` ignore it either way. The
+module setting the option must also add the agent's package to
+`myconfig.ai.dev.mysbx.extraTools` — the sandbox PATH is the only
+PATH in there, so a command not in `extraTools` does not exist.
+
 In a detached run (`mysbx --detach`/`--detachable`,
 [`docs/design/detach.md`](docs/design/detach.md)) the entry does not
 end with its client: detaching the inner multiplexer (`prefix d` in
