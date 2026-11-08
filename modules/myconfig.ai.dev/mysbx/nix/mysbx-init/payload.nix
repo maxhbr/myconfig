@@ -113,10 +113,14 @@
           _iw_base=0
           echo "armed: growth $_iw_limit, interval ''${_iw_interval}s" 2>/dev/null >> "$_iw_log" || :
           while :; do
-              # inode-state is TAB-separated; read's default IFS
-              # splits on any whitespace, so the first field alone
-              # lands in _iw_inodes.
-              read _iw_inodes _ < /proc/sys/fs/inode-state 2>/dev/null || _iw_inodes=0
+              # inode-state is TAB-separated; the busybox `read`
+              # builtin CANNOT read /proc/sys/* files — it yields
+              # only the file's FIRST byte (observed live, bd
+              # myconfig-24mn: the loop saw "3" forever and never
+              # dropped while the host virtiofsd pinned ~8M fds and
+              # the guest wedged). `cut` reads the whole line; the
+              # case guard keeps a failed read at 0.
+              _iw_inodes=$("$BB" cut -f1 /proc/sys/fs/inode-state 2>/dev/null || :)
               case "$_iw_inodes" in
                   "" | *[!0-9]*) _iw_inodes=0 ;;
               esac
@@ -125,7 +129,7 @@
                   # and a failing command would end this loop.
                   "$BB" sync || :
                   echo 2 > /proc/sys/vm/drop_caches 2>/dev/null || :
-                  read _iw_base _ < /proc/sys/fs/inode-state 2>/dev/null || _iw_base=0
+                  _iw_base=$("$BB" cut -f1 /proc/sys/fs/inode-state 2>/dev/null || :)
                   case "$_iw_base" in
                       "" | *[!0-9]*) _iw_base=0 ;;
                   esac
