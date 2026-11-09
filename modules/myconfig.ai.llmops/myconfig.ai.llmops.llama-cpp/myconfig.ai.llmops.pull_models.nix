@@ -42,10 +42,15 @@
         acc: m:
         let
           dir = toString m.pull-models.target_directory;
-          specs = m.pull-models.hf_spec;
+          # Dedupe against what earlier models already contributed to
+          # this directory: several entries legitimately re-declare the
+          # same file's spec (e.g. the Qwen3.8-27B base GGUF is listed
+          # by both the plain and the MTP entry), and `hf download` is
+          # idempotent-but-not-free.
           prev = acc.${dir} or [ ];
+          newSpecs = lib.unique (builtins.filter (s: !lib.elem s prev) m.pull-models.hf_spec);
         in
-        acc // { ${dir} = prev ++ specs; }
+        acc // { ${dir} = prev ++ newSpecs; }
       ) { } withPull;
   };
 }

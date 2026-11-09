@@ -286,20 +286,44 @@ in
     # `Qwen3.8-27B-Q8_0` and `Qwen3.8-27B-MTP-Q8_0`); the merged list is
     # de-duplicated here so `pull-models` does not run the same
     # `hf download` twice.
-    myconfig.ai.llmops.pull_models.models.${modelsPullDir} = lib.unique (
-      lib.concatMap (m: m.pull-models.hf_spec) (
-        builtins.filter (m: (m.pull-models or null) != null) (
-          amdModels
-          ++ qwen3_8_27B-multiGpu
-          ++ qwen3_6_35B-A3B-multiGpu
-          ++ hy3-multiGpu
-          ++ qwen3_8_27B.candidateModels
-          ++ qwen38_flash_next.amdModels
-          ++ nex_n25_mini.amdModels
-          ++ nanbeige4_3_33B.amdModels
+    #
+    # The rtx twins of the shared amd models are NOT listed here: the
+    # amd entry already pulls their exact files (same path, same
+    # spec), so listing both would only produce duplicates after this
+    # `lib.unique` — harmless but noisy. Multi-GPU and candidate
+    # models carry their own self-contained specs and are listed.
+    #
+    # NOTE: the host-level auto-collector (the pull_models bridge
+    # module) also collects from the HOST-level
+    # `myconfig.ai.llmops.llama-cpp.models` — which, via
+    # `fromRtxModels`, includes the rtx twins of the shared amd
+    # models — and NixOS concatenates the two declarations BEFORE any
+    # dedup runs. This block therefore subtracts the bridge's spec set
+    # so specs pulled by both sides are listed once.
+    myconfig.ai.llmops.pull_models.models.${modelsPullDir} =
+      let
+        bridgeSpecs = lib.unique (
+          lib.concatMap (m: m.pull-models.hf_spec) (
+            builtins.filter (m: (m.pull-models or null) != null) config.myconfig.ai.llmops.llama-cpp.models
+          )
+        );
+      in
+      lib.unique (
+        builtins.filter (s: !lib.elem s bridgeSpecs) (
+          lib.concatMap (m: m.pull-models.hf_spec) (
+            builtins.filter (m: (m.pull-models or null) != null) (
+              amdModels
+              ++ qwen3_8_27B-multiGpu
+              ++ qwen3_6_35B-A3B-multiGpu
+              ++ hy3-multiGpu
+              ++ qwen3_8_27B.candidateModels
+              ++ qwen38_flash_next.amdModels
+              ++ nex_n25_mini.amdModels
+              ++ nanbeige4_3_33B.amdModels
+            )
+          )
         )
-      )
-    );
+      );
 
     myconfig.ai.llmops.llama-cpp = rtx-llama-cpp-config;
 
