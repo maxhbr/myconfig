@@ -73,6 +73,18 @@
 //   --ro-share/--rw-share declare each share's SLOT and sandbox
 //   dest inside its device. The device count is constant, the
 //   share count is not.
+//   NON-TERMINAL stdio costs one MORE slot PER piped fd (bd
+//   myconfig-rn4e, the piped-run silent hang): libkrun wires each
+//   non-terminal fd through its own virtio port (krun-stdin,
+//   krun-stdout, krun-stderr), each a full MMIO device — a run
+//   whose fds are pipes or files (cron, scripts, the fd-stress
+//   harness) spends up to 3 slots the terminal mode does not. The
+//   launcher therefore counts the WHOLE census (balloon, rng,
+//   console, vsock, every fs device, every block disk, the pipe
+//   ports) before krun_start_enter — see irq_census/
+//   ensure_irq_budget — and refuses with EXIT_SETUP instead of
+//   letting libkrun panic silently (IrqsExhausted, krun_start_enter
+//   never returns).
 //
 // Usage (grouped interface — argv and env, no TOML):
 //
@@ -149,6 +161,80 @@ enum VsockDecision {
     DisableTsi,
     /// `--network none` without the symbol: the run is refused.
     RefusedNoSymbol,
+}
+
+/// libkrun's MMIO IRQ budget: every virtio device takes one line
+/// from IRQ_BASE (5) through IRQ_MAX (15) — 11 slots, and the -22
+/// IrqsExhausted live finding (the silent panic at main.rs's
+/// krun_init_log note) is what exceeding it looks like from the
+/// outside: krun_start_enter never returns, no diagnostic.
+const IRQ_SLOT_MAX: u32 = 11;
+
+/// The pre-enter device census (bd myconfig-rn4e): libkrun wires
+/// the guest console by the launcher's stdio type (vmm builder.rs,
+/// generate_console_devs) — the single implicit console port always
+/// exists, and EVERY fd that is not a terminal gets its own extra
+/// virtio port (krun-stdin for stdin, krun-stdout for stdout,
+/// krun-stderr for stderr), each a full MMIO device needing its
+/// own IRQ line. The census counts every class that consumes a
+/// slot: balloon + rng + console (3 implicit), the vsock when
+/// kept, one per registered virtiofs device (rootfs, trustfs,
+/// every --ro/--rw-device), one per virtio-blk disk (scratch,
+/// store), and one PER non-terminal stdio fd. Pure arithmetic on
+/// already-parsed state so the exact failing configuration of a
+/// live hang is unit-pinnable.
+fn irq_census(
+    fs_devices: usize,
+    block_disks: usize,
+    vsock_kept: bool,
+    pipe_ports: usize,
+) -> (u32, u32) {
+    let mut used: u32 = 3; // balloon, rng, the implicit console
+    used += fs_devices as u32;
+    used += block_disks as u32;
+    if vsock_kept {
+        used += 1;
+    }
+    used += pipe_ports as u32;
+    (used, IRQ_SLOT_MAX)
+}
+
+/// The census's verdict as a pure message (None = allowed): the
+/// refusal text naming every class, its count, the stdio mode and
+/// the exact overflow — extracted so the unit test pins the live
+/// failing configuration's REFUSAL, not just the arithmetic.
+fn irq_budget_violation(
+    fs_devices: usize,
+    block_disks: usize,
+    vsock_kept: bool,
+    pipe_ports: usize,
+) -> Option<String> {
+    let (used, max) = irq_census(fs_devices, block_disks, vsock_kept, pipe_ports);
+    if used <= max {
+        return None;
+    }
+    let vsock = if vsock_kept { 1 } else { 0 };
+    Some(format!(
+        "IRQ budget exceeded: balloon+rng+console=3, fs={fs_devices}, block={block_disks}, \
+         vsock={vsock}, pipe-ports={pipe_ports} (one per non-terminal stdio fd) -> {used} \
+         of {max} slots — libkrun would panic with IrqsExhausted (krun_start_enter never \
+         returns; the run would hang at boot with no diagnostic). Drop a device, a disk, \
+         or the vsock (--network none), or run the launcher from a terminal / a pty so \
+         the pipe ports cost 0"
+    ))
+}
+
+/// The census gate — the ensure_nofile discipline (bd myconfig-dj4)
+/// applied to IRQ lines: a census over the budget is a GUARANTEED
+/// silent IrqsExhausted hang at boot, so the run is refused at
+/// launch with the per-class breakdown (the operator immediately
+/// sees WHICH class to drop) and EXIT_SETUP, never left to wedge
+/// with no diagnostic.
+fn ensure_irq_budget(fs_devices: usize, block_disks: usize, vsock_kept: bool, pipe_ports: usize) {
+    if let Some(msg) = irq_budget_violation(fs_devices, block_disks, vsock_kept, pipe_ports) {
+        eprintln!("mysbx-krun: {msg}");
+        std::process::exit(EXIT_SETUP);
+    }
 }
 
 // The fd ceiling of the LAUNCHER itself (bd myconfig-mnr, the host
@@ -1226,16 +1312,44 @@ fn main() {
             eprintln!("mysbx-krun: share {}:{}@{}", s.tag, s.slot, s.dest);
         }
     }
+    // Console wiring follows stdio (bd myconfig-rn4e): terminal fds
+    // ride hvc0 on the single implicit console port, and every fd
+    // that is a pipe or file (cron, scripts, the fd-stress harness,
+    // workmux) gets its own krun-stdin/-stdout/-stderr virtio port
+    // — each a full MMIO device the census must charge for.
+    let pipe_ports = [
+        std::io::IsTerminal::is_terminal(&std::io::stdin()),
+        std::io::IsTerminal::is_terminal(&std::io::stdout()),
+        std::io::IsTerminal::is_terminal(&std::io::stderr()),
+    ]
+    .into_iter()
+    .filter(|is_tty| !is_tty)
+    .count();
     eprintln!(
         "mysbx-krun: stdio is {}",
-        if std::io::IsTerminal::is_terminal(&std::io::stdin())
-            && std::io::IsTerminal::is_terminal(&std::io::stdout())
-        {
+        if pipe_ports == 0 {
             "a terminal (console wiring: hvc0 <-> fds)"
         } else {
             "NOT a terminal (console wiring: pipes, the krun-stdin/-stdout virtio ports)"
         }
     );
+
+    // The IRQ census gate (bd myconfig-rn4e): every decision that
+    // consumes a slot is final by now (the fs devices incl. rootfs
+    // and trustfs, the scratch and store disks, the vsock mode, the
+    // stdio wiring), and NO libkrun call has been made yet — the
+    // refusal therefore precedes even krun_create_ctx, so an
+    // over-budget run dies diagnosably at launch instead of hanging
+    // forever inside krun_start_enter (IrqsExhausted never returns).
+    let fs_devices = 1 // the rootfs virtiofs
+        + if cfg.overlays.is_empty() { 0 } else { 1 } // the trustfs
+        + cfg.devices.len();
+    let block_disks = cfg.scratch.is_some() as usize + cfg.store_disk.is_some() as usize;
+    let (irq_used, irq_max) = irq_census(fs_devices, block_disks, cfg.network, pipe_ports);
+    if chatty {
+        eprintln!("mysbx-krun: IRQ census: {irq_used} of {irq_max} slots");
+    }
+    ensure_irq_budget(fs_devices, block_disks, cfg.network, pipe_ports);
 
     unsafe {
         let ctx = check((api.krun_create_ctx)(), "krun_create_ctx") as c_uint;
@@ -1583,6 +1697,56 @@ mod tests {
         assert!(
             matches!(vsock_decision(false, false), RefusedNoSymbol),
             "none on a symbol-less lib stays refused"
+        );
+    }
+
+    #[test]
+    fn irq_census_pins_the_live_failing_piped_run() {
+        // bd myconfig-rn4e: the trace-log census of the hung
+        // fd-stress runs — balloon=5, rng=6, console=7, fs x4 =
+        // 8..11 (rootfs, stage-ro, stage-rw, trustfs), block x2 =
+        // 12..13 (scratch, store), vsock = 14 — one slot left for
+        // the krun-stdin/krun-stdout pipe ports piped stdio adds
+        // (the harness keeps stderr on the log file's fd, a pipe
+        // too, but the trace stops at the exhaustion). 12 of 11:
+        // IrqsExhausted, krun_start_enter never returns.
+        assert_eq!(irq_census(4, 2, true, 2), (12, 11));
+        let msg =
+            irq_budget_violation(4, 2, true, 2).expect("the live failing census must be refused");
+        assert!(
+            msg.contains("pipe-ports=2"),
+            "the refusal must name the pipe ports: {msg}"
+        );
+        assert!(
+            msg.contains("12 of 11"),
+            "the refusal must name the exact overflow: {msg}"
+        );
+    }
+
+    #[test]
+    fn irq_census_allows_the_interactive_baseline() {
+        // The same device census from a terminal: hvc0 rides the
+        // single implicit console port, the pipe ports cost 0 —
+        // 10 of 11 (IRQ 5..14 used, the trace-log census; slot 15
+        // free is exactly why the interactive baseline booted fine).
+        assert_eq!(irq_census(4, 2, true, 0), (10, 11));
+        assert!(
+            irq_budget_violation(4, 2, true, 0).is_none(),
+            "the interactive baseline must be allowed"
+        );
+    }
+
+    #[test]
+    fn irq_census_allows_a_slim_piped_run() {
+        // A slim run keeps pipes affordable: stage-ro + stage-rw +
+        // trustfs (fs=3), no disks, no vsock → 3 + 3 + 3 = 9 of 11
+        // (all three fds piped, the fully headless case). Piped
+        // stdio is not a refusal per se — only a census that also
+        // spends every other slot is.
+        assert_eq!(irq_census(3, 0, false, 3), (9, 11));
+        assert!(
+            irq_budget_violation(3, 0, false, 3).is_none(),
+            "a slim piped run must be allowed"
         );
     }
 
