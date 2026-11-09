@@ -591,6 +591,152 @@ fn short_id(id: &str) -> &str {
     id.get(..12).unwrap_or(id)
 }
 
+/// One live virtiofsd instance of a VM-backend run, as the doctor
+/// reads it (bd myconfig-qq3i): the pid, its open-fd count and the
+/// soft `Max open files` limit that stands for it. `None` marks a
+/// limit the doctor could not read — a daemon without a readable
+/// limit never decides the verdict.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct VirtiofsdFd {
+    pid: u32,
+    fds: u64,
+    soft: Option<u64>,
+}
+
+/// The virtiofsd instances of THIS backend's runs under a proc
+/// tree: `/proc/<pid>/exe` basename `virtiofsd` (the pinned store
+/// binary — unwrapped, unlike the launchers) whose cmdline carries
+/// the backend's per-run runtime dir spelling
+/// (`mysbx-microvm-qemu-<launcher-pid>/` or the `-ch-` twin — the
+/// socket path names it). `backend_dir_prefix` is that
+/// `mysbx-<backend>-` spelling; the filter keeps other backends'
+/// and foreign virtiofsds out of the section's verdict.
+fn virtiofsd_instances(proc: &Path, backend_dir_prefix: &str) -> Vec<VirtiofsdFd> {
+    let mut found = Vec::new();
+    let Ok(entries) = std::fs::read_dir(proc) else {
+        return found;
+    };
+    for entry in entries.flatten() {
+        let pid = match entry.file_name().to_string_lossy().parse::<u32>() {
+            Ok(pid) => pid,
+            Err(_) => continue,
+        };
+        let dir = entry.path();
+        // readlink(exe) resolves the binary even after an exec;
+        // a vanished process between read_dir and here is skipped
+        // like any unreadable one
+        let Ok(exe) = std::fs::read_link(dir.join("exe")) else {
+            continue;
+        };
+        if exe.file_name().and_then(|n| n.to_str()) != Some("virtiofsd") {
+            continue;
+        }
+        let Ok(cmdline) = std::fs::read(dir.join("cmdline")) else {
+            continue;
+        };
+        // NUL-separated argv: the socket-path argument names the
+        // launcher's per-run dir, the one spelling that ties a
+        // daemon to THIS backend
+        let argv: Vec<String> = cmdline
+            .split(|b: &u8| *b == 0)
+            .map(|a| String::from_utf8_lossy(a).into_owned())
+            .collect();
+        if !argv.iter().any(|a| a.contains(backend_dir_prefix)) {
+            continue;
+        }
+        let fds = std::fs::read_dir(dir.join("fd"))
+            .map(|d| d.count() as u64)
+            .unwrap_or(0);
+        let soft = soft_nofile(&dir);
+        found.push(VirtiofsdFd { pid, fds, soft });
+    }
+    found
+}
+
+/// The soft `Max open files` limit of a proc entry (the doctor's
+/// read-only view — no rlimit syscall of our own). The field is
+/// the line's fourth token; an "unlimited" spelling parses to
+/// `None`, which the check treats as "never near a ceiling".
+fn soft_nofile(proc_dir: &Path) -> Option<u64> {
+    let limits = std::fs::read_to_string(proc_dir.join("limits")).ok()?;
+    let line = limits.lines().find(|l| l.starts_with("Max open files"))?;
+    line.split_whitespace()
+        .nth(3)
+        .and_then(|v| v.parse::<u64>().ok())
+}
+
+/// The fd-headroom check over the discovered instances (bd
+/// myconfig-qq3i): every daemon at or past this share of its soft
+/// limit raises the WARN.
+const VIRTIOFSD_WARN_PCT: u64 = 90;
+
+/// Every daemon at or past [`VIRTIOFSD_WARN_PCT`] of its soft limit
+/// raises the WARN (each one is named — two hot daemons must not
+/// hide each other); otherwise an OK names the worst ratio. A
+/// backend whose sandboxes are not up is a SKIP, never a FAIL —
+/// but daemons whose limits the doctor cannot read are reported
+/// as such, never silently healthy.
+fn virtiofsd_fd_check(instances: &[VirtiofsdFd]) -> Check {
+    if instances.is_empty() {
+        return Check::skip("virtiofsd fds", &["no running sandbox of this backend"]);
+    }
+    let pct_of = |i: &VirtiofsdFd| i.fds * 100 / i.soft.unwrap_or(1);
+    let ratable: Vec<&VirtiofsdFd> = instances.iter().filter(|i| i.soft.is_some()).collect();
+    let hot: Vec<&VirtiofsdFd> = ratable
+        .iter()
+        .copied()
+        .filter(|i| pct_of(i) >= VIRTIOFSD_WARN_PCT)
+        .collect();
+    let worst = ratable.iter().copied().max_by_key(|i| pct_of(i));
+    if let Some(worst) = worst {
+        if !hot.is_empty() {
+            let pids: Vec<String> = hot
+                .iter()
+                .map(|i| {
+                    format!(
+                        "pid {} holds {} fds — {}% of its {} soft limit",
+                        i.pid,
+                        i.fds,
+                        pct_of(i),
+                        i.soft.unwrap_or(0)
+                    )
+                })
+                .collect();
+            return Check::warn(
+                "virtiofsd fds",
+                pids.join("; "),
+                "virtiofsd pins one fd per guest-visited inode with no \
+                 eviction; near the ceiling the guest store wedges with ENFILE \
+                 (bd myconfig-qq3i) — drop guest caches (the inode watchdog) or \
+                 restart the sandbox run before the ceiling",
+            );
+        }
+        return Check::ok(
+            "virtiofsd fds",
+            format!(
+                "{} daemon(s), worst pid {} at {} of {} fds ({}%)",
+                instances.len(),
+                worst.pid,
+                worst.fds,
+                worst.soft.unwrap_or(0),
+                pct_of(worst)
+            ),
+        );
+    }
+    // daemons are running but no limit of theirs is readable
+    let pids: Vec<String> = instances.iter().map(|i| i.pid.to_string()).collect();
+    Check::warn(
+        "virtiofsd fds",
+        format!(
+            "{} daemon(s) running (pid {}) but no soft fd limit readable",
+            instances.len(),
+            pids.join(", pid ")
+        ),
+        "cannot judge fd headroom without /proc/<pid>/limits — check \
+         the daemon runs as this user",
+    )
+}
+
 /// Whether a `podman image inspect` error says the image is absent.
 fn image_unknown(error: &str) -> bool {
     let error = error.to_ascii_lowercase();
@@ -1176,6 +1322,15 @@ fn microvm_vm_checks(checks: &mut Vec<Check>, backend: &str, pin: &str, option: 
         }
         None => checks.push(Check::skip("launcher probe", &["launcher"])),
     }
+    // The live virtiofsd fd headroom (bd myconfig-qq3i): the
+    // daemons pin one host fd per guest-visited inode and have no
+    // eviction, so the count only grows during a run; a WARN near
+    // the ceiling names the daemon while the session can still be
+    // saved.
+    checks.push(virtiofsd_fd_check(&virtiofsd_instances(
+        Path::new("/proc"),
+        &format!("mysbx-{backend}-"),
+    )));
 }
 
 /// podman binary, OCI runtime, `/dev/kvm` (krun), image, startup probe
@@ -2270,5 +2425,170 @@ mod tests {
         assert_eq!(error_line("a\nError: boom\n\n"), "Error: boom");
         assert_eq!(error_line(""), "no error output");
         assert_eq!(error_line(&"x".repeat(300)).chars().count(), 201);
+    }
+
+    #[test]
+    fn virtiofsd_fd_check_verdicts() {
+        // bd myconfig-qq3i: skip when no daemon runs, OK naming the
+        // worst ratio, WARN at >= 90% of the soft ceiling naming
+        // EVERY hot daemon, and a running-but-unreadable daemon is
+        // never silently healthy.
+        assert_eq!(
+            virtiofsd_fd_check(&[]),
+            Check::skip("virtiofsd fds", &["no running sandbox of this backend"])
+        );
+        // healthy: worst daemon far from its ceiling, the detail
+        // names the worst one and the count
+        let ok = virtiofsd_fd_check(&[
+            VirtiofsdFd {
+                pid: 10,
+                fds: 1730,
+                soft: Some(8_388_608),
+            },
+            VirtiofsdFd {
+                pid: 11,
+                fds: 115_600,
+                soft: Some(8_388_608),
+            },
+        ]);
+        assert_eq!(ok.level, Level::Ok);
+        assert!(ok.detail.contains("2 daemon(s)"));
+        assert!(ok.detail.contains("pid 11 at 115600 of 8388608 fds (1%)"));
+        // near the ceiling: WARN names the daemon, the count and
+        // the hint names the failure class
+        let warn = virtiofsd_fd_check(&[
+            VirtiofsdFd {
+                pid: 10,
+                fds: 1_730,
+                soft: Some(8_388_608),
+            },
+            VirtiofsdFd {
+                pid: 11,
+                fds: 7_946_680,
+                soft: Some(8_388_608),
+            },
+        ]);
+        assert_eq!(warn.level, Level::Warn);
+        assert!(warn.detail.contains("pid 11 holds 7946680 fds — 94%"));
+        assert!(warn.hint.as_deref().unwrap_or("").contains("myconfig-qq3i"));
+        // two hot daemons: both are named, one must not hide the other
+        let both_hot = virtiofsd_fd_check(&[
+            VirtiofsdFd {
+                pid: 30,
+                fds: 9_500,
+                soft: Some(10_000),
+            },
+            VirtiofsdFd {
+                pid: 31,
+                fds: 9_900,
+                soft: Some(10_000),
+            },
+        ]);
+        assert_eq!(both_hot.level, Level::Warn);
+        assert!(both_hot.detail.contains("pid 30 holds 9500 fds — 95%"));
+        assert!(both_hot.detail.contains("pid 31 holds 9900 fds — 99%"));
+        // exactly at the boundary warns too
+        let at_edge = virtiofsd_fd_check(&[VirtiofsdFd {
+            pid: 12,
+            fds: 90,
+            soft: Some(100),
+        }]);
+        assert_eq!(at_edge.level, Level::Warn);
+        // a daemon with an unreadable limit among readable ones
+        // stays counted but never decides the verdict
+        let mixed = virtiofsd_fd_check(&[
+            VirtiofsdFd {
+                pid: 13,
+                fds: 5000,
+                soft: None,
+            },
+            VirtiofsdFd {
+                pid: 14,
+                fds: 1_000,
+                soft: Some(8_388_608),
+            },
+        ]);
+        assert_eq!(mixed.level, Level::Ok);
+        assert!(mixed.detail.contains("2 daemon(s)"));
+        assert!(mixed.detail.contains("pid 14 at 1000 of 8388608"));
+        // ONLY unreadable limits: a WARN, never a silent skip or
+        // a false "nothing running"
+        let only_unreadable = virtiofsd_fd_check(&[VirtiofsdFd {
+            pid: 15,
+            fds: 5000,
+            soft: None,
+        }]);
+        assert_eq!(only_unreadable.level, Level::Warn);
+        assert!(only_unreadable
+            .detail
+            .contains("running (pid 15) but no soft fd limit readable"));
+    }
+
+    #[test]
+    fn virtiofsd_instances_discover_over_a_fake_proc() {
+        // The discovery half over a fake proc tree: an exe whose
+        // basename is virtiofsd AND whose argv names the backend's
+        // runtime dir. A foreign virtiofsd (another backend's dir
+        // prefix) and a same-named-but-different binary are both
+        // invisible; a vanished pid directory (raced exit) is
+        // skipped, not an error.
+        let suffix = std::process::id();
+        let root = std::env::temp_dir().join(format!("mysbx-doctor-virtiofsd-{suffix}"));
+        let _ = std::fs::remove_dir_all(&root);
+        // OUR daemon: pid 21, 3 fds, soft limit 1048576
+        let mine = root.join("21");
+        std::fs::create_dir_all(mine.join("fd")).unwrap();
+        std::os::unix::fs::symlink("/nix/store/x-virtiofsd/bin/virtiofsd", mine.join("exe"))
+            .unwrap();
+        std::fs::write(
+            &mine.join("cmdline"),
+            b"/nix/store/x-virtiofsd/bin/virtiofsd\0--socket-path=/tmp/mysbx-microvm-qemu-1/x.sock\0--shared-dir=/y\0",
+        ).unwrap();
+        for i in 0..3 {
+            std::fs::File::create(mine.join("fd").join(i.to_string())).unwrap();
+        }
+        std::fs::write(
+            &mine.join("limits"),
+            "Max open files            1048576              1048576              files\n",
+        )
+        .unwrap();
+        // the OTHER backend's daemon: same exe, the -ch- dir
+        let other = root.join("22");
+        std::fs::create_dir_all(other.join("fd")).unwrap();
+        std::os::unix::fs::symlink("/nix/store/x-virtiofsd/bin/virtiofsd", other.join("exe"))
+            .unwrap();
+        std::fs::write(
+            &other.join("cmdline"),
+            b"/nix/store/x-virtiofsd/bin/virtiofsd\0--socket-path=/tmp/mysbx-microvm-ch-2/x.sock\0",
+        )
+        .unwrap();
+        // a non-virtiofsd process
+        let shell = root.join("23");
+        std::fs::create_dir_all(shell.join("fd")).unwrap();
+        std::os::unix::fs::symlink("/nix/store/x-bash/bin/bash", shell.join("exe")).unwrap();
+        // a dead entry: an empty dir the read_dir still lists
+        std::fs::create_dir_all(root.join("24")).unwrap();
+
+        let found = virtiofsd_instances(&root, "mysbx-microvm-qemu-");
+        assert_eq!(
+            found,
+            vec![VirtiofsdFd {
+                pid: 21,
+                fds: 3,
+                soft: Some(1_048_576)
+            }]
+        );
+        // the -ch- prefix sees only the other daemon — the
+        // sections never cross-report
+        let ch_found = virtiofsd_instances(&root, "mysbx-microvm-ch-");
+        assert_eq!(
+            ch_found,
+            vec![VirtiofsdFd {
+                pid: 22,
+                fds: 0,
+                soft: None
+            }]
+        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
