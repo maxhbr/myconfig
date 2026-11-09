@@ -246,16 +246,18 @@
     #   aichat         -> onig_sys
     #   nono           -> aws-lc-sys
     # Adding the libs to `buildInputs` puts their `.pc` files on
-    # PKG_CONFIG_PATH; every one of the five already ships `pkg-config` in
-    # `nativeBuildInputs`. All other failures in the affected builds
-    # (fish-completions, agent-bubblewrap wrappers, home-manager, toplevel)
-    # are cascading "N dependencies failed" errors.
+    # PKG_CONFIG_PATH; every one of the affected packages already ships
+    # `pkg-config` in `nativeBuildInputs`. All other failures in the affected
+    # builds (fish-completions, agent-bubblewrap wrappers, home-manager,
+    # toplevel) are cascading "N dependencies failed" errors.
     #
     # Upstream status:
     # - codex fixed by 16b463698a5b "codex: fix build with sys libs"
     #   (adds aws-lc, oniguruma, sqlite, zstd — mirrored here 1:1)
     # - aichat fixed on master (oniguruma in buildInputs)
     # - wprs, ccusage, nono: no fix on any branch yet (2026-11-08)
+    # - voxtype-onnx (vendoring onig_sys and libsqlite3-sys): no fix on any
+    #   branch yet (2026-11-09)
     #
     # Appending is idempotent once a package carries the fix upstream, but
     # leaves duplicate buildInputs — drop each entry when the pinned
@@ -282,6 +284,17 @@
       });
       nono = prev.nono.overrideAttrs (old: {
         buildInputs = (old.buildInputs or [ ]) ++ [ prev.aws-lc ];
+      });
+      # voxtype's upstream package.nix predates the cargoSetupHook change;
+      # its Cargo.lock vendors onig_sys and libsqlite3-sys, both forced to
+      # the system lib by the hook. `openssl-sys` is covered by the `openssl`
+      # already in buildInputs. Attribute is `voxtype-onnx`, not `voxtype`
+      # (see the osd-gtk4 override above).
+      voxtype-onnx = prev.voxtype-onnx.overrideAttrs (old: {
+        buildInputs = (old.buildInputs or [ ]) ++ [
+          prev.oniguruma
+          prev.sqlite
+        ];
       });
     })
   ];

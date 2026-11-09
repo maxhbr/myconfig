@@ -3,15 +3,16 @@
 ## What is overridden
 
 `flake.pkgs_overrides.nix` appends missing native library `buildInputs` to
-five Rust packages:
+six Rust packages:
 
-| Package        | Added `buildInputs`                |
-| -------------- | ---------------------------------- |
+| Package        | Added `buildInputs`                    |
+| -------------- | -------------------------------------- |
 | `codex`        | `aws-lc`, `oniguruma`, `sqlite`, `zstd` |
-| `wprs`         | `zstd`                             |
-| `ccusage`      | `zstd`                             |
-| `aichat`       | `oniguruma`                        |
-| `nono`         | `aws-lc`                           |
+| `wprs`         | `zstd`                                  |
+| `ccusage`      | `zstd`                                  |
+| `aichat`       | `oniguruma`                             |
+| `nono`         | `aws-lc`                                |
+| `voxtype-onnx` | `oniguruma`, `sqlite`                   |
 
 ## Why (upstream bug)
 
@@ -52,9 +53,9 @@ pinned `nixos-unstable` branch contains the corresponding commit:
 1. **codex** — fixed by `16b463698a5b` "codex: fix build with sys libs"
    (adds `aws-lc`, `oniguruma`, `sqlite`, `zstd`; mirrored 1:1 here).
 2. **aichat** — fixed on master (`oniguruma` in `buildInputs`).
-3. **wprs**, **ccusage**, **nono** — no fix merged on any branch yet
-   (as of 2026-11-08); file/track the upstream PRs, then wait for them to
-   reach `nixos-unstable`.
+3. **wprs**, **ccusage**, **nono**, **voxtype-onnx** — no fix merged on any
+   branch yet (as of 2026-11-09); file/track the upstream PRs, then wait
+   for them to reach `nixos-unstable`.
 
 Check and clean up per package:
 
