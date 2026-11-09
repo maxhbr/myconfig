@@ -7,6 +7,7 @@ import argparse
 import base64
 import os
 import pty
+import re
 from pathlib import Path
 import shlex
 import shutil
@@ -552,6 +553,51 @@ class InitTests(unittest.TestCase):
         result = run("banana", 30000, interval="banana")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("mysbx-test: drops=2", result.stdout)
+
+    def test_inode_watchdog_parses_procfs_sysctls(self):
+        # bd myconfig-24mn: the busybox `read` builtin yields only
+        # the FIRST BYTE of a /proc/sys/* file, so the old
+        # `read _iw_inodes _ < inode-state` poll read "3" (or
+        # whatever the leading digit was) on the live guest and the
+        # watchdog NEVER fired while the host virtiofsd pinned ~8M
+        # fds and the guest wedged. The poll must go through a
+        # whole-file reader. This is the one test that reads a REAL
+        # /proc/sys file, exactly the surface the fake-tree tests
+        # above cannot model.
+        start = INIT.index('if [ "${MYSBX_VM_INODE_WATCHDOG:-')
+        end = INIT.index('step "exec-ing the payload: $1"', start)
+        block = INIT[start:end]
+        self.assertNotIn(
+            "read _iw_inodes _ < /proc/sys/fs/inode-state", block
+        )
+        self.assertNotIn(
+            "read _iw_base _ < /proc/sys/fs/inode-state", block
+        )
+        # The cut-based parse must read the REAL host sysctl whole:
+        # the baked busybox under the test reads the same /proc the
+        # guest's would (a build sandbox sees the host proc), and a
+        # parse that truncates like the read builtin fails here.
+        parse = 'BB=%s\n_v=$("$BB" cut -f1 /proc/sys/fs/inode-state 2>/dev/null || :)\ncase "$_v" in "" | *[!0-9]*) echo "mysbx-test: bad=["$_v"]" ;; *) echo "mysbx-test: n=["$_v"]" ;; esac\n' % shlex.quote(
+            str(ROOTFS / "bin/busybox")
+        )
+        result = subprocess.run(
+            [str(ROOTFS / "bin/busybox"), "sh", "-c", parse],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            env={"PATH": ""},
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        # A sysctl value is multi-digit on any real system; the read
+        # builtin would have yielded its leading digit only. cut
+        # yields the whole field.
+        m = re.search(r"mysbx-test: n=\[(\d+)\]", result.stdout)
+        self.assertIsNotNone(m, result.stdout + result.stderr)
+        self.assertGreater(int(m.group(1)), 9, result.stdout)
+        self.assertNotIn("bad=[", result.stdout)
+        # And the block's own parse line must be the same cut shape
+        # (guards a revert to read through copy-edit drift).
+        self.assertIn('"$BB" cut -f1 /proc/sys/fs/inode-state', block)
 
     def watchdog_ticks(self, start, observed, post_drop, env=None, log_bytes=0):
         # Run the REAL watchdog block over several ticks. The sleep

@@ -43,6 +43,10 @@
 # |                | skia-source hash, so the "neovide" fetch stores skia's tree |
 # |                | (no Cargo.lock) and the vendor-staging drv fails. Taken from |
 # |                | the `master` input, which has the corrected hashes.           |
+# | aichat,        | nixpkgs 44cddf92c432 ("rustPlatform.cargoSetupHook: Force     |
+# | ccusage,       | system libs") makes cargo build scripts link system libs via  |
+# | codex, nono,   | pkg-config instead of vendored ones; these Rust packages lack   |
+# | wprs           | the corresponding `buildInputs` and fail at build time.        |
 #
 # When removing an override, also drop its entry here and rebuild.
 
@@ -227,6 +231,58 @@
     # TODO: remove once the nixos-unstable input includes 2cc8df2292.
     (self: _prev: {
       neovide = self.master.neovide;
+    })
+
+    # nixpkgs 44cddf92c432 "rustPlatform.cargoSetupHook: Force system libs"
+    # exports ZSTD_SYS_USE_PKG_CONFIG=1, RUSTONIG_SYSTEM_LIBONIG=1,
+    # AWS_LC_SYS_USE_SYSTEM=1 (and friends), so the `zstd-sys`, `onig_sys`
+    # and `aws-lc-sys` build scripts demand the system library through
+    # pkg-config instead of compiling their vendored copy. Five Rust
+    # packages in the pinned nixos-unstable lack the matching
+    # `buildInputs` and their builds panic in the crate build script:
+    #   codex 0.167.0  -> zstd-sys (and later aws-lc-sys/onig_sys/rusqlite)
+    #   wprs           -> zstd-sys
+    #   ccusage        -> zstd-sys
+    #   aichat         -> onig_sys
+    #   nono           -> aws-lc-sys
+    # Adding the libs to `buildInputs` puts their `.pc` files on
+    # PKG_CONFIG_PATH; every one of the five already ships `pkg-config` in
+    # `nativeBuildInputs`. All other failures in the affected builds
+    # (fish-completions, agent-bubblewrap wrappers, home-manager, toplevel)
+    # are cascading "N dependencies failed" errors.
+    #
+    # Upstream status:
+    # - codex fixed by 16b463698a5b "codex: fix build with sys libs"
+    #   (adds aws-lc, oniguruma, sqlite, zstd — mirrored here 1:1)
+    # - aichat fixed on master (oniguruma in buildInputs)
+    # - wprs, ccusage, nono: no fix on any branch yet (2026-11-08)
+    #
+    # Appending is idempotent once a package carries the fix upstream, but
+    # leaves duplicate buildInputs — drop each entry when the pinned
+    # nixos-unstable includes it.
+    #
+    # See doc/TODOs/drop-rust-force-system-libs-overrides.md.
+    (_final: prev: {
+      codex = prev.codex.overrideAttrs (old: {
+        buildInputs = (old.buildInputs or [ ]) ++ [
+          prev.aws-lc
+          prev.oniguruma
+          prev.sqlite
+          prev.zstd
+        ];
+      });
+      wprs = prev.wprs.overrideAttrs (old: {
+        buildInputs = (old.buildInputs or [ ]) ++ [ prev.zstd ];
+      });
+      ccusage = prev.ccusage.overrideAttrs (old: {
+        buildInputs = (old.buildInputs or [ ]) ++ [ prev.zstd ];
+      });
+      aichat = prev.aichat.overrideAttrs (old: {
+        buildInputs = (old.buildInputs or [ ]) ++ [ prev.oniguruma ];
+      });
+      nono = prev.nono.overrideAttrs (old: {
+        buildInputs = (old.buildInputs or [ ]) ++ [ prev.aws-lc ];
+      });
     })
   ];
 }
