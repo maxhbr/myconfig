@@ -38,6 +38,17 @@ let
   #                a base flows into the base entry itself, all of its
   #                variants, and every alias attached to either.
   #
+  #   _capabilities -> the user-declared `capabilities` of the model
+  #                (and, for a variant, the parent's merged with the
+  #                variant's own, deduped). Same inheritance as
+  #                `_userTags`. Unlike `tags`, these are structured
+  #                facts about the model ("thinking", "tools",
+  #                "vision", "agentic"), NOT emitted into
+  #                llama-server's INI `tags=`; they are published as
+  #                localModels tags (prefixed "cap:") so LiteLLM and
+  #                the agents can filter on them, and rendered in
+  #                models.md.
+  #
   # Write `params` (not `args`): every consumer (scripts.nix,
   # llama-swap.nix, router.nix) reads `model.params`. The earlier
   # `args = ...` was a typo that silently dropped per-variant `params`
@@ -51,6 +62,7 @@ let
       _kind = "variant";
       _baseName = model.name;
       _userTags = (model.tags or [ ]) ++ (variant.tags or [ ]);
+      _capabilities = lib.unique ((model.capabilities or [ ]) ++ (variant.capabilities or [ ]));
       inherit (variant) aliases;
       params =
         model.params
@@ -74,6 +86,7 @@ let
           _kind = "base";
           _baseName = model.name;
           _userTags = model.tags or [ ];
+          _capabilities = model.capabilities or [ ];
         }
       )
     ]

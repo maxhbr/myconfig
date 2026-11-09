@@ -123,6 +123,10 @@ in
   amdModels = [
     {
       name = "Qwen3.8-Flash-Next-UD-IQ4_XS";
+      capabilities = [
+        "vision"
+        "agentic"
+      ];
       path = "/models/unsloth-Qwen3.8-Flash-Next-GGUF/UD-IQ4_XS/Qwen3.8-Flash-Next-UD-IQ4_XS-00001-of-00003.gguf";
       pull-models = {
         target_directory = modelsPullDir;
@@ -145,6 +149,10 @@ in
     }
     {
       name = "Qwen3.8-Flash-Next-UD-Q4_K_XL";
+      capabilities = [
+        "vision"
+        "agentic"
+      ];
       path = "/models/unsloth-Qwen3.8-Flash-Next-GGUF/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf";
       pull-models = {
         target_directory = modelsPullDir;

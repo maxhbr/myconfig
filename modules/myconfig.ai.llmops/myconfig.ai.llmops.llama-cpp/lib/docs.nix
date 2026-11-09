@@ -37,6 +37,8 @@ in
       # (empty for top-level models, "    " for variants nested under
       # their parent).  Variant entries use `#####` headings instead of
       # `###`.
+      # Each entry carries `_kind`, `_baseName`, `_userTags`, and
+      # `_capabilities` from `lib/variants.nix`.
       renderModel =
         indent: m:
         let
@@ -65,6 +67,11 @@ in
               "${indent}  - **Ctx size**: ${toString m.ctxSize}"
             else
               "${indent}  - **Ctx size**: _model default_";
+          capabilitiesLine =
+            if (m._capabilities or [ ]) != [ ] then
+              "${indent}  - **Capabilities**: ${codeList (m._capabilities or [ ])}"
+            else
+              "";
         in
         ''
           ${indent}${heading} ${m.name}
@@ -76,6 +83,7 @@ in
           ${indent}- **Parallel**: ${toString m.parallel}
           ${indent}- **Group**: `${esc m.group}`
           ${indent}- **Aliases**: ${codeList m.aliases}
+          ${capabilitiesLine}
           ${indent}- **Tags**: ${codeList m._userTags}
           ${paramsLine}
           ${tensorSplitLine}

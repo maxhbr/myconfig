@@ -47,6 +47,12 @@ let
   };
   q4 = {
     name = "Nex-N2.5-mini-Q4_K_L";
+    capabilities = [
+      "thinking"
+      "tools"
+      "vision"
+      "agentic"
+    ];
     path = "/models/bartowski-nex-agi_Nex-N2.5-mini-GGUF/nex-agi_Nex-N2.5-mini-Q4_K_L.gguf";
     pull-models = {
       target_directory = modelsPullDir;
@@ -91,6 +97,12 @@ let
   #  };
   q6 = {
     name = "Nex-N2.5-mini-Q6_K_L";
+    capabilities = [
+      "thinking"
+      "tools"
+      "vision"
+      "agentic"
+    ];
     path = "/models/bartowski-nex-agi_Nex-N2.5-mini-GGUF/nex-agi_Nex-N2.5-mini-Q6_K_L.gguf";
     pull-models = {
       target_directory = modelsPullDir;

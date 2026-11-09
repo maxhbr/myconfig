@@ -83,6 +83,10 @@ let
   # Shared base attributes for all UD quantisations of Qwen3.8-27B.
   baseModel = quant: {
     name = "Qwen3.8-27B-UD-${quant}";
+    capabilities = [
+      "thinking"
+      "tools"
+    ];
     path = "/models/unsloth-Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-${quant}.gguf";
     pull-models = {
       target_directory = modelsPullDir;
@@ -98,6 +102,10 @@ let
   # https://huggingface.co/Blackfrost-AI/Qwen3.8-27B-ABLITERATED-GGUF
   baseModelAbliterated = quant: {
     name = "Qwen3.8-27B-ABL-${quant}";
+    capabilities = [
+      "thinking"
+      "tools"
+    ];
     path = "/models/Blackfrost-AI-Qwen3.8-27B-ABLITERATED-GGUF/Qwen3.8-27B-ABLITERATED-${quant}.gguf";
     pull-models = {
       target_directory = modelsPullDir;
@@ -379,6 +387,10 @@ in
     # sha256 (lfs oid): d0fa94af270f3de426965f1f9f6f6140aae9f5aad9b88bb466452492748d526e
     {
       name = "Qwen3.8-27B-Q6_K-MTP";
+      capabilities = [
+        "thinking"
+        "tools"
+      ];
       path = "/models/Jackrong-Qwen3.8-27B-MTP-GGUF/Qwen3.8-27B-MTP-Q6_K.gguf";
       pull-models = {
         target_directory = modelsPullDir;
@@ -426,6 +438,10 @@ in
   multiGpuModels = [
     {
       name = "Qwen3.8-27B-BF16-split";
+      capabilities = [
+        "thinking"
+        "tools"
+      ];
       path = "/models/unsloth-Qwen3.8-27B-GGUF/BF16/Qwen3.8-27B-BF16-00001-of-00002.gguf";
       pull-models = {
         target_directory = modelsPullDir;
@@ -461,6 +477,10 @@ in
     # omits it as well).
     {
       name = "Qwen3.8-27B-Q8_0-split";
+      capabilities = [
+        "thinking"
+        "tools"
+      ];
       path = "/models/unsloth-Qwen3.8-27B-GGUF/Qwen3.8-27B-Q8_0.gguf";
       pull-models = {
         target_directory = modelsPullDir;
@@ -505,6 +525,10 @@ in
     # resolved MTP head file).
     {
       name = "Qwen3.8-27B-MTP-Q8_0";
+      capabilities = [
+        "thinking"
+        "tools"
+      ];
       path = "/models/unsloth-Qwen3.8-27B-GGUF/Qwen3.8-27B-Q8_0.gguf";
       pull-models = {
         target_directory = modelsPullDir;
@@ -536,6 +560,10 @@ in
     }
     {
       name = "Qwen3.8-27B-Q8_0";
+      capabilities = [
+        "thinking"
+        "tools"
+      ];
       path = "/models/unsloth-Qwen3.8-27B-GGUF/Qwen3.8-27B-Q8_0.gguf";
       pull-models = {
         target_directory = modelsPullDir;

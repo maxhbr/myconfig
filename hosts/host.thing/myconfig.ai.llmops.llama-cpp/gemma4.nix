@@ -8,6 +8,10 @@ let
   disabled_gemma4_rtxModels = [
     {
       name = "gemma-4-31B-it-UD-Q5_K_XL";
+      capabilities = [
+        "thinking"
+        "vision"
+      ];
       path = "/models/unsloth-gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q5_K_XL.gguf";
       pull-models = {
         target_directory = modelsPullDir;
@@ -32,6 +36,10 @@ let
     }
     {
       name = "gemma-4-26B-A4B-it-UD-Q8_K_XL";
+      capabilities = [
+        "thinking"
+        "vision"
+      ];
       path = "/models/unsloth-gemma-4-26B-A4B-it-GGUF/gemma-4-26B-A4B-it-UD-Q8_K_XL.gguf";
       pull-models = {
         target_directory = modelsPullDir;
@@ -60,6 +68,10 @@ in
   rtxModels = [
     {
       name = "gemma-4-31B-it-UD-Q4_K_XL";
+      capabilities = [
+        "thinking"
+        "vision"
+      ];
       path = "/models/unsloth-gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q4_K_XL.gguf";
       pull-models = {
         target_directory = modelsPullDir;
@@ -102,6 +114,10 @@ in
     }
     {
       name = "gemma-4-31B-it-qat-q4_0";
+      capabilities = [
+        "thinking"
+        "vision"
+      ];
       path = "/models/google-gemma-4-31B-it-qat-q4_0-gguf/gemma-4-31B_q4_0-it.gguf";
       pull-models = {
         target_directory = modelsPullDir;
@@ -138,6 +154,10 @@ in
     }
     {
       name = "gemma-4-26B-A4B-it-qat-q4_0";
+      capabilities = [
+        "thinking"
+        "vision"
+      ];
       path = "/models/google-gemma-4-26B-A4B-it-qat-q4_0-gguf/gemma-4-26B_q4_0-it.gguf";
       pull-models = {
         target_directory = modelsPullDir;
@@ -177,6 +197,10 @@ in
     }
     {
       name = "gemma-4-26B-A4B-it-UD-Q6_K_XL";
+      capabilities = [
+        "thinking"
+        "vision"
+      ];
       path = "/models/unsloth-gemma-4-26B-A4B-it-GGUF/gemma-4-26B-A4B-it-UD-Q6_K_XL.gguf";
       pull-models = {
         target_directory = modelsPullDir;
@@ -205,6 +229,10 @@ in
   amdModels = [
     {
       name = "gemma-4-31B-it-BF16";
+      capabilities = [
+        "thinking"
+        "vision"
+      ];
       path = "/models/unsloth-gemma-4-31B-it-GGUF/BF16/gemma-4-31B-it-BF16-00001-of-00002.gguf";
       pull-models = {
         target_directory = modelsPullDir;

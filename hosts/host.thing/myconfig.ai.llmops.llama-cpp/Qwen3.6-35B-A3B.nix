@@ -71,6 +71,7 @@ in
   rtxModels = [
     {
       name = "Qwen3.6-35B-A3B-UD-Q5_K_XL";
+      capabilities = [ "thinking" ];
       path = "/models/unsloth-Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf";
       pull-models = {
         target_directory = modelsPullDir;
@@ -85,6 +86,7 @@ in
     }
     {
       name = "Qwen3.6-35B-A3B-UD-Q5_K_XL-MTP";
+      capabilities = [ "thinking" ];
       path = "/models/unsloth-Qwen3.6-35B-A3B-MTP-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf";
       pull-models = {
         target_directory = modelsPullDir;
@@ -111,6 +113,7 @@ in
   amdModels = [
     {
       name = "Qwen3.6-35B-A3B-Q8_0";
+      capabilities = [ "thinking" ];
       path = "/models/unsloth-Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-Q8_0.gguf";
       pull-models = {
         target_directory = modelsPullDir;
@@ -138,6 +141,7 @@ in
     }
     {
       name = "Qwen3.6-35B-A3B-UD-Q8_K_XL-MTP";
+      capabilities = [ "thinking" ];
       path = "/models/unsloth-Qwen3.6-35B-A3B-MTP-GGUF/Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf";
       pull-models = {
         target_directory = modelsPullDir;
@@ -159,6 +163,7 @@ in
     }
     {
       name = "Qwen3.6-35B-A3B-BF16";
+      capabilities = [ "thinking" ];
       path = "/models/unsloth-Qwen3.6-35B-A3B-GGUF/BF16/Qwen3.6-35B-A3B-BF16-00001-of-00002.gguf";
       pull-models = {
         target_directory = modelsPullDir;
@@ -181,6 +186,7 @@ in
 
     {
       name = "Qwen3.6-35B-A3B-MTP-BF16";
+      capabilities = [ "thinking" ];
       path = "/models/ggml-org-Qwen3.6-35B-A3B-MTP-GGUF/Qwen3.6-35B-A3B-MTP-BF16.gguf";
       pull-models = {
         target_directory = modelsPullDir;
@@ -205,6 +211,7 @@ in
   multiGpuModels = [
     {
       name = "Qwen3.6-35B-A3B-BF16-MTP-split";
+      capabilities = [ "thinking" ];
       path = "/models/ggml-org-Qwen3.6-35B-A3B-MTP-GGUF/Qwen3.6-35B-A3B-MTP-BF16.gguf";
       pull-models = {
         target_directory = modelsPullDir;

@@ -91,6 +91,12 @@
                           User tags propagate from the source model to every
                           derived entry: the base itself, all of its variants,
                           and every alias attached to either.
+
+                          Capability tags: every capability declared on the
+                          source model (llama-cpp `capabilities`, e.g. "vision",
+                          "tools", "thinking", "agentic") is published by the
+                          llama-cpp publishers as `cap:<capability>` in this
+                          list, after the backend tag and before the user tags.
                         '';
                       };
                     };

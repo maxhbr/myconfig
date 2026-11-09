@@ -3,6 +3,7 @@
   amdModels = [
     {
       name = "Hy3-Q2_K_L";
+      capabilities = [ "thinking" ];
       path = "/models/bartowski-Hy3-GGUF/Hy3-Q2_K_L/Hy3-Q2_K_L-00001-of-00003.gguf";
       pull-models = {
         target_directory = modelsPullDir;
@@ -22,6 +23,7 @@
   multiGpuModels = [
     {
       name = "Hy3-Q2_K_L-split";
+      capabilities = [ "thinking" ];
       path = "/models/bartowski-Hy3-GGUF/Hy3-Q2_K_L/Hy3-Q2_K_L-00001-of-00003.gguf";
       pull-models = {
         target_directory = modelsPullDir;

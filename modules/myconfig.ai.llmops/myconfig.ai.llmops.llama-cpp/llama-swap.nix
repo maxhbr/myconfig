@@ -276,6 +276,11 @@ let
   # Lineage tags for a model entry itself (not for its aliases).
   modelLineageTags = m: if m._kind == "variant" then [ m._baseName ] else [ ];
 
+  # Capability tags from the structured `capabilities` declaration
+  # (see options.nix): published as `cap:<capability>` in the
+  # localModels tags only, not in llama-swap's INI `tags=` key.
+  capabilityTags = m: map (c: "cap:${c}") (m._capabilities or [ ]);
+
   # Lineage tags for an alias of a model: the model's own name first,
   # then (only for a variant parent) the base it came from. This gives
   # an alias of a variant two tags; an alias of a base just one.
@@ -285,6 +290,7 @@ let
   # the device's llama.cpp backend ("cuda" / "rocm" / "vulkan", from
   # `backendForDevice`) so tag-based routing can pin requests to a
   # specific backend without parsing the device string, then the
+  # capability tags (`cap:<capability>`), then the
   # user-provided tags (already pre-merged with the parent's tags in
   # `lib/variants.nix` for variants). Deduped while preserving the
   # first occurrence. Aliases reuse this with the alias-specific
@@ -298,6 +304,7 @@ let
     lib.unique (
       modelLineageTags m
       ++ (lib.optional (backendForDevice device != null) (backendForDevice device))
+      ++ capabilityTags m
       ++ (m._userTags or [ ])
     );
   aliasTags =
@@ -305,6 +312,7 @@ let
     lib.unique (
       aliasLineageTags m
       ++ (lib.optional (backendForDevice device != null) (backendForDevice device))
+      ++ capabilityTags m
       ++ (m._userTags or [ ])
     );
 

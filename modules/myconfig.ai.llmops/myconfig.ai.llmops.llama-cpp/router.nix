@@ -140,6 +140,15 @@ let
   #   - variant -> [ _baseName ]
   modelLineageTags = m: lib.optional (m._kind or null == "variant") m._baseName;
 
+  # Capability tags derived from the model's structured
+  # `capabilities` declaration (see options.nix): each declared
+  # capability is published as `cap:<capability>` so tag-based
+  # routing / consumers can filter on it. Kept out of the INI
+  # `tags=` key (see `sectionFor`): those tags surface in
+  # `GET /v1/models` of the live server and mixing derived
+  # metadata in would change the served surface.
+  capabilityTags = m: map (c: "cap:${c}") (m._capabilities or [ ]);
+
   # Lineage tags for an alias of a model: the parent's own name
   # first, then (only when the parent is a variant) the base it came
   # from. An alias of a base gets one tag; an alias of a variant gets
@@ -150,6 +159,7 @@ let
   # the device's llama.cpp backend ("cuda" / "rocm" / "vulkan", from
   # `devices.backendForDevice`) so tag-based routing can pin requests
   # to a specific backend without parsing the device string, then the
+  # capability tags (`cap:<capability>`), then the
   # user-provided tags (already pre-merged with the parent's tags in
   # `lib/variants.nix` for variants). Deduped while preserving the
   # first occurrence. Aliases reuse this with the alias-specific
@@ -160,6 +170,7 @@ let
     lib.unique (
       modelLineageTags m
       ++ (lib.optional (backendForDevice device != null) (backendForDevice device))
+      ++ capabilityTags m
       ++ (m._userTags or [ ])
     );
   aliasTags =
@@ -167,6 +178,7 @@ let
     lib.unique (
       aliasLineageTags m
       ++ (lib.optional (backendForDevice device != null) (backendForDevice device))
+      ++ capabilityTags m
       ++ (m._userTags or [ ])
     );
 

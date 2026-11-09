@@ -12,6 +12,25 @@
 let
   inherit (lib) types mkOption;
 
+  # Capability enum: what a model can do, independent of the backend
+  # it runs on or the llama.cpp flags used to serve it. Values are
+  # chosen so that one glance answers the usual routing questions:
+  #   - text              plain chat completion (always true in practice;
+  #                      omitted — implied for every entry)
+  #   - thinking          produces reasoning traces; can be toggled or
+  #                      preserved via chat-template kwargs
+  #   - tools             OpenAI-style tool/function calling
+  #   - vision            image input via an mmproj sidecar or an
+  #                      omni-architecture projector
+  #   - agentic           trained for long-horizon tool/computer-use
+  #                      workflows, aggressive context use
+  capabilityEnum = types.enum [
+    "thinking"
+    "tools"
+    "vision"
+    "agentic"
+  ];
+
   modelSubmodule = types.submodule {
     options = {
       name = mkOption {
@@ -41,6 +60,24 @@ let
         type = types.listOf types.str;
         default = [ ];
         description = "Aliases for this model in llama-swap";
+      };
+      # Structured capability declaration for this model. Purely
+      # descriptive metadata — nothing consumes it on the serving side;
+      # it is propagated to localModels / LiteLLM (as tags) and
+      # rendered into /run/myconfig/docs/models.md so agents and
+      # humans get a machine-readable capability overview.
+      capabilities = mkOption {
+        type = types.listOf capabilityEnum;
+        default = [ ];
+        description = ''
+          Capabilities of the underlying model (e.g. "thinking",
+          "tools", "vision", "agentic"). Propagate like `tags`:
+          the unpacked base, every variant, and every alias
+          carry them. Unlike `tags`, they are NOT emitted into
+          llama-server's INI `tags=` key; they are published via
+          `myconfig.ai.llmops.localModels` and the models.md
+          overview instead.
+        '';
       };
       tags = mkOption {
         type = types.listOf types.str;
@@ -293,6 +330,16 @@ let
                 type = types.listOf types.str;
                 default = [ ];
                 description = "Aliases for this model in llama-swap";
+              };
+              capabilities = mkOption {
+                type = types.listOf capabilityEnum;
+                default = [ ];
+                description = ''
+                  Capabilities specific to this variant. Merged
+                  with the parent model's `capabilities` (parent
+                  first, deduped). See the parent model's
+                  `capabilities` option for the semantics.
+                '';
               };
               tags = mkOption {
                 type = types.listOf types.str;

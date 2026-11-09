@@ -42,6 +42,7 @@ let
 
   sidekickModel = {
     name = "Qwen3.5-9B-Q5_K_M";
+    capabilities = [ "thinking" ];
     path = "/models/unsloth-Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf";
     pull-models = {
       target_directory = modelsPullDir;
@@ -65,6 +66,7 @@ let
     [
       {
         name = "NVIDIA-Nemotron-3-Nano-Omni-Q8_0";
+        capabilities = [ "vision" ];
         path = "/models/ggml-org-NVIDIA-Nemotron-3-Nano-Omni/nemotron-3-nano-omni-ga_v1.0-Q8_0.gguf";
         pull-models = {
           target_directory = modelsPullDir;
@@ -74,6 +76,7 @@ let
       }
       {
         name = "qwen3.5-122B-A10B-Q5_K_M";
+        capabilities = [ "thinking" ];
         path = "/models/unsloth-Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M-00001-of-00003.gguf";
         pull-models = {
           target_directory = modelsPullDir;
@@ -145,6 +148,12 @@ let
           cacheType ? null,
           parallel ? 1,
           kvUnified ? false,
+          # Capability metadata must ride along: dropping it here would
+          # silently de-classify every RTX model re-served on gfx1151
+          # (their litellm entries would lose the cap:* tags). Same for
+          # the user `tags`.
+          capabilities ? [ ],
+          tags ? [ ],
           ...
         }:
         {
@@ -157,6 +166,8 @@ let
             cacheType
             parallel
             kvUnified
+            capabilities
+            tags
             ;
           aliases = lib.filter (a: !lib.elem a allAliasesAndNamesFromAmdModels) aliases;
           # variants are dropped for now

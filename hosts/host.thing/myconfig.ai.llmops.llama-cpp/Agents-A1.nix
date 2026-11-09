@@ -3,6 +3,10 @@
   rtxModels = [
     {
       name = "InternScience-Agents-A1-Q4_K_M";
+      capabilities = [
+        "vision"
+        "agentic"
+      ];
       path = "/models/InternScience-Agents-A1-Q4_K_M-GGUF/Agents-A1-Q4_K_M.gguf";
       pull-models = {
         target_directory = modelsPullDir;
@@ -38,6 +42,10 @@
   amdModels = [
     {
       name = "InternScience-Agents-A1-Q8_0";
+      capabilities = [
+        "vision"
+        "agentic"
+      ];
       path = "/models/InternScience-Agents-A1-Q8_0-GGUF/Agents-A1-Q8_0.gguf";
       pull-models = {
         target_directory = modelsPullDir;
