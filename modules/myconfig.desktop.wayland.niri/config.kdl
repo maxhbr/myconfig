@@ -91,10 +91,6 @@ cursor {
     position x=1280 y=0
 }
 
-workspace "chat" {
-    open-on-output "eDP-1"
-}
-
 // Make the wallpaper stationary, rather than moving with workspaces.
 layer-rule {
     // This is for swaybg; change for other wallpaper tools.
@@ -323,14 +319,6 @@ window-rule {
     match app-id="^Alacritty$"
 
     default-column-width { proportion 1.0; }
-}
-
-window-rule {
-    // The Signal window reports its app-id in lowercase (`signal`), and
-    // app-id matching is case-sensitive, so match case-insensitively.
-    match app-id="(?i)^signal$"
-
-    open-on-workspace "chat"
 }
 
 window-rule {
