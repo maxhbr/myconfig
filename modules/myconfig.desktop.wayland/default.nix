@@ -423,7 +423,9 @@ in
             '';
           };
           programs.waybar.enable = true;
-          services.kanshi.enable = false;
+          # mkDefault: a host opts in with a plain `services.kanshi.enable = true`
+          # plus per-host profiles in hosts/host.<host>/kanshi/.
+          services.kanshi.enable = lib.mkDefault false;
           services.swaync.enable = cfg.desktop.wayland.notificationCenter == "swaync";
           services.mako.enable = cfg.desktop.wayland.notificationCenter == "mako";
           services.dunst.enable = cfg.desktop.wayland.notificationCenter == "dunst";

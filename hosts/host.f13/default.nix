@@ -412,6 +412,7 @@ in
     services.gnome.gnome-keyring.enable = true;
 
     home-manager.sharedModules = [
+      { services.kanshi.enable = true; }
       {
         programs.password-store.enable = true;
       }
