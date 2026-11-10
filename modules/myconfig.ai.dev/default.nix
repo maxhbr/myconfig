@@ -73,6 +73,12 @@ in
         pi-coding-agent = {
           enable = true;
           litellmUrl = "http://localhost:4000";
+          # pi's startup model, persisted in nix: without it a fresh session
+          # falls through pi's resolution chain to the built-in per-provider
+          # fallback table, whose first entry is anthropic's current flagship
+          # Opus. The provider id is `<hostname>-litellm` (see the module).
+          defaultModel.provider = "${config.networking.hostName}-litellm";
+          defaultModel.model = "GLM-5.3";
           tokenSpeed.enable = true;
         };
         claude-code.enable = true;
