@@ -1,9 +1,9 @@
-# schreibtisch layout on f13, captured with `niri msg --json outputs`
+# desk layout on f13, captured with `niri msg --json outputs`
 { ... }:
 {
   services.kanshi.settings = [
     {
-      profile.name = "schreibtisch";
+      profile.name = "desk";
       profile.outputs = [
         {
           criteria = "BOE NE135A1M-NY1 Unknown";
