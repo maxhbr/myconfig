@@ -14,7 +14,7 @@
         {
           criteria = "HardCom Elektronik & Datateknik HDMI SPLITTER 0x01010101";
           mode = "1920x1080@60Hz";
-          position = "170,0";
+          position = "148,0";
           scale = 1.0;
         }
       ];
