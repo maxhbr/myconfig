@@ -22,24 +22,63 @@ let
 
   kanshiPackage = config.services.kanshi.package;
 
+  # kanshictl derives its varlink socket path from $WAYLAND_DISPLAY
+  # ("$XDG_RUNTIME_DIR/fr.emersion.kanshi.$WAYLAND_DISPLAY"). Waybar's
+  # custom-module children inherit waybar's environment; when waybar was
+  # started outside the wayland session scope (or the env was not imported),
+  # kanshictl cannot find the socket and reports nothing. Recover the env
+  # from the kanshi systemd user service if available.
+  ensureWaylandEnv = ''
+    if [ -z "''${WAYLAND_DISPLAY:-}" ] && command -v systemctl >/dev/null 2>&1; then
+      wayland_display="$(systemctl --user show-environment 2>/dev/null \
+        | ${pkgs.gnused}/bin/sed -n 's/^WAYLAND_DISPLAY=//p')" || wayland_display=""
+      [ -n "$wayland_display" ] && export WAYLAND_DISPLAY="$wayland_display"
+    fi
+  '';
+
   kanshiStatus = pkgs.writeShellApplication {
     name = "kanshi-status";
+    runtimeInputs = [
+      pkgs.systemd
+      pkgs.gnused
+    ];
     text = ''
-      set -euo pipefail
-      profile="$(${kanshiPackage}/bin/kanshictl status 2>/dev/null \
-        | ${pkgs.gnused}/bin/sed -n 's/^Current profile: //p')" || profile=""
-      if [ -z "''${profile:-}" ] || [ "$profile" = "(none)" ]; then
-        ${pkgs.jq}/bin/jq -cn '{text:" no profile",class:"disconnected",tooltip:"kanshi: no profile matched"}'
-        exit 0
-      fi
-      ${pkgs.jq}/bin/jq -cn --arg p "$profile" \
-        '{text:(" " + $p),profile:$p,class:"connected",tooltip:("profile: " + $p)}'
+            ${ensureWaylandEnv}
+            set -euo pipefail
+            status="$(${kanshiPackage}/bin/kanshictl status 2>/dev/null)" || status=""
+            current="$(printf '%s\n' "$status" \
+              | ${pkgs.gnused}/bin/sed -n 's/^Current profile: //p')"
+            pending="$(printf '%s\n' "$status" \
+              | ${pkgs.gnused}/bin/sed -n 's/^Pending profile: //p')"
+            # kanshi only records a current profile once the compositor confirms
+            # the apply; while a re-apply is pending it reports "(none)" even
+            # though the outputs already show the profile's layout. Prefer the
+            # confirmed profile, fall back to the pending one.
+            profile="$current"
+            if [ -z "$profile" ] || [ "$profile" = "(none)" ]; then
+              profile="$pending"
+            fi
+            if [ -z "''${profile:-}" ] || [ "$profile" = "(none)" ]; then
+              if [ -z "$status" ]; then
+                tooltip="kanshictl: cannot reach the kanshi daemon (socket \
+      \$XDG_RUNTIME_DIR/fr.emersion.kanshi.\$WAYLAND_DISPLAY)"
+              else
+                tooltip="kanshi: no profile matched"
+              fi
+              ${pkgs.jq}/bin/jq -cn --arg t "$tooltip" \
+                '{text:" no profile",class:"disconnected",tooltip:$t}'
+              exit 0
+            fi
+            ${pkgs.jq}/bin/jq -cn --arg p "$profile" --arg c "$current" \
+              '{text:(" " + $p),profile:$p,class:(if $c == "" or $c == "(none)" then "pending" else "connected" end),tooltip:("profile: " + $p)}'
     '';
   };
 
   kanshiSwitch = pkgs.writeShellApplication {
     name = "kanshi-switch";
+    runtimeInputs = [ pkgs.systemd ];
     text = ''
+      ${ensureWaylandEnv}
       set -euo pipefail
       choice="$(printf '%s\n' ${lib.escapeShellArgs profileNames} \
         | ${pkgs.wofi}/bin/wofi --dmenu --prompt "kanshi:" --cache-file /dev/null)" || exit 0
