@@ -36,47 +36,14 @@ must **not**:
 ## Attribution trailer
 
 End the commit message with a trailer line recording the model and agent
-harness that produced it, in this exact format:
+harness that produced it. Do not derive this from the conversation — run:
 
-    supported by <model> in <harness>
+    compute-commit-attribution-trailer.sh
 
-Detect both at commit time via the shell environment; do not guess from the
-conversation.
-
-### Detecting the harness
-
-- pi sets `PI_CODING_AGENT=true` in its shell tool's environment -> harness
-  is `pi`.
-- opencode sets `OPENCODE=1` in its shell tool's environment -> harness is
-  `opencode`.
-
-### Detecting the model
-
-- pi: use `$PI_MODEL`, prefixed with `$PI_PROVIDER/` only when the model id
-  does not already contain a `/`. Both variables are resolved freshly for
-  every shell command, so they always reflect the current selection.
-- opencode: the active model is not exported to the shell. Read the most
-  recently selected model from opencode's state file, guarding against a
-  missing file, a missing `jq`, and incomplete entries:
-
-  ```bash
-  f="${XDG_STATE_HOME:-$HOME/.local/state}/opencode/model.json"
-  command -v jq >/dev/null && [ -f "$f" ] && jq -r '
-    (.recent[0] // empty) | select(.providerID and .modelID)
-    | "\(.providerID)/\(.modelID)"' "$f"
-  ```
-
-  If that prints nothing (file missing/empty, or no valid entry), fall back
-  to the configured default model, guarded the same way:
-  `command -v jq >/dev/null && [ -f ~/.config/opencode/opencode.json ] && jq -r '.model // empty' ~/.config/opencode/opencode.json`.
-
-### Fall back gracefully
-
-Treat an empty result or a literal `null` (e.g. `null/null`) as "model
-unknown". If only the model is known, the trailer is `supported by <model>`;
-if only the harness is known, `supported in <harness>`; if neither can be
-determined, omit the trailer line entirely. Never emit `supported by  in `,
-`null`, or other empty/placeholder values.
+If the command succeeds it prints the exact trailer line (for example
+`supported by <model> in <harness>`, with parts omitted when unknown);
+append it to the commit message as-is. If it fails or prints nothing,
+omit the trailer entirely.
 
 ## On failure
 

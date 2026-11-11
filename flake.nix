@@ -666,6 +666,10 @@
                   # wrapper (`niri-run-or-raise`); shfmt is not covered by
                   # writeShellApplication's own shellcheck pass.
                   "modules/myconfig.desktop.wayland.niri/bin/niri-run-or-raise.sh"
+                  # Standalone script embedded into a writeShellApplication
+                  # wrapper (`compute-commit-attribution-trailer.sh`); shfmt is
+                  # not covered by writeShellApplication's own shellcheck pass.
+                  "modules/myconfig.ai.dev/skills/commit/compute-commit-attribution-trailer.sh"
                 ];
               in
               pkgs.stdenv.mkDerivation {

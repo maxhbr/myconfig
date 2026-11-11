@@ -8,14 +8,28 @@
 # The skill is registered in the central `myconfig.ai.dev.skills.handcrafted`
 # registry; `skills/default.nix` deploys it to every enabled agent harness
 # (opencode, claude-code, codex, and pi-coding-agent).
+#
+# The skill's attribution-trailer logic lives in the standalone CLI
+# `compute-commit-attribution-trailer.sh` next to the SKILL.md: the raw
+# script is synced together with the skill, and the wrapped `writeShellApplication`
+# build (jq on its PATH) is installed on the host and in every sandbox tier via
+# `myconfig.ai.dev.sandboxTools.extraPackages`, so `compute-commit-attribution-trailer.sh`
+# works wherever an agent runs.
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 let
   cfg = config.myconfig.ai.dev.skills.commit;
   skillDir = ./commit;
+
+  trailerScript = pkgs.writeShellApplication {
+    name = "compute-commit-attribution-trailer.sh";
+    runtimeInputs = [ pkgs.jq ];
+    text = builtins.readFile (skillDir + "/compute-commit-attribution-trailer.sh");
+  };
 in
 {
   options.myconfig.ai.dev.skills.commit = with lib; {
@@ -33,6 +47,16 @@ in
       # Also expose the same workflow as a pi prompt template (`/commit`),
       # deployed to `~/.pi/agent/prompts/commit.md` by `skills/default.nix`.
       myconfig.ai.dev.skills.handcraftedPrompts.commit = ./commit/prompt.md;
+
+      # The trailer CLI: on PATH on the host ...
+      home-manager.sharedModules = [
+        {
+          home.packages = [ trailerScript ];
+        }
+      ];
+      # ... and in every sandbox tier, so agents that commit from inside a
+      # sandbox resolve the same script (with jq) as on the host.
+      myconfig.ai.dev.sandboxTools.extraPackages = [ trailerScript ];
     })
   ];
 }
