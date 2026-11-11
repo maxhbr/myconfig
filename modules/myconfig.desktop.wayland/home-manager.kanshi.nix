@@ -24,12 +24,24 @@ let
 
   # kanshictl derives its varlink socket path from $WAYLAND_DISPLAY
   # ("$XDG_RUNTIME_DIR/fr.emersion.kanshi.$WAYLAND_DISPLAY"). Waybar's
-  # custom-module children inherit waybar's environment; when waybar was
-  # started outside the wayland session scope (or the env was not imported),
-  # kanshictl cannot find the socket and reports nothing. Recover the env
-  # from the kanshi systemd user service if available.
+  # custom-module children inherit waybar's environment, which can carry a
+  # stale or missing WAYLAND_DISPLAY (session restarts, env import races).
+  # The daemon's socket is named after its wayland display, so instead of
+  # trusting the inherited env the probe locates the actual socket and
+  # aligns WAYLAND_DISPLAY to it; only if no socket exists at all does it
+  # fall back to the imported user-manager environment.
   ensureWaylandEnv = ''
-    if [ -z "''${WAYLAND_DISPLAY:-}" ] && command -v systemctl >/dev/null 2>&1; then
+    socket_glob="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/fr.emersion.kanshi.*"
+    found_socket=""
+    for s in $socket_glob; do
+      if [ -S "$s" ]; then
+        found_socket="$s"
+        break
+      fi
+    done
+    if [ -n "$found_socket" ]; then
+      export WAYLAND_DISPLAY="''${found_socket##*.}"
+    elif [ -z "''${WAYLAND_DISPLAY:-}" ] && command -v systemctl >/dev/null 2>&1; then
       wayland_display="$(systemctl --user show-environment 2>/dev/null \
         | ${pkgs.gnused}/bin/sed -n 's/^WAYLAND_DISPLAY=//p')" || wayland_display=""
       [ -n "$wayland_display" ] && export WAYLAND_DISPLAY="$wayland_display"
@@ -45,7 +57,10 @@ let
     text = ''
             ${ensureWaylandEnv}
             set -euo pipefail
-            status="$(${kanshiPackage}/bin/kanshictl status 2>/dev/null)" || status=""
+            status=""
+            if [ -n "''${WAYLAND_DISPLAY:-}" ]; then
+              status="$(${kanshiPackage}/bin/kanshictl status 2>/dev/null)" || status=""
+            fi
             current="$(printf '%s\n' "$status" \
               | ${pkgs.gnused}/bin/sed -n 's/^Current profile: //p')"
             pending="$(printf '%s\n' "$status" \
@@ -76,7 +91,10 @@ let
 
   kanshiSwitch = pkgs.writeShellApplication {
     name = "kanshi-switch";
-    runtimeInputs = [ pkgs.systemd ];
+    runtimeInputs = [
+      pkgs.systemd
+      pkgs.gnused
+    ];
     text = ''
       ${ensureWaylandEnv}
       set -euo pipefail
