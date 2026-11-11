@@ -192,21 +192,46 @@ in
                 ${niri}/bin/niri msg output "$OUTPUT" scale "$target"
               '';
               kdlSource = builtins.readFile ./config.kdl;
+              # niri.service is active only when the compositor runs under
+              # systemd session management (niri-session/uwsm); plain niri
+              # never starts it. The spawn wrapper asks the user manager
+              # which case we are in: with session management the waybar
+              # systemd user service owns the bar (graphical-session.target
+              # is up before any spawn-at-startup child runs), without it
+              # the waybarOnce watchdog takes over.
+              waybarSpawnDetector = pkgs.writeShellScriptBin "niri-waybar-spawn" ''
+                if ${pkgs.systemd}/bin/systemctl --user is-active --quiet niri.service; then
+                  echo "waybar: started by waybar.service (session-managed niri)" >&2
+                  exit 0
+                fi
+                exec waybarOnce --auto-restart niri
+              '';
+              # keep the unconditional spawn for hosts that did not opt into
+              # the waybar systemd service at all
+              waybarSpawn =
+                if nixosConfig.myconfig.desktop.wayland.waybar.systemdService then
+                  ''spawn-at-startup "${waybarSpawnDetector}/bin/niri-waybar-spawn"''
+                else
+                  ''spawn-at-startup "waybarOnce" "--auto-restart" "niri"'';
               niriConfigKdl =
                 lib.throwIfNot (lib.hasInfix "@@niri-extra-binds@@" kdlSource)
                   "@@niri-extra-binds@@ marker missing from config.kdl"
                   (
-                    "environment {\n"
-                    + "    QT_QPA_PLATFORM \"wayland\"\n"
-                    + "    ELECTRON_OZONE_PLATFORM_HINT \"${nixosConfig.environment.sessionVariables.ELECTRON_OZONE_PLATFORM_HINT}\"\n"
-                    + "}\n\n"
-                    + (lib.replaceString "@@niri-extra-binds@@" config.myconfig.desktop.wayland.niri.extraBinds
-                      kdlSource
-                    )
-                    + "\n"
-                    + headlessWindowRules
-                    + "include optional=true \"include.kdl\"\n\n"
-                    + "spawn-at-startup \"${niri-autostart}\""
+                    lib.throwIfNot (lib.hasInfix "@@waybar-spawn@@" kdlSource)
+                      "@@waybar-spawn@@ marker missing from config.kdl"
+                      (
+                        "environment {\n"
+                        + "    QT_QPA_PLATFORM \"wayland\"\n"
+                        + "    ELECTRON_OZONE_PLATFORM_HINT \"${nixosConfig.environment.sessionVariables.ELECTRON_OZONE_PLATFORM_HINT}\"\n"
+                        + "}\n\n"
+                        + (lib.replaceString "@@niri-extra-binds@@" config.myconfig.desktop.wayland.niri.extraBinds (
+                          lib.replaceString "@@waybar-spawn@@" waybarSpawn kdlSource
+                        ))
+                        + "\n"
+                        + headlessWindowRules
+                        + "include optional=true \"include.kdl\"\n\n"
+                        + "spawn-at-startup \"${niri-autostart}\""
+                      )
                   );
               niri-config =
                 pkgs.runCommand "niri-config"
