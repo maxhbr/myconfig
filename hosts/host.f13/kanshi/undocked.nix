@@ -12,6 +12,9 @@
           scale = 1.3;
         }
       ];
+      # no external audio device while undocked; keep the Radeon HDMI
+      # audio card off
+      profile.exec = [ "kanshi-audio-card alsa_card.pci-0000_c1_00.1 off" ];
     }
   ];
 }

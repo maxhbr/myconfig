@@ -18,6 +18,10 @@
           scale = 1.0;
         }
       ];
+      # the TV is wired through the HDMI splitter: bring the Radeon HDMI
+      # audio back, selecting whatever HDMI port the splitter landed on
+      # (auto picks the highest-priority available profile)
+      profile.exec = [ "kanshi-audio-card alsa_card.pci-0000_c1_00.1 auto" ];
     }
   ];
 }

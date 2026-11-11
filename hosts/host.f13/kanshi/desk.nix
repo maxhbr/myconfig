@@ -18,6 +18,9 @@
           scale = 1.0;
         }
       ];
+      # the U3824DW is silent; keep the Radeon HDMI audio card off so it
+      # never grabs the default sink
+      profile.exec = [ "kanshi-audio-card alsa_card.pci-0000_c1_00.1 off" ];
     }
   ];
 }
