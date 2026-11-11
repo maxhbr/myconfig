@@ -123,10 +123,9 @@ in
     preferred_sinks_patterns = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [
-        "alsa_output.usb-FiiO_DigiHug_USB_Audio-01.analog-stereo"
+        "alsa_output.usb-Focusrite_Scarlett_2i2_4th_Gen_S25YG3B6345A7C-00.HiFi__Line1__sink"
         "alsa_output.pci-0000_c1_00.1.hdmi-stereo-extra2"
         "alsa_output.pci-0000_c1_00.6.analog-stereo"
-        "usb-FiiO_DigiHug_USB_Audio-01.analog-stereo"
         "hdmi-stereo"
         "alsa_output.pci-0000_c1_00.6.analog-stereo"
       ];
@@ -135,8 +134,10 @@ in
     preferred_sources_patterns = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [
-        "alsa_input.usb-BLUE_MICROPHONE_Blue_Snowball_797_2020_07_31_01554-00.mono-fallback"
-        "alsa_input.usb-046d_HD_Pro_Webcam_C920_9C1E301F-02.analog-stereo"
+        "alsa_input.usb-Focusrite_Scarlett_2i2_4th_Gen_S25YG3B6345A7C-00.HiFi__Mic1__source"
+        "alsa_input.usb-Focusrite_Scarlett_2i2_4th_Gen_S25YG3B6345A7C-00.HiFi__Mic2__source"
+        "alsa_input.usb-Elgato_Cam_Link_4K_00049D0B68000-03.analog-stereo"
+        "alsa_input.pci-0000_c1_00.6.analog-stereo"
       ];
     };
 
