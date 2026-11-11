@@ -13,6 +13,9 @@ let
   hmModule = (
     { config, ... }:
     let
+      # NOTE: `cfg` is the outer (NixOS) module's `config.myconfig`; the
+      # option is declared on the NixOS side, not inside home-manager.
+      waybarSystemdService = cfg.desktop.wayland.waybar.systemdService;
       waybarPackage =
         if false then
           pkgs.waybar.override {
@@ -220,263 +223,285 @@ let
         };
     in
     {
-      config = (
-        lib.mkIf config.programs.waybar.enable {
-          home.packages = [
-            waybarOnce
-            waybarDevelop
-          ];
-          programs.waybar = {
-            package = waybarPackage;
-            systemd.enable = false;
-            settings = {
-              mainBar = lib.mkMerge (
-                [
-                  {
-                    name = "mainBar";
-                    layer = "top";
-                    position = "left";
-                    height = null;
-                    spacing = 4;
-                    modules-left = [ ];
-                    modules-center = [
-                      "custom/idle_inhibitor"
-                      "custom/test_for_missing_tb_changing"
-                      # "custom/audio_idle_inhibitor"
-                      "clock#time"
-                      "clock#date"
-                      "custom/isvpn"
-                    ]
-                    ++ lib.optionals power-profiles-daemon-config.enable [ "power-profiles-daemon" ]
-                    ++ [
-                      "battery"
-                      "backlight"
-                      "pulseaudio"
-                    ];
-                    modules-right = [
-                      "tray"
-                      "systemd-failed-units#user"
-                      "systemd-failed-units#system"
-                      "cpu"
-                      "memory"
-                      "network"
-                    ];
-                    tray = {
-                      spacing = 10;
-                      rotate = 90;
-                    };
-                    "clock#time" = {
-                      format = "<big>{:%H:%M<sub>:%S</sub>}</big>";
-                      interval = 1;
-                      tooltip = false;
-                      rotate = 90;
-                    };
-                    "clock#date" = {
-                      format = ''
-                        {:%e
-                        <sub>%b</sub>}'';
-                      interval = 60;
-                      tooltip = false;
-                    };
-                    cpu = {
-                      format = "c: {usage}%";
-                      tooltip = false;
-                      on-click = "foot-btop";
-                      rotate = 90;
-                    };
-                    "wlr/taskbar" = {
-                      format = "{icon}";
-                      icon-size = 14;
-                      icon-theme = "Numix-Circle";
-                      tooltip-format = ''
-                        {title}
-                        {name}
-                        app_id: {app_id}
-                        {short_state}'';
-                      on-click = "activate";
-                      on-click-middle = "minimize-raise";
-                      ignore-list = [
-                        "Alacritty"
-                        "Foot"
-                        "foot"
-                        "tfoot"
+      config = lib.mkIf config.programs.waybar.enable (
+        lib.mkMerge [
+          {
+            home.packages = [
+              waybarOnce
+              waybarDevelop
+            ];
+            programs.waybar = {
+              package = waybarPackage;
+              # systemd user service bound to graphical-session.target with
+              # auto-restart — see the option definition at the bottom of this
+              # file. Compositor-started sessions (labwc/river/hikari) keep the
+              # waybarOnce watchdog instead, as nobody manages the session
+              # targets there.
+              systemd.enable = waybarSystemdService;
+              settings = {
+                mainBar = lib.mkMerge (
+                  [
+                    {
+                      name = "mainBar";
+                      layer = "top";
+                      position = "left";
+                      height = null;
+                      spacing = 4;
+                      modules-left = [ ];
+                      modules-center = [
+                        "custom/idle_inhibitor"
+                        "custom/test_for_missing_tb_changing"
+                        # "custom/audio_idle_inhibitor"
+                        "clock#time"
+                        "clock#date"
+                        "custom/isvpn"
+                      ]
+                      ++ lib.optionals power-profiles-daemon-config.enable [ "power-profiles-daemon" ]
+                      ++ [
+                        "battery"
+                        "backlight"
+                        "pulseaudio"
                       ];
-                      app_ids-mapping = {
-                        "firefoxdeveloperedition" = "firefox-developer-edition";
-                      };
-                      rotate = 90;
-                    };
-                    "power-profiles-daemon" = lib.mkIf power-profiles-daemon-config.enable {
-                      "format" = "{icon}";
-                      "tooltip-format" = ''
-                        Power profile: {profile}
-                        Driver: {driver}'';
-                      "tooltip" = true;
-                      "format-icons" = {
-                        "default" = "";
-                        "performance" = "";
-                        "balanced" = "";
-                        "power-saver" = "";
-                      };
-                      rotate = 90;
-                    };
-                    "systemd-failed-units#user" = {
-                      "hide-on-ok" = true;
-                      "format" = "✗ U:{nr_failed}";
-                      "format-ok" = "✓";
-                      "system" = false;
-                      "user" = true;
-                      rotate = 90;
-                      "on-click" =
-                        "${pkgs.alacritty}/bin/alacritty --command 'bash' '-c' 'systemctl --user --failed | less'";
-                    };
-                    "systemd-failed-units#system" = {
-                      "hide-on-ok" = true;
-                      "format" = "✗ S:{nr_failed}";
-                      "format-ok" = "✓";
-                      "system" = true;
-                      "user" = false;
-                      rotate = 90;
-                      "on-click" =
-                        "${pkgs.alacritty}/bin/alacritty --command 'bash' '-c' 'systemctl --system --failed | less'";
-                    };
-                    "custom/isvpn" = {
-                      format = "{}";
-                      exec =
-                        (pkgs.writeShellScriptBin "isvpn" ''
-                          if ${pkgs.nettools}/bin/ifconfig tun0 &> /dev/null; then
-                            cat <<EOF
-                          {"text":"VPN","class":"warning"}
-                          EOF
-                          fi
-                        '')
-                        + "/bin/isvpn";
-                      return-type = "json";
-                      interval = 30;
-                      rotate = 90;
-                    };
-                    "custom/test_for_missing_tb_changing" = {
-                      format = "{}";
-                      exec =
-                        (pkgs.writeShellScriptBin "test_for_missing_tb_changing" ''
-                          if ${pkgs.bolt}/bin/boltctl list | ${pkgs.gnugrep}/bin/grep "status" | ${pkgs.gnugrep}/bin/grep -q -v "disconnected"; then
-                            if ${pkgs.acpi}/bin/acpi -a | ${pkgs.gnugrep}/bin/grep -q "off-line"; then
-                              cat <<EOF
-                          {"text":"not-charging","class":"error"}
-                          EOF
-                             exit 0
-                            fi
-                          fi
-                        '')
-                        + "/bin/test_for_missing_tb_changing";
-                      return-type = "json";
-                      interval = 60;
-                      rotate = 90;
-                    };
-                    memory = {
-                      format = "m: {}%";
-                      rotate = 90;
-                    };
-                    backlight = {
-                      format = "{percent}% {icon}";
-                      format-icons = [
-                        ""
-                        ""
-                        ""
-                        ""
-                        ""
-                        ""
-                        ""
-                        ""
-                        ""
+                      modules-right = [
+                        "tray"
+                        "systemd-failed-units#user"
+                        "systemd-failed-units#system"
+                        "cpu"
+                        "memory"
+                        "network"
                       ];
-                      on-scroll-up = "${pkgs.brightnessctl}/bin/brightnessctl set +1%";
-                      on-scroll-down = "${pkgs.brightnessctl}/bin/brightnessctl set 1%-";
-                      on-click = "${toggleLight}/bin/toggleLight";
-                      rotate = 90;
-                    };
-                    battery = {
-                      states = {
-                        warning = 40;
-                        critical = 20;
+                      tray = {
+                        spacing = 10;
+                        rotate = 90;
                       };
-                      format = "{capacity}% {icon}";
-                      format-charging = "{capacity}% ";
-                      format-plugged = "{capacity}% ";
-                      format-alt = "{time} {icon}";
-                      format-icons = [
-                        ""
-                        ""
-                        ""
-                        ""
-                        ""
-                      ];
-                      rotate = 90;
-                    };
-                    network = {
-                      format-wifi = "{essid} ({signalStrength}%) ";
-                      format-ethernet = "{ifname} ";
-                      tooltip-format = ''
-                        {ifname} via {gwaddr} 
-                        {ipaddr}/{cidr}'';
-                      format-linked = "{ifname} (No IP) ";
-                      format-disconnected = "Disconnected ⚠";
-                      # format-alt = "{ifname}: {ipaddr}/{cidr}";
-                      on-click = "foot-nmtui";
-                      rotate = 90;
-                    };
-                    bluetooth = {
-                      format = " {status}";
-                      format-connected = " {device_alias}";
-                      format-connected-battery = " {device_alias} {device_battery_percentage}%";
-                      # format-device-preference = [ "device1"; "device2" ], # preference list deciding the displayed device
-                      tooltip-format = ''
-                        {controller_alias}	{controller_address}
-
-                        {num_connections} connected'';
-                      tooltip-format-connected = ''
-                        {controller_alias}	{controller_address}
-
-                        {num_connections} connected
-
-                        {device_enumerate}'';
-                      tooltip-format-enumerate-connected = "{device_alias}	{device_address}";
-                      tooltip-format-enumerate-connected-battery = "{device_alias}	{device_address}	{device_battery_percentage}%";
-                      on-click = "foot-bluetuith";
-                      rotate = 90;
-                    };
-                    pulseaudio = {
-                      format = "{volume}% {icon} {format_source}";
-                      format-bluetooth = "{volume}% {icon} {format_source}";
-                      format-bluetooth-muted = " {icon} {format_source}";
-                      format-muted = " {format_source}";
-                      format-source = "{volume}% ";
-                      format-source-muted = "";
-                      format-icons = {
-                        headphone = "";
-                        hands-free = "";
-                        headset = "";
-                        phone = "";
-                        portable = "";
-                        car = "";
-                        default = [
-                          ""
-                          ""
-                          ""
+                      "clock#time" = {
+                        format = "<big>{:%H:%M<sub>:%S</sub>}</big>";
+                        interval = 1;
+                        tooltip = false;
+                        rotate = 90;
+                      };
+                      "clock#date" = {
+                        format = ''
+                          {:%e
+                          <sub>%b</sub>}'';
+                        interval = 60;
+                        tooltip = false;
+                      };
+                      cpu = {
+                        format = "c: {usage}%";
+                        tooltip = false;
+                        on-click = "foot-btop";
+                        rotate = 90;
+                      };
+                      "wlr/taskbar" = {
+                        format = "{icon}";
+                        icon-size = 14;
+                        icon-theme = "Numix-Circle";
+                        tooltip-format = ''
+                          {title}
+                          {name}
+                          app_id: {app_id}
+                          {short_state}'';
+                        on-click = "activate";
+                        on-click-middle = "minimize-raise";
+                        ignore-list = [
+                          "Alacritty"
+                          "Foot"
+                          "foot"
+                          "tfoot"
                         ];
+                        app_ids-mapping = {
+                          "firefoxdeveloperedition" = "firefox-developer-edition";
+                        };
+                        rotate = 90;
                       };
-                      on-click = "pavucontrol";
-                      rotate = 90;
-                    };
-                    "custom/audio_idle_inhibitor".rotate = 90;
-                  }
-                ]
-                ++ (map doesFileExistCheck cfg.desktop.wayland.waybar.doesFileExistChecks)
-              );
+                      "power-profiles-daemon" = lib.mkIf power-profiles-daemon-config.enable {
+                        "format" = "{icon}";
+                        "tooltip-format" = ''
+                          Power profile: {profile}
+                          Driver: {driver}'';
+                        "tooltip" = true;
+                        "format-icons" = {
+                          "default" = "";
+                          "performance" = "";
+                          "balanced" = "";
+                          "power-saver" = "";
+                        };
+                        rotate = 90;
+                      };
+                      "systemd-failed-units#user" = {
+                        "hide-on-ok" = true;
+                        "format" = "✗ U:{nr_failed}";
+                        "format-ok" = "✓";
+                        "system" = false;
+                        "user" = true;
+                        rotate = 90;
+                        "on-click" =
+                          "${pkgs.alacritty}/bin/alacritty --command 'bash' '-c' 'systemctl --user --failed | less'";
+                      };
+                      "systemd-failed-units#system" = {
+                        "hide-on-ok" = true;
+                        "format" = "✗ S:{nr_failed}";
+                        "format-ok" = "✓";
+                        "system" = true;
+                        "user" = false;
+                        rotate = 90;
+                        "on-click" =
+                          "${pkgs.alacritty}/bin/alacritty --command 'bash' '-c' 'systemctl --system --failed | less'";
+                      };
+                      "custom/isvpn" = {
+                        format = "{}";
+                        exec =
+                          (pkgs.writeShellScriptBin "isvpn" ''
+                            if ${pkgs.nettools}/bin/ifconfig tun0 &> /dev/null; then
+                              cat <<EOF
+                            {"text":"VPN","class":"warning"}
+                            EOF
+                            fi
+                          '')
+                          + "/bin/isvpn";
+                        return-type = "json";
+                        interval = 30;
+                        rotate = 90;
+                      };
+                      "custom/test_for_missing_tb_changing" = {
+                        format = "{}";
+                        exec =
+                          (pkgs.writeShellScriptBin "test_for_missing_tb_changing" ''
+                            if ${pkgs.bolt}/bin/boltctl list | ${pkgs.gnugrep}/bin/grep "status" | ${pkgs.gnugrep}/bin/grep -q -v "disconnected"; then
+                              if ${pkgs.acpi}/bin/acpi -a | ${pkgs.gnugrep}/bin/grep -q "off-line"; then
+                                cat <<EOF
+                            {"text":"not-charging","class":"error"}
+                            EOF
+                               exit 0
+                              fi
+                            fi
+                          '')
+                          + "/bin/test_for_missing_tb_changing";
+                        return-type = "json";
+                        interval = 60;
+                        rotate = 90;
+                      };
+                      memory = {
+                        format = "m: {}%";
+                        rotate = 90;
+                      };
+                      backlight = {
+                        format = "{percent}% {icon}";
+                        format-icons = [
+                          ""
+                          ""
+                          ""
+                          ""
+                          ""
+                          ""
+                          ""
+                          ""
+                          ""
+                        ];
+                        on-scroll-up = "${pkgs.brightnessctl}/bin/brightnessctl set +1%";
+                        on-scroll-down = "${pkgs.brightnessctl}/bin/brightnessctl set 1%-";
+                        on-click = "${toggleLight}/bin/toggleLight";
+                        rotate = 90;
+                      };
+                      battery = {
+                        states = {
+                          warning = 40;
+                          critical = 20;
+                        };
+                        format = "{capacity}% {icon}";
+                        format-charging = "{capacity}% ";
+                        format-plugged = "{capacity}% ";
+                        format-alt = "{time} {icon}";
+                        format-icons = [
+                          ""
+                          ""
+                          ""
+                          ""
+                          ""
+                        ];
+                        rotate = 90;
+                      };
+                      network = {
+                        format-wifi = "{essid} ({signalStrength}%) ";
+                        format-ethernet = "{ifname} ";
+                        tooltip-format = ''
+                          {ifname} via {gwaddr} 
+                          {ipaddr}/{cidr}'';
+                        format-linked = "{ifname} (No IP) ";
+                        format-disconnected = "Disconnected ⚠";
+                        # format-alt = "{ifname}: {ipaddr}/{cidr}";
+                        on-click = "foot-nmtui";
+                        rotate = 90;
+                      };
+                      bluetooth = {
+                        format = " {status}";
+                        format-connected = " {device_alias}";
+                        format-connected-battery = " {device_alias} {device_battery_percentage}%";
+                        # format-device-preference = [ "device1"; "device2" ], # preference list deciding the displayed device
+                        tooltip-format = ''
+                          {controller_alias}	{controller_address}
+
+                          {num_connections} connected'';
+                        tooltip-format-connected = ''
+                          {controller_alias}	{controller_address}
+
+                          {num_connections} connected
+
+                          {device_enumerate}'';
+                        tooltip-format-enumerate-connected = "{device_alias}	{device_address}";
+                        tooltip-format-enumerate-connected-battery = "{device_alias}	{device_address}	{device_battery_percentage}%";
+                        on-click = "foot-bluetuith";
+                        rotate = 90;
+                      };
+                      pulseaudio = {
+                        format = "{volume}% {icon} {format_source}";
+                        format-bluetooth = "{volume}% {icon} {format_source}";
+                        format-bluetooth-muted = " {icon} {format_source}";
+                        format-muted = " {format_source}";
+                        format-source = "{volume}% ";
+                        format-source-muted = "";
+                        format-icons = {
+                          headphone = "";
+                          hands-free = "";
+                          headset = "";
+                          phone = "";
+                          portable = "";
+                          car = "";
+                          default = [
+                            ""
+                            ""
+                            ""
+                          ];
+                        };
+                        on-click = "pavucontrol";
+                        rotate = 90;
+                      };
+                      "custom/audio_idle_inhibitor".rotate = 90;
+                    }
+                  ]
+                  ++ (map doesFileExistCheck cfg.desktop.wayland.waybar.doesFileExistChecks)
+                );
+              };
+              style = builtins.readFile ./waybar.gtk.css;
             };
-            style = builtins.readFile ./waybar.gtk.css;
-          };
-        }
+          }
+          # waybarOnce restarts waybar on *any* exit; give the systemd unit
+          # the same resilience (Restart=on-failure would not cover clean
+          # exits that are actually crashes caught by GTK).
+          (lib.mkIf waybarSystemdService {
+            systemd.user.services.waybar = {
+              Service = {
+                Restart = lib.mkForce "always";
+                RestartSec = "1s";
+              };
+              Unit = {
+                # a restart must not race the compositor still tearing down
+                StartLimitIntervalSec = 0;
+              };
+            };
+          })
+        ]
       );
     }
   );
@@ -484,9 +509,22 @@ in
 {
   imports = [ ./idleInhibitor.nix ];
   options.myconfig = with lib; {
-    desktop.wayland.waybar.doesFileExistChecks = mkOption {
-      type = types.listOf types.str;
-      default = [ ];
+    desktop.wayland.waybar = {
+      doesFileExistChecks = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+      };
+      # Start waybar as a systemd user service (programs.waybar.systemd)
+      # bound to graphical-session.target instead of the waybarOnce
+      # watchdog spawned by the compositor. In session-managed niri
+      # (niri-session/uwsm) the service owns the bar; the `niri-plain`
+      # session keeps the waybarOnce watchdog via the spawn detector, as
+      # nobody manages the graphical-session targets there. Only disable
+      # for hosts where the service misbehaves.
+      systemdService = mkOption {
+        type = types.bool;
+        default = true;
+      };
     };
   };
   config = {
