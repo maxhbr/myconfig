@@ -164,11 +164,14 @@ in
         type = types.str;
         default = "/run/mysbx-egress/litellm.sock";
         description = ''
-          Listen path of the Unix-socket forwarder. The mysbx bubblewrap
-          backend binds its DIRECTORY (mode 0666) read-only at
-          `/run/mysbx-egress` in the sandbox, so the directory must be
-          this path's parent — `/run` is where a socket belongs (it is
-          mode 0755 root-owned and wiped on boot).
+          Listen path of the Unix-socket forwarder. The socket file is
+          mode 0666; its parent DIRECTORY (created by systemd, mode
+          0755 root-owned) is what the mysbx bubblewrap backend binds
+          READ-ONLY into the sandbox at `/run/mysbx-egress`. The path
+          must therefore sit in a dedicated directory at least two
+          levels below `/` — `/run/mysbx-egress/litellm.sock` is fine,
+          but `/run/litellm.sock` would bind the whole of `/run`
+          (including `/run/user/<uid>`) into the sandbox.
         '';
       };
     };
@@ -322,12 +325,12 @@ in
         description = "Unix socket for the agent LiteLLM egress forwarder";
         wantedBy = [ "sockets.target" ];
         socketConfig = {
-          # The parent directory is created before the socket binds (a
-          # fresh boot has no /run/mysbx-egress): 0755 root-owned, so the
-          # world-writable SOCKET inside it is the only relaxation, and a
+          # systemd creates the socket's parent directory itself (its
+          # `DirectoryMode=` default is 0755, root-owned), so no
+          # `ExecStartPre mkdir` is needed — the world-writable SOCKET
+          # (0666) inside a 0755 directory is the only relaxation, and a
           # sandbox that binds the directory read-only sees exactly the
           # one socket the mysbx backend expects.
-          ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p ${lib.escapeShellArg (builtins.dirOf cfg.unixSocket.path)}";
           ListenStream = cfg.unixSocket.path;
           # Mode 0666: the mysbx `proxy-only` sandbox binds the socket's
           # directory and connects as the sandbox user; the socket is no
@@ -353,7 +356,10 @@ in
           "litellm.service"
         ];
         serviceConfig = {
-          ExecStart = "${pkgs.systemd}/lib/systemd/systemd-socket-proxyd 127.0.0.1:${port}";
+          # --exit-idle-time mirrors the TCP forwarder: the unit exits
+          # after an idle period, so an enabled-but-unused forwarder
+          # really runs nothing once its first connection is done.
+          ExecStart = "${pkgs.systemd}/lib/systemd/systemd-socket-proxyd --exit-idle-time=5min 127.0.0.1:${port}";
           DynamicUser = true;
           NoNewPrivileges = true;
           PrivateTmp = true;
