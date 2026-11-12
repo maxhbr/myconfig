@@ -483,6 +483,37 @@ let
       throw "mysbx generated-config test: a host without the forwarder pinned backend env (${builtins.toJSON off.env})"
     else
       "ok";
+  # The `network = "proxy-only"` channel pins (docs/design/config.md
+  # D20, bd myconfig-mo3.2.4): the wrapper pins the host forwarder's
+  # Unix socket and the relay port EXACTLY when the forwarder's
+  # socket half runs — gated on `services.litellm.enable` alone (the
+  # profile runs on plain bubblewrap, not only on podman hosts) — and
+  # pins NOTHING on a host without LiteLLM. Modelled on
+  # `gvisorPinGate`.
+  egressPinGate =
+    let
+      pinsOf = extraModules: (evaluated extraModules).myconfig.ai.dev.mysbx.package.passthru;
+      on = pinsOf [
+        {
+          services.litellm = {
+            enable = true;
+            port = 4000;
+          };
+        }
+      ];
+      off = pinsOf [ { } ];
+    in
+    if on.egressSocket != "/run/mysbx-egress/litellm.sock" then
+      throw "mysbx generated-config test: a litellm host did not pin the egress socket (got ${toString on.egressSocket})"
+    else if on.egressPort != 4000 then
+      throw "mysbx generated-config test: the egress port did not follow the litellm port (got ${toString on.egressPort})"
+    else if off.egressSocket != null then
+      throw "mysbx generated-config test: a host without litellm pinned the egress socket (${toString off.egressSocket})"
+    else if off.egressPort != null then
+      throw "mysbx generated-config test: a host without litellm pinned the egress port (${toString off.egressPort})"
+    else
+      "ok";
+
   # The microvm-qemu backend's env pins (bd myconfig-mzys): the
   # SLiRP guest's loopback is its own, so the module must pin the
   # model endpoint at the SLiRP gateway `10.0.2.2` — which maps to
@@ -721,6 +752,7 @@ pkgs.runCommand "mysbx-generated-config-test"
     inherit
       assertionGate
       gvisorPinGate
+      egressPinGate
       qemuEnvGate
       chEnvGate
       krunPinGate

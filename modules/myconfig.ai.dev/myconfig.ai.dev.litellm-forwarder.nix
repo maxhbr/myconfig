@@ -140,66 +140,189 @@ in
         forwarder listens on `forwardPort`). Read-only.
       '';
     };
-  };
 
-  config = lib.mkIf cfg.enable {
-    assertions = [
-      {
-        assertion = config.services.litellm.enable;
-        message = ''
-          myconfig.ai.dev.litellm-forwarder.enable is on, but services.litellm
-          is not enabled — the forwarder would proxy to 127.0.0.1:${port},
-          where nothing listens.
+    unixSocket = {
+      enable = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Also run a Unix-socket forwarder
+          (`agent-litellm-forward-unix`) whose socket the bubblewrap
+          `network = "proxy-only"` profile binds into the sandbox
+          (`docs/design/config.md` D20). The socket is the ONE host
+          channel such a sandbox has; the in-sandbox `mysbx-egress-
+          relay` forwards loopback TCP clients to it.
+
+          Off by default: the mysbx module turns it on wherever it turns
+          the profile on. Independent of `enable` so a host can have the
+          socket channel without the TCP listener (and vice versa); the
+          socket serves only the loopback LiteLLM proxy.
         '';
-      }
-      {
-        assertion = cfg.forwardPort != cfg.port;
-        message = ''
-          myconfig.ai.dev.litellm-forwarder.forwardPort must differ from port:
-          the forwarder binds to 0.0.0.0:${forwardPort}, which would collide
-          with LiteLLM's own 127.0.0.1:${port} listener if they were equal.
+      };
+
+      path = mkOption {
+        type = types.str;
+        default = "/run/mysbx-egress/litellm.sock";
+        description = ''
+          Listen path of the Unix-socket forwarder. The mysbx bubblewrap
+          backend binds its DIRECTORY (mode 0666) read-only at
+          `/run/mysbx-egress` in the sandbox, so the directory must be
+          this path's parent — `/run` is where a socket belongs (it is
+          mode 0755 root-owned and wiped on boot).
         '';
-      }
-    ];
-
-    # Port-scoped forwarder: 0.0.0.0:${forwardPort} → 127.0.0.1:${port}.
-    # Socket-activated, so it costs nothing until a sandbox connects, and it
-    # exits again after an idle period. The 0.0.0.0 bind is safe because the
-    # NixOS firewall drops ${forwardPort} on non-loopback interfaces (it is not
-    # in allowedTCPPorts).
-    #
-    # `Accept` MUST stay at its default (`no`): systemd-socket-proxyd inherits
-    # the LISTENING socket and accepts connections itself (systemd-socket-proxyd(8):
-    # "support for socket activation with Accept=no"). With `Accept = true`
-    # systemd passes an already-accepted CONNECTION socket instead, the proxy
-    # fails on it and exits, and the client sees the TCP handshake succeed and
-    # then an immediate reset (`curl: (56) Recv failure: Connection reset by
-    # peer` from inside a sandbox).
-    systemd.sockets.agent-litellm-forward = {
-      description = "Socket for the agent LiteLLM port-scoped forwarder";
-      wantedBy = [ "sockets.target" ];
-      socketConfig.ListenStream = "0.0.0.0:${forwardPort}";
-    };
-
-    systemd.services.agent-litellm-forward = {
-      description = "Agent LiteLLM port-scoped forwarder (0.0.0.0:${forwardPort} -> 127.0.0.1:${port})";
-      requires = [
-        "agent-litellm-forward.socket"
-        "litellm.service"
-      ];
-      after = [
-        "agent-litellm-forward.socket"
-        "litellm.service"
-      ];
-      serviceConfig = {
-        Type = "notify";
-        ExecStart = "${pkgs.systemd}/lib/systemd/systemd-socket-proxyd --exit-idle-time=5min 127.0.0.1:${port}";
-        ProtectSystem = "strict";
-        PrivateTmp = true;
-        PrivateDevices = true;
-        # Needs the host network namespace to reach the loopback-only proxy.
-        PrivateNetwork = false;
       };
     };
   };
+
+  config = lib.mkMerge [
+    # The destination is the loopback LiteLLM proxy: whether the TCP
+    # forwarder, the Unix-socket forwarder or both are on, that proxy
+    # must exist, and the TCP listener's port must not collide with it.
+    (lib.mkIf cfg.enable {
+      assertions = [
+        {
+          assertion = config.services.litellm.enable;
+          message = ''
+            myconfig.ai.dev.litellm-forwarder.enable is on, but services.litellm
+            is not enabled — the forwarder would proxy to 127.0.0.1:${port},
+            where nothing listens.
+          '';
+        }
+        {
+          assertion = cfg.forwardPort != cfg.port;
+          message = ''
+            myconfig.ai.dev.litellm-forwarder.forwardPort must differ from port:
+            the forwarder binds to 0.0.0.0:${forwardPort}, which would collide
+            with LiteLLM's own 127.0.0.1:${port} listener if they were equal.
+          '';
+        }
+      ];
+
+      # Port-scoped forwarder: 0.0.0.0:${forwardPort} → 127.0.0.1:${port}.
+      # Socket-activated, so it costs nothing until a sandbox connects, and it
+      # exits again after an idle period. The 0.0.0.0 bind is safe because the
+      # NixOS firewall drops ${forwardPort} on non-loopback interfaces (it is not
+      # in allowedTCPPorts).
+      #
+      # `Accept` MUST stay at its default (`no`): systemd-socket-proxyd inherits
+      # the LISTENING socket and accepts connections itself (systemd-socket-proxyd(8):
+      # "support for socket activation with Accept=no"). With `Accept = true`
+      # systemd passes an already-accepted CONNECTION socket instead, the proxy
+      # fails on it and exits, and the client sees the TCP handshake succeed and
+      # then an immediate reset (`curl: (56) Recv failure: Connection reset by
+      # peer` from inside a sandbox).
+      systemd.sockets.agent-litellm-forward = {
+        description = "Socket for the agent LiteLLM port-scoped forwarder";
+        wantedBy = [ "sockets.target" ];
+        socketConfig.ListenStream = "0.0.0.0:${forwardPort}";
+      };
+
+      systemd.services.agent-litellm-forward = {
+        description = "Agent LiteLLM port-scoped forwarder (0.0.0.0:${forwardPort} -> 127.0.0.1:${port})";
+        requires = [
+          "agent-litellm-forward.socket"
+          "litellm.service"
+        ];
+        after = [
+          "agent-litellm-forward.socket"
+          "litellm.service"
+        ];
+        serviceConfig = {
+          Type = "notify";
+          ExecStart = "${pkgs.systemd}/lib/systemd/systemd-socket-proxyd --exit-idle-time=5min 127.0.0.1:${port}";
+          ProtectSystem = "strict";
+          PrivateTmp = true;
+          PrivateDevices = true;
+          # Needs the host network namespace to reach the loopback-only proxy.
+          PrivateNetwork = false;
+        };
+      };
+    })
+
+    # The Unix-socket half (bd myconfig-mo3.2.4): the host side of the
+    # bubblewrap `network = "proxy-only"` channel (config.md D20). The
+    # socket is the ONE host channel such a sandbox has — the mysbx
+    # backend binds its DIRECTORY into the sandbox, and the in-sandbox
+    # `mysbx-egress-relay` forwards loopback TCP clients to it.
+    #
+    # The microvm precedent (sandboxes/myconfig.ai.microvm/network.nix):
+    # one Unix socket → systemd-socket-proxyd → 127.0.0.1:<port>,
+    # destination-FIXED, with the process itself restricted to the host
+    # loopback so a compromised forwarder cannot reach the LAN, the VPN
+    # or the metadata service.
+    #
+    # `Accept` stays `no` (the same rule as the TCP pair): socket-proxyd
+    # inherits the LISTENING socket and accepts connections itself.
+    # Gated on `unixSocket.enable` ALONE (not the TCP half's
+    # `cfg.enable`): the profile runs on plain bubblewrap, where the
+    # port-scoped TCP forwarder is not needed, so a host can have the
+    # socket channel without the TCP listener.
+    (lib.mkIf cfg.unixSocket.enable {
+      assertions = [
+        {
+          assertion = config.services.litellm.enable;
+          message = ''
+            myconfig.ai.dev.litellm-forwarder.unixSocket.enable is on, but
+            services.litellm is not enabled — the socket would forward to
+            127.0.0.1:${port}, where nothing listens.
+          '';
+        }
+      ];
+
+      systemd.sockets.agent-litellm-forward-unix = {
+        description = "Unix socket for the agent LiteLLM egress forwarder";
+        wantedBy = [ "sockets.target" ];
+        socketConfig = {
+          # The parent directory is created before the socket binds (a
+          # fresh boot has no /run/mysbx-egress): 0755 root-owned, so the
+          # world-writable SOCKET inside it is the only relaxation, and a
+          # sandbox that binds the directory read-only sees exactly the
+          # one socket the mysbx backend expects.
+          ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p ${lib.escapeShellArg (builtins.dirOf cfg.unixSocket.path)}";
+          ListenStream = cfg.unixSocket.path;
+          # Mode 0666: the mysbx `proxy-only` sandbox binds the socket's
+          # directory and connects as the sandbox user; the socket is no
+          # wider than LiteLLM's own loopback TCP port (any host process
+          # could already curl it), and `/run/mysbx-egress` is root-owned
+          # 0755, so the world-writable SOCKET is the only relaxation.
+          SocketMode = "0666";
+          # A stale socket file would shadow the listener on the next
+          # start.
+          RemoveOnStop = true;
+          Accept = false;
+        };
+      };
+
+      systemd.services.agent-litellm-forward-unix = {
+        description = "Agent LiteLLM Unix-socket egress forwarder (${cfg.unixSocket.path} -> 127.0.0.1:${port})";
+        requires = [
+          "agent-litellm-forward-unix.socket"
+          "litellm.service"
+        ];
+        after = [
+          "agent-litellm-forward-unix.socket"
+          "litellm.service"
+        ];
+        serviceConfig = {
+          ExecStart = "${pkgs.systemd}/lib/systemd/systemd-socket-proxyd 127.0.0.1:${port}";
+          DynamicUser = true;
+          NoNewPrivileges = true;
+          PrivateTmp = true;
+          PrivateDevices = true;
+          ProtectSystem = "strict";
+          ProtectHome = true;
+          # HOST-TCP-ONLY, enforced on the FORWARDER: it may talk only to
+          # the host loopback, so even a compromised forwarder cannot
+          # reach the LAN, the VPN or the metadata service. AF_UNIX is
+          # the socket it is activated on, AF_INET the loopback target.
+          IPAddressAllow = "localhost";
+          IPAddressDeny = "any";
+          RestrictAddressFamilies = [
+            "AF_UNIX"
+            "AF_INET"
+          ];
+        };
+      };
+    })
+  ];
 }

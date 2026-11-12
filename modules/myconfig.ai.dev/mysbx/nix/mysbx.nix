@@ -312,6 +312,21 @@
   # spec is a per-invocation debugging knob rather than a closure
   # path that must match the build.
   podmanPastaSpec ? null,
+  # The host Unix socket of the `network = "proxy-only"` channel
+  # (`MYSBX_EGRESS_SOCKET`, docs/design/config.md D20, bd
+  # myconfig-mo3.2.4): the path of the
+  # `agent-litellm-forward-unix` forwarder's socket, which the
+  # bubblewrap backend binds into the sandbox. `null` pins nothing — an
+  # unwrapped build's PATH fallback applies, and a `proxy-only` run
+  # without a pinned socket is REFUSED (it fails closed). Pinned with
+  # `--set-default`: a debugging run may point it at another socket.
+  egressSocket ? null,
+  # The host LiteLLM port the in-sandbox relay listens on
+  # (`MYSBX_EGRESS_PORT`, docs/design/config.md D20): the relay binds
+  # `127.0.0.1:<port>` inside the sandbox and forwards to the egress
+  # socket, so an agent keeps its baked `127.0.0.1:<litellm port>`
+  # URLs. `null` pins nothing.
+  egressPort ? null,
   # Backend-specific environment pins of the podman-gvisor backend
   # (`MYSBX_PODMAN_ENV`): an attrset rendered as a space-separated
   # `KEY=VALUE` list. The container gets them as `--env` after the
@@ -918,6 +933,17 @@ let
   # knob — an invocation overriding it could name a dtach that
   # differs from the one this build validated.
   dtachPins = lib.optionalString (dtach != null) "--set MYSBX_DTACH '${lib.getExe dtach}'";
+  # The `network = "proxy-only"` channel pins (docs/design/config.md
+  # D20, bd myconfig-mo3.2.4): the host forwarder's Unix socket and the
+  # LiteLLM port the in-sandbox relay listens on. `--set-default`, the
+  # operator-knob reasoning of the pasta spec: a debugging run may
+  # point them elsewhere, and a `proxy-only` run without a pinned
+  # socket is refused (it fails closed).
+  egressPins =
+    lib.optionalString (egressSocket != null) "--set-default MYSBX_EGRESS_SOCKET '${egressSocket}' "
+    + lib.optionalString (
+      egressPort != null
+    ) "--set-default MYSBX_EGRESS_PORT '${toString egressPort}'";
   # The nono backend pins of the layered backend (bd
   # myconfig-6di.4.3): the binary (`--set`, an absolute store path
   # like every other closure pin) and the mysbx profile (the
@@ -1038,6 +1064,7 @@ symlinkJoin {
       ${krunPins} \
       ${waypipePins} \
       ${dtachPins} \
+      ${egressPins} \
       ${nonoPins} \
       ${nonoEnvPins} \
       ${sshKeygenPins} \
@@ -1099,6 +1126,11 @@ symlinkJoin {
     # `vm.store.enable` feeds it; the checks.nix wiring gate reads
     # it at eval time.
     vmStoreBaked = vmStoreBaked;
+    # The `network = "proxy-only"` channel pins (bd myconfig-mo3.2.4),
+    # for the generated-config gate: the host forwarder's Unix socket
+    # and the port the in-sandbox relay listens on. `null` when the
+    # caller pinned nothing.
+    inherit egressSocket egressPort;
     # The disk's closure roots as store paths, for the same gate:
     # `vmStoreExtraRoots` (the guest nix wrappers, the
     # git-default-diff wrapper) must appear here when the module
