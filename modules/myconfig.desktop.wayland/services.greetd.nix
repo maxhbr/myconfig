@@ -26,8 +26,40 @@ in
     (lib.mkIf config.services.greetd.enable {
       home-manager.sharedModules = [
         {
-          home.packages = with pkgs; [
-            (writeShellScriptBin "regreet" "sudo systemctl restart greetd.service")
+          home.packages = [
+            (pkgs.writeShellApplication {
+              name = "regreet";
+              runtimeInputs = [
+                pkgs.systemd
+                pkgs.gawk
+              ];
+              text = ''
+                # Return to the greeter by ending the graphical session;
+                # greetd relaunches the greeter when its session command
+                # exits. Restarting greetd.service alone would NOT end the
+                # session: the compositor runs under the user manager
+                # (niri.service) or in the session scope, both outside
+                # greetd's own cgroup, so it keeps running (music, apps)
+                # behind the login screen.
+                if systemctl --user is-active --quiet niri.service; then
+                  # stopping the compositor also ends the niri-session
+                  # wrapper greetd waits on, which triggers the greeter
+                  exec systemctl --user stop niri.service
+                fi
+                session="$(
+                  loginctl list-sessions --no-legend |
+                    awk -v u="$USER" '$3 == u && $4 == "seat0" { print $1; exit }'
+                )"
+                if [[ -z "$session" ]]; then
+                  session="''${XDG_SESSION_ID:-}"
+                fi
+                if [[ -z "$session" ]]; then
+                  echo "regreet: no graphical session found" >&2
+                  exit 1
+                fi
+                exec loginctl terminate-session "$session"
+              '';
+            })
           ];
         }
       ];
