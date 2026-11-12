@@ -563,15 +563,20 @@ pub fn bwrap_argv(
         }
     }
     // The `network = "proxy-only"` channel (docs/design/config.md D20,
-    // bd myconfig-mo3.2.6): the run needs the forwarder's socket
-    // directory and the relay binary, and NOTHING may mount or persist
-    // over the directory the channel binds. The profile fails closed:
-    // no channel is a refused run, never a silent fallback to a shared
-    // network.
-    if cfg.network == crate::config::Network::ProxyOnly {
-        let egress = params.egress.as_ref().ok_or(Error::EgressChannelMissing)?;
-        check_egress_dir(&cfg.mounts, &effective_state_dirs, egress.socket_dir)?;
-    }
+    // bd myconfig-mo3.2.6): resolved ONCE here and threaded through the
+    // rest of the builder, so the three uses below never re-check the
+    // mode nor unwrap an `Option`. The run needs the forwarder's
+    // socket directory and the relay binary; the profile fails closed
+    // (no channel is a refused run, never a silent fallback to a
+    // shared network), and NOTHING may mount or persist over the
+    // directory the channel binds.
+    let egress: Option<&EgressChannel<'_>> = if cfg.network == crate::config::Network::ProxyOnly {
+        let channel = params.egress.as_ref().ok_or(Error::EgressChannelMissing)?;
+        check_egress_dir(&cfg.mounts, &effective_state_dirs)?;
+        Some(channel)
+    } else {
+        None
+    };
     // A layered run's daemon bind fact, computed once (bd
     // myconfig-nj9): `/nix/var/nix` and the nix.conf pin below are
     // bound on the layered path exactly when the network is shared
@@ -654,7 +659,7 @@ pub fn bwrap_argv(
             argv.push("/nix/var/nix".into());
             argv.push("/nix/var/nix".into());
         }
-    } else if cfg.network == crate::config::Network::ProxyOnly {
+    } else if let Some(egress) = egress {
         // `network = "proxy-only"` (docs/design/config.md D20, bd
         // myconfig-mo3.2.6): no `--share-net` (so bwrap brings up an
         // empty netns with only `lo`), no resolver binds (there is no
@@ -671,10 +676,6 @@ pub fn bwrap_argv(
         //
         // The `check_egress_dir` guard above already refused a mount
         // covering this path, so the bind lands on the empty root.
-        let egress = params
-            .egress
-            .as_ref()
-            .expect("checked at the top of the builder");
         argv.push("--ro-bind".into());
         argv.push(egress.socket_dir.into());
         argv.push(EGRESS_DIR.into());
@@ -1318,11 +1319,7 @@ pub fn bwrap_argv(
     // `127.0.0.1:<port>` inside the empty netns and forwards each
     // connection to the bound host socket, then runs the payload (the
     // rest of the chain) as its child, exiting with its status.
-    if cfg.network == crate::config::Network::ProxyOnly {
-        let egress = params
-            .egress
-            .as_ref()
-            .expect("checked at the top of the builder");
+    if let Some(egress) = egress {
         argv.push(egress.relay_bin.into());
         argv.push("--listen".into());
         argv.push(format!("127.0.0.1:{}", egress.port).into());
@@ -2097,11 +2094,7 @@ fn check_display_socket(mounts: &[Mount], state_dirs: &[String]) -> Result<(), E
 /// path to the same directory than the one the profile intends. The
 /// `socket_dir` source itself is trusted (the forwarder owns it), so
 /// only its in-sandbox DEST is guarded.
-fn check_egress_dir(
-    mounts: &[Mount],
-    state_dirs: &[String],
-    _socket_dir: &str,
-) -> Result<(), Error> {
+fn check_egress_dir(mounts: &[Mount], state_dirs: &[String]) -> Result<(), Error> {
     let egress = Path::new(EGRESS_DIR);
     for m in mounts {
         let dest = normalize(m.dest.as_deref().unwrap_or(&m.path));
