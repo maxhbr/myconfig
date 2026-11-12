@@ -203,8 +203,9 @@ SLiRP for QEMU. `MYSBX_PODMAN_ENV` and
 `MYSBX_PODMAN_PASTA_SPEC` are consumed by **both** Podman variants.
 
 **2c — network policy.** The finer-than-on/off sketch became nono's
-`--allow-domain` / `--allow-connect-port` policy. It is not the separate
-proxy-only egress proposal, and is not a domain-and-port conjunction.
+`--allow-domain` / `--allow-connect-port` policy — not a domain-and-port
+conjunction. The proxy-only profile is `network`'s middle value
+(see the LANDED note below), a separate axis from the allowlist.
 
 LANDED. The allowlist schema (bd myconfig-mo3.1) is
 `allow-domains`/`connect-ports`/`listen-ports` (`config.md` D21): both
@@ -222,10 +223,15 @@ independent grants are not proof of an arbitrary-host bypass, and
 proxy-bypass variables can instead create connectivity conflicts. Exact
 combined policies need live testing; see the current guide.
 
-PROPOSED, NOT LANDED: `egress = "proxy-only"` (`config.md` D20, bd
-myconfig-mo3.2). The strict parser rejects `egress` on **every** backend,
-including bubblewrap. The isolated namespace plus LiteLLM socket relay
-is a design proposal, not a shipped enforcement path.
+LANDED (bubblewrap): `network = "proxy-only"` (`config.md` D20, bd
+myconfig-mo3.2). It is a value of the ONE `network` key, not a separate
+`egress` key — the parser still rejects `egress` everywhere. On
+bubblewrap the profile is an empty netns plus the host LiteLLM
+forwarder's Unix socket and the in-sandbox `mysbx-egress-relay`
+(bd myconfig-mo3.2.4/.5/.6); every other backend refuses it (exit 70).
+The credential rules under the profile are `config.md` D28
+(bd myconfig-t24). Nono and the per-backend VM transports are later
+work (bd myconfig-vpi9).
 
 **2d — the toolchain and `myconfig.ai.sandboxTools`.** DONE (bd
 myconfig-9mw): `mysbx` consumes

@@ -77,15 +77,33 @@ required by the [detach design](design/detach.md); see the explicit
 
 ## Network policy and endpoint access
 
-`network = false` wins if either configuration layer sets it. It selects
-an isolated network namespace or no network device, and nono also gets
-`--block-net`. A nonempty nono allowlist with networking disabled is
-refused.
+`network` is ONE key with `"none" | "proxy-only" | "shared"`; the bool
+`false`/`true` stay permanent aliases of `"none"`/`"shared"`. The
+stricter value wins across the layers, and a sidecar that widens is
+refused. `"none"` selects an isolated network namespace or no network
+device, and nono also gets `--block-net`. `"shared"` is the default.
+A nonempty nono allowlist with `"none"` is refused.
+
+`network = "proxy-only"` is the no-key profile (`config.md` D20/D28):
+the sandbox reaches ONLY the host LiteLLM endpoint plus an in-sandbox
+loopback relay to the forwarder's Unix socket. **bubblewrap** enforces
+it; the podman, krun and VM backends REFUSE it (exit 70) because their
+net device always keeps a gateway route. Under the profile the
+forwarded environment narrows to the technical base, a credential-shaped
+`[env]`/`[nix]` name is refused, and a dropped credential name gets the
+fixed `mysbx-proxy-only` placeholder.
 
 Allowlist entries from the user and repository layers are additive and
-deduplicated. A repository list does not narrow the user list. The
-`egress` key, including `egress = "proxy-only"`, is **not implemented**
-and is rejected during strict parsing on every backend.
+deduplicated. A repository list does not narrow the user list; the keys
+are valid only with `"shared"`. The separate `egress` key, including
+`egress = "proxy-only"`, is **not implemented** and is rejected during
+strict parsing on every backend — the profile is a `network` value, not
+its own key.
+
+Host-loopback endpoints under `"shared"` are transport-dependent:
+shared host networking, Podman's gateway mapping, libkrun TSI and
+QEMU's SLiRP gateway are not interchangeable. Under `"proxy-only"`
+bubblewrap the single forwarder socket is the only path.
 
 | Nono configuration | Meaning in pinned 0.80.0 |
 | --- | --- |
@@ -107,9 +125,7 @@ overwrite nono's injected proxy environment and break connectivity. This
 does not reconfigure the Landlock/seccomp restrictions already installed
 before payload execution, and is not a demonstrated policy bypass.
 
-Host-loopback endpoints are transport-dependent: shared host networking,
-Podman's gateway mapping, libkrun TSI and QEMU's SLiRP gateway are not
-interchangeable. The shared Podman dispatch consumes
+The shared Podman dispatch consumes
 `MYSBX_PODMAN_ENV` and `MYSBX_PODMAN_PASTA_SPEC` for **both** Podman
 backends, not just gVisor. A host TCP endpoint probe does not establish
 that a sandboxed client can reach it under the selected policy.

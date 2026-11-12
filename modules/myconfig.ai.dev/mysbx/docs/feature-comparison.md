@@ -92,14 +92,14 @@ How `mysbx` handles each network key, per backend. "Refused" means the
 run exits `70` before anything is created, including under `--dry-run`
 (`lib.rs` step 4b):
 
-| Key | `bubblewrap` | `nono` | `podman-gvisor` | `podman-krun` | `krun` | `microvm-qemu` |
-| --- | --- | --- | --- | --- | --- | --- |
-| `network = false` | no `--share-net` | bwrap netns + `--block-net` | `--network none` | `--network none`, TSI dials from an empty netns | implicit vsock disabled + bwrap netns | no netdev + bwrap netns |
-| `allow-domains` / `connect-ports` / `listen-ports` | refused | proxy/port grants; see caveats below. `listen-ports` alone and URL forms refused | refused | refused | refused | refused |
-| allowlist + `network = false` | refused | refused | refused | refused | refused | refused |
-| `network = "proxy-only"` (D20) | enforced: empty netns + forwarder socket + relay | refused | refused (pasta keeps the default route) | refused (TSI proxy) | refused (TSI) | refused (SLiRP gateway) |
-| `egress` (including `"proxy-only"`) | unknown schema key; rejected | same | same | same | same | same |
-| implicit host nix daemon `/nix/var/nix` | only with shared network | only with shared network and no allowlist | none | none | none (host-store db copy is not daemon access) | none (same) |
+| Key | `bubblewrap` | `nono` | `podman-gvisor` | `podman-krun` | `krun` | `microvm-qemu` | `microvm-ch` |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `network = false` | no `--share-net` | bwrap netns + `--block-net` | `--network none` | `--network none`, TSI dials from an empty netns | implicit vsock disabled + bwrap netns | no netdev + bwrap netns | no netdev + bwrap netns |
+| `allow-domains` / `connect-ports` / `listen-ports` | refused | proxy/port grants; see caveats below. `listen-ports` alone and URL forms refused | refused | refused | refused | refused | refused |
+| allowlist + `network = false` | refused | refused | refused | refused | refused | refused | refused |
+| `network = "proxy-only"` (D20) | enforced: empty netns + forwarder socket + relay | refused | refused (pasta keeps the default route) | refused (TSI proxy) | refused (TSI) | refused (SLiRP gateway) | refused (passt gateway) |
+| `egress` (including `"proxy-only"`) | unknown schema key; rejected | same | same | same | same | same | same |
+| implicit host nix daemon `/nix/var/nix` | only with shared network | only with shared network and no allowlist | none | none | none (host-store db copy is not daemon access) | none (same) | none (same) |
 
 Nono domain and port grants are **not a conjunction**. Port-only grants
 are host-independent; domains use a hostname proxy. With both, Landlock
@@ -340,7 +340,7 @@ validation may still be incomplete.
 
 | Gap | Old tier that has it | Bead |
 | --- | --- | --- |
-| model key never inside the sandbox (proxy-only egress) | `microvm` `networkProfile = "proxy-only"` | bd myconfig-mo3.2, bd myconfig-t24. podman side bd myconfig-6di.3 |
+| model key never inside the sandbox on every backend (proxy-only egress) | `microvm` `networkProfile = "proxy-only"` | landed for bubblewrap (`config.md` D20/D28: bd myconfig-mo3.2, myconfig-t24); podman/krun/VM backends refuse it (bd myconfig-6di.3). Nono + per-backend transports in bd myconfig-vpi9 |
 | public egress without the host LAN / private ranges | `microvm` (every profile) | bd myconfig-fvi |
 | any limit on bwrap/nono (the config keys exist, `config.md` D23) | `microvm` `resourceClasses`, `qemu` `vcpu`/`mem` | bd myconfig-cea |
 | detached interactive runs implemented on bwrap/nono/direct krun/QEMU; refused on Podman, live matrix unrecorded | `gvisor` `run --detach` + `shell`, `microvm` `submit` | bd myconfig-7ioq; [`detach-validation-log.md`](./detach-validation-log.md) |

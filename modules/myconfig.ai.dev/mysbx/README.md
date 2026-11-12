@@ -596,6 +596,28 @@ No credential travels with them: the proxy this repo configures is
 keyless, and API keys reach a sandbox only through
 `forwardedEnvVars`.
 
+## Proxy-only network (`network = "proxy-only"`)
+
+The bubblewrap no-key profile (`docs/design/config.md` D20/D28, bd
+myconfig-mo3.2). The sandbox's network namespace is empty except one
+host channel: the LiteLLM forwarder's Unix socket
+(`myconfig.ai.dev.litellm-forwarder.unixSocket`, default
+`/run/mysbx-egress/litellm.sock`), whose DIRECTORY the backend binds
+read-only at `/run/mysbx-egress`. Inside the sandbox
+`mysbx-egress-relay` (`MYSBX_EGRESS_RELAY`) listens on
+`127.0.0.1:<litellm port>` and forwards every connection to that
+socket, so agents keep their baked `http://127.0.0.1:<port>/v1` URLs
+while the only reachable endpoint is the host proxy.
+
+The module turns the socket half on wherever `services.litellm` runs
+and pins `MYSBX_EGRESS_SOCKET` / `MYSBX_EGRESS_PORT` /
+`MYSBX_EGRESS_RELAY`. A `proxy-only` run with a missing pin, or on any
+backend but bubblewrap, is refused (exit 70) — never weakened to a
+shared network. `mysbx doctor` probes the socket with a `GET
+/v1/models`. The credential rules (forward-env narrowing, the
+credential-name refusal, the placeholder) are in the "Environment"
+section above and in `config.md` D28.
+
 ## Browser automation
 
 `myconfig.ai.dev.mysbx.browser.enable` puts a chrome-family browser
