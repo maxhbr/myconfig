@@ -2823,6 +2823,19 @@ fn sandbox_pipeline(
     // `--dry-run` early return, so a dry run audits it too — the
     // same accepted-never-ignored rule the allowlist refusal
     // follows.
+    // The `network = "proxy-only"` channel (docs/design/config.md D20,
+    // bd myconfig-mo3.2.6): resolve and validate the wrapper's pins in
+    // step 4b — BEFORE the session clone (step 4a) and before the
+    // `--dry-run` return — so a broken configuration creates nothing
+    // (review B2). The missing-setting, path-shape (review A1) and —
+    // for a REAL run only — socket-existence (review B1) refusals live
+    // here; the argv builder later takes the same values as a
+    // `bwrap::EgressChannel`.
+    let egress: Option<EgressPins> = match resolve_egress(merged.network, backend, dry_run) {
+        Ok(pins) => pins,
+        Err(()) => return EXIT_INFRASTRUCTURE,
+    };
+
     // The credential rules of `network = "proxy-only"` (docs/design/config.md
     // D28, bd myconfig-t24): the profile is the no-key path — the host
     // LiteLLM proxy holds the model credential — so no config layer may
@@ -3302,86 +3315,21 @@ fn sandbox_pipeline(
     // profile elsewhere), so the channel is built only for it; the
     // other arms carry `None` and are never reached with the profile.
     //
-    // The pins are `MYSBX_EGRESS_SOCKET` (the forwarder's socket path),
-    // `MYSBX_EGRESS_PORT` (the relay's in-sandbox port) and
-    // `MYSBX_EGRESS_RELAY` (the relay binary). A missing pin is the
-    // EgressChannelMissing refusal in the builder, surfaced below —
-    // the profile fails closed.
-    let egress_socket_path: Option<String> = env_opt("MYSBX_EGRESS_SOCKET");
-    let egress_socket_dir: Option<String> = egress_socket_path.as_deref().map(|p| {
-        std::path::Path::new(p)
-            .parent()
-            .map(|d| d.to_string_lossy().into_owned())
-            .unwrap_or_default()
-    });
-    let egress_socket_name: Option<String> = egress_socket_path.as_deref().map(|p| {
-        std::path::Path::new(p)
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default()
-    });
-    // The port is parsed separately from "is it set": a non-numeric
-    // value is INVALID (named as such), not missing (review G).
-    let egress_port_raw: Option<String> = env_opt("MYSBX_EGRESS_PORT");
-    let egress_port: Option<u16> = egress_port_raw.as_deref().and_then(|p| p.parse().ok());
-    let egress_relay: Option<String> = env_opt("MYSBX_EGRESS_RELAY");
+    // Review B2: the SETTINGS and SHAPE were already validated in step
+    // 4b, before the session clone, so a broken configuration creates
+    // nothing. Here the pinned strings are simply rejoined into the
+    // channel the argv builder takes.
     let egress_params: Option<bwrap::EgressChannel<'_>> =
         if merged.network == config::Network::ProxyOnly && backend == "bubblewrap" {
-            // The socket path's shape comes first (review A1): its
-            // parent directory is bound into the sandbox, so a shared
-            // directory there would leak host state.
-            if let Some(path) = egress_socket_path.as_deref() {
-                if let Err(message) = validate_egress_socket("MYSBX_EGRESS_SOCKET", path) {
-                    eprintln!("mysbx: {message}");
-                    return EXIT_INFRASTRUCTURE;
-                }
-            }
-            // A set-but-unparsable port is INVALID, not missing.
-            if let (Some(raw), None) = (egress_port_raw.as_deref(), egress_port) {
-                eprintln!(
-                    "mysbx: MYSBX_EGRESS_PORT = `{raw}` is not a valid port (expected 1-65535); \
-                     the wrapper pins the host LiteLLM port here (docs/design/config.md D20)"
-                );
-                return EXIT_INFRASTRUCTURE;
-            }
-            match (
-                egress_socket_dir.as_deref(),
-                egress_socket_name.as_deref(),
-                egress_port,
-                egress_relay.as_deref(),
-            ) {
-                (Some(dir), Some(name), Some(port), Some(relay)) => Some(bwrap::EgressChannel {
-                    socket_dir: dir,
-                    socket: name,
-                    port,
-                    relay_bin: relay,
-                }),
-                // Report the missing pin(s) now, before the builder runs —
-                // the same exit 70 and the operator-facing option name.
-                _ => {
-                    let mut missing = Vec::new();
-                    if egress_socket_dir.is_none() {
-                        missing.push("MYSBX_EGRESS_SOCKET");
-                    }
-                    if egress_port.is_none() && egress_port_raw.is_none() {
-                        missing.push("MYSBX_EGRESS_PORT");
-                    }
-                    if egress_relay.is_none() {
-                        missing.push("MYSBX_EGRESS_RELAY");
-                    }
-                    eprintln!(
-                        "mysbx: network = \"proxy-only\" needs the LiteLLM forwarder's \
-                     socket channel, but this host pinned no {}",
-                        missing.join(", ")
-                    );
-                    eprintln!(
-                        "  enable myconfig.ai.dev.litellm-forwarder.unixSocket.enable so \
-                     the host runs the forwarder and the wrapper pins its socket, \
-                     or set network = \"shared\"/\"none\" (docs/design/config.md D20)"
-                    );
-                    return EXIT_INFRASTRUCTURE;
-                }
-            }
+            let pinned = egress
+                .as_ref()
+                .expect("step 4b resolved the egress channel for a proxy-only bubblewrap run");
+            Some(bwrap::EgressChannel {
+                socket_dir: &pinned.socket_dir,
+                socket: &pinned.socket,
+                port: pinned.port,
+                relay_bin: &pinned.relay_bin,
+            })
         } else {
             None
         };
@@ -5715,6 +5663,142 @@ pub fn validate_egress_socket(setting: &str, path: &str) -> Result<(), String> {
         return complain("sits in the user's home directory");
     }
     Ok(())
+}
+
+/// The `network = "proxy-only"` channel resolved from the wrapper's
+/// pins (bd myconfig-mo3.2.6), owned so it can be validated in step 4b
+/// (before the session clone) and used later to build the argv.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EgressPins {
+    /// The socket's parent directory (bound read-only at
+    /// [`bwrap::EGRESS_DIR`]).
+    pub socket_dir: String,
+    /// The socket file name inside it.
+    pub socket: String,
+    /// The LiteLLM port the relay listens on inside the sandbox.
+    pub port: u16,
+    /// The full host socket path, for the existence check.
+    pub path: String,
+    /// The relay binary.
+    pub relay_bin: String,
+}
+
+/// Resolve and validate the `proxy-only` egress channel from
+/// `MYSBX_EGRESS_SOCKET` / `MYSBX_EGRESS_PORT` / `MYSBX_EGRESS_RELAY`
+/// (docs/design/config.md D20, bd myconfig-mo3.2.6).
+///
+/// Runs in step 4b — BEFORE the session clone and before the
+/// `--dry-run` return — so a broken configuration creates nothing
+/// (review B2). Refuses with a printed, operator-facing message:
+///
+/// - a missing setting (naming the option to enable),
+/// - a socket path in a shared directory ([`validate_egress_socket`],
+///   review A1),
+/// - a non-numeric port (invalid, not missing),
+/// - on a REAL run only, a socket that does not exist or is not a Unix
+///   socket (review B1) — a dry run still succeeds and shows the
+///   channel.
+///
+/// `Ok(None)` when the profile is not selected (or the backend is not
+/// bubblewrap).
+pub fn resolve_egress(
+    network: config::Network,
+    backend: &str,
+    dry_run: bool,
+) -> Result<Option<EgressPins>, ()> {
+    if network != config::Network::ProxyOnly || backend != "bubblewrap" {
+        return Ok(None);
+    }
+    let complain = |message: String| {
+        eprintln!("mysbx: {message}");
+        eprintln!(
+            "  enable myconfig.ai.dev.litellm-forwarder.unixSocket.enable so the host \
+             runs the forwarder (agent-litellm-forward-unix.socket) and the wrapper pins \
+             its socket, or set network = \"shared\"/\"none\" (docs/design/config.md D20)"
+        );
+        Err(())
+    };
+    let socket_path = env_opt("MYSBX_EGRESS_SOCKET");
+    let port_raw = env_opt("MYSBX_EGRESS_PORT");
+    let relay = env_opt("MYSBX_EGRESS_RELAY");
+
+    if let Some(path) = socket_path.as_deref() {
+        if let Err(message) = validate_egress_socket("MYSBX_EGRESS_SOCKET", path) {
+            return complain(message);
+        }
+    }
+    // A set-but-unparsable port is INVALID, not missing (review G).
+    let port: Option<u16> = port_raw.as_deref().and_then(|p| p.parse().ok());
+    if let (Some(raw), None) = (port_raw.as_deref(), port) {
+        return Err(complain(format!(
+            "MYSBX_EGRESS_PORT = `{raw}` is not a valid port (expected 1-65535); the \
+             wrapper pins the host LiteLLM port here (docs/design/config.md D20)"
+        ))
+        .unwrap_err());
+    }
+
+    let mut missing = Vec::new();
+    if socket_path.is_none() {
+        missing.push("MYSBX_EGRESS_SOCKET");
+    }
+    if port.is_none() {
+        missing.push("MYSBX_EGRESS_PORT");
+    }
+    if relay.is_none() {
+        missing.push("MYSBX_EGRESS_RELAY");
+    }
+    if !missing.is_empty() {
+        return complain(format!(
+            "network = \"proxy-only\" needs the LiteLLM forwarder's socket channel, \
+             but this host pinned no {}",
+            missing.join(", ")
+        ));
+    }
+    let (path, port, relay) = (
+        socket_path.expect("checked above"),
+        port.expect("checked above"),
+        relay.expect("checked above"),
+    );
+    let p = std::path::Path::new(&path);
+    let socket_dir = p
+        .parent()
+        .map(|d| d.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let socket = p
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+
+    // Review B1: a REAL run needs the socket to exist and to be a Unix
+    // socket. A `--dry-run` audits the channel without requiring the
+    // forwarder to be up (the run creates nothing either way).
+    if !dry_run {
+        use std::os::unix::fs::FileTypeExt;
+        match std::fs::metadata(&path) {
+            Ok(meta) if meta.file_type().is_socket() => {}
+            Ok(_) => {
+                return complain(format!(
+                    "MYSBX_EGRESS_SOCKET = `{path}` is not a Unix socket; the forwarder \
+                     (agent-litellm-forward-unix.socket) must be running"
+                ))
+            }
+            Err(e) => {
+                return complain(format!(
+                    "MYSBX_EGRESS_SOCKET = `{path}` does not exist ({e}); the forwarder \
+                     (agent-litellm-forward-unix.socket) must be running for a \
+                     network = \"proxy-only\" run"
+                ))
+            }
+        }
+    }
+
+    Ok(Some(EgressPins {
+        socket_dir,
+        socket,
+        port,
+        path,
+        relay_bin: relay,
+    }))
 }
 
 /// The first credential-shaped `[env]` name, if any (D28 rule 6b).

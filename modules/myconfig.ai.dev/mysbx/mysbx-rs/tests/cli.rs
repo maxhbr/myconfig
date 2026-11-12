@@ -10226,6 +10226,92 @@ fn proxy_only_refuses_a_non_numeric_egress_port() {
 }
 
 #[test]
+fn proxy_only_real_run_needs_the_socket_to_exist() {
+    // Review B1 (bd myconfig-mo3.2.6): a REAL run (not --dry-run) must
+    // find a Unix socket at MYSBX_EGRESS_SOCKET; a missing file exits
+    // 70 naming the option and the unit. --dry-run succeeds regardless
+    // (it creates nothing and audits the channel).
+    let (inv, repo, sidecar) = fixture("proxy-only-missing-socket", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    let dir = repo.parent().unwrap().join("egress");
+    std::fs::create_dir_all(&dir).unwrap();
+
+    // A real run: the socket does not exist → exit 70.
+    let mut cmd = spawn_proxy_only(&inv, &["run", "--", "/bin/true"], &dir);
+    cmd.env_remove("MYSBX_BWRAP"); // never reached; refuse before exec
+    let (code, _stdout, stderr) = run_command(cmd);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("does not exist") && stderr.contains("MYSBX_EGRESS_SOCKET"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("agent-litellm-forward-unix.socket"),
+        "the refusal names the unit: {stderr}"
+    );
+
+    // --dry-run of the SAME run succeeds and shows the channel.
+    let (code, stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"], &dir));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("mysbx-egress-relay"), "{stdout}");
+
+    // With a real Unix socket present, the real run reaches the argv
+    // (a --dry-run of it is enough to prove the check passed). The
+    // socket lives in a SHORT directory: the test tempdir path plus
+    // "litellm.sock" can exceed the Unix SUN_LEN limit (the same
+    // constraint the forwarder's own option docs note).
+    let short = std::path::PathBuf::from(format!("/tmp/mysbx-egress-test-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&short);
+    std::fs::create_dir_all(&short).unwrap();
+    let sock = short.join("litellm.sock");
+    let _listener = std::os::unix::net::UnixListener::bind(&sock).unwrap();
+    let (code, stdout, stderr) = run_command(spawn_proxy_only(
+        &inv,
+        &["run", "--dry-run", "--", "/bin/true"],
+        &short,
+    ));
+    let _ = std::fs::remove_dir_all(&short);
+    assert_eq!(code, 0, "a present socket passes the check: {stderr}");
+    assert!(stdout.contains("mysbx-egress-relay"), "{stdout}");
+}
+
+#[test]
+fn proxy_only_missing_setting_is_refused_before_the_session_clone() {
+    // Review B2 (bd myconfig-mo3.2.6): the settings check must run
+    // BEFORE the session clone — a broken configuration creates
+    // nothing. A `--session` run with no MYSBX_EGRESS_SOCKET exits 70
+    // and leaves no clone behind.
+    let (inv, repo, sidecar) = fixture("proxy-only-session-no-pins", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    // No egress pins at all (spawn_with_args removes them).
+    let (code, _stdout, stderr) = run_binary_with(&inv, &["--session", "s1", "--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("MYSBX_EGRESS_SOCKET"),
+        "the refusal names the missing pin: {stderr}"
+    );
+    // The session clone must not have been created.
+    let worktrees = repo.parent().unwrap().join(format!(
+        "{}__worktrees",
+        repo.file_name().unwrap().to_string_lossy()
+    ));
+    let cloned = worktrees.join("s1");
+    assert!(
+        !cloned.exists(),
+        "a refused run must create no clone, found {}",
+        cloned.display()
+    );
+}
+
+#[test]
 fn proxy_only_refuses_a_credential_shaped_env_key() {
     // D28 rule 6b: a `[env]` name whose `_` parts include a credential
     // word is refused (exit 70), naming the file and the key.
