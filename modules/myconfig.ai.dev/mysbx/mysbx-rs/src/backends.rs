@@ -275,10 +275,10 @@ mod tests {
                     b.name
                 );
             }
-            // D21's allowlist has exactly one enforcing backend
-            // today, and D20's proxy-only profile none yet — the
-            // registry predicates the egress work asks (bd
-            // myconfig-mo3.2.1) stay derivable from the table.
+            // D21's allowlist is enforced by exactly one backend
+            // (nono); D20's proxy-only profile by exactly one
+            // (bubblewrap). The registry predicates the egress work
+            // asks stay derivable from the table (bd myconfig-mo3.2.1).
             assert_eq!(
                 b.network_allowlist,
                 b.name == "nono",

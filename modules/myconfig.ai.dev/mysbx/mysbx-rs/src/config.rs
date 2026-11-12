@@ -307,11 +307,10 @@ pub enum Network {
     /// none` on the podman backends, no net device on the VM
     /// backends. The `network = false` alias.
     None,
-    /// Only the host's LiteLLM endpoint (config.md D20): enforced on
-    /// bubblewrap (from bd myconfig-mo3.2.6), refused on every backend
-    /// until its transport lands — every backend including bubblewrap
-    /// at the moment this value was introduced (myconfig-mo3.2.3), so
-    /// the profile can never be silently weakened. The
+    /// Only the host's LiteLLM endpoint (config.md D20): bubblewrap
+    /// enforces it (an empty netns, the forwarder's Unix socket and the
+    /// in-sandbox relay, bd myconfig-mo3.2.6); every other backend
+    /// refuses it rather than weaken the profile. The
     /// no-model-credential path (D28).
     ProxyOnly,
     /// The whole network the backend's transport gives (D21's
@@ -356,10 +355,10 @@ impl Network {
         }
     }
 
-    /// Whether the network is shared at all — the ONE predicate the
-    /// ~50 old `cfg.network` bool reads become. `false` for both
-    /// `None` and `ProxyOnly`: a proxy-only run has NO direct route,
-    /// so every "is the network up" question answers no.
+    /// Whether the network is shared at all — the predicate the rest
+    /// of the crate asks instead of the old network bool. `false` for
+    /// both `None` and `ProxyOnly`: a proxy-only run has NO direct
+    /// route, so every "is the network up" question answers no.
     pub fn is_shared(self) -> bool {
         self == Network::Shared
     }
