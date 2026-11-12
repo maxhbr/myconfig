@@ -190,11 +190,16 @@ to expose by default.
 **2b — credentials and the model API.** The original tier comparison
 contrasted host-key forwarding, SSH seeding, endpoint rewrites and a
 host-held proxy key. Current mysbx forwards credential variables only
-when declared in `forward-env`; a keyless proxy is usable, but a
-proxy-only egress profile remains unimplemented. Transport is backend
+when declared in `forward-env`; a keyless proxy is usable, and the
+`network = "proxy-only"` profile (`config.md` D20/D28, bd myconfig-mo3.2)
+is its no-key enforcement on bubblewrap: the sandbox reaches only the
+host LiteLLM endpoint, the forward-env narrows to the technical base,
+credential-shaped `[env]`/`[nix]` names are refused, and the dropped
+credential names get a fixed placeholder. Transport is backend
 specific: host namespace for bwrap/nono, pasta for Podman (TSI from the
 container namespace on Podman-krun), host-namespace TSI for direct krun,
-and SLiRP for QEMU. `MYSBX_PODMAN_ENV` and
+a single forwarder Unix socket for a `proxy-only` bubblewrap run, and
+SLiRP for QEMU. `MYSBX_PODMAN_ENV` and
 `MYSBX_PODMAN_PASTA_SPEC` are consumed by **both** Podman variants.
 
 **2c — network policy.** The finer-than-on/off sketch became nono's

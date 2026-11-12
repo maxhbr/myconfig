@@ -71,6 +71,9 @@ pub struct Report<'a> {
     /// The forwarded host variables (already filtered to the ones that
     /// were actually set).
     pub host_env: &'a HostEnv,
+    /// The forward-env names a `proxy-only` run DROPPED (docs/design/
+    /// config.md D28 rule 6a). Empty under every other network policy.
+    pub dropped_env: &'a [String],
     pub params: &'a Params<'a>,
     /// The backend binary that would be executed (`MYSBX_BWRAP` /
     /// `MYSBX_PODMAN` / `MYSBX_NONO` after their fallbacks).
@@ -210,6 +213,15 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     .collect();
     if !allow.is_empty() {
         p(format!("allowlist:     {}", allow.join("; ")));
+    }
+    // The D28 rule 6a drop list: every forward-env name beyond the
+    // terminal/locale/editor base, said out loud rather than silently
+    // narrowed.
+    if !r.dropped_env.is_empty() {
+        p(format!(
+            "env dropped:   {} [dropped — network = \"proxy-only\", D28]",
+            r.dropped_env.join(", ")
+        ));
     }
 
     // The nix store this run sees (docs/design/guest-store.md): said
@@ -815,6 +827,7 @@ mod tests {
             user_mount_count: 1,
             cli_mount_count: 0,
             host_env: &host,
+            dropped_env: &[],
             params: &params,
             bwrap_bin: "/synth/bin/bwrap",
             backend: "bubblewrap",
@@ -928,6 +941,7 @@ mod tests {
             user_mount_count: 1,
             cli_mount_count: 0,
             host_env: &host,
+            dropped_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -980,6 +994,7 @@ mod tests {
             user_mount_count: 1,
             cli_mount_count: 0,
             host_env: &host,
+            dropped_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -1033,6 +1048,7 @@ mod tests {
             user_mount_count: 2,
             cli_mount_count: 0,
             host_env: &host,
+            dropped_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -1088,6 +1104,7 @@ mod tests {
             user_mount_count: 2,
             cli_mount_count: 0,
             host_env: &host,
+            dropped_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -1144,6 +1161,7 @@ mod tests {
             user_mount_count: 2,
             cli_mount_count: 0,
             host_env: &host,
+            dropped_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -1206,6 +1224,7 @@ mod tests {
                     user_mount_count: 1,
                     cli_mount_count: 0,
                     host_env: &host,
+                    dropped_env: &[],
                     params: &params,
                     bwrap_bin: "bwrap",
                     backend: "bubblewrap",
@@ -1297,6 +1316,7 @@ mod tests {
                 user_mount_count: 1,
                 cli_mount_count: 0,
                 host_env: &host,
+                dropped_env: &[],
                 params: &herdr_params(workspace),
                 bwrap_bin: "bwrap",
                 backend: "bubblewrap",
@@ -1388,6 +1408,7 @@ mod tests {
                 user_mount_count: 1,
                 cli_mount_count: 0,
                 host_env: &host,
+                dropped_env: &[],
                 params: &params,
                 bwrap_bin: "bwrap",
                 backend: "bubblewrap",
@@ -1436,6 +1457,7 @@ mod tests {
             user_mount_count: 1,
             cli_mount_count: 0,
             host_env: &forwarded,
+            dropped_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -1469,6 +1491,7 @@ mod tests {
             user_mount_count: 1,
             cli_mount_count: 0,
             host_env: &host,
+            dropped_env: &[],
             params: &unrefused,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -1534,6 +1557,7 @@ mod tests {
             user_mount_count: 1,
             cli_mount_count: 1,
             host_env: &host,
+            dropped_env: &[],
             params: &params,
             bwrap_bin: "/synth/bin/bwrap",
             backend: "bubblewrap",
@@ -1590,6 +1614,7 @@ mod tests {
             user_mount_count: 1,
             cli_mount_count: 0,
             host_env: &host,
+            dropped_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -1649,6 +1674,7 @@ mod tests {
             user_mount_count: 1,
             cli_mount_count: 0,
             host_env: &host,
+            dropped_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -1736,6 +1762,7 @@ mod tests {
             user_mount_count: 1,
             cli_mount_count: 0,
             host_env: &host,
+            dropped_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",

@@ -2823,6 +2823,35 @@ fn sandbox_pipeline(
     // `--dry-run` early return, so a dry run audits it too — the
     // same accepted-never-ignored rule the allowlist refusal
     // follows.
+    // The credential rules of `network = "proxy-only"` (docs/design/config.md
+    // D28, bd myconfig-t24): the profile is the no-key path — the host
+    // LiteLLM proxy holds the model credential — so no config layer may
+    // put one into the sandbox. Refused here, before the session clone
+    // and before the `--dry-run` early return (a dry run audits it too).
+    // The forward-env DROP (rule 6a/6d) happens later, in
+    // `collect_host_env`; this only refuses what it cannot drop.
+    if merged.network == config::Network::ProxyOnly {
+        if let Some(bad) = credential_env_key(&merged.env) {
+            eprintln!(
+                "mysbx: [env] {bad} looks like a model credential, and \
+                 network = \"proxy-only\" keeps credentials on the host \
+                 (docs/design/config.md D28) — the host LiteLLM proxy holds \
+                 the model key; drop the entry"
+            );
+            return EXIT_INFRASTRUCTURE;
+        }
+        for key in ["access-tokens", "netrc-file"] {
+            if merged.nix.contains_key(key) {
+                eprintln!(
+                    "mysbx: [nix] {key} carries a credential, and \
+                     network = \"proxy-only\" keeps credentials on the host \
+                     (docs/design/config.md D28) — drop the setting"
+                );
+                return EXIT_INFRASTRUCTURE;
+            }
+        }
+    }
+
     if merged.nested_virt && !backends::find(backend).is_some_and(|row| row.nested_virt) {
         eprintln!(
             "mysbx: nested-virt = true is not supported on the `{backend}` backend \
@@ -3044,6 +3073,7 @@ fn sandbox_pipeline(
     }
 
     // 5. the argv — its single source is `bwrap::bwrap_argv` (mvp-4).
+    let dropped_env: Vec<String> = dropped_forward_env(&merged);
     let mut host_env = collect_host_env(&merged);
     // The console size marker (bd myconfig-a2uq, backends.md D9): the
     // qemu guest's serial console carries no winsize, so the caller's
@@ -4551,6 +4581,7 @@ fn sandbox_pipeline(
             user_mount_count,
             cli_mount_count,
             host_env: &host_env,
+            dropped_env: &dropped_env,
             params: &report_params,
             bwrap_bin: &backend_bin,
             backend,
@@ -5563,6 +5594,51 @@ const SYMLINK_BUDGET: usize = 40;
 /// variable the default already carries costs nothing. A name
 /// forwards only when actually set at launch, so an absent variable
 /// costs nothing either.
+/// Whether a `[env]` / forwarded name looks like a model credential
+/// (docs/design/config.md D28, bd myconfig-t24): split at `_`; a part
+/// equal to `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`,
+/// `CREDENTIAL`, `CREDENTIALS` or `AUTH`, or a name ending in `APIKEY`,
+/// matches. `GIT_AUTHOR_NAME` and `KEYMAP` pass — the split is on `_`
+/// parts and the `APIKEY` suffix, not substrings. A documented
+/// residual risk remains: a secret under an innocent name.
+pub fn credential_shape(name: &str) -> bool {
+    if name.ends_with("APIKEY") {
+        return true;
+    }
+    name.split('_').any(|part| {
+        matches!(
+            part,
+            "KEY"
+                | "TOKEN"
+                | "SECRET"
+                | "PASSWORD"
+                | "PASSWD"
+                | "CREDENTIAL"
+                | "CREDENTIALS"
+                | "AUTH"
+        )
+    })
+}
+
+/// The first credential-shaped `[env]` name, if any (D28 rule 6b).
+fn credential_env_key(env: &std::collections::BTreeMap<String, String>) -> Option<&str> {
+    env.keys().map(String::as_str).find(|k| credential_shape(k))
+}
+
+/// The forwarded env names a `proxy-only` run DROPS (D28 rules 6a/6d):
+/// every name beyond [`FORWARDED_ENV_VARS`]. Returned so the report can
+/// list them and the placeholder can be set for the credential-shaped
+/// ones. Empty under every other network policy.
+fn dropped_forward_env(merged: &merge::Merged) -> Vec<String> {
+    if merged.network != config::Network::ProxyOnly {
+        return Vec::new();
+    }
+    forwarded_env_vars(merged)
+        .into_iter()
+        .filter(|n| !FORWARDED_ENV_VARS.contains(&n.as_str()))
+        .collect()
+}
+
 fn forwarded_env_vars(merged: &merge::Merged) -> Vec<String> {
     let mut names: Vec<String> = FORWARDED_ENV_VARS.iter().map(|&s| s.to_string()).collect();
     let pin = env_opt("MYSBX_FORWARD_ENV").unwrap_or_default();
@@ -5584,6 +5660,15 @@ fn forwarded_env_vars(merged: &merge::Merged) -> Vec<String> {
 /// place that reads the real process environment; the argv builder stays
 /// pure and receives the values as a parameter.
 fn collect_host_env(merged: &merge::Merged) -> bwrap::HostEnv {
+    // Under `network = "proxy-only"` the forwarded environment is
+    // narrowed to [`FORWARDED_ENV_VARS`] (D28 rule 6a): every other
+    // forward-env name is DROPPED, whether a layer declared it or
+    // `MYSBX_FORWARD_ENV` did. A dropped name whose parts match the
+    // credential shape (rule 6d) gets the fixed placeholder
+    // [`PROXY_ONLY_PLACEHOLDER`]; a base-URL name is dropped bare (the
+    // agents keep their baked 127.0.0.1 URLs). The list of dropped
+    // names lives in the report.
+    let dropped: Vec<String> = dropped_forward_env(merged);
     let mut env = bwrap::HostEnv::new();
     for name in forwarded_env_vars(merged) {
         // The detached-run marker (docs/design/detach.md B8) is never
@@ -5595,12 +5680,26 @@ fn collect_host_env(merged: &merge::Merged) -> bwrap::HostEnv {
         if name == "MYSBX_DETACHED" {
             continue;
         }
+        if dropped.iter().any(|d| d == &name) {
+            // Rule 6d: the credential-shaped droppees get the fixed
+            // placeholder so an agent that insists on a key still runs
+            // (the local LiteLLM is keyless). Base-URL names stay out.
+            if credential_shape(&name) {
+                env.insert(name, PROXY_ONLY_PLACEHOLDER.to_owned());
+            }
+            continue;
+        }
         if let Ok(value) = std::env::var(&name) {
             env.insert(name, value);
         }
     }
     env
 }
+
+/// The fixed placeholder a `proxy-only` run sets for a dropped,
+/// credential-shaped forwarded name (docs/design/config.md D28 rule
+/// 6d). The local LiteLLM proxy is keyless, so the value is inert.
+pub const PROXY_ONLY_PLACEHOLDER: &str = "mysbx-proxy-only";
 
 /// `std::env::var` with the empty-means-unset rule, for pins that have
 /// no fallback at all: `MYSBX_NIX_CONF` unset means "bind no nix
@@ -6912,6 +7011,44 @@ pub(crate) fn write_atomically(path: &std::path::Path, contents: &str) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- the D28 credential-name rule (bd myconfig-t24) --------------
+
+    #[test]
+    fn credential_shape_matches_underscore_parts_and_the_apikey_suffix() {
+        // Every rule-6b word, as a whole `_` part or a bare name.
+        for name in [
+            "OPENAI_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "AWS_SECRET_ACCESS_KEY",
+            "DB_PASSWORD",
+            "DB_PASSWD",
+            "GITHUB_CREDENTIAL",
+            "GITHUB_CREDENTIALS",
+            "AUTH",
+            "TOKEN",
+            "APIKEY",
+            "MYAPIKEY",
+        ] {
+            assert!(credential_shape(name), "{name} must be credential-shaped");
+        }
+        // The innocent names the bead calls out must PASS: the split is
+        // on `_` parts, not substrings.
+        for name in [
+            "GIT_AUTHOR_NAME",
+            "KEYMAP",
+            "MONKEY",
+            "KEYBOARD",
+            "TERM",
+            "OPENAI_BASE_URL",
+            "MY_KEYRING",
+        ] {
+            assert!(
+                !credential_shape(name),
+                "{name} must NOT be credential-shaped"
+            );
+        }
+    }
 
     // ---- the krun git trust file (bd myconfig-zj2) -------------------
 

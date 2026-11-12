@@ -364,7 +364,18 @@ variables it needs in `forward-env` — the private flake does this via
 hard-coded in this repository (bd myconfig-20j). A credential lives
 only in the host environment, never in a store path, so an `[env]`
 entry cannot forward it and only the variable NAME travels through a
-configuration layer. A repo sidecar declares its own mounts independently — both
+configuration layer.
+
+Under `network = "proxy-only"` (bubblewrap, `docs/design/config.md`
+D20/D28) the credential story flips to the no-key path: the host
+LiteLLM proxy holds the model credential and the sandbox reaches only
+its endpoint. The forwarded environment narrows to the technical base
+(`TERM COLORTERM LANG LC_ALL EDITOR VISUAL`) and the report lists every
+dropped name; a credential-shaped `[env]` name or `[nix]`
+`access-tokens`/`netrc-file` refuses the run (exit 70); and a dropped
+credential name (e.g. `OPENAI_API_KEY`) is set to the fixed
+`mysbx-proxy-only` placeholder so an agent that insists on a key still
+runs against the keyless proxy. A repo sidecar declares its own mounts independently — both
 configuration files are trusted (`docs/design/config.md` D7). Per-agent
 modules
 append their own config files to `myconfig.ai.mysbx.config.mounts` and

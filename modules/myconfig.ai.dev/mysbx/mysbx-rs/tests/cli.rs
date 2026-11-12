@@ -139,6 +139,12 @@ fn spawn_with_args<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> C
         // foreground runs.
         .env_remove("MYSBX_DTACH")
         .env_remove("MYSBX_DETACHED")
+        // The `network = "proxy-only"` channel pins (D20, bd
+        // myconfig-mo3.2.6): wrapper-provided, so an unwrapped test run
+        // sees none unless it pins them itself.
+        .env_remove("MYSBX_EGRESS_SOCKET")
+        .env_remove("MYSBX_EGRESS_PORT")
+        .env_remove("MYSBX_EGRESS_RELAY")
         // The detached-run registry root is not a fixture input: a
         // host-set value would make runs of this very sandbox depend
         // on the machine's runtime dir. Tests that exercise the
@@ -170,6 +176,37 @@ fn run_binary_with(inv: &Invocation, args: &[&str]) -> (i32, String, String) {
     let out = spawn_with_args(inv, args)
         .output()
         .expect("failed to spawn the mysbx binary");
+    (
+        out.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+/// A `spawn_with_args` command carrying the `network = "proxy-only"`
+/// channel pins (docs/design/config.md D20, bd myconfig-mo3.2.6), so a
+/// run reaches the argv/report stages instead of the missing-pin
+/// refusal. The socket dir is a real tempdir so a non-dry run would
+/// find it.
+fn spawn_proxy_only<S: AsRef<std::ffi::OsStr>>(
+    inv: &Invocation,
+    args: &[S],
+    socket_dir: &Path,
+) -> Command {
+    let mut cmd = spawn_with_args(inv, args);
+    cmd.env("MYSBX_EGRESS_SOCKET", socket_dir.join("litellm.sock"))
+        .env("MYSBX_EGRESS_PORT", "4000")
+        .env(
+            "MYSBX_EGRESS_RELAY",
+            "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
+        );
+    cmd
+}
+
+/// Like [`run_binary_with`], but on a caller-built [`Command`] (the
+/// proxy-only tests need the egress pins, which `spawn` does not set).
+fn run_command(mut cmd: Command) -> (i32, String, String) {
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
     (
         out.status.code().unwrap_or(-1),
         String::from_utf8_lossy(&out.stdout).into_owned(),
@@ -10048,6 +10085,102 @@ fn proxy_only_on_bubblewrap_without_pins_is_refused() {
         !stdout.contains("--clearenv"),
         "no argv on refusal: {stdout}"
     );
+}
+
+#[test]
+fn proxy_only_drops_forward_env_beyond_the_base_and_reports_it() {
+    // D28 rule 6a/6d: under `network = "proxy-only"` the forwarded
+    // environment narrows to FORWARDED_ENV_VARS; every other name is
+    // dropped and listed in the report. A credential-shaped droppee
+    // gets the fixed placeholder (the keyless local LiteLLM ignores
+    // it); a base-URL name is dropped bare.
+    let (inv, repo, sidecar) = fixture("proxy-only-drop-env", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n         forward-env = [\"OPENAI_API_KEY\", \"OPENAI_BASE_URL\"]\n",
+    )
+    .unwrap();
+    let socket_dir = repo.parent().unwrap().join("egress");
+    std::fs::create_dir_all(&socket_dir).unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["--verbose", "--dry-run"], &socket_dir);
+    cmd.env("OPENAI_API_KEY", "sk-real-secret")
+        .env("TERM", "xterm");
+    let out = cmd.output().expect("failed to spawn mysbx");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let report = report_lines(&stdout).join("\n");
+    // Both names are announced as dropped.
+    assert!(
+        report.contains("[dropped — network = \"proxy-only\", D28]"),
+        "{report}"
+    );
+    assert!(report.contains("OPENAI_API_KEY"), "{report}");
+    assert!(report.contains("OPENAI_BASE_URL"), "{report}");
+    // The real secret never reaches the argv...
+    assert!(
+        !stdout.contains("sk-real-secret"),
+        "the real key must not be forwarded: {stdout}"
+    );
+    // ...the credential-shaped name gets the fixed placeholder...
+    assert!(
+        stdout.contains("OPENAI_API_KEY=mysbx-proxy-only"),
+        "the placeholder is set: {stdout}"
+    );
+    // ...and the base-URL name is dropped bare (not even set).
+    assert!(
+        !stdout.contains("OPENAI_BASE_URL="),
+        "a dropped base-URL name is not set: {stdout}"
+    );
+    // TERM is in the base set: still forwarded.
+    assert!(stdout.contains("TERM=xterm"), "{stdout}");
+}
+
+#[test]
+fn proxy_only_refuses_a_credential_shaped_env_key() {
+    // D28 rule 6b: a `[env]` name whose `_` parts include a credential
+    // word is refused (exit 70), naming the file and the key.
+    let (inv, repo, sidecar) = fixture("proxy-only-env-key", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n\
+         [env]\nANTHROPIC_AUTH_TOKEN = \"secret\"\n",
+    )
+    .unwrap();
+    let socket_dir = repo.parent().unwrap().join("egress");
+    std::fs::create_dir_all(&socket_dir).unwrap();
+    let (code, _stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"], &socket_dir));
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(stderr.contains("ANTHROPIC_AUTH_TOKEN"), "{stderr}");
+    assert!(stderr.contains("D28"), "{stderr}");
+}
+
+#[test]
+fn proxy_only_refuses_nix_access_tokens_and_netrc() {
+    // D28 rule 3: `[nix]` access-tokens and netrc-file carry
+    // credentials and are refused under the profile.
+    for key in ["access-tokens", "netrc-file"] {
+        let (inv, repo, sidecar) = fixture(&format!("proxy-only-nix-{key}"), &[]);
+        std::fs::write(
+            sidecar.join("config.toml"),
+            format!(
+                "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n\
+                 [nix]\n{key} = \"/some/secret\"\n"
+            ),
+        )
+        .unwrap();
+        let socket_dir = repo.parent().unwrap().join("egress");
+        std::fs::create_dir_all(&socket_dir).unwrap();
+        let (code, _stdout, stderr) =
+            run_command(spawn_proxy_only(&inv, &["--dry-run"], &socket_dir));
+        assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "{key}: {stderr}");
+        assert!(stderr.contains(key), "{key}: {stderr}");
+        assert!(stderr.contains("D28"), "{key}: {stderr}");
+    }
 }
 
 #[test]
