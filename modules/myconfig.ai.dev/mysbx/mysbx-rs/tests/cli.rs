@@ -9771,8 +9771,9 @@ fn nono_report_labels_the_backend() {
     // the executed binary `nono:` — the layered run's argv[0] IS
     // bwrap (backends.md D1), and the label says so: a nono run
     // execs bwrap, and the argv it describes wraps `nono run` inside.
-    // `network = false` keeps the run accepted (the shared-network
-    // default would be refused — nono mediates per connection).
+    // `network = false` keeps the run accepted (the run needs no
+    // network stance: nono runs in every network mode, backends.md
+    // D1's table — the dry run just labels the backend).
     let (inv, _, _) = fixture_nono_config(
         "nono-report",
         &["--backend", "nono", "--verbose", "--dry-run"],
@@ -9868,6 +9869,69 @@ fn allowlist_on_podman_krun_is_refused() {
     let (code, _, stderr) = run_binary_with(&inv, &["--dry-run"]);
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
     assert!(stderr.contains("podman-krun"), "{stderr}");
+    assert!(stderr.contains("listen-ports"), "{stderr}");
+}
+
+#[test]
+fn allowlist_on_krun_is_refused() {
+    // Direct libkrun's TSI has no allowlist hook (config.md D21's
+    // table): an allowlist is refused on the direct `krun` backend
+    // too — the registry predicate (bd myconfig-mo3.2.1), never a
+    // name match. The refusal sits before the --dry-run return, so
+    // no launcher pins are needed.
+    let Some((inv, _, sidecar)) = krun_fixture("nono-allowlist-krun", &[]) else {
+        return; // no placeable krun fixture root here
+    };
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"krun\"\nconnect-ports = [443]\n",
+    )
+    .unwrap();
+    let (code, _, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(stderr.contains("krun"), "{stderr}");
+    assert!(stderr.contains("connect-ports"), "{stderr}");
+    assert!(
+        stderr.contains("only the `nono` backend enforces them"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn allowlist_on_microvm_qemu_is_refused() {
+    // The SLiRP net device has no per-domain/per-port hook either
+    // (config.md D21's table): an allowlist is refused on
+    // `microvm-qemu` exactly like on the other non-nono backends.
+    let Some((inv, _, sidecar)) = krun_fixture("nono-allowlist-microvm-qemu", &[]) else {
+        return; // no placeable fixture root here
+    };
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"microvm-qemu\"\nallow-domains = [\"api.openai.com\"]\n",
+    )
+    .unwrap();
+    let (code, _, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(stderr.contains("microvm-qemu"), "{stderr}");
+    assert!(stderr.contains("allow-domains"), "{stderr}");
+}
+
+#[test]
+fn allowlist_on_microvm_ch_is_refused() {
+    // The passt child of the SLiRP-compatible address plan (backends.md
+    // D11) has no allowlist hook either: an allowlist is refused on
+    // `microvm-ch`, closing the D21 test gap (bd myconfig-mo3.2.1).
+    let Some((inv, _, sidecar)) = krun_fixture("nono-allowlist-microvm-ch", &[]) else {
+        return; // no placeable fixture root here
+    };
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"microvm-ch\"\nlisten-ports = [8080]\n",
+    )
+    .unwrap();
+    let (code, _, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(stderr.contains("microvm-ch"), "{stderr}");
     assert!(stderr.contains("listen-ports"), "{stderr}");
 }
 

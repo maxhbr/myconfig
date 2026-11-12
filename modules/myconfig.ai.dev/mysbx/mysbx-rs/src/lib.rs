@@ -2714,7 +2714,10 @@ fn sandbox_pipeline(
     .flatten()
     .collect();
     if !allowlist_keys.is_empty() {
-        if backend != "nono" {
+        // Asked of the registry (bd myconfig-mo3.2.1): the row's
+        // network_allowlist predicate is D21's enforcement table —
+        // nono alone enforces an allowlist today.
+        if !backends::find(backend).is_some_and(|row| row.network_allowlist) {
             eprintln!(
                 "mysbx: the configuration sets {} — only the `nono` backend enforces them; the `{backend}` backend cannot (bubblewrap shares or unshares the whole network namespace; the podman backends dial from an unfiltered netns — pasta on `podman-gvisor`, libkrun's TSI proxy on `podman-krun`, bd myconfig-6di.3/myconfig-6di.5.5)",
                 allowlist_keys

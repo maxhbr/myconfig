@@ -204,7 +204,7 @@ proxy-only egress proposal, and is not a domain-and-port conjunction.
 LANDED. The allowlist schema (bd myconfig-mo3.1) is
 `allow-domains`/`connect-ports`/`listen-ports` (`config.md` D21): both
 layers concatenate, user first, deduped keeping the first occurrence.
-Only nono supports these keys; the other five backends refuse them.
+Only nono supports these keys; the other six backends refuse them.
 `listen-ports` alone, URL-form domains, and allowlists combined with
 `network = false` are refused.
 

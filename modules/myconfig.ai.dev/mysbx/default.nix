@@ -1966,9 +1966,9 @@ in
               Enforcement is per backend and NEVER accepted-and-ignored
               (D21): enforced on `backend = "nono"` (nono's egress
               proxy, plain host names only — a URL/path form is refused,
-              bd myconfig-6di.4.4); `bubblewrap` and `podman-gvisor`
-              refuse the run when any allowlist key is set. These
-              options just seed the layer: the backend choice stays
+              bd myconfig-6di.4.4); every other backend refuses the
+              run when any allowlist key is set. These options just
+              seed the layer: the backend choice stays
               per repository (sidecar) or per run (`--backend`).
             '';
           };

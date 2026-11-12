@@ -1280,6 +1280,10 @@ a security bug:
 | `podman-krun` | refused — libkrun's TSI is an UNFILTERED proxy: the VMM dials whatever the guest connects to, from the container's own netns (pasta by default, the empty netns under `network = false`); no per-domain or per-port hook exists in the muxer (verified against the sources, bd myconfig-6di.5.5) |
 | `krun` | refused — direct libkrun TSI has no implemented allowlist hook |
 | `microvm-qemu` | refused — the SLiRP network path has no implemented allowlist enforcement |
+| `microvm-ch` | refused — passt's vhost-user net device (D11's SLiRP-compatible address plan) has no implemented allowlist hook |
+
+Every backend's row is asked of the registry (`network_allowlist`,
+bd myconfig-mo3.2.1), not matched by name at the call site.
 
 The first enforcement is the nono backend (bd myconfig-6di.2). The
 refusal fires while the argv is laid out, BEFORE the `--dry-run` early

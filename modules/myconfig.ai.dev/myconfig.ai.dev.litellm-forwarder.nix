@@ -5,7 +5,7 @@
 # makes the loopback-only LiteLLM proxy reachable from a container sandbox.
 #
 # The host LiteLLM proxy is loopback-only on purpose
-# (`services.litellm.host = mkForce "127.0.0.1"` in ../myconfig.ai/services.litellm.nix),
+# (`services.litellm.host = mkForce "127.0.0.1"` in ../myconfig.ai.llmops/services.litellm.nix),
 # so a rootless Podman sandbox cannot reach it directly: with pasta (podman's
 # rootless default) the sandbox's own 127.0.0.1 is the container's loopback, not
 # the host's, and runsc runs its own netstack on top of the pasta netns.
