@@ -44,6 +44,10 @@
 # | ccusage,       | system libs") makes cargo build scripts link system libs via  |
 # | codex, nono,   | pkg-config instead of vendored ones; these Rust packages lack   |
 # | wprs           | the corresponding `buildInputs` and fail at build time.        |
+# | waybar         | 0.16.0 regressed label centering: custom/* modules and niri/    |
+# |                | workspaces text hugs the module's start edge and CSS          |
+# |                | backgrounds cover only the glyph. Patched until fixed          |
+# |                | upstream.                                                      |
 #
 # When removing an override, also drop its entry here and rebuild.
 
@@ -270,6 +274,28 @@
         buildInputs = (old.buildInputs or [ ]) ++ [
           prev.oniguruma
           prev.sqlite
+        ];
+      });
+    })
+
+    # waybar 0.16.0 (nixpkgs bump landed with the 2026-11-12 system switch)
+    # re-based the custom/* module from ALabel to AIconLabel and gave
+    # niri/workspaces a per-workspace Workspace widget. Both wrap the
+    # previously-bare Gtk::Label in a Gtk::Box packed without expand/fill,
+    # so on a vertical bar the text hugs the module's start edge and CSS
+    # backgrounds (the blinking error state of custom/mbsync-get-status)
+    # cover only the glyph instead of the full module width. GTK3 CSS
+    # cannot restore the 0.15.0 layout, so patch the packing to fill the
+    # label along the box's main axis.
+    #
+    # See doc/TODOs/drop-waybar-0.16-label-centering-patch.md.
+    #
+    # TODO: remove once a waybar release fixes these packing regressions
+    # and the nixpkgs input carries it.
+    (_final: prev: {
+      waybar = prev.waybar.overrideAttrs (old: {
+        patches = (old.patches or [ ]) ++ [
+          ./modules/myconfig.desktop.wayland/programs.waybar/patches/fix-0.16-label-centering.patch
         ];
       });
     })

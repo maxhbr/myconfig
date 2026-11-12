@@ -1,0 +1,64 @@
+From 8e13ac5d3a97d98bfd4a301a1e18f2d6faa635c6 Mon Sep 17 00:00:00 2001
+From: Maximilian Huber <oss@maximilian-huber.de>
+Date: Thu, 12 Nov 2026 12:24:13 +0100
+Subject: [PATCH] fix: restore 0.15.0 label centering in AIconLabel and niri
+ workspaces
+
+0.16.0 wrapped the previously-bare Gtk::Label of AIconLabel-derived
+modules (custom/*, ...) in a Gtk::Box packed without expand/fill, so
+text hugged the module's start edge and CSS backgrounds covered only
+the glyph. niri/workspaces likewise packed its new Workspace label
+non-expanding, so digits hug the start edge instead of being centered
+in the (rotated) button. Fill the labels along their box's main axis
+and center the niri workspace label to restore the 0.15.0 layout.
+---
+ src/AIconLabel.cpp             | 13 +++++++++----
+ src/modules/niri/workspace.cpp |  6 +++++-
+ 2 files changed, 14 insertions(+), 5 deletions(-)
+
+diff --git a/src/AIconLabel.cpp b/src/AIconLabel.cpp
+index 6d36a70..ed0fbb6 100644
+--- a/src/AIconLabel.cpp
++++ b/src/AIconLabel.cpp
+@@ -55,12 +55,17 @@ AIconLabel::AIconLabel(const Json::Value& config, const std::string& name, const
+                  config_["swap-icon-label"].asString());
+   }
+ 
++  // 0.15.0 packed the bare Gtk::Label into the event box, where it filled the
++  // module's full width and centered its text. Wrapping it in a box without
++  // expand/fill regressed that: text hugged the module's start edge and CSS
++  // backgrounds only covered the glyph. Fill the label along the box's main
++  // axis to restore the 0.15.0 layout for modules without an icon.
+   if ((rot == 0 || rot == 3) ^ swap_icon_label) {
+-    box_.add(image_);
+-    box_.add(label_);
++    box_.pack_start(image_, false, false, 0);
++    box_.pack_start(label_, true, true, 0);
+   } else {
+-    box_.add(label_);
+-    box_.add(image_);
++    box_.pack_start(label_, true, true, 0);
++    box_.pack_start(image_, false, false, 0);
+   }
+ 
+   event_box_.add(box_);
+diff --git a/src/modules/niri/workspace.cpp b/src/modules/niri/workspace.cpp
+index e157685..9e920f7 100644
+--- a/src/modules/niri/workspace.cpp
++++ b/src/modules/niri/workspace.cpp
+@@ -21,7 +21,11 @@ Workspace::Workspace(const Json::Value& workspace_data, Workspaces& manager)
+       box_(Gtk::ORIENTATION_HORIZONTAL, 0),
+       taskbar_box_(Gtk::ORIENTATION_HORIZONTAL, 0) {
+   button_.add(box_);
+-  box_.pack_start(label_, false, false, 0);
++  // Center the workspace label like the 0.15.0 plain-GtkButton label was:
++  // the button gives box_ its full (rotated-bar) width, so a non-expanding
++  // label hugs the start edge and the digit looks left-aligned.
++  label_.set_halign(Gtk::ALIGN_CENTER);
++  box_.pack_start(label_, true, true, 0);
+   box_.pack_start(taskbar_box_, false, false, 0);
+ 
+   button_.set_relief(Gtk::RELIEF_NONE);
+-- 
+2.56.0
+
