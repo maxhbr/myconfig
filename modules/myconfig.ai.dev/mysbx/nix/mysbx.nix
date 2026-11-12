@@ -943,7 +943,10 @@ let
     lib.optionalString (egressSocket != null) "--set-default MYSBX_EGRESS_SOCKET '${egressSocket}' "
     + lib.optionalString (
       egressPort != null
-    ) "--set-default MYSBX_EGRESS_PORT '${toString egressPort}'";
+    ) "--set-default MYSBX_EGRESS_PORT '${toString egressPort}' "
+    # The in-sandbox relay binary (bd myconfig-mo3.2.5): a closure path,
+    # so `--set`, not `--set-default` — it must match this build.
+    + "--set MYSBX_EGRESS_RELAY '${crate}/bin/mysbx-egress-relay'";
   # The nono backend pins of the layered backend (bd
   # myconfig-6di.4.3): the binary (`--set`, an absolute store path
   # like every other closure pin) and the mysbx profile (the
@@ -1131,6 +1134,9 @@ symlinkJoin {
     # and the port the in-sandbox relay listens on. `null` when the
     # caller pinned nothing.
     inherit egressSocket egressPort;
+    # The in-sandbox relay binary the wrapper pins (bd myconfig-mo3.2.5),
+    # for the checks.nix gate that runs it live.
+    egressRelay = "${crate}/bin/mysbx-egress-relay";
     # The disk's closure roots as store paths, for the same gate:
     # `vmStoreExtraRoots` (the guest nix wrappers, the
     # git-default-diff wrapper) must appear here when the module
