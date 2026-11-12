@@ -19,8 +19,12 @@
         }
       ];
       # the U3824DW is silent; keep the Radeon HDMI audio card off so it
-      # never grabs the default sink
-      profile.exec = [ "kanshi-audio-card alsa_card.pci-0000_c1_00.1 off" ];
+      # never grabs the default sink, and the internal speakers off —
+      # audio goes through the Focusrite
+      profile.exec = [
+        "kanshi-audio-card alsa_card.pci-0000_c1_00.1 off"
+        "kanshi-audio-card alsa_card.pci-0000_c1_00.6 off"
+      ];
     }
   ];
 }
