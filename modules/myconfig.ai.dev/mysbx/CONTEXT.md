@@ -79,3 +79,27 @@ mysbx backs it with `<sidecar>/state/<entry>` and binds it rw at
 `/mysbx-home/<entry>`, so the payload's writes there persist across runs.
 The host home is never the source — the sidecar is, by design.
 _Avoid_: state directory mount, persistent volume, cache dir
+
+**Proxy-only profile**:
+The `network = "proxy-only"` setting (config.md D20): the sandbox reaches
+only the host's LiteLLM endpoint and holds no model credential. Stricter
+than `"shared"`, weaker than `"none"`; enforced on bubblewrap and
+refused on every other backend in phase A. The credential rules it
+implies are config.md D28.
+_Avoid_: egress mode, proxy mode, restricted network
+
+**Egress forwarder**:
+The host-side, port-scoped `systemd-socket-proxyd` listener
+(`myconfig.ai.dev.litellm-forwarder`) that makes the loopback-only LiteLLM
+proxy reachable from a sandbox. It is a static, socket-activated unit;
+under `proxy-only` its Unix socket is the one channel the bubblewrap
+sandbox has.
+_Avoid_: proxy bridge, port forward, tunnel
+
+**Egress relay**:
+The in-sandbox process (`mysbx-egress-relay`) that accepts loopback TCP
+clients and forwards to the host egress forwarder's socket. It makes
+proxy-aware clients work without giving them a route. A later
+host-side *egress broker* (bd myconfig-vpi9) may replace it; the relay
+makes no allow/deny decisions of its own.
+_Avoid_: proxy server, sidecar, gateway
