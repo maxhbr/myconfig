@@ -6937,9 +6937,9 @@ const SIDECAR_TEMPLATE_ROOT: &str = r#"# mysbx sidecar config
 # bound at its host path is invisible there (config.md D14).
 #
 # backend = "bubblewrap"         # bubblewrap | nono | podman-gvisor | podman-krun | krun | microvm-qemu | microvm-ch
-# network = "shared"            # none | proxy-only | shared (D20; the bool
-#                                # false/true stay aliases of none/shared); a
-#                                # sidecar may tighten, never widen
+# network = "shared"    # none | proxy-only | shared (D20; the bool
+#                        # false/true stay aliases of none/shared); a
+#                        # sidecar may tighten, never widen
 # display = "off"                # off | waypipe, a Wayland channel (D18)
 #
 # Nested virtualization (D27): hand the guest hardware virtualization

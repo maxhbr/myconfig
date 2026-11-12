@@ -1081,7 +1081,14 @@ fn host_endpoint_check(
                 } else {
                     "proxy-only"
                 },
-                merged.network
+                // Byte-identity for existing configs (review F): the
+                // bool spellings render `false`/`true` as they always
+                // did; only the profile's string form prints a string.
+                if merged.network.is_none() {
+                    "false"
+                } else {
+                    "proxy-only"
+                }
             ),
         ));
         return;
@@ -1618,7 +1625,11 @@ fn podman_checks(
                 } else {
                     "proxy-only"
                 },
-                merged.network
+                if merged.network.is_none() {
+                    "false"
+                } else {
+                    "proxy-only"
+                }
             ),
         ));
         return;
@@ -1947,10 +1958,13 @@ pub fn run(args: &[String]) -> i32 {
         match backend.as_str() {
             "bubblewrap" => {
                 bwrap_checks(&mut checks, merged.network.is_shared());
-                // The proxy-only channel (D20): probe it whenever the
-                // backend is bubblewrap, so an operator sees the
-                // channel's health before a `proxy-only` run needs it.
-                egress_check(&mut checks);
+                // The proxy-only channel (D20): probe it only when the
+                // merged network is the profile — a shared/none
+                // bubblewrap doctor keeps its output unchanged (review
+                // F).
+                if merged.network == crate::config::Network::ProxyOnly {
+                    egress_check(&mut checks);
+                }
                 host_endpoint_check(&mut checks, &merged, &forwarded);
             }
             "nono" => {

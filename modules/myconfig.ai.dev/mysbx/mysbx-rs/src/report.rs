@@ -216,8 +216,18 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     .into_iter()
     .flatten()
     .collect();
-    if !allow.is_empty() {
-        p(format!("allowlist:     {}", allow.join("; ")));
+    // The D21 allowlist line: printed only when a layer actually set an
+    // allowlist key or the network is proxy-only (review F) — a shared
+    // config without one keeps its previous `--verbose` output.
+    if !allow.is_empty() || r.merged.network == crate::config::Network::ProxyOnly {
+        p(format!(
+            "allowlist:      {}",
+            if allow.is_empty() {
+                "none (proxy-only grants only the model endpoint)".to_owned()
+            } else {
+                allow.join("; ")
+            }
+        ));
     }
     // The D28 rule 6a drop list: every forward-env name beyond the
     // terminal/locale/editor base, said out loud rather than silently
@@ -1083,6 +1093,10 @@ mod tests {
         );
         // With user_mount_count == 2 both mounts belong to the user layer.
         assert!(!joined.contains("[sidecar config]"), "{joined}");
+        // Review F: a plain shared config gets NEITHER the allowlist nor
+        // the env-drop line — its `--verbose` output is unchanged.
+        assert!(!joined.contains("allowlist:"), "{joined}");
+        assert!(!joined.contains("env dropped:"), "{joined}");
     }
 
     #[test]

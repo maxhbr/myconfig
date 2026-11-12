@@ -993,7 +993,18 @@ fn sidecar_network_true_still_cannot_reenable() {
     std::fs::write(sidecar.join("config.toml"), "network = true\n").unwrap();
     let (code, stdout, stderr) = run_binary(&inv);
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stdout: {stdout}");
-    assert!(stderr.contains("never widen it"), "stderr: {stderr}");
+    // Review F: check the full message, both values and both files —
+    // the old full-message assertion was dropped when the wording
+    // changed.
+    let msg = stderr.trim();
+    assert!(
+        msg.contains("network = \"shared\" widens the network the user config"),
+        "{msg}"
+    );
+    assert!(msg.contains("set to \"none\""), "{msg}");
+    assert!(msg.contains("never widen it"), "{msg}");
+    assert!(msg.contains("config.toml"), "{msg}");
+    assert!(msg.contains("docs/design/config.md D20"), "{msg}");
 }
 
 #[test]
@@ -8535,8 +8546,12 @@ fn doctor_passes_on_a_healthy_bubblewrap_host() {
         &[("MYSBX_BWRAP", bwrap.as_str()), ("MYSBX_SHELL", "/bin/sh")],
     );
     assert_eq!(code, 0, "stdout: {stdout}\nstderr: {stderr}");
+    // Review F: the full line, and the bool rendering `false` (not
+    // `none`) for a config that spelled `network = false`.
     assert!(
-        stdout.contains("OK   model endpoint: not applicable: the network is denied"),
+        stdout.contains(
+            "OK   model endpoint: not applicable: the network is denied (network = false)"
+        ),
         "{stdout}"
     );
     let recorded = std::fs::read_to_string(&record).unwrap();
