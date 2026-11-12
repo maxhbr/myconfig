@@ -5562,6 +5562,57 @@ const SYMLINK_BUDGET: usize = 40;
 /// variable the default already carries costs nothing. A name
 /// forwards only when actually set at launch, so an absent variable
 /// costs nothing either.
+/// The one place the crate names the libc signal symbols
+/// (`signal(2)`, `kill(2)`) — the dependency-free approach the std
+/// library uses internally, shared by `main.rs` (SIGPIPE back to its
+/// default) and `mysbx-egress-relay` (forward the termination signals
+/// to the payload) so the binding is declared once (review C).
+///
+/// The crate targets unix; the module compiles away elsewhere.
+#[cfg(unix)]
+pub mod sig {
+    #[allow(non_snake_case)]
+    extern "C" {
+        fn signal(signum: i32, handler: usize) -> usize;
+        fn kill(pid: i32, sig: i32) -> i32;
+    }
+
+    /// `SIGHUP`.
+    pub const HUP: i32 = 1;
+    /// `SIGINT`.
+    pub const INT: i32 = 2;
+    /// `SIGPIPE`.
+    pub const PIPE: i32 = 13;
+    /// `SIGTERM`.
+    pub const TERM: i32 = 15;
+
+    /// Restore a signal to its default action (`SIG_DFL`).
+    ///
+    /// # Safety
+    /// Signals are process-global: the caller must own the process'
+    /// handler policy for `signum` (the two binaries do, at startup).
+    pub unsafe fn to_default(signum: i32) {
+        unsafe { signal(signum, 0) };
+    }
+
+    /// `kill(pid, signum)`.
+    ///
+    /// # Safety
+    /// The caller is responsible for the target pid.
+    pub unsafe fn kill_pid(pid: i32, signum: i32) {
+        unsafe { kill(pid, signum) };
+    }
+
+    /// Install `handler` (a `fn(i32)` cast to its address) for
+    /// `signum`.
+    ///
+    /// # Safety
+    /// Process-global handler policy, as [`to_default`].
+    pub unsafe fn on(signum: i32, handler: unsafe extern "C" fn(i32)) {
+        unsafe { signal(signum, handler as *const () as usize) };
+    }
+}
+
 /// Whether a `[env]` / forwarded name looks like a model credential
 /// (docs/design/config.md D28, bd myconfig-t24): split at `_`; a part
 /// equal to `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`,

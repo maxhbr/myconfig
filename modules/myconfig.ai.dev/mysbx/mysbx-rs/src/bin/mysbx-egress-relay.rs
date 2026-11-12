@@ -14,22 +14,26 @@
 //!
 //! ## Why a dedicated binary instead of `socat`
 //!
-//! Decision 5 of the plan (myconfig-n8kv): the listener is bound
-//! BEFORE the payload starts, so a client that connects immediately
-//! cannot race a half-started relay; a bind failure is visible as exit
-//! 70 instead of a payload that fails obscurely; and the crate stays
-//! dependency-free (std only, no tokio).
+//! The listener is bound BEFORE the payload starts, so a client that
+//! connects immediately cannot race a half-started relay; a bind
+//! failure is a visible exit code instead of a payload that fails
+//! obscurely; and the crate stays dependency-free (std only, no tokio).
 //!
 //! ## Process model
 //!
-//! 1. Parse `--listen 127.0.0.1:<port> --connect <uds> -- <cmd...>`.
-//! 2. Bind the TCP listener (failure → exit 70 with a message).
-//! 3. Spawn `<cmd>`, with its stdin/stdout/stderr inherited.
-//! 4. Forward `SIGINT`/`SIGTERM`/`SIGHUP` to the child (so a `^C`
-//!    stops the payload, not just the relay).
-//! 5. One accept thread: per connection, connect to the Unix socket
+//! 1. Parse `--listen 127.0.0.1:<port> --connect <uds> -- <cmd...>`
+//!    (`--help` prints the usage and exits 0; a usage error exits 2).
+//! 2. Do every fallible setup step — bind the TCP listener, make it
+//!    non-blocking, install the signal handlers — BEFORE the spawn
+//!    (failure → exit 70 with a message).
+//! 3. Spawn `<cmd>`, with its stdin/stdout/stderr inherited, then
+//!    record its pid for the signal handlers.
+//! 4. One accept thread: per connection, connect to the Unix socket
 //!    and copy both ways until EOF, then half-close the peer.
-//! 6. Exit with the child's status; the relay never outlives it.
+//!    Transient accept errors retry, descriptor pressure backs off,
+//!    a fatal one is printed once.
+//! 5. Exit with the child's status; a failed `wait` is exit 70. The
+//!    relay never outlives the payload.
 //!
 //! The relay makes no allow/deny decisions of its own: the fence is
 //! the empty netns plus the single bound socket. It exists only to
@@ -50,14 +54,32 @@ const EXIT_INFRASTRUCTURE: i32 = 70;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // `-h`/`--help` is a success (usage to stdout, exit 0); a usage
+    // error is exit 2 (cli.md D8). `run` returns `Err` for both, so
+    // the marker distinguishes them.
+    if let Some(first) = args.first() {
+        if first == "-h" || first == "--help" {
+            println!("{USAGE}");
+            std::process::exit(0);
+        }
+    }
     match run(&args) {
         Ok(code) => std::process::exit(code),
+        Err(e) if e == HELP_REQUESTED => {
+            println!("{USAGE}");
+            std::process::exit(0);
+        }
         Err(e) => {
             eprintln!("mysbx-egress-relay: {e}");
-            std::process::exit(EXIT_INFRASTRUCTURE);
+            std::process::exit(2);
         }
     }
 }
+
+/// Marker returned by [`Invocation::parse`] for `-h`/`--help` so
+/// `main` can print the usage to STDOUT and exit 0 (a help request is
+/// not an error); every real parse error exits 2 (cli.md D8).
+const HELP_REQUESTED: &str = "__help__";
 
 /// The parsed invocation: where to listen, what host socket to forward
 /// to, and the payload to run while forwarding.
@@ -100,7 +122,7 @@ impl Invocation {
                     i += 2;
                 }
                 "-h" | "--help" => {
-                    return Err(USAGE.to_owned());
+                    return Err(HELP_REQUESTED.to_owned());
                 }
                 other => return Err(format!("unknown argument `{other}`\n{USAGE}")),
             }
@@ -124,28 +146,31 @@ const USAGE: &str =
 
 fn run(args: &[String]) -> Result<i32, String> {
     let inv = Invocation::parse(args)?;
-    // Bind BEFORE spawning: a port already taken (or an unusable
-    // address) is a hard failure the operator sees, not a payload that
-    // connects to nothing.
+    // Every fallible setup step happens BEFORE the payload is spawned
+    // (review C): a relay that cannot listen must fail visibly, never
+    // start the payload and then die around it.
     let listener =
         TcpListener::bind(&inv.listen).map_err(|e| format!("cannot bind {}: {e}", inv.listen))?;
+    listener
+        .set_nonblocking(true)
+        .map_err(|e| format!("cannot poll {}: {e}", inv.listen))?;
+
+    // A `^C` (or a supervisor's SIGTERM/SIGHUP) must stop the PAYLOAD,
+    // not leave it orphaned while the relay dies. The handler is
+    // installed BEFORE the spawn so a signal landing in the spawn
+    // window cannot kill the relay and orphan a not-yet-recorded child;
+    // it forwards to CHILD_PID only once that is set (0 = nothing yet).
+    forward_signals();
 
     let mut child = Command::new(&inv.payload[0])
         .args(&inv.payload[1..])
         .spawn()
         .map_err(|e| format!("cannot start `{}`: {e}", inv.payload[0]))?;
-
-    // A `^C` (or a supervisor's SIGTERM/SIGHUP) must stop the PAYLOAD,
-    // not leave it orphaned while the relay dies: forward the three
-    // termination signals to the child. Nothing else is installed.
-    forward_signals(&child);
+    set_child_pid(child.id());
 
     let stop = Arc::new(AtomicBool::new(false));
     let connect = inv.connect.clone();
     let accept_stop = Arc::clone(&stop);
-    listener
-        .set_nonblocking(true)
-        .map_err(|e| format!("cannot poll {}: {e}", inv.listen))?;
     let acceptor = std::thread::spawn(move || {
         accept_loop(listener, &connect, &accept_stop);
     });
@@ -178,9 +203,33 @@ fn accept_loop(listener: TcpListener, connect: &str, stop: &AtomicBool) {
             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
                 std::thread::sleep(Duration::from_millis(50));
             }
-            Err(_) => break,
+            // Transient: the peer aborted the connection before accept
+            // finished, or a signal interrupted the syscall (review C).
+            Err(ref e)
+                if matches!(
+                    e.kind(),
+                    io::ErrorKind::ConnectionAborted | io::ErrorKind::Interrupted
+                ) => {}
+            // Descriptor pressure: back off briefly instead of spinning
+            // (EMFILE/ENFILE surface as `Other` with those raw codes).
+            Err(ref e) if is_descriptor_pressure(e) => {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            // Fatal: report it once, on stderr, and stop accepting
+            // (rather than stopping silently).
+            Err(e) => {
+                eprintln!("mysbx-egress-relay: accept failed: {e}");
+                break;
+            }
         }
     }
+}
+
+/// Whether an accept error is descriptor exhaustion (`EMFILE` on the
+/// process, `ENFILE` system-wide), where a short back-off — rather than
+/// a hot spin or a dead relay — is the right response.
+fn is_descriptor_pressure(e: &io::Error) -> bool {
+    matches!(e.raw_os_error(), Some(24) | Some(23)) // EMFILE, ENFILE
 }
 
 /// Forward one client connection to the Unix socket and back until
@@ -271,47 +320,42 @@ fn exit_code(status: ExitStatus) -> i32 {
     EXIT_INFRASTRUCTURE
 }
 
-/// Forward SIGINT/SIGTERM/SIGHUP to the child. A raw `signal(2)` with
-/// a `static` child pid, the same dependency-free approach `main.rs`
-/// uses for SIGPIPE.
+/// The payload pid the signal handler forwards to (0 = not spawned
+/// yet, so an early signal is a no-op rather than a kill of pid 0 —
+/// which would signal the whole process group).
 #[cfg(unix)]
-fn forward_signals(child: &Child) {
-    use std::sync::atomic::AtomicI32;
-    static CHILD_PID: AtomicI32 = AtomicI32::new(0);
-    CHILD_PID.store(child.id() as i32, Ordering::SeqCst);
+static CHILD_PID: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
 
-    #[allow(non_snake_case)]
-    extern "C" {
-        fn signal(signum: i32, handler: usize) -> usize;
-    }
-    extern "C" fn forward(signum: i32) {
+/// Record the payload pid for the signal handler.
+fn set_child_pid(pid: u32) {
+    #[cfg(unix)]
+    CHILD_PID.store(pid as i32, Ordering::SeqCst);
+    #[cfg(not(unix))]
+    let _ = pid;
+}
+
+/// Install the SIGINT/SIGTERM/SIGHUP handlers (before the spawn) so a
+/// `^C` or a supervisor's signal stops the PAYLOAD. The libc binding
+/// lives once in `mysbx::sig`.
+#[cfg(unix)]
+fn forward_signals() {
+    unsafe extern "C" fn forward(signum: i32) {
         let pid = CHILD_PID.load(Ordering::SeqCst);
         if pid > 0 {
-            #[allow(non_snake_case)]
-            extern "C" {
-                fn kill(pid: i32, sig: i32) -> i32;
-            }
             unsafe {
-                kill(pid, signum);
+                mysbx::sig::kill_pid(pid, signum);
             }
         }
     }
-    const SIGHUP: i32 = 1;
-    const SIGINT: i32 = 2;
-    const SIGTERM: i32 = 15;
-    // `forward as usize` is the explicit cast the extern signature
-    // wants; `as *const () as usize` is the lint-clean spelling of the
-    // same value.
-    let handler = forward as *const () as usize;
-    for sig in [SIGHUP, SIGINT, SIGTERM] {
+    for sig in [mysbx::sig::HUP, mysbx::sig::INT, mysbx::sig::TERM] {
         unsafe {
-            signal(sig, handler);
+            mysbx::sig::on(sig, forward);
         }
     }
 }
 
 #[cfg(not(unix))]
-fn forward_signals(_child: &Child) {}
+fn forward_signals() {}
 
 #[cfg(test)]
 mod tests {
@@ -420,5 +464,31 @@ mod tests {
             .status()
             .unwrap();
         assert_eq!(exit_code(status), 3);
+    }
+
+    #[test]
+    fn a_non_numeric_help_is_a_parse_error_but_h_is_the_marker() {
+        // `-h`/`--help` yields the marker (main prints usage to stdout
+        // and exits 0); anything else unknown is a real error.
+        assert_eq!(Invocation::parse(&s(&["-h"])).unwrap_err(), HELP_REQUESTED);
+        assert_eq!(
+            Invocation::parse(&s(&["--help"])).unwrap_err(),
+            HELP_REQUESTED
+        );
+        assert!(Invocation::parse(&s(&["--bogus"])).is_err());
+        assert_ne!(
+            Invocation::parse(&s(&["--bogus"])).unwrap_err(),
+            HELP_REQUESTED
+        );
+    }
+
+    #[test]
+    fn descriptor_pressure_is_recognised() {
+        // EMFILE (24) / ENFILE (23) get a back-off, not a fatal break;
+        // other errors do not.
+        assert!(is_descriptor_pressure(&io::Error::from_raw_os_error(24)));
+        assert!(is_descriptor_pressure(&io::Error::from_raw_os_error(23)));
+        assert!(!is_descriptor_pressure(&io::Error::from_raw_os_error(9)));
+        assert!(!is_descriptor_pressure(&io::Error::other("x")));
     }
 }
