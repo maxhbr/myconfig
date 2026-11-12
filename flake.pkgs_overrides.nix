@@ -36,9 +36,6 @@
 # |                | `voxtype-osd-gtk4` nor `voxtype-osd-native` lands on PATH and   |
 # |                | the `voxtype-osd` launcher crashes on every daemon start.    |
 # |                | Override builds the `osd-gtk4` feature + GTK4 deps.           |
-# | opencode       | 2.2.5 bump shipped a stale `node_modules` FOD hash (computed  |
-# |                | before the bun 1.4.4 bump); every opencode-dependent build    |
-# |                | fails with a hash mismatch. Override pins the verified hash.  |
 # | neovide        | 0.17.1 bump clobbered `src.hash` and `cargoHash` with the     |
 # |                | skia-source hash, so the "neovide" fetch stores skia's tree |
 # |                | (no Cargo.lock) and the vendor-staging drv fails. Taken from |
@@ -167,27 +164,6 @@
           rev = "4ba0f4b6c0667192263c385c13b5ec42a87af9ff";
           hash = "sha256-BaAULmeTxsj6uk3Aqe7ft/uN14M/b1U3ga7S71+lE68=";
         };
-      });
-    })
-
-    # opencode: the 2.2.5 bump (nixpkgs PR #581607) pinned a stale
-    # `outputHash` for the `node_modules` fixed-output derivation — it was
-    # computed before bun 1.4.2 → 1.4.4 (PR #577354) landed, so `bun install`
-    # produces a different tree and every opencode closure build fails with:
-    #   specified: sha256-xfOVcw1+waLVNhFDwzOtzxrUSQEogvn88YomydOlhwc=
-    #      got:    sha256-prx9dX7kUvs/E3zopkaPk5LXh3xJAy5sZeum/W8L7cA=
-    # Upstream issue: https://github.com/NixOS/nixpkgs/issues/582673
-    # Upstream fix:   https://github.com/NixOS/nixpkgs/pull/582675
-    # (same hash for all platforms — the FOD installs with `--os="*"`).
-    # `opencode-desktop` inherits `node_modules` from the `opencode` argument
-    # via callPackage, so it picks up the fix through the overlay scope too.
-    #
-    # See doc/TODOs/drop-opencode-node-modules-hash-override.md.
-    (_final: prev: {
-      opencode = prev.opencode.overrideAttrs (old: {
-        node_modules = old.node_modules.overrideAttrs (_: {
-          outputHash = "sha256-prx9dX7kUvs/E3zopkaPk5LXh3xJAy5sZeum/W8L7cA=";
-        });
       });
     })
 
