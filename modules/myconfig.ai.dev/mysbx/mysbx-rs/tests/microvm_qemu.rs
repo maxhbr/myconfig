@@ -132,6 +132,28 @@ fn run(cfg: &Merged, repo: &Repo, payload: &Payload, params: &Params<'_>) -> Vec
 }
 
 #[test]
+fn proxy_only_is_refused_by_the_builder() {
+    // D20 (bd myconfig-6di.3): the qemu builder refuses
+    // `network = "proxy-only"` itself — the SLiRP net device always
+    // has a gateway route.
+    let mut cfg = base(true);
+    cfg.network = mysbx::config::Network::ProxyOnly;
+    let p = params("/synth/rootfs", "/synth/shell", None, Workspace::Live);
+    let host_env = BTreeMap::new();
+    let err = microvm_qemu_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env,
+        &p,
+        KERNEL,
+        &[],
+    )
+    .expect_err("a proxy-only qemu run must be refused");
+    assert!(matches!(err, mysbx::krun::Error::ProxyOnlyRefused), "{err}");
+}
+
+#[test]
 fn nested_virt_rides_the_qemu_only_flag_and_marker() {
     // docs/design/config.md D27: the opt-in carries exactly TWO argv
     // pieces — the launcher's `--nested-virt` switch (it boots -cpu

@@ -90,6 +90,28 @@ fn assert_parity(cfg: &Merged, params: &Params<'_>) -> Vec<String> {
 }
 
 #[test]
+fn proxy_only_is_refused_by_the_builder() {
+    // D20 (bd myconfig-6di.3): the CH builder refuses
+    // `network = "proxy-only"` itself — passt's vhost-user net device
+    // always has a gateway route.
+    let mut cfg = base();
+    cfg.network = mysbx::config::Network::ProxyOnly;
+    let p = params();
+    let host_env = BTreeMap::new();
+    let err = microvm_ch_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env,
+        &p,
+        KERNEL,
+        &[],
+    )
+    .expect_err("a proxy-only CH run must be refused");
+    assert!(matches!(err, mysbx::krun::Error::ProxyOnlyRefused), "{err}");
+}
+
+#[test]
 fn same_argv_as_qemu_minimal() {
     assert_parity(&base(), &params());
 }

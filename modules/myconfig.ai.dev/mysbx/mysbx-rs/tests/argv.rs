@@ -4260,6 +4260,30 @@ fn podman_config_env_cannot_repoint_the_xdg_base_dirs() {
 }
 
 #[test]
+fn proxy_only_is_refused_by_the_podman_builder() {
+    // D20 (bd myconfig-6di.3): the shared podman builder refuses
+    // `network = "proxy-only"` itself — pasta adds a route to the
+    // forwarder without removing the default route — defense in depth
+    // next to the pipeline's step-4b refusal. The SAME builder serves
+    // podman-gvisor and podman-krun, so one test covers both.
+    let mut cfg = podman_base(true);
+    cfg.network = mysbx::config::Network::ProxyOnly;
+    let params = podman_params();
+    let err = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .expect_err("a proxy-only podman run must be refused");
+    assert!(
+        matches!(err, mysbx::podman_gvisor::Error::ProxyOnlyRefused),
+        "{err}"
+    );
+}
+
+#[test]
 fn podman_backend_env_pins_win_over_the_config_layers() {
     // MYSBX_PODMAN_ENV carries environment that is only correct under
     // this backend (the container-side URL of the host's LiteLLM

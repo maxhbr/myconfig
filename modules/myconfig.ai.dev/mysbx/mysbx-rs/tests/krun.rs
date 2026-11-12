@@ -123,6 +123,21 @@ fn run(cfg: &Merged, repo: &Repo, payload: &Payload, params: &Params<'_>) -> Vec
 }
 
 #[test]
+fn proxy_only_is_refused_by_the_builder() {
+    // D20 (bd myconfig-6di.3): the direct-krun builder refuses
+    // `network = "proxy-only"` itself, defense in depth next to the
+    // pipeline's step-4b refusal — libkrun's TSI always has a gateway
+    // route.
+    let mut cfg = base(true);
+    cfg.network = mysbx::config::Network::ProxyOnly;
+    let params = params("/synth/rootfs", "/synth/shell", None, Workspace::Live);
+    let host_env = BTreeMap::new();
+    let err = krun_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env, &params)
+        .expect_err("a proxy-only krun run must be refused");
+    assert!(matches!(err, mysbx::krun::Error::ProxyOnlyRefused), "{err}");
+}
+
+#[test]
 fn golden_minimal_config() {
     let argv = run(
         &base(true),

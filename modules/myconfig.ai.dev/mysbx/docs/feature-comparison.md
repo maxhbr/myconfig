@@ -97,6 +97,7 @@ run exits `70` before anything is created, including under `--dry-run`
 | `network = false` | no `--share-net` | bwrap netns + `--block-net` | `--network none` | `--network none`, TSI dials from an empty netns | implicit vsock disabled + bwrap netns | no netdev + bwrap netns |
 | `allow-domains` / `connect-ports` / `listen-ports` | refused | proxy/port grants; see caveats below. `listen-ports` alone and URL forms refused | refused | refused | refused | refused |
 | allowlist + `network = false` | refused | refused | refused | refused | refused | refused |
+| `network = "proxy-only"` (D20) | enforced: empty netns + forwarder socket + relay | refused | refused (pasta keeps the default route) | refused (TSI proxy) | refused (TSI) | refused (SLiRP gateway) |
 | `egress` (including `"proxy-only"`) | unknown schema key; rejected | same | same | same | same | same |
 | implicit host nix daemon `/nix/var/nix` | only with shared network | only with shared network and no allowlist | none | none | none (host-store db copy is not daemon access) | none (same) |
 
@@ -128,10 +129,13 @@ endpoint probe is not proof of payload reachability under its policy.
 | `microvm` | never in the guest: the host LiteLLM holds it, the guest has placeholders | root-staged config seed, allowlist + credential denylist | `agent-microvm-security-model.md` |
 | `mysbx` | none by default. A plain run forwards credential names only when declared in `forward-env` (`myconfig.ai.dev.mysbx.forwardedEnvVars`, set by the private flake). Under `network = "proxy-only"` (bubblewrap) the host LiteLLM holds the key: the forward-env narrows to the technical base, credential-shaped `[env]`/`[nix]` names are refused, and dropped credential names get the `mysbx-proxy-only` placeholder (`config.md` D28, bd myconfig-mo3.2/t24). Podman backends can reach the keyless proxy through the forwarder | live runs get a per-repo ed25519 keypair in `<repo>.mysbx/state/.ssh`; clone sessions receive neither that key nor persisted state. No implicit host `~/.ssh` or `SSH_AUTH_SOCK` (`config.md` D22) | `lib.rs` `FORWARDED_ENV_VARS`, `default.nix` `forwardedEnvVars` |
 
-A keyless proxy can be used by configuration, but `mysbx` has no
-implemented proxy-only egress profile that guarantees it is the sole
-endpoint. `egress` is a proposal (`config.md` D20, bd myconfig-mo3.2),
-not an accepted key.
+A keyless proxy can be used by configuration. `network = "proxy-only"`
+(bubblewrap only) is the implemented no-key profile: an empty netns,
+one forwarder Unix socket, and the in-sandbox relay, so the LiteLLM
+endpoint is the sole reach (`config.md` D20/D28, bd myconfig-mo3.2); the
+podman, krun and VM backends REFUSE it. The separate `egress` key
+remains a rejected unknown key — the profile is a value of `network`,
+not a key of its own.
 
 ## 5. Workspace model
 

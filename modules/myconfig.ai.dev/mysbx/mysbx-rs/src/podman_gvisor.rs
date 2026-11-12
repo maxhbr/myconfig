@@ -498,6 +498,14 @@ pub fn podman_run_argv(
     // socket checks, the state-parent tmpfses and the bind emission
     // below all see one list.
     let effective_state_dirs = cfg.effective_state_dirs();
+    // `network = "proxy-only"` (docs/design/config.md D20, bd
+    // myconfig-6di.3): refused on the podman backends (defense in depth
+    // next to the pipeline's step 4b) — pasta adds a route to the
+    // forwarder without removing the default route, so the profile is
+    // not enforceable here.
+    if cfg.network == crate::config::Network::ProxyOnly {
+        return Err(Error::ProxyOnlyRefused);
+    }
     // The multiplexer applies to the INTERACTIVE payload only (cli.md
     // D11): `mysbx run -- CMD` is a one-shot, and wrapping it in a
     // multiplexer would leave the command's output in a pane nobody
@@ -1693,6 +1701,12 @@ pub enum Error {
     KrunMuxSocketDest { dest: String },
     /// A `state-dirs` entry would make [`MUX_SOCKET_DIR`] sidecar-backed.
     MuxSocketPersisted { entry: String },
+    /// `network = "proxy-only"` (docs/design/config.md D20) is refused
+    /// on the podman backends: pasta's `--map-guest-addr` ADDS a route
+    /// to the forwarder, it does not remove the default route, so the
+    /// profile is not enforceable here (bd myconfig-6di.3). Defense in
+    /// depth next to the pipeline's step-4b refusal.
+    ProxyOnlyRefused,
     /// The configuration selects the waypipe display (D18) but this
     /// build pinned no in-image waypipe (`MYSBX_PODMAN_WAYPIPE`). The
     /// container mounts nothing from the host `/nix/store`, so no
@@ -1788,6 +1802,14 @@ impl fmt::Display for Error {
                 f,
                 "state-dirs entry {entry} would persist the multiplexer \
                  socket directory {MUX_SOCKET_DIR}"
+            ),
+            Error::ProxyOnlyRefused => write!(
+                f,
+                "network = \"proxy-only\" is not enforceable on the podman \
+                 backends: pasta's --map-guest-addr ADDS a route to the LiteLLM \
+                 forwarder, it does not remove the container's default route \
+                 (docs/design/config.md D20, bd myconfig-6di.3); the run is \
+                 refused, never weakened to a shared network"
             ),
             Error::DisplayUnavailable => write!(
                 f,
