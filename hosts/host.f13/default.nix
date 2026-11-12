@@ -178,7 +178,7 @@ in
                     jumphost_args=(--jumphost ${myconfig.metadatalib.getIp "vserver"} --jport 22022)
                   fi
                   set -x
-                  until et "''${jumphost_args[@]}" --kill-other-sessions ${portsArgs} --noexit mhuber@${hostAddr}:22022 --command "host-tmux-session"; do
+                  until et "''${jumphost_args[@]}" --kill-other-sessions ${portsArgs} --noexit --command "host-tmux-session" mhuber@${hostAddr}:22022; do
                     echo "et to ${hostAddr} failed, retrying in 5s..." >&2
                     sleep 5
                   done
