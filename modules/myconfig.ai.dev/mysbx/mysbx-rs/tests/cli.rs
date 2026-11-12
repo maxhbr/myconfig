@@ -10114,9 +10114,15 @@ fn proxy_only_drops_forward_env_beyond_the_base_and_reports_it() {
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
     let report = report_lines(&stdout).join("\n");
-    // Both names are announced as dropped.
+    // Both names are announced as dropped. The credential-shaped one
+    // says it got the placeholder (review E); the base-URL one is a
+    // bare drop.
     assert!(
-        report.contains("[dropped — network = \"proxy-only\", D28]"),
+        report.contains("OPENAI_API_KEY [dropped — set to placeholder \"mysbx-proxy-only\", D28]"),
+        "{report}"
+    );
+    assert!(
+        report.contains("OPENAI_BASE_URL [dropped — network = \"proxy-only\", D28]"),
         "{report}"
     );
     assert!(report.contains("OPENAI_API_KEY"), "{report}");
@@ -10328,6 +10334,26 @@ fn proxy_only_refuses_a_credential_shaped_env_key() {
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(stderr.contains("ANTHROPIC_AUTH_TOKEN"), "{stderr}");
     assert!(stderr.contains("D28"), "{stderr}");
+    // The refusal names the FILE (review E): the sidecar config path.
+    assert!(
+        stderr.contains(&sidecar.join("config.toml").display().to_string()),
+        "the refusal names the file: {stderr}"
+    );
+
+    // Review E: the match is case-insensitive — a lowercase
+    // `openai_api_key` is refused too.
+    let (inv, repo, sidecar) = fixture("proxy-only-env-key-lower", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n\
+         [env]\nopenai_api_key = \"secret\"\n",
+    )
+    .unwrap();
+    let socket_dir = repo.parent().unwrap().join("egress");
+    std::fs::create_dir_all(&socket_dir).unwrap();
+    let (code, _stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"], &socket_dir));
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(stderr.contains("openai_api_key"), "{stderr}");
 }
 
 #[test]

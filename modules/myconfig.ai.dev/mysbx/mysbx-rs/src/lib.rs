@@ -2322,6 +2322,23 @@ fn sandbox_pipeline(
     // `home` is also what `~/…` mount paths expand against (config.md
     // D8) — on the HOST, before bwrap runs, so the sandbox's own
     // (cleared) environment never enters the resolution.
+    // The D28 credential-name refusals want the FILE each offending key
+    // came from (review E), but the merge consumes the layers — so
+    // record the per-layer offenders now, before that.
+    let mut credential_offences: Vec<(std::path::PathBuf, String, String)> = Vec::new();
+    for (path, layer) in [
+        (&user_config_path, &layers.user.0),
+        (&sidecar_config_path, &layers.sidecar.0),
+    ] {
+        if let Some(bad) = credential_env_key(&layer.env) {
+            credential_offences.push((path.clone(), "env".to_owned(), bad.to_owned()));
+        }
+        for key in ["access-tokens", "netrc-file"] {
+            if layer.nix.contains_key(key) {
+                credential_offences.push((path.clone(), "nix".to_owned(), key.to_owned()));
+            }
+        }
+    }
     let mut merged = match merge::merge(
         layers.user.0,
         layers.sidecar.0,
@@ -2844,24 +2861,26 @@ fn sandbox_pipeline(
     // The forward-env DROP (rule 6a/6d) happens later, in
     // `collect_host_env`; this only refuses what it cannot drop.
     if merged.network == config::Network::ProxyOnly {
-        if let Some(bad) = credential_env_key(&merged.env) {
-            eprintln!(
-                "mysbx: [env] {bad} looks like a model credential, and \
-                 network = \"proxy-only\" keeps credentials on the host \
-                 (docs/design/config.md D28) — the host LiteLLM proxy holds \
-                 the model key; drop the entry"
-            );
-            return EXIT_INFRASTRUCTURE;
-        }
-        for key in ["access-tokens", "netrc-file"] {
-            if merged.nix.contains_key(key) {
+        // The refusal names the FILE and the KEY (bead acceptance,
+        // review E) from the offenders recorded before the merge.
+        if let Some((path, table, key)) = credential_offences.first() {
+            if table == "env" {
                 eprintln!(
-                    "mysbx: [nix] {key} carries a credential, and \
+                    "mysbx: {}: [env] {key} looks like a model credential, and \
                      network = \"proxy-only\" keeps credentials on the host \
-                     (docs/design/config.md D28) — drop the setting"
+                     (docs/design/config.md D28) — the host LiteLLM proxy holds \
+                     the model key; drop the entry",
+                    path.display()
                 );
-                return EXIT_INFRASTRUCTURE;
+            } else {
+                eprintln!(
+                    "mysbx: {}: [nix] {key} carries a credential, and \
+                     network = \"proxy-only\" keeps credentials on the host \
+                     (docs/design/config.md D28) — drop the setting",
+                    path.display()
+                );
             }
+            return EXIT_INFRASTRUCTURE;
         }
     }
 
@@ -3087,6 +3106,14 @@ fn sandbox_pipeline(
 
     // 5. the argv — its single source is `bwrap::bwrap_argv` (mvp-4).
     let dropped_env: Vec<String> = dropped_forward_env(&merged);
+    // The subset that got the D28 rule-6d placeholder (its name matched
+    // the credential shape) — the report names them differently from
+    // the bare drops.
+    let placeholder_env: Vec<String> = dropped_env
+        .iter()
+        .filter(|n| credential_shape(n))
+        .cloned()
+        .collect();
     let mut host_env = collect_host_env(&merged);
     // The console size marker (bd myconfig-a2uq, backends.md D9): the
     // qemu guest's serial console carries no winsize, so the caller's
@@ -4550,6 +4577,7 @@ fn sandbox_pipeline(
             cli_mount_count,
             host_env: &host_env,
             dropped_env: &dropped_env,
+            placeholder_env: &placeholder_env,
             params: &report_params,
             bwrap_bin: &backend_bin,
             backend,
@@ -5621,10 +5649,14 @@ pub mod sig {
 /// parts and the `APIKEY` suffix, not substrings. A documented
 /// residual risk remains: a secret under an innocent name.
 pub fn credential_shape(name: &str) -> bool {
-    if name.ends_with("APIKEY") {
+    // Case-insensitive (review E): `openai_api_key` must be refused
+    // just like `OPENAI_API_KEY`. The `APIKEY` suffix is matched the
+    // same way.
+    let upper = name.to_ascii_uppercase();
+    if upper.ends_with("APIKEY") {
         return true;
     }
-    name.split('_').any(|part| {
+    upper.split('_').any(|part| {
         matches!(
             part,
             "KEY"
@@ -7261,6 +7293,11 @@ mod tests {
             "TOKEN",
             "APIKEY",
             "MYAPIKEY",
+            // Lowercase spellings match too (review E).
+            "openai_api_key",
+            "anthropic_auth_token",
+            "db_password",
+            "myapikey",
         ] {
             assert!(credential_shape(name), "{name} must be credential-shaped");
         }
