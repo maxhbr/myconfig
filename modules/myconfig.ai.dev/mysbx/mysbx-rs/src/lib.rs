@@ -3320,10 +3320,30 @@ fn sandbox_pipeline(
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default()
     });
-    let egress_port: Option<u16> = env_opt("MYSBX_EGRESS_PORT").and_then(|p| p.parse().ok());
+    // The port is parsed separately from "is it set": a non-numeric
+    // value is INVALID (named as such), not missing (review G).
+    let egress_port_raw: Option<String> = env_opt("MYSBX_EGRESS_PORT");
+    let egress_port: Option<u16> = egress_port_raw.as_deref().and_then(|p| p.parse().ok());
     let egress_relay: Option<String> = env_opt("MYSBX_EGRESS_RELAY");
     let egress_params: Option<bwrap::EgressChannel<'_>> =
         if merged.network == config::Network::ProxyOnly && backend == "bubblewrap" {
+            // The socket path's shape comes first (review A1): its
+            // parent directory is bound into the sandbox, so a shared
+            // directory there would leak host state.
+            if let Some(path) = egress_socket_path.as_deref() {
+                if let Err(message) = validate_egress_socket("MYSBX_EGRESS_SOCKET", path) {
+                    eprintln!("mysbx: {message}");
+                    return EXIT_INFRASTRUCTURE;
+                }
+            }
+            // A set-but-unparsable port is INVALID, not missing.
+            if let (Some(raw), None) = (egress_port_raw.as_deref(), egress_port) {
+                eprintln!(
+                    "mysbx: MYSBX_EGRESS_PORT = `{raw}` is not a valid port (expected 1-65535); \
+                     the wrapper pins the host LiteLLM port here (docs/design/config.md D20)"
+                );
+                return EXIT_INFRASTRUCTURE;
+            }
             match (
                 egress_socket_dir.as_deref(),
                 egress_socket_name.as_deref(),
@@ -3343,7 +3363,7 @@ fn sandbox_pipeline(
                     if egress_socket_dir.is_none() {
                         missing.push("MYSBX_EGRESS_SOCKET");
                     }
-                    if egress_port.is_none() {
+                    if egress_port.is_none() && egress_port_raw.is_none() {
                         missing.push("MYSBX_EGRESS_PORT");
                     }
                     if egress_relay.is_none() {
@@ -5620,6 +5640,83 @@ pub fn credential_shape(name: &str) -> bool {
     })
 }
 
+/// Directories a `proxy-only` forwarder socket must never live
+/// directly in (docs/design/config.md D20, bd myconfig-mo3.2.6): the
+/// sandbox binds the socket's PARENT directory read-only, so a socket
+/// placed straight in one of these would hand the sandbox the whole
+/// directory — `/run` would expose `/run/user/<uid>` (D-Bus, Wayland,
+/// ssh-agent), `/tmp` the world, `$HOME` the user's files.
+const FORBIDDEN_SOCKET_PARENTS: &[&str] = &[
+    "/", "/run", "/tmp", "/var", "/var/run", "/home", "/root", "/etc", "/usr",
+];
+
+/// Validate a `proxy-only` forwarder socket path before its parent is
+/// bound into the sandbox (docs/design/config.md D20, bd myconfig-mo3.2.6,
+/// review A1).
+///
+/// The rule: the path must be ABSOLUTE, have a non-empty file name, and
+/// live in a DEDICATED directory — at least two components deep below
+/// `/`, and not directly inside one of [`FORBIDDEN_SOCKET_PARENTS`].
+/// `/run/mysbx-egress/litellm.sock` passes; `/run/litellm.sock`,
+/// `/x.sock`, a relative path and an empty file name do not.
+///
+/// Returns a full, operator-facing message naming the setting and the
+/// offending path.
+pub fn validate_egress_socket(setting: &str, path: &str) -> Result<(), String> {
+    let p = std::path::Path::new(path);
+    let complain = |why: &str| {
+        Err(format!(
+            "{setting} = `{path}` {why} — the sandbox binds the socket's PARENT \
+             DIRECTORY read-only, so it must sit in a dedicated directory of its \
+             own (e.g. /run/mysbx-egress/litellm.sock), never directly in /run, \
+             /tmp, $HOME or / (docs/design/config.md D20)"
+        ))
+    };
+    if !p.is_absolute() {
+        return complain("is not an absolute path");
+    }
+    match p.file_name() {
+        Some(name) if !name.is_empty() => {}
+        _ => return complain("has no file name"),
+    }
+    // The parent, with redundant components folded away so `/run/./x`
+    // and `/run/x` compare alike.
+    let parent = match p.parent() {
+        Some(parent) => parent,
+        None => return complain("has no parent directory"),
+    };
+    let normalized: std::path::PathBuf = parent.components().collect();
+    let depth = normalized
+        .components()
+        .filter(|c| matches!(c, std::path::Component::Normal(_)))
+        .count();
+    if depth < 2 {
+        return complain("does not sit in a dedicated directory (at least two levels below `/`)");
+    }
+    if FORBIDDEN_SOCKET_PARENTS
+        .iter()
+        .any(|forbidden| normalized == std::path::Path::new(forbidden))
+    {
+        return complain("sits directly in a shared directory");
+    }
+    // `$HOME` itself (wherever it lives) and its conventional
+    // `/home/<user>` spelling: binding the user's home read-only is
+    // strictly worse than the `/home` case above.
+    let in_home = std::env::var_os("HOME")
+        .map(std::path::PathBuf::from)
+        .is_some_and(|home| normalized == home)
+        || (normalized.starts_with("/home")
+            && normalized
+                .components()
+                .filter(|c| matches!(c, std::path::Component::Normal(_)))
+                .count()
+                == 2);
+    if in_home {
+        return complain("sits in the user's home directory");
+    }
+    Ok(())
+}
+
 /// The first credential-shaped `[env]` name, if any (D28 rule 6b).
 fn credential_env_key(env: &std::collections::BTreeMap<String, String>) -> Option<&str> {
     env.keys().map(String::as_str).find(|k| credential_shape(k))
@@ -7047,6 +7144,42 @@ mod tests {
                 !credential_shape(name),
                 "{name} must NOT be credential-shaped"
             );
+        }
+    }
+
+    // ---- the D20 egress socket shape (bd myconfig-mo3.2.6) -----------
+
+    #[test]
+    fn egress_socket_must_live_in_a_dedicated_directory() {
+        // The sandbox binds the socket's PARENT directory read-only, so
+        // a shared directory would leak host state (review A1).
+        for good in [
+            "/run/mysbx-egress/litellm.sock",
+            "/srv/mysbx/litellm.sock",
+            "/var/lib/mysbx/litellm.sock",
+        ] {
+            assert!(
+                validate_egress_socket("MYSBX_EGRESS_SOCKET", good).is_ok(),
+                "{good} must be accepted"
+            );
+        }
+        for bad in [
+            "/run/litellm.sock",
+            "/x.sock",
+            "/tmp/litellm.sock",
+            "/var/litellm.sock",
+            "/var/run/litellm.sock",
+            "/home/litellm.sock",
+            "/home/someone/litellm.sock",
+            "/etc/litellm.sock",
+            "litellm.sock",
+            "/run/mysbx-egress/",
+            "",
+        ] {
+            let e = validate_egress_socket("MYSBX_EGRESS_SOCKET", bad)
+                .expect_err(&format!("{bad} must be refused"));
+            assert!(e.contains("MYSBX_EGRESS_SOCKET"), "{bad}: {e}");
+            assert!(e.contains("dedicated directory"), "{bad}: {e}");
         }
     }
 

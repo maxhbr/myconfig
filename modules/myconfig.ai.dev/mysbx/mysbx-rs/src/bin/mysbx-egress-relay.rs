@@ -150,7 +150,14 @@ fn run(args: &[String]) -> Result<i32, String> {
         accept_loop(listener, &connect, &accept_stop);
     });
 
-    let status = wait_child(&mut child, &stop);
+    let status = match wait_child(&mut child) {
+        Ok(status) => status,
+        Err(e) => {
+            stop.store(true, Ordering::SeqCst);
+            let _ = acceptor.join();
+            return Err(format!("cannot wait for `{}`: {e}", inv.payload[0]));
+        }
+    };
     stop.store(true, Ordering::SeqCst);
     // The accept loop polls non-blocking with a short sleep; join it so
     // no in-flight copy keeps the process alive past the payload.
@@ -241,9 +248,11 @@ fn copy<R: Read, W: Write>(from: &mut R, to: &mut W) {
     }
 }
 
-/// Wait for the payload, polling so a stop request is noticed.
-fn wait_child(child: &mut Child, _stop: &AtomicBool) -> ExitStatus {
-    child.wait().unwrap_or_else(|_| ExitStatus::default())
+/// Wait for the payload and return its status. A failed `wait` is a
+/// real error (the relay can no longer know how the payload ended), so
+/// it is propagated and exits 70 — never reported as a successful 0.
+fn wait_child(child: &mut Child) -> std::io::Result<ExitStatus> {
+    child.wait()
 }
 
 /// The process exit code: the child's code, 128+signal when it was

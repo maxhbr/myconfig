@@ -267,6 +267,55 @@ in
             127.0.0.1:${port}, where nothing listens.
           '';
         }
+        {
+          # The mysbx `proxy-only` backend binds this socket's PARENT
+          # DIRECTORY read-only into the sandbox (docs/design/config.md
+          # D20), so the path must sit in a dedicated directory — never
+          # directly in /run, /tmp, /var or the like, where the bind
+          # would hand the sandbox the whole host directory (review A1).
+          # The Rust side refuses the same shapes at run time.
+          assertion = lib.all (p: p) [
+            (lib.hasPrefix "/" cfg.unixSocket.path) # absolute
+            (!(lib.hasSuffix "/" cfg.unixSocket.path)) # a socket FILE, not a dir
+            (builtins.baseNameOf cfg.unixSocket.path != "/") # a file name
+            (builtins.baseNameOf cfg.unixSocket.path != "") # a file name
+            # The parent is at least two components deep below `/`.
+            (
+              builtins.length (
+                builtins.filter (c: c != "") (lib.splitString "/" (builtins.dirOf cfg.unixSocket.path))
+              ) >= 2
+            )
+            # … and not a shared top-level directory nor a
+            # `/home/<user>` home.
+            (
+              !(lib.elem (builtins.dirOf cfg.unixSocket.path) [
+                "/"
+                "/run"
+                "/tmp"
+                "/var"
+                "/var/run"
+                "/home"
+                "/root"
+                "/etc"
+                "/usr"
+              ])
+            )
+            (
+              builtins.length (
+                builtins.filter (c: c != "") (lib.splitString "/" (builtins.dirOf cfg.unixSocket.path))
+              ) != 2
+              || !(lib.hasPrefix "/home/" (builtins.dirOf cfg.unixSocket.path))
+            )
+          ];
+          message = ''
+            myconfig.ai.dev.litellm-forwarder.unixSocket.path = "${cfg.unixSocket.path}"
+            must sit in a dedicated directory at least two levels below `/` — the
+            mysbx `network = "proxy-only"` sandbox binds the socket's PARENT
+            directory read-only, so `/run/mysbx-egress/litellm.sock` is fine but
+            `/run/litellm.sock` would expose the whole of /run (docs/design/config.md
+            D20).
+          '';
+        }
       ];
 
       systemd.sockets.agent-litellm-forward-unix = {
