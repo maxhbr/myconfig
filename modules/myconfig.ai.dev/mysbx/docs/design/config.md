@@ -1253,7 +1253,7 @@ as D21, and bubblewrap is the only enforcing backend in phase A:
 
 | backend | `network = "proxy-only"` means |
 | --- | --- |
-| `bubblewrap` | the enforcing backend: an unshared network namespace, the static systemd forwarder's socket DIRECTORY (mode `0666`) bound read-only at `/run/mysbx-egress`, and the `mysbx-egress-relay` binary listening on `127.0.0.1:<litellm port>` and forwarding to that socket. Enforced from bd myconfig-mo3.2.6; until then it refuses like every other backend (myconfig-mo3.2.3) |
+| `bubblewrap` | the enforcing backend: an unshared network namespace, the static systemd forwarder's socket DIRECTORY (mode `0666`) bound read-only at `/run/mysbx-egress`, and the `mysbx-egress-relay` binary listening on `127.0.0.1:<litellm port>` and forwarding to that socket (bd myconfig-mo3.2.6) |
 | `nono` | refused — its Landlock/seccomp layer is no default-deny network fence; the profile there is bd myconfig-vpi9.1 |
 | `podman-gvisor` | refused — pasta's `--map-guest-addr` ADDS a route to the forwarder, it does not remove the default route (bd myconfig-6di.3) |
 | `podman-krun` | refused — libkrun's TSI is an unfiltered proxy from the container netns (bd myconfig-6di.5.5) |
@@ -1263,13 +1263,11 @@ as D21, and bubblewrap is the only enforcing backend in phase A:
 
 The refusal is exit `70` with a backend-specific reason, before the
 session clone and before the `--dry-run` early return, so a dry run
-audits it. Until the bubblewrap transport lands (bd myconfig-mo3.2.6),
-EVERY backend refuses — including bubblewrap — so the profile can
-never be silently weakened. A bubblewrap run whose pinned forwarder
-socket or wrapper pins are missing is refused the same way once it
-is enforced — the profile fails closed.
-Phase B–D (per-backend transports, the broker) live in bd
-myconfig-vpi9.
+audits it. Bubblewrap enforces the profile; a run whose pinned
+forwarder socket or wrapper pins are missing is REFUSED (exit `70`,
+naming the option to enable) — the profile fails closed, never falls
+back to a shared network. Phase B–D (per-backend transports, the
+broker) live in bd myconfig-vpi9.
 
 **Orca's shared-network requirement** stays unsatisfied under this
 profile: `multiplexer = "orca"` needs the shared network and is

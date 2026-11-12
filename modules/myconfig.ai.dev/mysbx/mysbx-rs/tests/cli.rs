@@ -9937,16 +9937,14 @@ fn allowlist_on_microvm_ch_is_refused() {
 }
 
 #[test]
-fn proxy_only_is_refused_on_every_backend_until_its_transport_lands() {
-    // D20 (bd myconfig-mo3.2.3): `network = "proxy-only"` is refused
-    // (exit 70) by every backend whose registry row does not yet
-    // enforce it — all seven today, bubblewrap included until its
-    // unshared-netns + socket + relay transport lands (mo3.2.6).
-    // The refusal names the backend and a backend-specific reason,
-    // before the session clone and before the --dry-run return, so a
-    // dry run audits it.
+fn proxy_only_is_refused_on_every_backend_but_bubblewrap() {
+    // D20 (bd myconfig-mo3.2.3, mo3.2.6): `network = "proxy-only"` is
+    // enforced by bubblewrap ALONE; every other backend refuses it
+    // (exit 70) with a backend-specific reason, before the session
+    // clone and before the --dry-run return, so a dry run audits it.
+    // (Bubblewrap's own refusal — the missing-pins fail-closed — is
+    // `proxy_only_on_bubblewrap_without_pins_is_refused`.)
     for backend in [
-        "bubblewrap",
         "nono",
         "podman-gvisor",
         "podman-krun",
@@ -10015,6 +10013,37 @@ fn proxy_only_with_an_allowlist_is_refused_cross_layer() {
         "{stderr}"
     );
     assert!(stderr.contains("allow-domains"), "{stderr}");
+    assert!(
+        !stdout.contains("--clearenv"),
+        "no argv on refusal: {stdout}"
+    );
+}
+
+#[test]
+fn proxy_only_on_bubblewrap_without_pins_is_refused() {
+    // D20 enforced by bubblewrap (bd myconfig-mo3.2.6), but the
+    // channel needs the wrapper's MYSBX_EGRESS_SOCKET/PORT/RELAY pins.
+    // A run without them FAILS CLOSED: exit 70 naming the option to
+    // enable, never a silent fallback to a shared network. This test
+    // runs an UNWRAPPED fixture (no pins), the shape an unwrapped
+    // build has.
+    let (inv, _, sidecar) = fixture("proxy-only-bwrap-no-pins", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("network = \"proxy-only\" needs the LiteLLM forwarder")
+            && stderr.contains("MYSBX_EGRESS_SOCKET"),
+        "the refusal names the harness and the pins: {stderr}"
+    );
+    assert!(
+        stderr.contains("unixSocket.enable"),
+        "the refusal names the option to enable: {stderr}"
+    );
     assert!(
         !stdout.contains("--clearenv"),
         "no argv on refusal: {stdout}"

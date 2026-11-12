@@ -3266,6 +3266,75 @@ fn sandbox_pipeline(
         None
     };
     let report_waypipe: Option<bwrap::Waypipe<'_>> = waypipe_params.clone();
+    // The `network = "proxy-only"` channel (docs/design/config.md D20,
+    // bd myconfig-mo3.2.6): resolved from the wrapper's pins. The
+    // bubblewrap backend is the ONLY enforcing row (step 4b refuses the
+    // profile elsewhere), so the channel is built only for it; the
+    // other arms carry `None` and are never reached with the profile.
+    //
+    // The pins are `MYSBX_EGRESS_SOCKET` (the forwarder's socket path),
+    // `MYSBX_EGRESS_PORT` (the relay's in-sandbox port) and
+    // `MYSBX_EGRESS_RELAY` (the relay binary). A missing pin is the
+    // EgressChannelMissing refusal in the builder, surfaced below —
+    // the profile fails closed.
+    let egress_socket_path: Option<String> = env_opt("MYSBX_EGRESS_SOCKET");
+    let egress_socket_dir: Option<String> = egress_socket_path.as_deref().map(|p| {
+        std::path::Path::new(p)
+            .parent()
+            .map(|d| d.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    });
+    let egress_socket_name: Option<String> = egress_socket_path.as_deref().map(|p| {
+        std::path::Path::new(p)
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    });
+    let egress_port: Option<u16> = env_opt("MYSBX_EGRESS_PORT").and_then(|p| p.parse().ok());
+    let egress_relay: Option<String> = env_opt("MYSBX_EGRESS_RELAY");
+    let egress_params: Option<bwrap::EgressChannel<'_>> =
+        if merged.network == config::Network::ProxyOnly && backend == "bubblewrap" {
+            match (
+                egress_socket_dir.as_deref(),
+                egress_socket_name.as_deref(),
+                egress_port,
+                egress_relay.as_deref(),
+            ) {
+                (Some(dir), Some(name), Some(port), Some(relay)) => Some(bwrap::EgressChannel {
+                    socket_dir: dir,
+                    socket: name,
+                    port,
+                    relay_bin: relay,
+                }),
+                // Report the missing pin(s) now, before the builder runs —
+                // the same exit 70 and the operator-facing option name.
+                _ => {
+                    let mut missing = Vec::new();
+                    if egress_socket_dir.is_none() {
+                        missing.push("MYSBX_EGRESS_SOCKET");
+                    }
+                    if egress_port.is_none() {
+                        missing.push("MYSBX_EGRESS_PORT");
+                    }
+                    if egress_relay.is_none() {
+                        missing.push("MYSBX_EGRESS_RELAY");
+                    }
+                    eprintln!(
+                        "mysbx: network = \"proxy-only\" needs the LiteLLM forwarder's \
+                     socket channel, but this host pinned no {}",
+                        missing.join(", ")
+                    );
+                    eprintln!(
+                        "  enable myconfig.ai.dev.litellm-forwarder.unixSocket.enable so \
+                     the host runs the forwarder and the wrapper pins its socket, \
+                     or set network = \"shared\"/\"none\" (docs/design/config.md D20)"
+                    );
+                    return EXIT_INFRASTRUCTURE;
+                }
+            }
+        } else {
+            None
+        };
     let (report_shell, report_tools_path, report_mux_entry) =
         if backends::find(backend).is_some_and(|row| row.podman()) {
             (
@@ -3305,6 +3374,9 @@ fn sandbox_pipeline(
         // a detached run's report is the outer's pre-flight one.
         detachable,
         inner: None,
+        // The egress channel the report's `network:` line describes;
+        // the bubblewrap arm below consumes the same value.
+        egress: egress_params.clone(),
     };
     // The backend dispatch produces the backend binary, the argv and
     // — for podman-gvisor — the container image. Every backend's
@@ -3328,6 +3400,7 @@ fn sandbox_pipeline(
                 workspace: workspace.clone(),
                 detachable,
                 inner: None,
+                egress: egress_params.clone(),
             };
             let argv = match bwrap::bwrap_argv(&merged, &repo, &payload, &host_env, &params) {
                 Ok(a) => a,
@@ -4440,6 +4513,10 @@ fn sandbox_pipeline(
                     argv: &inner_argv,
                     env_bin: &env_bin,
                 }),
+                // The layered nono path is never reached with the
+                // profile (step 4b refuses proxy-only on nono), so it
+                // carries no channel.
+                egress: egress_params.clone(),
             };
             let argv = match bwrap::bwrap_argv(&merged, &repo, &payload, &host_env, &params) {
                 Ok(a) => a,

@@ -71,9 +71,10 @@ pub struct Backend {
     /// an allowlist (config.md D21), never accepts-and-ignores it.
     pub network_allowlist: bool,
     /// Whether the backend enforces the D20 proxy-only network
-    /// profile (`network = "proxy-only"`): false on every row
-    /// until a backend ships the enforcement (bd myconfig-mo3.2);
-    /// a backend that cannot enforce it refuses the profile.
+    /// profile (`network = "proxy-only"`): `true` only for
+    /// bubblewrap, whose unshared netns plus forwarder socket and
+    /// in-sandbox relay is the shipped transport (bd
+    /// myconfig-mo3.2.6). Every other backend refuses the profile.
     pub network_proxy_only: bool,
 }
 
@@ -103,7 +104,7 @@ pub const REGISTRY: &[Backend] = &[
         detach_refused: false,
         waypipe_refused: false,
         network_allowlist: false,
-        network_proxy_only: false,
+        network_proxy_only: true,
     },
     Backend {
         name: "podman-gvisor",
@@ -284,9 +285,12 @@ mod tests {
                 "`{}`: network_allowlist must match config.md D21's table",
                 b.name
             );
-            assert!(
-                !b.network_proxy_only,
-                "`{}`: proxy-only is unenforced on every backend (D20)",
+            // D20's proxy-only profile is enforced by the bubblewrap row
+            // alone (bd myconfig-mo3.2.6); every other backend refuses it.
+            assert_eq!(
+                b.network_proxy_only,
+                b.name == "bubblewrap",
+                "`{}`: network_proxy_only must match config.md D20's table",
                 b.name
             );
         }

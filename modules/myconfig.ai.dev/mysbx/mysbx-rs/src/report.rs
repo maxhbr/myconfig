@@ -149,16 +149,68 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
             ""
         }
     ));
-    p(format!(
-        "network:        {}",
-        match r.merged.network {
-            crate::config::Network::Shared => "shared (--share-net)",
-            crate::config::Network::None => "denied (--unshare-all, no --share-net)",
-            crate::config::Network::ProxyOnly => {
-                "proxy-only (unshared netns, the model endpoint is the only reach)"
+    // The shared and denied strings are byte-identical to the pre-D20
+    // output (the goldens depend on it); proxy-only names its channel.
+    match r.merged.network {
+        crate::config::Network::Shared => {
+            p("network:        shared (--share-net)".to_string());
+        }
+        crate::config::Network::None => {
+            p("network:        denied (--unshare-all, no --share-net)".to_string());
+        }
+        crate::config::Network::ProxyOnly => {
+            match &r.params.egress {
+                Some(e) => p(format!(
+                    "network:        proxy-only (no --share-net; 127.0.0.1:{} -> {}/{} via the relay)",
+                    e.port,
+                    crate::bwrap::EGRESS_DIR,
+                    e.socket,
+                )),
+                // Unreachable for a runnable run (the builder refuses a
+                // channel-less profile); said out loud rather than
+                // guessed if a caller ever builds a report without one.
+                None => p(
+                    "network:        proxy-only (no enforced channel — the run is refused)"
+                        .to_string(),
+                ),
             }
         }
-    ));
+    }
+    // The D21 allowlist, when a layer declared one: it narrows a SHARED
+    // network only (proxy-only/denied refuse it earlier), so the line
+    // appears exactly when it governs the run.
+    let allow: Vec<String> = [
+        (!r.merged.allow_domains.is_empty())
+            .then(|| format!("domains {}", r.merged.allow_domains.join(", "))),
+        (!r.merged.connect_ports.is_empty()).then(|| {
+            format!(
+                "connect-ports {}",
+                r.merged
+                    .connect_ports
+                    .iter()
+                    .map(u16::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        }),
+        (!r.merged.listen_ports.is_empty()).then(|| {
+            format!(
+                "listen-ports {}",
+                r.merged
+                    .listen_ports
+                    .iter()
+                    .map(u16::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        }),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    if !allow.is_empty() {
+        p(format!("allowlist:     {}", allow.join("; ")));
+    }
 
     // The nix store this run sees (docs/design/guest-store.md): said
     // out loud like the network — which store backs the sandbox is a
@@ -749,6 +801,7 @@ mod tests {
             workspace: Workspace::Live,
             inner: None,
             detachable: false,
+            egress: None,
         };
         lines(&Report {
             repo: &repo,
@@ -861,6 +914,7 @@ mod tests {
             workspace: Workspace::Live,
             inner: None,
             detachable: false,
+            egress: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -912,6 +966,7 @@ mod tests {
             workspace: Workspace::Live,
             inner: None,
             detachable: false,
+            egress: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -964,6 +1019,7 @@ mod tests {
             workspace: Workspace::Live,
             inner: None,
             detachable: false,
+            egress: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -1018,6 +1074,7 @@ mod tests {
             workspace: Workspace::Live,
             inner: None,
             detachable: false,
+            egress: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -1073,6 +1130,7 @@ mod tests {
             workspace: Workspace::Live,
             inner: None,
             detachable: false,
+            egress: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -1133,6 +1191,7 @@ mod tests {
                 workspace: Workspace::Live,
                 inner: None,
                 detachable: false,
+                egress: None,
             };
             let report_of = |payload: &Payload| {
                 lines(&Report {
@@ -1220,6 +1279,7 @@ mod tests {
                 workspace,
                 inner: None,
                 detachable: false,
+                egress: None,
             }
         }
         let report_of = |repo: Repo, workspace: Workspace| {
@@ -1313,6 +1373,7 @@ mod tests {
             workspace: Workspace::Live,
             inner: None,
             detachable: false,
+            egress: None,
         };
         let report_of = |payload: &Payload| {
             lines(&Report {
@@ -1458,6 +1519,7 @@ mod tests {
             workspace: Workspace::Live,
             inner: None,
             detachable: false,
+            egress: None,
         };
         let payload = Payload::Shell;
         let out = lines(&Report {
@@ -1514,6 +1576,7 @@ mod tests {
             workspace: Workspace::Live,
             inner: None,
             detachable: false,
+            egress: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -1572,6 +1635,7 @@ mod tests {
             },
             inner: None,
             detachable: false,
+            egress: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -1658,6 +1722,7 @@ mod tests {
             workspace: Workspace::Live,
             inner: None,
             detachable: false,
+            egress: None,
         };
         let joined = lines(&Report {
             repo: &repo,
