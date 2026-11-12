@@ -40,6 +40,11 @@ fn synth_repo() -> Repo {
 }
 
 fn base(network: bool) -> Merged {
+    let network = if network {
+        mysbx::config::Network::Shared
+    } else {
+        mysbx::config::Network::None
+    };
     Merged {
         backend: Some("microvm-qemu".into()),
         network,

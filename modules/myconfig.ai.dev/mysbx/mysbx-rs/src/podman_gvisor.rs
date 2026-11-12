@@ -977,7 +977,7 @@ pub fn podman_run_argv(
         }
     }
     // Network check (same as bwrap)
-    if !cfg.network {
+    if !cfg.network.is_shared() {
         const DAEMON_DIR: &str = "/nix/var/nix";
         for src in cfg
             .mounts

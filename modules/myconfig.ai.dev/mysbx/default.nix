@@ -1734,9 +1734,23 @@ in
             description = "Sandbox backend (`bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`, `krun`, `microvm-qemu` or `microvm-ch`); `null` leaves the choice to the sidecar.";
           };
           network = mkOption {
-            type = types.bool;
+            type = types.either types.bool (
+              types.enum [
+                "none"
+                "proxy-only"
+                "shared"
+              ]
+            );
             default = true;
-            description = "Share the host network; `false` is the deny switch.";
+            description = ''
+              The sandbox's network policy (`./docs/design/config.md`
+              D20): `"none"` (the `false` alias) denies the network,
+              `"proxy-only"` grants only the host model endpoint, and
+              `"shared"` (the `true` alias, the default) shares it.
+              The bool aliases stay accepted forever, so a host that
+              keeps the default renders `network = true` and its
+              generated TOML is unchanged. A sidecar may tighten the
+              value, never widen it.'';
           };
           nestedVirt = mkOption {
             type = types.nullOr types.bool;

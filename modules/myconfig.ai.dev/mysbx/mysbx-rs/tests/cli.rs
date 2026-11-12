@@ -942,9 +942,10 @@ fn user_network_deny_survives_a_fresh_sidecar() {
 
 #[test]
 fn sidecar_network_true_still_cannot_reenable() {
-    // The guard itself is unchanged: an EXPLICIT sidecar `network = true`
-    // against a user deny stays the hard error of docs/design/config.md
-    // D7 — the tri-state only stops ABSENT values from counting as true.
+    // The guard, generalised by D20: an EXPLICIT sidecar value WIDER
+    // than the user layer's (here `shared` against a `none` deny, the
+    // old `true`-over-`false` case) is the NetworkUpgrade hard error —
+    // the tri-state only stops ABSENT values from counting as shared.
     let (inv, _, sidecar) = fixture("explicit-reenable", &["--dry-run"]);
     std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
     std::fs::write(
@@ -955,7 +956,7 @@ fn sidecar_network_true_still_cannot_reenable() {
     std::fs::write(sidecar.join("config.toml"), "network = true\n").unwrap();
     let (code, stdout, stderr) = run_binary(&inv);
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stdout: {stdout}");
-    assert!(stderr.contains("never re-enable it"), "stderr: {stderr}");
+    assert!(stderr.contains("never widen it"), "stderr: {stderr}");
 }
 
 #[test]
@@ -9933,6 +9934,91 @@ fn allowlist_on_microvm_ch_is_refused() {
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
     assert!(stderr.contains("microvm-ch"), "{stderr}");
     assert!(stderr.contains("listen-ports"), "{stderr}");
+}
+
+#[test]
+fn proxy_only_is_refused_on_every_backend_until_its_transport_lands() {
+    // D20 (bd myconfig-mo3.2.3): `network = "proxy-only"` is refused
+    // (exit 70) by every backend whose registry row does not yet
+    // enforce it — all seven today, bubblewrap included until its
+    // unshared-netns + socket + relay transport lands (mo3.2.6).
+    // The refusal names the backend and a backend-specific reason,
+    // before the session clone and before the --dry-run return, so a
+    // dry run audits it.
+    for backend in [
+        "bubblewrap",
+        "nono",
+        "podman-gvisor",
+        "podman-krun",
+        "krun",
+        "microvm-qemu",
+        "microvm-ch",
+    ] {
+        let base = match backend {
+            // The VM backends need a fixture root the guest can place a
+            // share under; the refusal fires before any share is made,
+            // but the fixture shape is shared with their other tests.
+            "krun" | "microvm-qemu" | "microvm-ch" | "podman-krun" => {
+                match krun_fixture(&format!("proxy-only-refused-{backend}"), &[]) {
+                    Some(t) => t,
+                    None => continue, // no placeable fixture root here
+                }
+            }
+            _ => fixture(&format!("proxy-only-refused-{backend}"), &[]),
+        };
+        let (inv, _, sidecar) = base;
+        std::fs::write(
+            sidecar.join("config.toml"),
+            format!("backend = \"{backend}\"\nnetwork = \"proxy-only\"\n"),
+        )
+        .unwrap();
+        let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+        assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "{backend}: {stderr}");
+        assert!(
+            stderr.contains(&format!(
+                "network = \"proxy-only\" is not enforced on the `{backend}` backend"
+            )),
+            "{backend}: the refusal names the backend and the profile: {stderr}"
+        );
+        assert!(
+            stderr.contains("never weakened to a shared network"),
+            "{backend}: the refused-not-weakened rule is stated: {stderr}"
+        );
+        assert!(
+            !stdout.contains("--clearenv"),
+            "{backend}: no argv on refusal: {stdout}"
+        );
+    }
+}
+
+#[test]
+fn proxy_only_with_an_allowlist_is_refused_cross_layer() {
+    // D20/D21: the SAME-file form is a schema error (config.rs); a
+    // user-layer profile with a sidecar allowlist is refused at run
+    // time, exit 70, naming both keys.
+    let (inv, _, sidecar) = fixture("proxy-only-cross-layer-allowlist", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "allow-domains = [\"api.openai.com\"]\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("network = \"proxy-only\" grants only the host model endpoint"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("allow-domains"), "{stderr}");
+    assert!(
+        !stdout.contains("--clearenv"),
+        "no argv on refusal: {stdout}"
+    );
 }
 
 #[test]

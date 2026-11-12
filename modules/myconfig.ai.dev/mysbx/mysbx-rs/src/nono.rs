@@ -416,7 +416,7 @@ pub fn nono_run_argv(
     let has_allowlist = !cfg.allow_domains.is_empty()
         || !cfg.connect_ports.is_empty()
         || !cfg.listen_ports.is_empty();
-    if cfg.network && !has_allowlist {
+    if cfg.network.is_shared() && !has_allowlist {
         argv.extend(["--allow-unix-socket".into(), NIX_DAEMON_SOCKET.into()]);
     }
 
@@ -428,7 +428,7 @@ pub fn nono_run_argv(
     // default, no nono flag — the seccomp-medium baseline hides
     // behind bwrap's namespace, not behind a silently narrow egress
     // list.
-    if !cfg.network {
+    if !cfg.network.is_shared() {
         // The deny must be EXPLICIT under nono (allowed by default),
         // and an allowlist next to it is a contradiction — the
         // pipeline refuses it earlier (step 4b, lib.rs), and the

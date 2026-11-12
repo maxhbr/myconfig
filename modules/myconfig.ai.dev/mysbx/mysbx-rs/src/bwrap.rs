@@ -416,7 +416,7 @@ impl PolicyPath {
 /// binds — do not reorder):
 ///
 /// 1. `--clearenv`
-/// 2. `--unshare-all`, then `--share-net` unless `cfg.network` is `false`
+/// 2. `--unshare-all`, then `--share-net` unless `cfg.network` is `none`
 ///    (the spec's `network = false` row: "network = false adds
 ///    `--unshare-net`" is realised as *absence of the re-share*, so
 ///    either direction is assertable in the golden tests)
@@ -529,7 +529,7 @@ pub fn bwrap_argv(
     // WITHOUT an allowlist; the bubblewrap backend keeps its current
     // semantics (the allowlist is refused there anyway).
     let daemon_bound = params.inner.is_none()
-        || (cfg.network
+        || (cfg.network.is_shared()
             && cfg.allow_domains.is_empty()
             && cfg.connect_ports.is_empty()
             && cfg.listen_ports.is_empty());
@@ -541,7 +541,7 @@ pub fn bwrap_argv(
     if params.detachable {
         argv.push("--die-with-parent".into());
     }
-    if cfg.network {
+    if cfg.network.is_shared() {
         argv.push("--share-net".into());
         // Sharing the network namespace alone does not give the new
         // root DNS or TLS: `/etc/resolv.conf` and friends live on the
@@ -1019,7 +1019,7 @@ pub fn bwrap_argv(
     // in-sandbox ancestors of protected paths, so an ancestor SOURCE
     // was the one gap.
     const DAEMON_DIR: &str = "/nix/var/nix";
-    if !cfg.network || (params.inner.is_some() && !daemon_bound) {
+    if !cfg.network.is_shared() || (params.inner.is_some() && !daemon_bound) {
         // Every effective source, not just the configured mounts:
         // the workspace bind is checked too (review-3 item 2 said so
         // explicitly — in a clone run that is the CLONE's source,
@@ -2321,7 +2321,7 @@ mod tests {
     fn merged() -> Merged {
         Merged {
             backend: Some("bubblewrap".into()),
-            network: true,
+            network: crate::config::Network::Shared,
             nested_virt: false,
             mounts: Vec::new(),
             env: BTreeMap::new(),
@@ -2475,7 +2475,7 @@ mod tests {
         assert!(argv.contains(&"--share-net".to_string()));
 
         let mut deny = cfg;
-        deny.network = false;
+        deny.network = crate::config::Network::None;
         let argv = bwrap_argv(&deny, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
         assert!(!argv.contains(&"--share-net".to_string()));
         // But --unshare-all stays.

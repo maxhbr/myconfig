@@ -151,10 +151,12 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     ));
     p(format!(
         "network:        {}",
-        if r.merged.network {
-            "shared (--share-net)"
-        } else {
-            "denied (--unshare-all, no --share-net)"
+        match r.merged.network {
+            crate::config::Network::Shared => "shared (--share-net)",
+            crate::config::Network::None => "denied (--unshare-all, no --share-net)",
+            crate::config::Network::ProxyOnly => {
+                "proxy-only (unshared netns, the model endpoint is the only reach)"
+            }
         }
     ));
 
@@ -696,7 +698,7 @@ mod tests {
         env.insert("EDITOR".to_owned(), "nvim".to_owned());
         let merged = Merged {
             backend: Some("bubblewrap".into()),
-            network: false,
+            network: crate::config::Network::None,
             nested_virt: false,
             mounts: vec![
                 Mount {
@@ -949,7 +951,7 @@ mod tests {
     #[test]
     fn network_shared_and_exec_mode_are_said_out_loud() {
         let (repo, mut merged, host) = fixture_report();
-        merged.network = true;
+        merged.network = crate::config::Network::Shared;
         let params = Params {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",

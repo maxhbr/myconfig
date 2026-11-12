@@ -746,7 +746,7 @@ pub fn stage_binds(
     // needs no host db either: the image carries its own REGISTERED
     // db (the includeNixDB recipe), one that cannot diverge from
     // its store — the mxu reconcile never runs there.
-    if cfg.network && params.scratch.is_some() && !params.baked() {
+    if cfg.network.is_shared() && params.scratch.is_some() && !params.baked() {
         binds.push(("/nix/var/nix".to_owned(), true, "nix-var".to_owned()));
     }
     Ok(binds)
@@ -869,7 +869,7 @@ fn krun_shares(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Result<Vec<Sha
     // of the stage_binds entry, same gate, LINKLESS (NOLINK_DEST).
     // The baked-store run skips it with the same extra gate: its db
     // rides inside the image, registered against its own store.
-    if cfg.network && params.scratch.is_some() && !params.baked() {
+    if cfg.network.is_shared() && params.scratch.is_some() && !params.baked() {
         shares.push(Share {
             slot: "nix-var".to_owned(),
             sandbox_path: NOLINK_DEST.to_owned(),
@@ -1075,7 +1075,11 @@ pub(crate) fn spec_of(
         // way.
         workdir: repo.root.to_string_lossy().into_owned(),
         payload: payload_argv,
-        network: cfg.network,
+        // The launcher protocol keeps its bool: a proxy-only run has
+        // no route either, so `--network none` is the fence it needs
+        // until the krun transport lands (refused at pipeline step 4b
+        // anyway).
+        network: cfg.network.is_shared(),
         scratch: params.scratch.map(str::to_owned),
         // The store disk rides the same route as the scratch: the
         // flag names the image, the env announces it, the init mounts
@@ -1249,7 +1253,7 @@ fn sandbox_env(
     // are tab-separated). Set ONLY when the network is shared —
     // network = false has no resolver to reach and the entry would
     // advertise one.
-    if cfg.network {
+    if cfg.network.is_shared() {
         // The tests pin the resolver source to a fixture — the host
         // file itself differs per machine (bd myconfig-dak.6).
         let source =

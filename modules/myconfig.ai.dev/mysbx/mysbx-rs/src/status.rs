@@ -210,10 +210,12 @@ pub fn run(args: &[String], dry_run: bool) -> i32 {
     });
     p(format!(
         "network:         {}",
-        if merged.network {
-            "shared (--share-net)"
-        } else {
-            "denied (--unshare-all, no --share-net)"
+        match merged.network {
+            crate::config::Network::Shared => "shared (--share-net)",
+            crate::config::Network::None => "denied (--unshare-all, no --share-net)",
+            crate::config::Network::ProxyOnly => {
+                "proxy-only (unshared netns, the model endpoint is the only reach)"
+            }
         }
     ));
     // The nix store a run of this repo would see (docs/design/

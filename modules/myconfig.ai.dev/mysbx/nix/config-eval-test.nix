@@ -356,6 +356,15 @@ let
       { myconfig.ai.dev.mysbx.config.nestedVirt = true; }
     ];
     nestedVirtOff = generated [ { myconfig.ai.dev.mysbx.config.nestedVirt = false; } ];
+    # The network policy (docs/design/config.md D20): the option takes
+    # the three canonical values AND stays a bool, so a host that keeps
+    # the `true` default renders `network = true` unchanged (the bool
+    # aliases are permanent). A `proxy-only` selection reaches the TOML
+    # as the string.
+    networkProxyOnly = generated [
+      { myconfig.ai.dev.mysbx.config.network = "proxy-only"; }
+    ];
+    networkDefault = generated [ { } ];
     # The sandbox's own ssh keypair is unconditional (../docs/design/
     # config.md D22): the option is gone, and the generated layer
     # never carries an `ssh-key` key — the crate refuses one as
@@ -704,6 +713,8 @@ pkgs.runCommand "mysbx-generated-config-test"
       scratchDirectOnly
       nestedVirtOn
       nestedVirtOff
+      networkProxyOnly
+      networkDefault
       sandboxToolsEnv
       sandboxToolsEnvOff
       ;
@@ -862,6 +873,14 @@ pkgs.runCommand "mysbx-generated-config-test"
     if grep -q '^nested-virt' "$nonoBackend"; then
       fail "the null nestedVirt default leaked a key" "$nonoBackend"
     fi
+
+    # ... the D20 network policy: a proxy-only selection reaches the
+    # layer as the string, and the untouched bool default stays the
+    # bool `network = true` (byte-identical to the pre-D20 output).
+    grep -q '^network = "proxy-only"$' "$networkProxyOnly" \
+      || fail "the network = proxy-only seed is missing" "$networkProxyOnly"
+    grep -q '^network = true$' "$networkDefault" \
+      || fail "the default bool network seed changed" "$networkDefault"
 
     # 6a. the sandbox ssh keypair (D22) is unconditional: the option
     #     is gone, and the generated layer of a default config must

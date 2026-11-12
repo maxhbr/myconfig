@@ -1071,10 +1071,18 @@ fn host_endpoint_check(
     merged: &merge::Merged,
     forwarded: &[(String, String)],
 ) {
-    if !merged.network {
+    if !merged.network.is_shared() {
         checks.push(Check::ok(
             "model endpoint",
-            "not applicable: the network is denied (network = false)",
+            format!(
+                "not applicable: the network is {} (network = {})",
+                if merged.network.is_none() {
+                    "denied"
+                } else {
+                    "proxy-only"
+                },
+                merged.network
+            ),
         ));
         return;
     }
@@ -1509,10 +1517,18 @@ fn podman_checks(
         }
     };
 
-    if !merged.network {
+    if !merged.network.is_shared() {
         checks.push(Check::ok(
             "model endpoint",
-            "not applicable: the network is denied (network = false)",
+            format!(
+                "not applicable: the network is {} (network = {})",
+                if merged.network.is_none() {
+                    "denied"
+                } else {
+                    "proxy-only"
+                },
+                merged.network
+            ),
         ));
         return;
     }
@@ -1839,11 +1855,11 @@ pub fn run(args: &[String]) -> i32 {
         let mut checks = Vec::new();
         match backend.as_str() {
             "bubblewrap" => {
-                bwrap_checks(&mut checks, merged.network);
+                bwrap_checks(&mut checks, merged.network.is_shared());
                 host_endpoint_check(&mut checks, &merged, &forwarded);
             }
             "nono" => {
-                bwrap_checks(&mut checks, merged.network);
+                bwrap_checks(&mut checks, merged.network.is_shared());
                 nono_checks(&mut checks);
                 host_endpoint_check(&mut checks, &merged, &forwarded);
             }

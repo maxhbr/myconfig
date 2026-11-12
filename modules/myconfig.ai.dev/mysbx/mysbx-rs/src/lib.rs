@@ -2713,6 +2713,56 @@ fn sandbox_pipeline(
     .into_iter()
     .flatten()
     .collect();
+    // The proxy-only profile (docs/design/config.md D20, bd
+    // myconfig-mo3.2.3): `network = "proxy-only"` grants only the host
+    // model endpoint. It is enforced by the backends whose registry
+    // row says so — bubblewrap alone until the other transports land —
+    // and REFUSED by every other backend with a backend-specific
+    // reason, before the session clone and before the `--dry-run`
+    // return (a dry run audits the refusal too). The cross-layer
+    // allowlist contradiction is refused here as well; the SAME-file
+    // form is a schema error (config.rs).
+    if merged.network == config::Network::ProxyOnly {
+        if !allowlist_keys.is_empty() {
+            eprintln!(
+                "mysbx: network = \"proxy-only\" grants only the host model endpoint; an allowlist ({}) contradicts it — the allowlist keys describe a shared network (docs/design/config.md D20/D21); drop the keys or share the network",
+                allowlist_keys
+                    .iter()
+                    .map(|k| format!("`{k}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            return EXIT_INFRASTRUCTURE;
+        }
+        if !backends::find(backend).is_some_and(|row| row.network_proxy_only) {
+            let reason = match backend {
+                "podman-gvisor" => {
+                    "pasta's --map-guest-addr ADDS a route to the LiteLLM forwarder, it does not remove the container's default route (bd myconfig-6di.3)"
+                }
+                "podman-krun" | "krun" => {
+                    "libkrun's TSI is an UNFILTERED proxy: the VMM dials whatever the guest connects to, from a netns with a default route"
+                }
+                "microvm-qemu" => {
+                    "the SLiRP net device always has a gateway route"
+                }
+                "microvm-ch" => {
+                    "passt's vhost-user net device always has a gateway route"
+                }
+                "nono" => {
+                    "its Landlock/seccomp layer is no default-deny network fence yet (bd myconfig-vpi9.1)"
+                }
+                _ => "the backend cannot express a default-deny network",
+            };
+            eprintln!(
+                "mysbx: network = \"proxy-only\" is not enforced on the `{backend}` backend — {reason} (docs/design/config.md D20); the run is refused, never weakened to a shared network"
+            );
+            eprintln!(
+                "  switch the backend to `bubblewrap` for the profile, or drop `network = \"proxy-only\"`"
+            );
+            return EXIT_INFRASTRUCTURE;
+        }
+    }
+
     if !allowlist_keys.is_empty() {
         // Asked of the registry (bd myconfig-mo3.2.1): the row's
         // network_allowlist predicate is D21's enforcement table —
@@ -2731,10 +2781,10 @@ fn sandbox_pipeline(
         }
         // The same contradiction the nono argv builder refuses as
         // defense in depth (Error::AllowlistUnderDeniedNetwork),
-        // refused here for EVERY backend: `network = false` denies
+        // refused here for EVERY backend: `network = none` denies
         // the network, an allowlist names what may be reached — both
         // cannot hold at once.
-        if !merged.network {
+        if merged.network.is_none() {
             eprintln!(
                 "mysbx: network = false denies the network; an allowlist ({}) contradicts it — drop the keys or share the network",
                 allowlist_keys
@@ -3609,7 +3659,7 @@ fn sandbox_pipeline(
 
             // Network spec: explicit "none" when network is denied, otherwise podman default (shared)
             let pasta_spec = env_opt("MYSBX_PODMAN_PASTA_SPEC");
-            let network_spec: Option<&str> = if !merged.network {
+            let network_spec: Option<&str> = if !merged.network.is_shared() {
                 Some("none")
             } else {
                 pasta_spec.as_deref()
@@ -4208,7 +4258,7 @@ fn sandbox_pipeline(
             // launcher's own netns away too — the TSI proxy would
             // otherwise still dial from a netns that has a route.
             // Both layers, defense in depth.
-            if !merged.network {
+            if !merged.network.is_shared() {
                 argv.push("--unshare-net".into());
             }
             // The staging trees (the slot budget's grouping, bd
@@ -6446,9 +6496,10 @@ const SIDECAR_TEMPLATE_ROOT: &str = r#"# mysbx sidecar config
 # /mysbx-home: HOME is /mysbx-home inside the sandbox, so a config
 # bound at its host path is invisible there (config.md D14).
 #
-# backend = "bubblewrap"         # bubblewrap | nono | podman-gvisor | podman-krun | krun | microvm-qemu
-# network = false                # the network is shared unless a layer denies
-#                                # it; a sidecar may deny, never re-enable (D7)
+# backend = "bubblewrap"         # bubblewrap | nono | podman-gvisor | podman-krun | krun | microvm-qemu | microvm-ch
+# network = "shared"            # none | proxy-only | shared (D20; the bool
+#                                # false/true stay aliases of none/shared); a
+#                                # sidecar may tighten, never widen
 # display = "off"                # off | waypipe, a Wayland channel (D18)
 #
 # Nested virtualization (D27): hand the guest hardware virtualization

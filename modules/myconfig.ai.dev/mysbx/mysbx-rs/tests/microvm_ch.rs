@@ -33,7 +33,7 @@ fn synth_repo() -> Repo {
 fn base() -> Merged {
     Merged {
         backend: Some("microvm-ch".into()),
-        network: true,
+        network: mysbx::config::Network::Shared,
         nested_virt: false,
         mounts: Vec::new(),
         env: BTreeMap::new(),

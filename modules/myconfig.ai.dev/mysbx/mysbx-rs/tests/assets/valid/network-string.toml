@@ -1,0 +1,4 @@
+# D20: the string form of `network`, with `proxy-only` as the value —
+# the bool spellings stay aliases, the strings are the canonical form.
+backend = "bubblewrap"
+network = "proxy-only"

@@ -1,0 +1,5 @@
+# D20/D21: `network = "proxy-only"` grants only the host model endpoint,
+# so D21's allowlist keys — which describe a SHARED network — contradict
+# it in the same file.
+network = "proxy-only"
+allow-domains = ["api.openai.com"]

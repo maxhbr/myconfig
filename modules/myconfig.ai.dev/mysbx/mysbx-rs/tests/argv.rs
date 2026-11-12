@@ -53,6 +53,11 @@ fn worktree_repo(git_dirs: &[&str]) -> Repo {
 
 /// A synthetic `Merged`: bubblewrap, the given network switch, nothing else.
 fn base(network: bool) -> Merged {
+    let network = if network {
+        mysbx::config::Network::Shared
+    } else {
+        mysbx::config::Network::None
+    };
     Merged {
         backend: Some("bubblewrap".into()),
         network,
@@ -1059,7 +1064,7 @@ fn golden_both_layers_contribute_mounts() {
     // first, sidecar mounts after (config.md D7).
     let cfg = Merged {
         backend: Some("bubblewrap".into()),
-        network: true,
+        network: mysbx::config::Network::Shared,
         nested_virt: false,
         mounts: vec![
             make_mount("/synth/data/refs", None, Mode::Ro), // user
@@ -1441,7 +1446,7 @@ fn mount_order_is_preserved() {
     // the order is pinned on disjoint paths instead.)
     let cfg = Merged {
         backend: Some("bubblewrap".into()),
-        network: true,
+        network: mysbx::config::Network::Shared,
         nested_virt: false,
         mounts: vec![
             make_mount("/synth/data/outer", None, Mode::Ro),
@@ -3901,6 +3906,11 @@ fn podman_params() -> PodmanParams<'static> {
 
 /// A podman-gvisor base config.
 fn podman_base(network: bool) -> Merged {
+    let network = if network {
+        mysbx::config::Network::Shared
+    } else {
+        mysbx::config::Network::None
+    };
     Merged {
         backend: Some("podman-gvisor".into()),
         network,
@@ -4419,7 +4429,7 @@ fn podman_no_run_no_host_home_beyond_declared_mounts() {
 fn podman_mount_order_is_preserved() {
     let cfg = Merged {
         backend: Some("podman-gvisor".into()),
-        network: true,
+        network: mysbx::config::Network::Shared,
         nested_virt: false,
         mounts: vec![
             make_mount("/synth/data/outer", None, Mode::Ro),
@@ -5628,6 +5638,11 @@ fn nono_params() -> NonoParams<'static> {
 /// A nono base config: no allowlist entries — callers that test the
 /// network mapping fill them.
 fn nono_base(network: bool) -> Merged {
+    let network = if network {
+        mysbx::config::Network::Shared
+    } else {
+        mysbx::config::Network::None
+    };
     Merged {
         backend: Some("nono".into()),
         network,
