@@ -27,6 +27,7 @@ pub mod backends;
 pub mod bwrap;
 pub mod config;
 pub mod detach;
+pub mod diagnose;
 pub mod doctor;
 pub mod handoff;
 pub mod krun;
@@ -346,6 +347,32 @@ pub fn run(args: Vec<String>) -> i32 {
         // precedent).
         Some("status") if flags.verbose => reject_verbose("status"),
         Some("status") => status::run(&rest[1..], flags.dry_run),
+        // `diagnose egress` (docs/design/egress.md E4, bd
+        // myconfig-n8kv.1.4) reads the broker's decision log back. It only
+        // READS — no sandbox, no sidecar writes, no pins — so `--verbose`
+        // widens the report instead of being refused, and `--dry-run` is a
+        // plain print (the `status` precedent). Both arms sit BEFORE the
+        // generic run-scoped refusal below, which is what makes the
+        // before-the-verb spellings reach the verb at all.
+        Some("diagnose") => {
+            match rest.get(1).map(String::as_str) {
+                Some("egress") => diagnose::run(&rest[2..], flags.verbose),
+                // The group is open (cli.md D29): a later diagnosis joins
+                // here without growing the top-level verb list, so an
+                // unknown member names the one that exists rather than
+                // pretending a closed set.
+                Some(other) => {
+                    eprintln!("mysbx diagnose: unknown sub-verb: {other}");
+                    eprintln!("try `mysbx diagnose egress`");
+                    2
+                }
+                None => {
+                    eprintln!("mysbx diagnose: a sub-verb is required: egress");
+                    eprintln!("{usage}", usage = diagnose::USAGE);
+                    2
+                }
+            }
+        }
         // `ssh-pubkey` (docs/design/config.md D22): host-side like the
         // handoff verbs — print the sandbox keypair's PUBLIC key so
         // the operator can register it (GitHub deploy key, gitolite

@@ -10466,6 +10466,157 @@ fn a_broker_backed_real_run_starts_the_broker_and_logs_to_the_sidecar() {
 }
 
 #[test]
+fn diagnose_egress_reports_a_recorded_run() {
+    // bd myconfig-n8kv.1.4: the verb reads back what the broker wrote. The
+    // log shape is the broker's (`{"ts","pid","event","why"}`), and the
+    // counts separate an admission from an unreachable upstream.
+    let (inv, _repo, sidecar) = fixture("diagnose-egress", &[]);
+    let dir = sidecar.join("egress").join("4242");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("decisions.jsonl"),
+        concat!(
+            r#"{"ts":10,"pid":4242,"event":"listen","why":"/run/user/1000/mysbx-egress/4242/litellm.sock -> 127.0.0.1:4000"}"#,
+            "\n",
+            r#"{"ts":11,"pid":4242,"event":"allow","why":"pid 9 uid 0 -> 127.0.0.1:4000"}"#,
+            "\n",
+            r#"{"ts":12,"pid":4242,"event":"allow","why":"pid 10 uid 0 -> 127.0.0.1:4000"}"#,
+            "\n",
+            r#"{"ts":13,"pid":4242,"event":"unreachable","why":"pid 11 uid 0 -> 127.0.0.1:4000: cannot connect"}"#,
+            "\n",
+        ),
+    )
+    .unwrap();
+    // `--dry-run` is a plain print (no side effects to preview) and
+    // `--verbose` works in BOTH positions, since the global parser stops
+    // at the verb (cli.md D29).
+    for (args, label) in [
+        (
+            vec!["--dry-run", "diagnose", "egress"],
+            "before-verb --dry-run",
+        ),
+        (
+            vec!["diagnose", "egress", "--dry-run"],
+            "after-verb --dry-run",
+        ),
+        (
+            vec!["--verbose", "diagnose", "egress"],
+            "before-verb --verbose",
+        ),
+        (
+            vec!["diagnose", "egress", "--verbose"],
+            "after-verb --verbose",
+        ),
+    ] {
+        let (code, _out, stderr) = run_command(spawn_with_args(&inv, &args));
+        assert_eq!(code, 0, "{label}: stderr: {stderr}");
+    }
+    let (code, stdout, stderr) = run_command(spawn_with_args(&inv, &["diagnose", "egress"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("run 4242"), "{stdout}");
+    assert!(stdout.contains("2 admissions"), "{stdout}");
+    assert!(stdout.contains("1 unreachable"), "{stdout}");
+    assert!(stdout.contains("127.0.0.1:4000"), "{stdout}");
+    // The upstream note is the operator-facing half of the report.
+    assert!(stdout.contains("could not be reached"), "{stdout}");
+    // `--verbose` adds the decision lines themselves.
+    let (code, quiet, _) = run_command(spawn_with_args(&inv, &["diagnose", "egress"]));
+    assert_eq!(code, 0);
+    assert!(!quiet.contains("11 allow"), "{quiet}");
+    let (code, verbose, stderr) =
+        run_command(spawn_with_args(&inv, &["diagnose", "egress", "--verbose"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(verbose.contains("11 allow"), "{verbose}");
+    assert!(verbose.contains("13 unreachable"), "{verbose}");
+}
+
+#[test]
+fn diagnose_egress_json_is_one_object_per_run() {
+    let (inv, _repo, sidecar) = fixture("diagnose-egress-json", &[]);
+    for pid in ["7", "9"] {
+        let dir = sidecar.join("egress").join(pid);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("decisions.jsonl"),
+            format!("{{\"ts\":1,\"pid\":{pid},\"event\":\"listen\",\"why\":\"chan {pid}\"}}\n"),
+        )
+        .unwrap();
+    }
+    let (code, stdout, stderr) =
+        run_command(spawn_with_args(&inv, &["diagnose", "egress", "--json"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let lines: Vec<&str> = stdout.lines().filter(|l| !l.is_empty()).collect();
+    assert_eq!(lines.len(), 2, "{stdout}");
+    // Newest first, and each line is a self-contained object.
+    assert!(lines[0].starts_with("{\"pid\":9,"), "{stdout}");
+    assert!(lines[1].starts_with("{\"pid\":7,"), "{stdout}");
+    for line in &lines {
+        assert!(line.ends_with('}'), "{line}");
+        // The path is a proper JSON string, not a doubled-quoted one.
+        assert!(!line.contains("\"\""), "{line}");
+    }
+    // `--run` narrows it.
+    let (code, one, _) = run_command(spawn_with_args(
+        &inv,
+        &["diagnose", "egress", "--run", "7", "--json"],
+    ));
+    assert_eq!(code, 0);
+    assert_eq!(one.lines().filter(|l| !l.is_empty()).count(), 1, "{one}");
+    assert!(one.contains("\"pid\":7,"), "{one}");
+}
+
+#[test]
+fn diagnose_egress_is_read_only_and_reports_an_empty_sidecar() {
+    // No log yet: exit 0 with a line naming the directory — the `status`
+    // precedent (report, do not judge), and nothing is created.
+    let (inv, _repo, sidecar) = fixture("diagnose-egress-empty", &[]);
+    let (code, stdout, stderr) = run_command(spawn_with_args(&inv, &["diagnose", "egress"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("no egress decisions recorded"), "{stdout}");
+    assert!(
+        !sidecar.join("egress").exists(),
+        "the verb must not create the log directory"
+    );
+}
+
+#[test]
+fn diagnose_is_allowed_in_a_once_run() {
+    // cli.md D29/D22: `diagnose` reads the HOST sidecar, which a once run
+    // does not use, so it is allowed — the `doctor` precedent. A refused
+    // form would exit 70 with the once message; this must NOT.
+    let (inv, _repo, _sidecar) = fixture("diagnose-once", &[]);
+    let mut cmd = spawn_with_args(&inv, &["diagnose", "egress"]);
+    // Invoke the once name, which the fixture's binary supports.
+    cmd.env("MYSBX_ONCE", "1");
+    let (code, stdout, stderr) = run_command(cmd);
+    assert_ne!(
+        code,
+        mysbx::EXIT_INFRASTRUCTURE,
+        "diagnose must not be refused in a once run: {stderr}"
+    );
+    assert!(
+        !stderr.contains("mysbx-once"),
+        "diagnose must not hit the once refusal: {stderr}"
+    );
+    assert!(stdout.contains("no egress decisions recorded"), "{stdout}");
+}
+
+#[test]
+fn diagnose_needs_a_known_sub_verb() {
+    let (inv, _repo, _sidecar) = fixture("diagnose-usage", &[]);
+    let (code, _stdout, stderr) = run_command(spawn_with_args(&inv, &["diagnose"]));
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(stderr.contains("a sub-verb is required"), "{stderr}");
+    let (code, _stdout, stderr) = run_command(spawn_with_args(&inv, &["diagnose", "nope"]));
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(stderr.contains("unknown sub-verb"), "{stderr}");
+    let (code, _stdout, stderr) =
+        run_command(spawn_with_args(&inv, &["diagnose", "egress", "--run"]));
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(stderr.contains("needs a pid"), "{stderr}");
+}
+
+#[test]
 fn proxy_only_refuses_a_socket_outside_the_pinned_directory() {
     // bd myconfig-mo3.2.6: the socket path is exactly
     // /run/mysbx-egress/<plain-name>. A `..`, a subdirectory, a shared

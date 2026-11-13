@@ -24,9 +24,10 @@ Vocabulary, on top of [`../../CONTEXT.md`](../../CONTEXT.md):
 - **upstream** — the one destination the broker dials,
   `127.0.0.1:<litellm port>`. Literal, never resolved.
 - **decision log** — `decisions.jsonl` in the run's LOG directory
-  (E4: the sidecar's `egress/<pid>/`), one JSON object per admit/deny,
-  written by the broker. Never in the bound run directory: the payload
-  reads that one through the read-only bind.
+  (E4: the sidecar's `egress/<pid>/`), written by the broker: one JSON
+  object per line, appended, flushed per line. Never in the bound run
+  directory: the payload reads that one through the read-only bind. The
+  line format is fixed in E4.
 - **static forwarder** — the phase-A `agent-litellm-forward-unix`
   socket unit (`myconfig.ai.dev.litellm-forwarder`), which the broker
   replaces in the sequence E6 fixes.
@@ -214,6 +215,47 @@ run directory keeps exactly one entry, the socket. The log directory is
 sidecar debris like the waypipe token directories (config.md D18): the
 next run of the same repo sweeps the entries of gone pids, and a refused
 or dry run creates none.
+
+**The line format is fixed here** (bd myconfig-n8kv.1.4). One JSON object
+per line, appended with a single `write_all` of the whole line plus a
+`flush`, so a reader never sees a half line and a crash loses at most the
+line being written. The four fields are always present:
+
+```json
+{"ts":1794583068,"pid":9671,"event":"listen","why":"/run/user/1000/mysbx-egress/9669/litellm.sock -> 127.0.0.1:4777, confined by Landlock to that one port"}
+```
+
+- `ts` — whole seconds since the epoch (`0` if the clock is before it).
+- `pid` — the BROKER's pid, not the run's and not the peer's.
+- `event` — one of the vocabulary below.
+- `why` — free text, JSON-escaped (`"`, `\`, and control characters; other
+  bytes pass through). It names peers and paths, so nothing machine-parses
+  it beyond displaying it.
+
+The vocabulary separates the ADMISSION decision from what happened after
+it, because a reader must not mistake a stopped model proxy for a policy
+refusal:
+
+| `event` | meaning |
+| --- | --- |
+| `listen` | the channel opened; `why` is `<socket> -> <upstream>` |
+| `allow` | a peer was admitted; `why` carries its pid and uid |
+| `unreachable` | after admission, the upstream could not be dialed |
+| `io` | after admission, a stream could not be split |
+| `fatal` | the accept loop died; the process exits `70` |
+
+So one connection produces `allow` and MAY then produce `unreachable` or
+`io`: `allow` counts ATTEMPTS, not successes, and the counts therefore do
+not sum to a connection total.
+
+There is no `deny` event. Nothing in phase B refuses a peer — the fence is
+the empty network namespace plus the one bound socket — so a `deny` in the
+log would be a broker bug, not a policy decision.
+
+`mysbx diagnose egress` (n8kv.1.4, cli.md D29) is the reader. A line that
+does not parse is SKIPPED, not treated as an error: a broker killed
+mid-write leaves exactly that, and the rest of the log is still the
+record.
 
 ### E5: Fail closed, and what a dry run can audit
 

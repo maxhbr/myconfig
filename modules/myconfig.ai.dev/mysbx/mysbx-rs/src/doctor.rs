@@ -1177,8 +1177,77 @@ fn egress_check(checks: &mut Vec<Check>) {
             "rebuild mysbx from a store that carries mysbx-egress-relay",
         )
     });
-    // The socket → LiteLLM channel: a `GET /v1/models` over it is the
-    // same request a sandboxed agent makes.
+    // The per-run broker (docs/design/egress.md E1/E5, bd
+    // myconfig-n8kv.1.4): a build that pins it needs the binary, a kernel
+    // whose Landlock ABI can confine it, and a probe THROUGH it. Each is
+    // its own line so a host with a broken broker says which part is
+    // wrong, and the probe is SKIPped when a dependency already failed
+    // (the `Check::skip` contract).
+    let mut broker_ok = true;
+    match crate::env_opt("MYSBX_EGRESS_BROKER") {
+        Some(broker) if is_executable(Path::new(&broker)) => checks.push(Check::ok(
+            "egress broker",
+            format!("{broker} (one process per proxy-only run)"),
+        )),
+        Some(broker) => {
+            broker_ok = false;
+            checks.push(Check::fail(
+                "egress broker",
+                format!("{broker} is not an executable file"),
+                "rebuild mysbx from a store that carries mysbx-egress-broker",
+            ));
+        }
+        // No pin: this build's channel is the static forwarder, which is
+        // a supported state (docs/design/egress.md E6 step 1), not a fault.
+        None => checks.push(Check::ok(
+            "egress broker",
+            "not pinned; a proxy-only run uses the static forwarder socket",
+        )),
+    }
+    let landlock = landlock_abi();
+    match landlock {
+        Some(abi) if abi >= crate::landlock::ABI_NET_PORTS => checks.push(Check::ok(
+            "egress broker confinement",
+            format!("Landlock ABI {abi} confines the broker to one TCP port"),
+        )),
+        Some(abi) => {
+            broker_ok = false;
+            checks.push(Check::fail(
+                "egress broker confinement",
+                format!(
+                    "Landlock ABI {abi} has no TCP port rules (ABI {} = Linux 6.7 or newer)",
+                    crate::landlock::ABI_NET_PORTS
+                ),
+                "a proxy-only run with the broker is refused on this kernel; \
+                 use network = \"shared\" or a newer kernel",
+            ));
+        }
+        None => {
+            broker_ok = false;
+            checks.push(Check::fail(
+                "egress broker confinement",
+                "Landlock is unavailable on this kernel",
+                "a proxy-only run with the broker is refused without Landlock",
+            ));
+        }
+    }
+    if !broker_ok {
+        checks.push(Check::skip(
+            "egress channel probe",
+            &["the egress broker or its confinement"],
+        ));
+        return;
+    }
+    // With a broker, probe THROUGH it: start one short-lived instance on a
+    // throwaway socket, make the same `GET /v1/models` a sandboxed agent
+    // makes, and stop it. That exercises the whole path the run will use —
+    // the binary, its confinement, its upstream — instead of just asking
+    // whether the host's static socket answers (docs/design/egress.md E5).
+    if let Some(broker) = crate::env_opt("MYSBX_EGRESS_BROKER") {
+        checks.push(probe_through_broker(&broker, &port));
+        return;
+    }
+    // The static channel: the socket → LiteLLM path, the same request.
     checks.push(match uds_http_get(&socket, "/v1/models") {
         Ok(answer) => Check::ok(
             "egress socket",
@@ -1191,6 +1260,132 @@ fn egress_check(checks: &mut Vec<Check>) {
              .socket) and make sure litellm.service is up",
         ),
     });
+}
+
+/// Start the per-run broker on a throwaway directory under
+/// `$XDG_RUNTIME_DIR`, make one `GET /v1/models` through its socket and
+/// stop it (docs/design/egress.md E5). The verdict names what failed:
+/// the broker never came up, the request failed, or it answered.
+fn probe_through_broker(broker: &str, port: &str) -> Check {
+    let Some(runtime) = std::env::var_os("XDG_RUNTIME_DIR") else {
+        return Check::skip("egress channel probe", &["$XDG_RUNTIME_DIR"]);
+    };
+    let runtime = Path::new(&runtime);
+    if !runtime.is_absolute() {
+        return Check::skip("egress channel probe", &["an absolute $XDG_RUNTIME_DIR"]);
+    }
+    let port = match port.parse::<u16>() {
+        Ok(port) if port != 0 => port,
+        _ => return Check::skip("egress channel probe", &["a pinned MYSBX_EGRESS_PORT"]),
+    };
+    let Some(dir) = crate::egress_run_dir_under(runtime, std::process::id()) else {
+        return Check::skip("egress channel probe", &["an absolute $XDG_RUNTIME_DIR"]);
+    };
+    // A directory of its own: doctor must not disturb a live run's.
+    let dir = dir.with_file_name(format!("doctor-{}", std::process::id()));
+    if std::fs::create_dir_all(&dir).is_err() {
+        return Check::skip("egress channel probe", &["a writable $XDG_RUNTIME_DIR"]);
+    }
+    let _ = std::fs::set_permissions(
+        &dir,
+        <std::fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o700),
+    );
+    let socket = dir.join("probe.sock");
+    let log = dir.join("probe.jsonl");
+    // A named pipe would be more code than it is worth here; the broker
+    // writes ONE line to stderr on a refusal, so a file it appends to is
+    // enough to quote it back.
+    let stderr_path = dir.join("probe.stderr");
+    let stderr_file = match std::fs::File::create(&stderr_path) {
+        Ok(file) => file,
+        Err(_) => {
+            let _ = std::fs::remove_dir_all(&dir);
+            return Check::skip("egress channel probe", &["a writable probe directory"]);
+        }
+    };
+    let child = std::process::Command::new(broker)
+        .arg("--listen")
+        .arg(&socket)
+        .arg("--upstream")
+        .arg(format!("127.0.0.1:{port}"))
+        .arg("--decision-log")
+        .arg(&log)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::from(stderr_file))
+        .spawn();
+    let mut child = match child {
+        Ok(child) => child,
+        Err(e) => {
+            let _ = std::fs::remove_dir_all(&dir);
+            return Check::fail(
+                "egress channel probe",
+                format!("cannot start {broker}: {e}"),
+                "rebuild mysbx from a store that carries mysbx-egress-broker",
+            );
+        }
+    };
+    // The broker writes its `listen` line after `bind(2)`, so the log is
+    // the readiness signal (a stale socket cannot fool it).
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    let mut bound = false;
+    while std::time::Instant::now() < deadline {
+        if std::fs::read_to_string(&log)
+            .map(|text| text.contains("\"event\":\"listen\""))
+            .unwrap_or(false)
+        {
+            bound = true;
+            break;
+        }
+        if let Ok(Some(_)) = child.try_wait() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    // A broker that never bound is a FAIL with ITS OWN diagnosis: it
+    // refused, and its one stderr line says why (a Landlock ABI, the run
+    // directory, the socket path) — "start the model proxy" would be the
+    // wrong advice for it.
+    if !bound {
+        let _ = child.kill();
+        let _ = child.wait();
+        let why = std::fs::read_to_string(&stderr_path).unwrap_or_default();
+        let _ = std::fs::remove_dir_all(&dir);
+        return Check::fail(
+            "egress channel probe",
+            format!(
+                "the broker never opened its socket: {}",
+                if why.trim().is_empty() {
+                    "(no diagnosis on stderr)"
+                } else {
+                    why.trim()
+                }
+            ),
+            "a network = \"proxy-only\" run with this broker is refused; \
+             fix the broker's diagnosis or use network = \"shared\"",
+        );
+    }
+    let answer = uds_http_get(&socket.to_string_lossy(), "/v1/models");
+    let _ = child.kill();
+    let _ = child.wait();
+    let _ = std::fs::remove_dir_all(&dir);
+    match answer {
+        Ok(answer) => Check::ok(
+            "egress channel probe",
+            format!(
+                "through the per-run broker: GET /v1/models answered ({})",
+                answer.trim()
+            ),
+        ),
+        // The broker RAN and was confined; only the upstream failed, so
+        // this is the proxy, not the channel.
+        Err(e) => Check::warn(
+            "egress channel probe",
+            format!("through the per-run broker: {e}"),
+            "start the model proxy (systemctl status litellm.service); the broker \
+             started and confined itself",
+        ),
+    }
 }
 
 /// A minimal `GET <path>` over a Unix socket, `Host: localhost`. The

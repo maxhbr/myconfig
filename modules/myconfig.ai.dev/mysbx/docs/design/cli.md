@@ -46,15 +46,17 @@ is still discovered); plain `init` never touches the config at all.
 ### D3: Verb subcommands, no nesting
 
 Subcommands are single verbs (`init`, `run`, `edit`, `version`, `help`). No
-nested command trees — two exceptions: the `session` noun group
+nested command trees — three exceptions: the `session` noun group
 (`session list`, `session destroy`, `session hunk`), a closed set defined by
-[workspace.md](./workspace.md) D7, and the `worktree` noun group
+[workspace.md](./workspace.md) D7, the `worktree` noun group
 (`worktree list`, `worktree diff`, `worktree hunk`), a closed set defined by
-[worktree.md](./worktree.md) W1. Rationale: the surface is small and
+[worktree.md](./worktree.md) W1, and `diagnose` (D29). Rationale: the
+surface is small and
 stays memorable; nesting would only pay off with many more commands —
-and the two noun groups are the places where a noun carries its own
+and the noun groups are the places where a noun carries its own
 meaning (“destroy the session”, not “destroy the repo”; “diff the
-worktree”, not “diff the repo”).
+worktree”, not “diff the repo”; “diagnose egress”, not “diagnose the
+proxy-only channel”).
 
 Currently implemented: `init`, `edit` (D12), `version`, `help`, the bare
 form (entering the sandbox, see D2), `run -- COMMAND` for
@@ -891,7 +893,8 @@ the session and worktree noun groups, `fetch`/`merge`/`push`/
 `--detach`/`--detachable`. **Allowed**: the bare form, `run --
 CMD`, `gui` (the window's inner invocation carries the marker),
 `doctor` (it checks the user layer, reporting the sidecar as
-ignored), `version`/`help`, `--dry-run` — which creates nothing and
+ignored), `diagnose egress` (it reads the HOST sidecar, D29),
+`version`/`help`, `--dry-run` — which creates nothing and
 prints the argv with a placeholder temp path — `--multiplexer`,
 `--backend`, `--ro`/`--rw`, `--verbose`.
 
@@ -899,6 +902,44 @@ prints the argv with a placeholder temp path — `--multiplexer`,
 state-dirs do not persist; the sandbox ssh keypair is new for each
 run; krun/podman-krun scratch/state live in the temp root and die
 with it.
+
+### D29: `mysbx diagnose egress` — the third D3 exception (bd myconfig-n8kv.1.4)
+
+`mysbx diagnose egress [--run <pid>] [--json]` reads the per-run egress
+broker's decision log back ([egress.md](./egress.md) E4). It is the third
+noun group, and the reason nesting pays here is the one D3 names: the noun
+carries the meaning. `egress` is not a target the verb acts on, it is WHICH
+diagnosis is asked for — a later `diagnose <something-else>` (a policy
+diff, a detach ledger) joins without growing the top-level verb list.
+
+**Read-only, and that is the contract.** No sandbox starts, no sidecar file
+is written, no wrapper pin is required. It therefore works on exactly the
+host state an operator brings to it: a broker that already exited, a
+forwarder that is stopped, a run from three days ago whose process is long
+gone. Exit `0` when there is nothing recorded (a line saying so) — the
+`status` precedent (D19). Exit `2` on a bad command line. Exit `70` when
+the working directory is not a repo (`resolve_cwd`, the same as every other
+verb) or when the log directory exists but cannot be read.
+
+**Flags:** `--run <pid>`, `--json`, `--verbose`, and `--dry-run` — the last
+two accepted in either position and `--dry-run` a plain no-op print (there
+is no side effect to preview).
+
+**`--verbose` is accepted** (it widens the report to the trailing decision
+lines), unlike `status`/`ssh-pubkey`, which refuse it: those verbs report a
+fixed set of facts, while a decision log has a natural "more". Both
+spellings work (`mysbx --verbose diagnose egress` and `mysbx diagnose
+egress --verbose`) — the global parser stops at the verb, so the group
+accepts the flag on either side, like `run`'s flags (D10).
+
+**`--json`** prints one object per run, so a script (or an agent) can read
+the counts without parsing the human lines. The shape is
+`{"pid","log","channel","decisions","allow","unreachable","io","fatal"}`;
+`channel` is the first `listen` line's reason, or `null`.
+
+**In `mysbx-once` it is ALLOWED** (D22): it reads the HOST sidecar, which a
+once run does not use, so it reports what the host recorded — the `doctor`
+precedent, which is also allowed for the same reason.
 
 ## Non-goals
 
