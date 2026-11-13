@@ -54,17 +54,12 @@ const EXIT_INFRASTRUCTURE: i32 = 70;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    // `-h`/`--help` is a success (usage to stdout, exit 0); a usage
-    // error is exit 2 (cli.md D8). `run` returns `Err` for both, so
-    // the marker distinguishes them.
-    if let Some(first) = args.first() {
-        if first == "-h" || first == "--help" {
-            println!("{USAGE}");
-            std::process::exit(0);
-        }
-    }
-    match run(&args) {
-        Ok(code) => std::process::exit(code),
+    // Argument parsing happens HERE, so the two classes of failure are
+    // distinct: a usage error is exit 2 (cli.md D8), `-h`/`--help`
+    // prints to stdout and exits 0, and every failure AFTER a valid
+    // parse (bind, spawn, wait) is a runtime failure, exit 70.
+    let inv = match Invocation::parse(&args) {
+        Ok(inv) => inv,
         Err(e) if e == HELP_REQUESTED => {
             println!("{USAGE}");
             std::process::exit(0);
@@ -72,6 +67,13 @@ fn main() {
         Err(e) => {
             eprintln!("mysbx-egress-relay: {e}");
             std::process::exit(2);
+        }
+    };
+    match run(&inv) {
+        Ok(code) => std::process::exit(code),
+        Err(e) => {
+            eprintln!("mysbx-egress-relay: {e}");
+            std::process::exit(EXIT_INFRASTRUCTURE);
         }
     }
 }
@@ -144,8 +146,7 @@ impl Invocation {
 const USAGE: &str =
     "usage: mysbx-egress-relay --listen 127.0.0.1:<port> --connect <unix-socket> -- <cmd...>";
 
-fn run(args: &[String]) -> Result<i32, String> {
-    let inv = Invocation::parse(args)?;
+fn run(inv: &Invocation) -> Result<i32, String> {
     // Every fallible setup step happens BEFORE the payload is spawned
     // (review C): a relay that cannot listen must fail visibly, never
     // start the payload and then die around it.
@@ -179,6 +180,11 @@ fn run(args: &[String]) -> Result<i32, String> {
         Ok(status) => status,
         Err(e) => {
             stop.store(true, Ordering::SeqCst);
+            // The relay can no longer learn how the payload ended, so it
+            // must not leave the payload running unattended: kill it, then
+            // report the failure (exit 70).
+            let _ = child.kill();
+            let _ = child.wait();
             let _ = acceptor.join();
             return Err(format!("cannot wait for `{}`: {e}", inv.payload[0]));
         }
