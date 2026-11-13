@@ -10349,13 +10349,21 @@ fn proxy_only_refuses_a_mount_over_the_egress_directory() {
         sidecar.join("config.toml"),
         format!(
             "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n\
-             [[mounts]]\npath = \"{}\"\ndest = \"/run/mysbx-egress\"\nmode = \"ro\"\n",
+             [[mounts]]\npath = \"{}\"\ndest = \"/run/mysbx-egress\"\nmode = \"ro\"\n\
+             [env]\nOPENAI_API_KEY = \"x\"\n",
             granted.display()
         ),
     )
     .unwrap();
     let (code, stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"]));
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    // The credential-shaped [env] key would be refused later in step 4b
+    // (D28); the egress-directory refusal must come first, which shows it
+    // runs in step 4b and not only in the argv builder.
+    assert!(
+        !stderr.contains("looks like a model credential"),
+        "the egress-directory refusal must fire before the credential rule: {stderr}"
+    );
     assert!(
         stderr.contains("/run/mysbx-egress is related to /run/mysbx-egress"),
         "the refusal names the covering destination: {stderr}"

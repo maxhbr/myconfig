@@ -98,12 +98,19 @@ fn a_sigint_sent_to_the_relay_reaches_the_payload() {
             "--",
             "/bin/sh",
             "-c",
-            "trap 'exit 42' INT; while :; do :; done",
+            "trap 'exit 42' INT; echo ready; while :; do :; done",
         ])
+        .stdout(std::process::Stdio::piped())
         .spawn()
         .expect("failed to spawn mysbx-egress-relay");
-    // Give the payload time to install its trap.
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    // Wait until the payload has installed its trap.
+    let mut ready = String::new();
+    std::io::BufRead::read_line(
+        &mut std::io::BufReader::new(child.stdout.take().expect("stdout")),
+        &mut ready,
+    )
+    .expect("read the payload's ready line");
+    assert_eq!(ready.trim(), "ready");
     unsafe { mysbx::sig::kill_pid(child.id() as i32, mysbx::sig::INT) };
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     let status = loop {

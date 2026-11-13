@@ -5569,8 +5569,8 @@ fn trusted_policy(path: &std::path::Path) -> bwrap::PolicyPath {
 /// unprotected.
 const SYMLINK_BUDGET: usize = 40;
 
-/// The crate's only libc signal binding (`signal(2)`, `kill(2)`,
-/// `pthread_sigmask(3)`, `getpgrp`/`tcgetpgrp`): the dependency-free
+/// The crate's shared libc signal binding (`sigaction(2)`, `kill(2)`,
+/// `pthread_sigmask(3)`): the dependency-free
 /// approach the std library uses internally, so the crate keeps zero
 /// dependencies. Shared by `main.rs` (SIGPIPE back to its default) and
 /// `mysbx-egress-relay` (mask a window, forward termination signals to
@@ -5581,7 +5581,6 @@ const SYMLINK_BUDGET: usize = 40;
 pub mod sig {
     #[allow(non_snake_case)]
     extern "C" {
-        fn signal(signum: i32, handler: usize) -> usize;
         fn kill(pid: i32, sig: i32) -> i32;
         fn pthread_sigmask(how: i32, set: *const SigSet, old: *mut SigSet) -> i32;
         fn sigemptyset(set: *mut SigSet) -> i32;
@@ -5592,7 +5591,8 @@ pub mod sig {
     /// The platform's `sigset_t`: a 128-byte block, which glibc and musl
     /// both accept as an over-large (never under-large) buffer for the
     /// mask they see. Only `sigemptyset`/`sigaddset`/`pthread_sigmask`
-    /// touch it, and all three are given a pointer to zeroed bytes.
+    /// and `sigaction` (as `sa_mask`) touch it, always starting from
+    /// zeroed bytes.
     #[repr(C, align(8))]
     #[derive(Clone, Copy)]
     pub struct SigSet([u8; 128]);
@@ -5629,7 +5629,7 @@ pub mod sig {
     /// previous mask.
     ///
     /// # Safety
-    /// Like [`on`]: the caller owns this thread's signal policy.
+    /// Like [`on_info`]: the caller owns this thread's signal policy.
     pub unsafe fn mask(how: i32, set: &SigSet) -> SigSet {
         let mut old = SigSet::empty();
         unsafe {
@@ -5689,13 +5689,21 @@ pub mod sig {
     /// `SIGTERM`.
     pub const TERM: i32 = 15;
 
-    /// Restore a signal to its default action (`SIG_DFL`).
+    /// Restore a signal to its default action (`SIG_DFL`). Uses
+    /// `sigaction`, which is async-signal-safe, so it may also run in a
+    /// child between `fork` and `exec`.
     ///
     /// # Safety
     /// Signals are process-global: the caller must own the process'
     /// handler policy for `signum` (the two binaries do, at startup).
     pub unsafe fn to_default(signum: i32) {
-        unsafe { signal(signum, 0) };
+        let act = SigAction {
+            sa_sigaction: 0, // SIG_DFL
+            sa_mask: SigSet::empty(),
+            sa_flags: 0,
+            sa_restorer: 0,
+        };
+        unsafe { sigaction(signum, &act, std::ptr::null_mut()) };
     }
 
     /// `kill(pid, signum)`.
@@ -5711,14 +5719,18 @@ pub mod sig {
     ///
     /// # Safety
     /// Process-global handler policy, as [`to_default`].
-    pub unsafe fn on_info(signum: i32, handler: InfoHandler) {
+    pub unsafe fn on_info(signum: i32, handler: InfoHandler) -> std::io::Result<()> {
         let act = SigAction {
             sa_sigaction: handler as *const () as usize,
             sa_mask: unsafe { set_of(&[]) },
             sa_flags: SA_SIGINFO | SA_RESTART,
             sa_restorer: 0,
         };
-        unsafe { sigaction(signum, &act, std::ptr::null_mut()) };
+        if unsafe { sigaction(signum, &act, std::ptr::null_mut()) } == 0 {
+            Ok(())
+        } else {
+            Err(std::io::Error::last_os_error())
+        }
     }
 }
 

@@ -43,7 +43,10 @@
 //! forwarded only when a process sent it (`kill(2)`, `si_code` =
 //! `SI_USER`); a kernel-raised SIGINT (`SI_KERNEL`) is the terminal's
 //! ^C, which already reached the payload in the same foreground process
-//! group, so forwarding it would signal the payload twice.
+//! group, so forwarding it would signal the payload twice. A SIGINT a
+//! process sends to the whole group (`kill(0, …)` as `timeout` does,
+//! `kill -INT %job`) is `SI_USER` too and reaches the payload twice:
+//! once directly, once forwarded.
 //!
 //! The relay makes no allow/deny decisions of its own: the fence is
 //! the empty netns plus the single bound socket. It exists only to
@@ -177,18 +180,26 @@ fn run(inv: &Invocation) -> Result<i32, String> {
     let blocked =
         unsafe { mysbx::sig::set_of(&[mysbx::sig::HUP, mysbx::sig::INT, mysbx::sig::TERM]) };
     let saved = unsafe { mysbx::sig::mask(mysbx::sig::BLOCK, &blocked) };
-    forward_signals();
+    if let Err(e) = forward_signals() {
+        unsafe { mysbx::sig::restore_mask(&saved) };
+        return Err(format!("cannot install the signal handlers: {e}"));
+    }
 
     // `Command::spawn` passes the calling thread's signal mask on to the
     // child, so the payload would start with the three signals blocked
-    // and never see them. Restore the mask from before the block in the
-    // child, between fork and exec (`pthread_sigmask` is
-    // async-signal-safe).
+    // and never see them. In the child, between fork and exec, first set
+    // the three signals back to their default action — the forked child
+    // still has the relay's handler, which would swallow a signal that
+    // arrives before exec — and only then restore the mask from before
+    // the block. `sigaction` and `pthread_sigmask` are async-signal-safe.
     let child_mask = saved;
     let mut command = Command::new(&inv.payload[0]);
     command.args(&inv.payload[1..]);
     unsafe {
         command.pre_exec(move || {
+            for sig in [mysbx::sig::HUP, mysbx::sig::INT, mysbx::sig::TERM] {
+                mysbx::sig::to_default(sig);
+            }
             mysbx::sig::restore_mask(&child_mask);
             Ok(())
         });
@@ -393,7 +404,7 @@ fn set_child_pid(pid: u32) {
 /// `^C` or a supervisor's signal stops the PAYLOAD. The libc binding
 /// lives once in `mysbx::sig`.
 #[cfg(unix)]
-fn forward_signals() {
+fn forward_signals() -> io::Result<()> {
     unsafe extern "C" fn forward(signum: i32, info: *const u8, _ctx: *mut u8) {
         let pid = CHILD_PID.load(Ordering::SeqCst);
         // A SIGINT the kernel raised is the terminal's ^C to the
@@ -416,14 +427,15 @@ fn forward_signals() {
         }
     }
     for sig in [mysbx::sig::HUP, mysbx::sig::INT, mysbx::sig::TERM] {
-        unsafe {
-            mysbx::sig::on_info(sig, forward);
-        }
+        unsafe { mysbx::sig::on_info(sig, forward)? };
     }
+    Ok(())
 }
 
 #[cfg(not(unix))]
-fn forward_signals() {}
+fn forward_signals() -> io::Result<()> {
+    Ok(())
+}
 
 #[cfg(test)]
 mod tests {
