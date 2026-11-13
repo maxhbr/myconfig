@@ -553,21 +553,41 @@ pub fn nested_virt_check(intel: Option<&str>, amd: Option<&str>) -> Check {
     )
 }
 
-/// The Landlock check of the nono backend; `abi` is the kernel's
-/// Landlock ABI version, `None` when Landlock is unavailable.
+/// Whether a nono run of `merged` emits a TCP PORT rule — the only thing
+/// that needs the Landlock V4 ABI. Mirrors `nono::network_flags`: the
+/// profile grants the relay's port, and a shared network with an allowlist
+/// grants its connect-ports. A shared network WITHOUT an allowlist emits
+/// no nono network flag at all (nono allows egress by default; the fence
+/// there is bwrap's namespace), so such a host needs no V4.
+pub fn nono_needs_port_rules(merged: &merge::Merged) -> bool {
+    nono_grants_a_port(merged.network, !merged.connect_ports.is_empty())
+}
+
+/// The pure half of [`nono_needs_port_rules`].
+pub fn nono_grants_a_port(network: crate::config::Network, has_connect_ports: bool) -> bool {
+    if network == crate::config::Network::ProxyOnly {
+        return true;
+    }
+    network.is_shared() && has_connect_ports
+}
+
+/// The Landlock check of the nono backend; `abi` is the kernel's Landlock
+/// ABI version, `None` when Landlock is unavailable, and `needs_port_rules`
+/// says whether this configuration asks nono for a TCP PORT grant.
 ///
-/// ABI < 4 is a full failure, not a warning: `network = "shared"` with
-/// an allowlist and `network = "proxy-only"` both rely on Landlock TCP
-/// port rules, which the kernel only enforces from ABI 4.
-pub fn landlock_check(abi: Option<i64>) -> Check {
+/// Landlock itself is required either way (nono's filesystem layer is
+/// Landlock). ABI < 4 is only a failure when port rules are needed: the
+/// V4 rules are what carry `--allow-connect-port`, so a config that emits
+/// none runs fine on an older kernel.
+pub fn landlock_check(abi: Option<i64>, needs_port_rules: bool) -> Check {
     match abi {
-        Some(v) if v >= 4 => Check::ok("Landlock", format!("ABI v{v}")),
+        Some(v) if v >= 4 || !needs_port_rules => Check::ok("Landlock", format!("ABI v{v}")),
         Some(v) => Check::fail(
             "Landlock",
             format!("ABI v{v} predates TCP port rules"),
-            "the nono backend's port grants (allow-connect-port, so both the allowlist and \
-             network = \"proxy-only\") need Landlock V4+; boot a newer kernel, or use the \
-             bubblewrap backend",
+            "this run asks nono for a port grant (`--allow-connect-port`, from \
+             network = \"proxy-only\" or an allowlist's connect-ports), which needs \
+             Landlock V4+; boot a newer kernel, or use the bubblewrap backend",
         ),
         None => Check::fail(
             "Landlock",
@@ -1047,7 +1067,7 @@ fn bwrap_checks(checks: &mut Vec<Check>, share_net: bool) {
 }
 
 /// nono binary, profile and Landlock.
-fn nono_checks(checks: &mut Vec<Check>) {
+fn nono_checks(checks: &mut Vec<Check>, merged: &merge::Merged) {
     binary_check(
         checks,
         "nono binary",
@@ -1072,7 +1092,10 @@ fn nono_checks(checks: &mut Vec<Check>) {
             format!("`{profile}` (a profile name, resolved by nono)"),
         ));
     }
-    checks.push(landlock_check(landlock_abi()));
+    checks.push(landlock_check(
+        landlock_abi(),
+        nono_needs_port_rules(merged),
+    ));
 }
 
 /// The model endpoint of the bwrap-based backends: they share the
@@ -2201,7 +2224,7 @@ pub fn run(args: &[String]) -> i32 {
             }
             "nono" => {
                 bwrap_checks(&mut checks, merged.network.is_shared());
-                nono_checks(&mut checks);
+                nono_checks(&mut checks, &merged);
                 // The proxy-only channel (D20, bd myconfig-vpi9.1):
                 // the layered nono backend binds the same forwarder
                 // socket and wraps the same relay, so the probe is
@@ -2713,6 +2736,29 @@ mod tests {
     }
 
     #[test]
+    fn the_landlock_port_rule_floor_only_applies_when_a_port_is_granted() {
+        // bd myconfig-1012: nono emits `--allow-connect-port` only for the
+        // proxy-only profile and for a shared network WITH connect-ports.
+        // A shared network without an allowlist emits no nono network flag
+        // at all (the fence is bwrap's namespace), so ABI 3 must not be
+        // reported as a failure there.
+        assert_eq!(landlock_check(Some(3), false).level, Level::Ok);
+        assert_eq!(landlock_check(Some(3), true).level, Level::Fail);
+        assert_eq!(landlock_check(Some(4), true).level, Level::Ok);
+
+        // The predicate mirrors nono::network_flags.
+        use crate::config::Network;
+        // shared, no allowlist: no port rule.
+        assert!(!nono_grants_a_port(Network::Shared, false));
+        // shared WITH connect-ports: a port rule.
+        assert!(nono_grants_a_port(Network::Shared, true));
+        // proxy-only: always one (the relay port).
+        assert!(nono_grants_a_port(Network::ProxyOnly, false));
+        // denied: no grant at all, only --block-net.
+        assert!(!nono_grants_a_port(Network::None, false));
+    }
+
+    #[test]
     fn the_broker_confinement_verdict_hangs_off_the_pin() {
         // bd myconfig-1012: the broker's Landlock self-fence is a BROKER
         // requirement. A build without the pin serves the channel from the
@@ -2796,8 +2842,13 @@ mod tests {
 
     #[test]
     fn landlock_and_userns_checks() {
-        assert_eq!(landlock_check(Some(4)).line(), "OK   Landlock: ABI v4");
-        assert_eq!(landlock_check(None).level, Level::Fail);
+        assert_eq!(
+            landlock_check(Some(4), true).line(),
+            "OK   Landlock: ABI v4"
+        );
+        // Landlock itself is always needed (nono's filesystem layer).
+        assert_eq!(landlock_check(None, false).level, Level::Fail);
+        assert_eq!(landlock_check(None, true).level, Level::Fail);
         assert_eq!(userns_check(None), None);
         assert_eq!(userns_check(Some("63432\n")).unwrap().level, Level::Ok);
         assert_eq!(userns_check(Some("0\n")).unwrap().level, Level::Warn);

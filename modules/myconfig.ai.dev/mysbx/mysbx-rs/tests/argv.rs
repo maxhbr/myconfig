@@ -6040,6 +6040,41 @@ fn nono_golden_allowlist() {
 }
 
 #[test]
+fn nono_needs_port_rules_agrees_with_the_argv() {
+    // bd myconfig-1012: doctor fails a run on a Landlock ABI < 4 only when
+    // nono will be asked for a TCP PORT grant. That verdict is a predicate
+    // in doctor; the truth is the `--allow-connect-port` flag this builder
+    // emits. Assert the two agree for every network shape, so the
+    // predicate cannot drift from the argv it describes.
+    use mysbx::config::Network;
+    let cases: Vec<(Network, Vec<u16>)> = vec![
+        (Network::None, vec![]),
+        (Network::Shared, vec![]),
+        (Network::Shared, vec![443]),
+        (Network::ProxyOnly, vec![]),
+    ];
+    for (network, connect_ports) in cases {
+        let mut cfg = nono_base(network.is_shared());
+        cfg.network = network;
+        cfg.connect_ports = connect_ports.clone();
+        let mut params = nono_params();
+        // proxy-only needs the relay's port to build at all.
+        if network == Network::ProxyOnly {
+            params.egress_port = Some(4000);
+        }
+        let grants = nono_run_argv(&cfg, &synth_repo(), &Payload::Shell, &params)
+            .expect("this config builds");
+        let argv_grants_a_port = grants.iter().any(|arg| arg == "--allow-connect-port");
+        let predicate = mysbx::doctor::nono_grants_a_port(network, !connect_ports.is_empty());
+        assert_eq!(
+            argv_grants_a_port, predicate,
+            "{network:?} with connect_ports {connect_ports:?}: the argv and the \
+             doctor predicate disagree (argv={argv_grants_a_port}, predicate={predicate})"
+        );
+    }
+}
+
+#[test]
 fn nono_refuses_listen_ports_only() {
     // bd myconfig-a14: `listen-ports` alone does not restrict
     // outbound — nono reports "outbound allowed" with only listen
