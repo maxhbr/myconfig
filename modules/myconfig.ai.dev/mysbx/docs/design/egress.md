@@ -186,10 +186,18 @@ parent bead's B1 line names, `pid_gone`-swept):
   sibling spelling `mysbx-egress` is none of those, and it must stay a
   SIBLING — nesting the run directory under `mysbx/` would make the
   channel's bind source trip the registry-exposure check.
+4. **The fit is checked before the run starts.** Both the resolved path's
+  length and the `$XDG_RUNTIME_DIR` root itself are validated in step 4b,
+  so a missing or relative root (`None`, never a `/tmp` guess) and an
+  over-long path refuse the run with a dry run still auditing it.
 
 An unset or relative `$XDG_RUNTIME_DIR` refuses the run (exit 70) rather
 than falling back, the same rule detach.md B3 applies to detached runs
 (a `/tmp` fallback would put the channel in a world-writable directory).
+
+That is also why item 4 above sits in step 4b: the root is resolved
+once, early, and the pins carry the finished directory, so the argv
+builder and the broker start cannot disagree about the path.
 
 The wrapper keeps pinning `MYSBX_EGRESS_SOCKET` as the absolute
 `/run/mysbx-egress/<name>` string it pins today: that value is now the
@@ -213,8 +221,13 @@ Every failure is exit 70, in the order that already exists (D20): the
 pin checks run in step 4b, BEFORE anything is created (`ensure_state_dirs`,
 the SSH key, the session clone) and before the `--dry-run` early return,
 so a dry run audits them: a missing or malformed `MYSBX_EGRESS_SOCKET` /
-`_PORT`, a missing `MYSBX_EGRESS_BROKER` pin, an unset or relative
-`$XDG_RUNTIME_DIR`, a computed socket path over `SUN_PATH_LIMIT`.
+`_PORT`, an unset or relative `$XDG_RUNTIME_DIR` (when the broker is
+pinned), a computed socket path over `SUN_PATH_LIMIT`.
+
+A build WITHOUT the broker pin is not a refusal: it binds the static
+forwarder directory, which is the phase-A channel (E6 step 1). "No
+broker, no egress" governs a build that HAS the broker — once the pin is
+there, a broker that cannot start refuses the run.
 
 The checks that need the filesystem or a live process come AFTER that
 return, on a real run only, and are still refusals, not warnings: the run

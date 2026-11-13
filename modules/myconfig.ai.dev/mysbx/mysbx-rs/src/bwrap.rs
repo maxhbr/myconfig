@@ -379,10 +379,11 @@ pub struct Waypipe<'a> {
 /// `http://127.0.0.1:<port>/v1` URLs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EgressChannel<'a> {
-    /// The host directory holding the forwarder's socket. The CLI
-    /// resolves it from the pinned socket path's parent; the builder
-    /// binds the DIRECTORY read-only at [`EGRESS_DIR`], so the socket
-    /// file inside it (recreated by a forwarder restart) stays visible
+    /// The host directory holding the socket the sandbox binds: the
+    /// run's OWN per-run directory for a broker-backed run
+    /// (docs/design/egress.md E3/E4), otherwise the static forwarder
+    /// directory the pin names. The builder binds the DIRECTORY read-only
+    /// at [`EGRESS_DIR`], so the socket file inside it stays visible
     /// without a new bind.
     pub socket_dir: &'a str,
     /// The socket FILE name inside [`Self::socket_dir`] (the relay's

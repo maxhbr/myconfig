@@ -3354,14 +3354,28 @@ fn sandbox_pipeline(
     // validated the pins, so the channel is built from those values — a
     // `proxy-only` bubblewrap run always has them; the `map` keeps the
     // conversion total without an `expect`.
+    // With a broker the run binds ITS OWN per-run directory
+    // (docs/design/egress.md E3/E4), created a few steps below; without one
+    // it binds the host's static forwarder directory (E6).
+    let egress_bind_dir: Option<String> = match egress.as_ref() {
+        Some(pinned) if pinned.broker_bin.is_some() => pinned
+            .broker_dir
+            .as_ref()
+            .map(|dir| dir.to_string_lossy().into_owned()),
+        Some(pinned) => Some(pinned.socket_dir.clone()),
+        None => None,
+    };
     let egress_params: Option<bwrap::EgressChannel<'_>> =
-        egress.as_ref().map(|pinned| bwrap::EgressChannel {
-            socket_dir: &pinned.socket_dir,
-            socket: &pinned.socket,
-            port: pinned.port,
-            relay_bin: &pinned.relay_bin,
-            etc_dir: &pinned.etc_dir,
-        });
+        match (egress.as_ref(), egress_bind_dir.as_deref()) {
+            (Some(pinned), Some(socket_dir)) => Some(bwrap::EgressChannel {
+                socket_dir,
+                socket: &pinned.socket,
+                port: pinned.port,
+                relay_bin: &pinned.relay_bin,
+                etc_dir: &pinned.etc_dir,
+            }),
+            _ => None,
+        };
     let (report_shell, report_tools_path, report_mux_entry) =
         if backends::find(backend).is_some_and(|row| row.podman()) {
             (
@@ -4747,8 +4761,62 @@ fn sandbox_pipeline(
         }
     }
 
+    // The per-run egress broker (docs/design/egress.md E1/E2, bd
+    // myconfig-n8kv.1.3): spawned HERE — after every argv/refusal check
+    // above, before the backend — so a broken channel refuses the run and
+    // a dry run never reaches this point. The detach OUTER is excluded on
+    // purpose: its contract is that a pre-flight creates nothing.
+    let mut egress_child: Option<std::process::Child> = None;
+    let egress_run_dir_path: Option<std::path::PathBuf> =
+        egress.as_ref().and_then(|pinned| pinned.broker_dir.clone());
+    if let Some(pinned) = egress.as_ref() {
+        // The outer of a detached run spawns nothing (detach.md B4): its
+        // pre-flight must stay free of side effects.
+        if let Some(dir) = pinned.broker_dir.as_deref() {
+            if !matches!(mode, RunMode::Detached | RunMode::Detachable) {
+                match start_egress_broker(pinned, dir, &repo, &mut egress_child) {
+                    Ok(()) => {}
+                    Err(msg) => {
+                        eprintln!("mysbx: {msg}");
+                        if matches!(mode, RunMode::DetachedInner) {
+                            detach::record_inner_refusal(
+                                &repo,
+                                flags.session.as_deref(),
+                                backend,
+                                merged.multiplexer.name(),
+                                &format!("mysbx: {msg}"),
+                            );
+                        }
+                        return EXIT_INFRASTRUCTURE;
+                    }
+                }
+            }
+        }
+    }
+
     let mut cmd = std::process::Command::new(&backend_bin);
     cmd.args(&argv);
+    // The backend reads nothing from mysbx's environment (bwrap's argv
+    // clears and re-sets it, and the VM launchers get their own pins as
+    // arguments), but the CHILD inherited it until exec — and the sandbox
+    // that process becomes could read it back through /proc (bd
+    // myconfig-q8zg). Dropping it here is the cheapest place to close that
+    // window, and a proxy-only broker makes it matter more: the host
+    // environment is exactly where the credential names live (config.md
+    // D28).
+    //
+    // Two exclusions, both because the child is not (yet) the sandbox:
+    // podman's client half reads its own environment, and the inner of a
+    // detached run is a mysbx that re-derives everything from its argv and
+    // needs the ordinary environment to do it.
+    if !backends::find(backend).is_some_and(|row| row.podman())
+        && !matches!(
+            mode,
+            RunMode::Detached | RunMode::Detachable | RunMode::DetachedInner
+        )
+    {
+        cmd.env_clear();
+    }
     match mode {
         // The outer's handoff (detach.md B4 step 2): registry, lock,
         // state file and the dtach spawn — everything above was the
@@ -4788,6 +4856,8 @@ fn sandbox_pipeline(
                 krun_stage_dir.as_deref(),
                 krun_gcroot_dir.as_deref(),
                 krun_scratch_file.as_deref(),
+                egress_child,
+                egress_run_dir_path.as_deref(),
             );
             exit
         }
@@ -4808,6 +4878,13 @@ fn sandbox_pipeline(
             if let Some(mut child) = waypipe_child {
                 let _ = child.kill();
                 let _ = child.wait();
+            }
+            if let Some(mut child) = egress_child {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+            if let Some(dir) = egress_run_dir_path.as_deref() {
+                let _ = std::fs::remove_dir_all(dir);
             }
             eprintln!("mysbx: cannot exec {backend_bin}: {e}");
             if let Some(f) = &git_trust_file {
@@ -4846,6 +4923,8 @@ fn sandbox_pipeline(
                 krun_stage_dir.as_deref(),
                 krun_gcroot_dir.as_deref(),
                 krun_scratch_file.as_deref(),
+                egress_child,
+                egress_run_dir_path.as_deref(),
             );
             if let Some(temp) = &once {
                 *once_kept = once::teardown(temp, &repo);
@@ -4874,6 +4953,8 @@ fn sandbox_pipeline(
                 krun_stage_dir.as_deref(),
                 krun_gcroot_dir.as_deref(),
                 krun_scratch_file.as_deref(),
+                egress_child,
+                egress_run_dir_path.as_deref(),
             );
             exit
         }
@@ -4897,7 +4978,20 @@ fn cleanup_per_run_state(
     krun_stage_dir: Option<&std::path::Path>,
     krun_gcroot_dir: Option<&std::path::Path>,
     krun_scratch_file: Option<&std::path::Path>,
+    egress_child: Option<std::process::Child>,
+    egress_run_dir: Option<&std::path::Path>,
 ) {
+    // The egress broker of a waited run (docs/design/egress.md E2): the
+    // process that spawned it is still here, so it is killed, reaped and
+    // its bind directory removed — an exec-mode run relies on
+    // PR_SET_PDEATHSIG and the next run's sweep instead.
+    if let Some(mut child) = egress_child {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    if let Some(dir) = egress_run_dir {
+        let _ = std::fs::remove_dir_all(dir);
+    }
     // The waypipe client of a waited run is cleaned up here
     // (D18): a multi client never exits on its own when the
     // guest server goes away — kill it, reap it, and remove
@@ -5895,6 +5989,16 @@ pub struct EgressPins {
     /// The store directory with the sandbox's `hosts` and
     /// `nsswitch.conf`.
     pub etc_dir: String,
+    /// The per-run broker binary (`MYSBX_EGRESS_BROKER`), when this build
+    /// carries one: the run then creates its own channel instead of
+    /// binding the host's static forwarder directory (docs/design/egress.md
+    /// E3, bd myconfig-n8kv.1.3).
+    pub broker_bin: Option<String>,
+    /// The directory a broker-backed run binds: `$XDG_RUNTIME_DIR/mysbx-egress/<pid>`,
+    /// resolved and length-checked in step 4b so a missing
+    /// `$XDG_RUNTIME_DIR` refuses the run BEFORE anything is created
+    /// (docs/design/egress.md E4/E5). `None` for a static-forwarder build.
+    pub broker_dir: Option<std::path::PathBuf>,
 }
 
 /// Resolve and validate the `proxy-only` egress channel from
@@ -5937,6 +6041,7 @@ pub fn resolve_egress(
     let port_raw = env_opt("MYSBX_EGRESS_PORT");
     let relay = env_opt("MYSBX_EGRESS_RELAY");
     let etc_dir = env_opt("MYSBX_EGRESS_ETC");
+    let broker_bin = env_opt("MYSBX_EGRESS_BROKER");
 
     let mut missing = Vec::new();
     if socket_path.is_none() {
@@ -5982,7 +6087,50 @@ pub fn resolve_egress(
         Ok(port) => port,
     };
 
-    if !dry_run {
+    // A broker-backed run owns its channel in a per-run directory whose
+    // root is $XDG_RUNTIME_DIR (docs/design/egress.md E4). Resolving it HERE
+    // keeps every refusal in step 4b, ahead of the state dirs, the SSH key
+    // and the clone: an unset or relative root, or a path over SUN_LEN, is
+    // refused with a dry run still auditing it.
+    let broker_dir = if broker_bin.is_some() {
+        let dir = match egress_run_dir(std::process::id()) {
+            Some(dir) => dir,
+            None => {
+                return complain(
+                    "network = \"proxy-only\" needs $XDG_RUNTIME_DIR for the egress \
+                     broker's socket directory, and it is unset or relative; the profile \
+                     refuses rather than falling back to a world-writable directory \
+                     (docs/design/egress.md E4/E5)",
+                )
+            }
+        };
+        let socket = dir.join(&socket);
+        // `sun_path` is BYTES: measure the raw path, not a lossy string.
+        let socket_len = {
+            use std::os::unix::ffi::OsStrExt;
+            socket.as_os_str().as_bytes().len()
+        };
+        if socket_len > detach::SUN_PATH_LIMIT {
+            return complain(&format!(
+                "the egress socket path `{}` is {socket_len} bytes, but a Unix socket \
+                 path is limited to {} bytes; shorten $XDG_RUNTIME_DIR \
+                 (docs/design/egress.md E4)",
+                socket.display(),
+                detach::SUN_PATH_LIMIT
+            ));
+        }
+        Some(dir)
+    } else {
+        None
+    };
+
+    // Two channel shapes share these pins (docs/design/egress.md E3/E6):
+    // a build WITHOUT the broker binds the host's static forwarder
+    // directory and needs it to exist, root-owned; a build WITH the broker
+    // creates a per-run directory, so nothing of the host's is checked or
+    // bound. The pin decides which, and a broker that cannot be started
+    // refuses the run later (E5: no broker, no egress).
+    if broker_bin.is_none() && !dry_run {
         let dir = std::path::Path::new(EGRESS_SOCKET_DIR);
         if let Err(message) = check_egress_socket_dir(dir) {
             return complain(&format!("{message} (MYSBX_EGRESS_SOCKET = `{path}`)"));
@@ -5999,6 +6147,8 @@ pub fn resolve_egress(
         path,
         relay_bin: relay,
         etc_dir,
+        broker_bin,
+        broker_dir,
     }))
 }
 
@@ -6648,6 +6798,217 @@ fn ensure_ssh_key(
         println!("## ssh public key: {}", key.trim_end());
     }
     Ok(SshKeyOutcome::Created)
+}
+
+/// The per-run egress broker directory: `$XDG_RUNTIME_DIR/mysbx-egress/<pid>`
+/// (docs/design/egress.md E3/E4). A SIBLING of `$XDG_RUNTIME_DIR/mysbx`,
+/// never below it: detach.md B8 refuses a bind source that IS, lies below
+/// or contains the detached-run registry, and this directory is a bind
+/// source.
+fn egress_run_dir(pid: u32) -> Option<std::path::PathBuf> {
+    let runtime = std::env::var_os("XDG_RUNTIME_DIR")?;
+    egress_run_dir_under(std::path::Path::new(&runtime), pid)
+}
+
+/// The pure half of [`egress_run_dir`]: an absolute `runtime` root gives
+/// `<runtime>/mysbx-egress/<pid>`, anything else gives `None`. Free so the
+/// rule is testable without touching the process environment.
+fn egress_run_dir_under(runtime: &std::path::Path, pid: u32) -> Option<std::path::PathBuf> {
+    if !runtime.is_absolute() {
+        return None;
+    }
+    Some(runtime.join("mysbx-egress").join(pid.to_string()))
+}
+
+/// Create the run's egress directory (mode 0700, symlink-free) and sweep
+/// the leftovers of runs that are gone.
+///
+/// The exec-mode lifecycle leaves the directory behind on purpose — the
+/// process that would remove it is replaced by the backend — so the NEXT
+/// run sweeps the siblings whose pid is gone. A shell-level `rm` is not
+/// attempted on a name we do not own: a pid-named entry of the run user
+/// IS ours (the same rule `ensure_waypipe_token_dir` applies).
+fn ensure_egress_run_dir(dir: &std::path::Path) -> Result<(), String> {
+    let root = dir
+        .parent()
+        .ok_or_else(|| format!("{} has no parent directory", dir.display()))?;
+    ensure_plain_dir(root)?;
+    ensure_plain_dir(dir)?;
+    std::fs::set_permissions(
+        dir,
+        <std::fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o700),
+    )
+    .map_err(|e| format!("cannot chmod {} to 0700: {e}", dir.display()))?;
+    // The directory is a bind source, so its metadata is part of the
+    // fence: a real directory, ours, no group/other bits (E3).
+    use std::os::unix::fs::MetadataExt;
+    let meta = std::fs::symlink_metadata(dir)
+        .map_err(|e| format!("cannot inspect {}: {e}", dir.display()))?;
+    if !meta.is_dir() {
+        return Err(format!(
+            "{} is not a real directory (a symlink or a plain file); the sandbox \
+             binds it read-only, so it must not be redirected (docs/design/egress.md E3)",
+            dir.display()
+        ));
+    }
+    let euid = unsafe { libc_geteuid() };
+    if meta.uid() != euid {
+        return Err(format!(
+            "{} is owned by uid {}, not by this run (uid {euid}) \
+             (docs/design/egress.md E3)",
+            dir.display(),
+            meta.uid()
+        ));
+    }
+    if meta.mode() & 0o077 != 0 {
+        return Err(format!(
+            "{} is mode {:04o}, so group or other can reach it; it must be 0700 \
+             (docs/design/egress.md E3)",
+            dir.display(),
+            meta.mode() & 0o7777
+        ));
+    }
+    sweep_pid_dirs(root);
+    Ok(())
+}
+
+/// Remove the pid-named entries of `root` whose owner is gone — the
+/// debris an exec-mode run leaves behind (nothing of the host outlives the
+/// exec to clean it). A name that does not parse as a pid is not ours and
+/// stays untouched, and this run's own entry is never swept.
+fn sweep_pid_dirs(root: &std::path::Path) {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let Ok(stale_pid) = name.parse::<u32>() else {
+            continue;
+        };
+        if stale_pid != std::process::id() && pid_gone(stale_pid) {
+            let _ = std::fs::remove_dir_all(entry.path());
+        }
+    }
+}
+
+/// Start the per-run egress broker (docs/design/egress.md E1/E2): create
+/// the run directory, spawn `mysbx-egress-broker` on the run's socket with
+/// the decision log in the sidecar, and wait for the socket to appear —
+/// the backend must not start before the channel is up (E5: no broker, no
+/// egress).
+///
+/// The broker is pinned to its parent with `prctl(PR_SET_PDEATHSIG,
+/// SIGKILL)` through [`die_with_parent`], so an exec-mode run needs no
+/// cleanup at all: when the backend exits, the kernel kills the broker and
+/// the next run's sweep removes the directory. A waited run kills it
+/// explicitly in [`cleanup_per_run_state`], like the waypipe client.
+fn start_egress_broker(
+    pinned: &EgressPins,
+    dir: &std::path::Path,
+    repo: &repo::Repo,
+    child_out: &mut Option<std::process::Child>,
+) -> Result<(), String> {
+    let pid = std::process::id();
+    ensure_egress_run_dir(dir)?;
+    let socket = dir.join(&pinned.socket);
+    let socket_str = socket
+        .to_str()
+        .ok_or_else(|| format!("the socket path {} is not valid UTF-8", socket.display()))?;
+    // The decision log lives in the sidecar, NOT the run directory: the
+    // sandbox binds the run directory read-only, so the payload would read
+    // it (docs/design/egress.md E4).
+    let log_root = repo.sidecar.join("egress");
+    let log_dir = log_root.join(pid.to_string());
+    ensure_plain_dir(&log_root)?;
+    ensure_plain_dir(&log_dir)?;
+    std::fs::set_permissions(
+        &log_dir,
+        <std::fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o700),
+    )
+    .map_err(|e| format!("cannot chmod {} to 0700: {e}", log_dir.display()))?;
+    // The log outlives its run for `mysbx diagnose egress` to read, so the
+    // directories of gone pids are the sidecar debris the next run sweeps
+    // (the waypipe token-directory rule, config.md D18).
+    sweep_pid_dirs(&log_root);
+    let log_path = log_dir.join("decisions.jsonl");
+    let log_str = log_path
+        .to_str()
+        .ok_or_else(|| format!("the log path {} is not valid UTF-8", log_path.display()))?;
+
+    let broker_bin = pinned.broker_bin.clone().ok_or_else(|| {
+        "network = \"proxy-only\" needs the per-run egress broker, but this \
+         build pinned no MYSBX_EGRESS_BROKER (docs/design/egress.md E5)"
+            .to_owned()
+    })?;
+    let upstream = format!("127.0.0.1:{}", pinned.port);
+    let mut cmd = std::process::Command::new(&broker_bin);
+    cmd.arg("--listen")
+        .arg(socket_str)
+        .arg("--upstream")
+        .arg(&upstream)
+        .arg("--decision-log")
+        .arg(log_str)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null());
+    // Die with mysbx's process: in exec mode mysbx IS the backend after the
+    // exec, so the kernel kills the broker when the run ends. Captured
+    // BEFORE the fork, where it would be the child's own pid.
+    use std::os::unix::process::CommandExt;
+    let parent_at_fork = std::process::id();
+    unsafe {
+        cmd.pre_exec(move || die_with_parent(parent_at_fork));
+    }
+    let mut spawned = cmd
+        .spawn()
+        .map_err(|e| format!("cannot start the egress broker {broker_bin}: {e}"))?;
+    let outcome = wait_for_egress_socket(&socket, &mut spawned, std::time::Duration::from_secs(5));
+    if outcome.is_err() {
+        let _ = spawned.kill();
+        let _ = spawned.wait();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+    outcome.map(|()| {
+        *child_out = Some(spawned);
+    })
+}
+
+/// Wait (polling at 50ms) for the broker's socket, bounded by `budget`,
+/// while watching the child: a broker that exits before binding ends the
+/// wait immediately. The socket-poll half of [`start_egress_broker`], free
+/// so the unit tests can drive it with a fake child.
+fn wait_for_egress_socket(
+    socket: &std::path::Path,
+    child: &mut std::process::Child,
+    budget: std::time::Duration,
+) -> Result<(), String> {
+    let deadline = std::time::Instant::now() + budget;
+    loop {
+        if socket.exists() {
+            return Ok(());
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                return Err(format!(
+                    "the egress broker exited ({status}) before creating {} — a \
+                     network = \"proxy-only\" run gets no channel and is refused \
+                     (docs/design/egress.md E5)",
+                    socket.display()
+                ));
+            }
+            Ok(None) => {}
+            Err(e) => return Err(format!("cannot watch the egress broker: {e}")),
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err(format!(
+                "the egress broker did not create {} within {:?} — a \
+                 network = \"proxy-only\" run gets no channel and is refused \
+                 (docs/design/egress.md E5)",
+                socket.display(),
+                budget
+            ));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
 }
 
 /// The per-run waypipe token directory (config.md D18):
@@ -7532,6 +7893,32 @@ mod tests {
         let e = check_egress_socket_dir(&missing).expect_err("a missing dir must be refused");
         assert!(e.contains("agent-litellm-forward-unix.socket"), "{e}");
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn the_egress_run_dir_is_a_sibling_of_the_detach_registry() {
+        // detach.md B8 refuses a bind source that IS, lies below or
+        // contains $XDG_RUNTIME_DIR/mysbx; the egress run directory is a
+        // bind source, so it must stay a SIBLING (docs/design/egress.md E4).
+        let runtime = std::path::Path::new("/run/user/1000");
+        let dir = egress_run_dir_under(runtime, 4242).expect("an absolute root resolves");
+        assert_eq!(
+            dir,
+            std::path::Path::new("/run/user/1000/mysbx-egress/4242")
+        );
+        let registry = runtime.join("mysbx");
+        assert!(
+            !dir.starts_with(&registry) && !registry.starts_with(&dir),
+            "the egress dir must not nest with the detach registry: {dir:?}"
+        );
+    }
+
+    #[test]
+    fn a_relative_runtime_dir_is_not_a_root() {
+        // A relative root would put the channel below the CWD, which the
+        // run's own directory resolution must never do.
+        assert!(egress_run_dir_under(std::path::Path::new("relative/root"), 4242).is_none());
+        assert!(egress_run_dir_under(std::path::Path::new(""), 4242).is_none());
     }
 
     #[test]

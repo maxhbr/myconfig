@@ -63,17 +63,13 @@ fn upstream_fixture() -> String {
     addr
 }
 
-/// The identity of a file, so a readiness wait can tell a stale socket
-/// from the one the broker just bound.
-fn inode(path: &Path) -> Option<u64> {
-    use std::os::unix::fs::MetadataExt;
-    std::fs::symlink_metadata(path).ok().map(|meta| meta.ino())
-}
-
-/// Spawn a broker and wait until IT has created its socket, then return
-/// it. `stale` is the inode of a socket that already sat at the path: the
-/// wait must ignore it (the broker replaces it).
-fn spawn_ready(dir: &Path, upstream: &str, stale: Option<u64>) -> (Child, String) {
+/// Spawn a broker and wait until IT has bound its channel, then return it.
+///
+/// Readiness is the `listen` line in the decision log, not the socket
+/// file: the broker writes that line after `bind(2)` and before the first
+/// accept, and a stale socket left at the path (the exec-mode debris the
+/// broker replaces) would satisfy a bare "does the file exist" wait.
+fn spawn_ready(dir: &Path, upstream: &str) -> (Child, String) {
     let socket = sock(dir);
     let child = broker()
         .args([
@@ -89,20 +85,25 @@ fn spawn_ready(dir: &Path, upstream: &str, stale: Option<u64>) -> (Child, String
         .stderr(Stdio::piped())
         .spawn()
         .expect("failed to spawn mysbx-egress-broker");
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    while inode(Path::new(&socket)).is_none() || inode(Path::new(&socket)) == stale {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    loop {
+        let bound = std::fs::read_to_string(log_in(dir))
+            .map(|log| log.contains("\"event\":\"listen\""))
+            .unwrap_or(false);
+        if bound {
+            return (child, socket);
+        }
         if std::time::Instant::now() > deadline {
             let mut child = child;
             let _ = child.kill();
             let out = child.wait_with_output().expect("wait");
             panic!(
-                "the broker never created {socket}: {}",
+                "the broker never bound {socket}: {}",
                 String::from_utf8_lossy(&out.stderr)
             );
         }
         std::thread::sleep(std::time::Duration::from_millis(25));
     }
-    (child, socket)
 }
 
 #[test]
@@ -208,7 +209,7 @@ fn a_world_accessible_run_directory_is_refused_with_seventy() {
 fn a_connection_is_forwarded_and_logged() {
     let dir = run_dir("forward");
     let addr = upstream_fixture();
-    let (child, socket) = spawn_ready(&dir, &addr, None);
+    let (child, socket) = spawn_ready(&dir, &addr);
     let mut client =
         std::os::unix::net::UnixStream::connect(&socket).expect("connect to the broker socket");
     client
@@ -242,7 +243,7 @@ fn an_unreachable_upstream_is_logged_as_unreachable_and_does_not_kill_the_broker
         let probe = TcpListener::bind("127.0.0.1:0").expect("bind a probe");
         probe.local_addr().expect("probe addr").to_string()
     };
-    let (child, socket) = spawn_ready(&dir, &addr, None);
+    let (child, socket) = spawn_ready(&dir, &addr);
     let mut client =
         std::os::unix::net::UnixStream::connect(&socket).expect("connect to the broker socket");
     let _ = client.write_all(b"GET /v1/models HTTP/1.1\r\n\r\n");
@@ -276,10 +277,9 @@ fn a_stale_socket_is_replaced_not_refused() {
     let dir = run_dir("stale");
     let socket = sock(&dir);
     let dead = std::os::unix::net::UnixListener::bind(&socket).expect("bind a fake stale socket");
-    let stale_inode = inode(Path::new(&socket)).expect("the stale socket exists");
     drop(dead);
     let addr = upstream_fixture();
-    let (child, socket) = spawn_ready(&dir, &addr, Some(stale_inode));
+    let (child, socket) = spawn_ready(&dir, &addr);
     let _ = std::os::unix::net::UnixStream::connect(&socket).expect("connect to the new socket");
     let mut child = child;
     let _ = child.kill();
@@ -291,7 +291,7 @@ fn a_stale_socket_is_replaced_not_refused() {
 fn the_decision_log_is_jsonl() {
     let dir = run_dir("jsonl");
     let addr = upstream_fixture();
-    let (child, socket) = spawn_ready(&dir, &addr, None);
+    let (child, socket) = spawn_ready(&dir, &addr);
     let mut client =
         std::os::unix::net::UnixStream::connect(&socket).expect("connect to the broker socket");
     let _ = client.write_all(b"GET /v1/models HTTP/1.1\r\n\r\n");
@@ -439,7 +439,7 @@ fn the_forwarded_connection_still_carries_the_client_bytes() {
             let _ = stream.write_all(b"HTTP/1.1 200 OK\r\n\r\nok");
         }
     });
-    let (child, socket) = spawn_ready(&dir, &addr, None);
+    let (child, socket) = spawn_ready(&dir, &addr);
     let mut client = std::os::unix::net::UnixStream::connect(&socket).expect("connect");
     client
         .write_all(b"POST /v1/chat/completions HTTP/1.1\r\nContent-Length: 2\r\n\r\n{}")

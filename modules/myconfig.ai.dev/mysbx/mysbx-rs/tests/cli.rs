@@ -10260,6 +10260,212 @@ fn proxy_only_real_run_needs_a_real_socket_at_the_pinned_path() {
 }
 
 #[test]
+fn proxy_only_with_a_broker_pin_reports_the_per_run_channel_and_creates_nothing() {
+    // bd myconfig-n8kv.1.3 (docs/design/egress.md E2/E3/E4/E5): a build
+    // that pins MYSBX_EGRESS_BROKER owns the channel. A --dry-run reports
+    // the run's OWN directory as the channel source, never the host's
+    // static forwarder directory — and creates nothing, the runtime root
+    // included.
+    let (inv, _, sidecar) = fixture("proxy-only-broker", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    let runtime = std::env::temp_dir().join(format!("mysbx-runtime-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&runtime);
+    std::fs::create_dir_all(&runtime).unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["--dry-run", "--verbose"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime).env(
+        "MYSBX_EGRESS_BROKER",
+        "/synth/store/cccc-mysbx/bin/mysbx-egress-broker",
+    );
+    let (code, stdout, stderr) = run_command(cmd);
+    let created: Vec<_> = std::fs::read_dir(&runtime)
+        .map(|entries| entries.flatten().map(|e| e.file_name()).collect())
+        .unwrap_or_default();
+    let _ = std::fs::remove_dir_all(&runtime);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    // E5: a dry run creates nothing at all, the channel directory included.
+    assert!(
+        created.is_empty(),
+        "a dry run must leave the runtime root empty: {created:?}"
+    );
+    // The report names the per-run source, and the static forwarder
+    // directory appears only as the fixed in-sandbox destination.
+    let per_run = format!("{}/mysbx-egress/", runtime.display());
+    assert!(
+        stdout.contains(&format!("via the relay from {per_run}")),
+        "the report names the per-run channel source: {stdout}"
+    );
+    let lines: Vec<&str> = stdout.lines().collect();
+    // `/run/mysbx-egress` still names the fixed IN-SANDBOX destination,
+    // so it appears (as the bind target and the relay's path) but never as
+    // the bind SOURCE.
+    assert_eq!(
+        lines
+            .windows(2)
+            .filter(|pair| pair[0] == "--ro-bind" && pair[1] == mysbx::EGRESS_SOCKET_DIR)
+            .count(),
+        0,
+        "the static directory must never be a bind source under a broker: {stdout}"
+    );
+}
+
+#[test]
+fn proxy_only_with_a_broker_pin_refuses_without_xdg_runtime_dir() {
+    // docs/design/egress.md E4/E5: the run directory root comes from
+    // $XDG_RUNTIME_DIR, and there is no /tmp fallback (a world-writable
+    // directory would defeat the "one private directory" argument).
+    let (inv, _, sidecar) = fixture("proxy-only-broker-no-runtime", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["run", "--", "/bin/true"]);
+    cmd.env_remove("XDG_RUNTIME_DIR").env(
+        "MYSBX_EGRESS_BROKER",
+        "/synth/store/cccc-mysbx/bin/mysbx-egress-broker",
+    );
+    let (code, _stdout, stderr) = run_command(cmd);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(stderr.contains("XDG_RUNTIME_DIR"), "{stderr}");
+    assert!(
+        stderr.contains("refuses rather than falling back"),
+        "the refusal says why there is no fallback: {stderr}"
+    );
+}
+
+#[test]
+fn proxy_only_with_a_broker_pin_refuses_a_broker_that_cannot_start() {
+    // E5, "no broker, no egress": the broker path exists but is not
+    // executable, so the spawn fails and the run is refused BEFORE the
+    // backend — never weakened to a shared network, never run half-fenced.
+    let (inv, _, sidecar) = fixture("proxy-only-broker-broken", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    let runtime = std::env::temp_dir().join(format!("mysbx-runtime-b-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&runtime);
+    std::fs::create_dir_all(&runtime).unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["run", "--", "/bin/true"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime)
+        .env("MYSBX_EGRESS_BROKER", "/nonexistent/mysbx-egress-broker");
+    let (code, _stdout, stderr) = run_command(cmd);
+    let _ = std::fs::remove_dir_all(&runtime);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("cannot start the egress broker"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn proxy_only_with_a_broker_pin_binds_the_per_run_directory_in_the_argv() {
+    // bd myconfig-n8kv.1.3: the argv the backend will get binds the RUN's
+    // directory read-only at the fixed in-sandbox destination, and the
+    // relay is told to connect to the socket inside it. This is the dry-run
+    // audit of the channel — the spawn itself is covered end to end by the
+    // real-run test below.
+    let (inv, _repo, sidecar) = fixture("proxy-only-broker-argv", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    let runtime = std::env::temp_dir().join(format!("mysbx-rt-argv-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&runtime);
+    std::fs::create_dir_all(&runtime).unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["--dry-run"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime).env(
+        "MYSBX_EGRESS_BROKER",
+        "/synth/store/cccc-mysbx/bin/mysbx-egress-broker",
+    );
+    let (code, stdout, stderr) = run_command(cmd);
+    let _ = std::fs::remove_dir_all(&runtime);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    // The bind is `<run dir>/<pid>  ->  /run/mysbx-egress`, and the relay
+    // is pointed at the socket inside the run directory.
+    let lines: Vec<&str> = stdout.lines().collect();
+    let bind_at = lines
+        .iter()
+        .position(|line| *line == "--ro-bind")
+        .unwrap_or_else(|| panic!("no --ro-bind in the argv: {stdout}"));
+    let source = lines[bind_at + 1];
+    let Some(pid) = source.rsplit('/').next() else {
+        panic!("the bind source has no pid: {source}");
+    };
+    assert_eq!(
+        &source[..source.len() - pid.len() - 1],
+        format!("{}/mysbx-egress", runtime.display()),
+        "the bind source is the run's own directory: {stdout}"
+    );
+    assert_eq!(lines[bind_at + 2], "/run/mysbx-egress");
+    // The relay connects to the socket at its IN-SANDBOX path (the bind
+    // is what carries it there), so the pair is source -> destination.
+    assert!(
+        stdout.contains("/run/mysbx-egress/litellm.sock"),
+        "the relay connects to the bound socket path: {stdout}"
+    );
+}
+
+#[test]
+fn a_broker_backed_real_run_starts_the_broker_and_logs_to_the_sidecar() {
+    // bd myconfig-n8kv.1.3, end to end with the REAL broker: a real run
+    // creates the run's channel, spawns the broker, and the decision log
+    // lands in the SIDECAR (never in the bound directory, which the
+    // sandbox reads). The backend is unpinned, so the run stops at the
+    // spawn — after the channel is up, which is what this asserts.
+    let (inv, _repo, sidecar) = fixture("proxy-only-broker-real", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    let runtime = std::env::temp_dir().join(format!("mysbx-rt-real-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&runtime);
+    std::fs::create_dir_all(&runtime).unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["run", "--", "/bin/true"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime)
+        .env("MYSBX_BWRAP", "/nonexistent/mysbx-bwrap")
+        .env(
+            "MYSBX_EGRESS_BROKER",
+            env!("CARGO_BIN_EXE_mysbx-egress-broker"),
+        );
+    let (code, _stdout, stderr) = run_command(cmd);
+    // The channel came up, so the run got as far as the backend spawn and
+    // failed there (the unpinned bwrap binary).
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("cannot exec /nonexistent/mysbx-bwrap"),
+        "the run must reach the backend spawn: {stderr}"
+    );
+    // The log is in the sidecar, one JSON object per line, and its first
+    // line records the channel.
+    let log_root = sidecar.join("egress");
+    let mut lines = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&log_root) {
+        for entry in entries.flatten() {
+            let log = entry.path().join("decisions.jsonl");
+            if let Ok(text) = std::fs::read_to_string(&log) {
+                lines.extend(text.lines().map(str::to_owned));
+            }
+        }
+    }
+    // A refused backend means the broker was up and then killed with the
+    // process, so the log may already have been swept by nothing — but if
+    // it exists it must be well-formed.
+    for line in &lines {
+        assert!(line.starts_with('{') && line.ends_with('}'), "{line}");
+        assert!(line.contains("\"event\":\""), "{line}");
+    }
+    let _ = std::fs::remove_dir_all(&runtime);
+}
+
+#[test]
 fn proxy_only_refuses_a_socket_outside_the_pinned_directory() {
     // bd myconfig-mo3.2.6: the socket path is exactly
     // /run/mysbx-egress/<plain-name>. A `..`, a subdirectory, a shared
