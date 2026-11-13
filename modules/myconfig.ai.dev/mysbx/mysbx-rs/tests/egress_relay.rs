@@ -82,3 +82,40 @@ fn a_missing_payload_is_a_runtime_failure_exit_seventy() {
     assert_eq!(code, Some(70), "stderr: {stderr}");
     assert!(stderr.contains("cannot start"), "{stderr}");
 }
+
+#[test]
+fn a_sigint_sent_to_the_relay_reaches_the_payload() {
+    // `kill -INT <relay>` (si_code SI_USER) targets the relay alone, so
+    // it must be forwarded: the payload traps SIGINT and exits 42, and
+    // the relay passes that status through. A terminal's ^C (SI_KERNEL)
+    // is not forwarded; that case needs a pty and is not covered here.
+    let mut child = relay()
+        .args([
+            "--listen",
+            "127.0.0.1:0",
+            "--connect",
+            "/tmp/mysbx-egress-relay-does-not-matter.sock",
+            "--",
+            "/bin/sh",
+            "-c",
+            "trap 'exit 42' INT; while :; do :; done",
+        ])
+        .spawn()
+        .expect("failed to spawn mysbx-egress-relay");
+    // Give the payload time to install its trap.
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    unsafe { mysbx::sig::kill_pid(child.id() as i32, mysbx::sig::INT) };
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("try_wait") {
+            break status;
+        }
+        if std::time::Instant::now() > deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("the payload never got the forwarded SIGINT");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    };
+    assert_eq!(status.code(), Some(42), "status: {status:?}");
+}

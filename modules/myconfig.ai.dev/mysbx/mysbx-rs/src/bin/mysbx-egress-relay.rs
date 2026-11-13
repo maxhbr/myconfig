@@ -29,7 +29,8 @@
 //! 3. Block SIGHUP/SIGINT/SIGTERM, install their handlers, spawn
 //!    `<cmd>` with its stdin/stdout/stderr inherited, record its pid,
 //!    then unblock: a signal arriving anywhere in that window stays
-//!    pending and is forwarded once the pid is known.
+//!    pending and is forwarded once the pid is known. The payload gets
+//!    the mask from before the block, so it receives the signals.
 //! 4. One accept thread: per connection, connect to the Unix socket
 //!    and copy both ways until EOF, then half-close the peer.
 //!    Transient accept errors retry, descriptor pressure backs off,
@@ -39,9 +40,10 @@
 //!
 //! Signal-forwarding rule: SIGHUP and SIGTERM are always forwarded to
 //! the payload (a supervisor's shutdown must stop it). SIGINT is
-//! forwarded only when the relay is NOT in the terminal's foreground
-//! process group — in the foreground the terminal already delivered ^C
-//! to the payload too, so forwarding would signal it twice.
+//! forwarded only when a process sent it (`kill(2)`, `si_code` =
+//! `SI_USER`); a kernel-raised SIGINT (`SI_KERNEL`) is the terminal's
+//! ^C, which already reached the payload in the same foreground process
+//! group, so forwarding it would signal the payload twice.
 //!
 //! The relay makes no allow/deny decisions of its own: the fence is
 //! the empty netns plus the single bound socket. It exists only to
@@ -50,6 +52,7 @@
 use std::io::{self, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::os::unix::net::UnixStream;
+use std::os::unix::process::CommandExt;
 use std::process::{Child, Command, ExitStatus};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -170,16 +173,27 @@ fn run(inv: &Invocation) -> Result<i32, String> {
     // lasts across the spawn+pid-store: a signal arriving anywhere in
     // that window stays pending and is forwarded once the pid is known
     // (with the handlers installed before the block, a signal in between
-    // would reach a handler with no pid and be dropped). The payload's
-    // own mask is reset by `Command::spawn`, so it does not inherit the
-    // block.
+    // would reach a handler with no pid and be dropped).
     let blocked =
         unsafe { mysbx::sig::set_of(&[mysbx::sig::HUP, mysbx::sig::INT, mysbx::sig::TERM]) };
     let saved = unsafe { mysbx::sig::mask(mysbx::sig::BLOCK, &blocked) };
     forward_signals();
 
-    let child = Command::new(&inv.payload[0])
-        .args(&inv.payload[1..])
+    // `Command::spawn` passes the calling thread's signal mask on to the
+    // child, so the payload would start with the three signals blocked
+    // and never see them. Restore the mask from before the block in the
+    // child, between fork and exec (`pthread_sigmask` is
+    // async-signal-safe).
+    let child_mask = saved;
+    let mut command = Command::new(&inv.payload[0]);
+    command.args(&inv.payload[1..]);
+    unsafe {
+        command.pre_exec(move || {
+            mysbx::sig::restore_mask(&child_mask);
+            Ok(())
+        });
+    }
+    let child = command
         .spawn()
         .map_err(|e| format!("cannot start `{}`: {e}", inv.payload[0]));
     let mut child = match child {
@@ -378,12 +392,19 @@ fn set_child_pid(pid: u32) {
 /// lives once in `mysbx::sig`.
 #[cfg(unix)]
 fn forward_signals() {
-    unsafe extern "C" fn forward(signum: i32) {
+    unsafe extern "C" fn forward(signum: i32, info: *const u8, _ctx: *mut u8) {
         let pid = CHILD_PID.load(Ordering::SeqCst);
-        // SIGINT: skip when the relay and the payload share the terminal's
-        // foreground process group — the terminal already delivered ^C to
-        // both, and forwarding it again would signal the payload twice.
-        if signum == mysbx::sig::INT && mysbx::sig::in_foreground_process_group() {
+        // A SIGINT the kernel raised is the terminal's ^C to the
+        // foreground process group: the payload is in that group and got
+        // it too, so forwarding would signal it twice. A SIGINT sent with
+        // kill(2) (SI_USER) targets the relay alone and is forwarded. The
+        // decision rests on `si_code`, not on process groups, because
+        // inside the sandbox's pid namespace the terminal's process
+        // groups are not visible.
+        if signum == mysbx::sig::INT
+            && !info.is_null()
+            && unsafe { mysbx::sig::si_code(info) } == mysbx::sig::SI_KERNEL
+        {
             return;
         }
         if pid > 0 {
@@ -394,7 +415,7 @@ fn forward_signals() {
     }
     for sig in [mysbx::sig::HUP, mysbx::sig::INT, mysbx::sig::TERM] {
         unsafe {
-            mysbx::sig::on(sig, forward);
+            mysbx::sig::on_info(sig, forward);
         }
     }
 }

@@ -5577,8 +5577,7 @@ pub mod sig {
         fn pthread_sigmask(how: i32, set: *const SigSet, old: *mut SigSet) -> i32;
         fn sigemptyset(set: *mut SigSet) -> i32;
         fn sigaddset(set: *mut SigSet, signum: i32) -> i32;
-        fn getpgrp() -> i32;
-        fn tcgetpgrp(fd: i32) -> i32;
+        fn sigaction(signum: i32, act: *const SigAction, old: *mut SigAction) -> i32;
     }
 
     /// The platform's `sigset_t`: a 128-byte block, which glibc and musl
@@ -5586,6 +5585,7 @@ pub mod sig {
     /// mask they see. Only `sigemptyset`/`sigaddset`/`pthread_sigmask`
     /// touch it, and all three are given a pointer to zeroed bytes.
     #[repr(C, align(8))]
+    #[derive(Clone, Copy)]
     pub struct SigSet([u8; 128]);
 
     impl SigSet {
@@ -5639,15 +5639,36 @@ pub mod sig {
         }
     }
 
-    /// Whether the calling process is in the FOREGROUND process group of
-    /// its controlling terminal — i.e. the terminal delivers `^C`
-    /// (`SIGINT`) to the relay and the payload alike.
-    pub fn in_foreground_process_group() -> bool {
-        // stdin is fd 0; a process with no controlling terminal gets
-        // `tcgetpgrp` = -1, which compares unequal to a real pgrp.
-        let fg = unsafe { tcgetpgrp(0) };
-        let own = unsafe { getpgrp() };
-        fg >= 0 && fg == own
+    /// The libc `struct sigaction` (glibc and musl, x86_64 and aarch64:
+    /// handler, 128-byte mask, `int` flags, restorer — 152 bytes).
+    #[repr(C)]
+    struct SigAction {
+        sa_sigaction: usize,
+        sa_mask: SigSet,
+        sa_flags: i32,
+        sa_restorer: usize,
+    }
+
+    /// `SA_SIGINFO`: the handler receives a `siginfo_t`.
+    const SA_SIGINFO: i32 = 0x4;
+    /// `SA_RESTART`: restart interrupted system calls, as `signal()` does.
+    const SA_RESTART: i32 = 0x1000_0000;
+
+    /// `SI_KERNEL`: the signal was raised by the kernel itself — for
+    /// `SIGINT`, the terminal driver's `^C` to the foreground process
+    /// group. A `kill(2)` from a process carries `SI_USER` instead.
+    pub const SI_KERNEL: i32 = 0x80;
+
+    /// An `SA_SIGINFO` handler: `(signum, siginfo_t *, ucontext *)`.
+    pub type InfoHandler = unsafe extern "C" fn(i32, *const u8, *mut u8);
+
+    /// The `si_code` of a `siginfo_t` (the third `int`: `si_signo`,
+    /// `si_errno`, `si_code` on Linux).
+    ///
+    /// # Safety
+    /// `info` must be the `siginfo_t` pointer an [`InfoHandler`] got.
+    pub unsafe fn si_code(info: *const u8) -> i32 {
+        unsafe { std::ptr::read_unaligned(info.add(8) as *const i32) }
     }
 
     /// `SIGHUP`.
@@ -5676,13 +5697,19 @@ pub mod sig {
         unsafe { kill(pid, signum) };
     }
 
-    /// Install `handler` (a `fn(i32)` cast to its address) for
-    /// `signum`.
+    /// Install `handler` for `signum` with `SA_SIGINFO | SA_RESTART`, so
+    /// the handler can tell who raised the signal ([`si_code`]).
     ///
     /// # Safety
     /// Process-global handler policy, as [`to_default`].
-    pub unsafe fn on(signum: i32, handler: unsafe extern "C" fn(i32)) {
-        unsafe { signal(signum, handler as *const () as usize) };
+    pub unsafe fn on_info(signum: i32, handler: InfoHandler) {
+        let act = SigAction {
+            sa_sigaction: handler as *const () as usize,
+            sa_mask: unsafe { set_of(&[]) },
+            sa_flags: SA_SIGINFO | SA_RESTART,
+            sa_restorer: 0,
+        };
+        unsafe { sigaction(signum, &act, std::ptr::null_mut()) };
     }
 }
 
