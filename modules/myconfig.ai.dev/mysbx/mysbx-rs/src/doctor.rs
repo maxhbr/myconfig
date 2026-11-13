@@ -1194,9 +1194,16 @@ fn egress_check(checks: &mut Vec<Check>) {
     // its own line so a host with a broken broker says which part is
     // wrong, and the probe is SKIPped when a dependency already failed
     // (the `Check::skip` contract).
+    // The per-run broker (docs/design/egress.md E1/E5, bd
+    // myconfig-n8kv.1.4). It is OPTIONAL: a build without the pin serves
+    // the channel from the static forwarder, which needs no Landlock at
+    // all (the fence is the empty netns plus the bound socket), so every
+    // broker-specific verdict below hangs off the pin. A host on an old
+    // kernel is a healthy STATIC-forwarder host, not a broken one.
+    let broker = crate::env_opt("MYSBX_EGRESS_BROKER");
     let mut broker_ok = true;
-    match crate::env_opt("MYSBX_EGRESS_BROKER") {
-        Some(broker) if is_executable(Path::new(&broker)) => checks.push(Check::ok(
+    match broker.as_deref() {
+        Some(broker) if is_executable(Path::new(broker)) => checks.push(Check::ok(
             "egress broker",
             format!("{broker} (one process per proxy-only run)"),
         )),
@@ -1208,38 +1215,40 @@ fn egress_check(checks: &mut Vec<Check>) {
                 "rebuild mysbx from a store that carries mysbx-egress-broker",
             ));
         }
-        // No pin: this build's channel is the static forwarder, which is
-        // a supported state (docs/design/egress.md E6 step 1), not a fault.
         None => checks.push(Check::ok(
             "egress broker",
-            "not pinned; a proxy-only run uses the static forwarder socket",
+            "not pinned; the channel comes from the static forwarder socket \
+             (no Landlock needed)",
         )),
     }
-    let landlock = landlock_abi();
-    match landlock {
-        Some(abi) if abi >= crate::landlock::ABI_NET_PORTS => checks.push(Check::ok(
-            "egress broker confinement",
-            format!("Landlock ABI {abi} confines the broker to one TCP port"),
-        )),
-        Some(abi) => {
-            broker_ok = false;
-            checks.push(Check::fail(
+    // The broker confines ITSELF with Landlock TCP port rules, so the ABI
+    // floor is a broker requirement only.
+    if broker.is_some() {
+        match landlock_abi() {
+            Some(abi) if abi >= crate::landlock::ABI_NET_PORTS => checks.push(Check::ok(
                 "egress broker confinement",
-                format!(
-                    "Landlock ABI {abi} has no TCP port rules (ABI {} = Linux 6.7 or newer)",
-                    crate::landlock::ABI_NET_PORTS
-                ),
-                "a proxy-only run with the broker is refused on this kernel; \
-                 use network = \"shared\" or a newer kernel",
-            ));
-        }
-        None => {
-            broker_ok = false;
-            checks.push(Check::fail(
-                "egress broker confinement",
-                "Landlock is unavailable on this kernel",
-                "a proxy-only run with the broker is refused without Landlock",
-            ));
+                format!("Landlock ABI {abi} confines the broker to one TCP port"),
+            )),
+            Some(abi) => {
+                broker_ok = false;
+                checks.push(Check::fail(
+                    "egress broker confinement",
+                    format!(
+                        "Landlock ABI {abi} has no TCP port rules (ABI {} = Linux 6.7 or newer)",
+                        crate::landlock::ABI_NET_PORTS
+                    ),
+                    "a proxy-only run with the broker is refused on this kernel; \
+                     use network = \"shared\" or a newer kernel",
+                ));
+            }
+            None => {
+                broker_ok = false;
+                checks.push(Check::fail(
+                    "egress broker confinement",
+                    "Landlock is unavailable on this kernel",
+                    "a proxy-only run with the broker is refused without Landlock",
+                ));
+            }
         }
     }
     if !broker_ok {
@@ -1254,7 +1263,7 @@ fn egress_check(checks: &mut Vec<Check>) {
     // makes, and stop it. That exercises the whole path the run will use —
     // the binary, its confinement, its upstream — instead of just asking
     // whether the host's static socket answers (docs/design/egress.md E5).
-    if let Some(broker) = crate::env_opt("MYSBX_EGRESS_BROKER") {
+    if let Some(broker) = broker {
         checks.push(probe_through_broker(&broker, &port));
         return;
     }
@@ -2701,6 +2710,88 @@ mod tests {
         let missing = kvm_check(false, false);
         assert_eq!(missing.level, Level::Fail);
         assert!(missing.detail.contains("missing"));
+    }
+
+    #[test]
+    fn the_broker_confinement_verdict_hangs_off_the_pin() {
+        // bd myconfig-1012: the broker's Landlock self-fence is a BROKER
+        // requirement. A build without the pin serves the channel from the
+        // static forwarder, which needs none, so an old kernel must not
+        // turn into a FAIL (and a SKIPped probe) on such a host.
+        //
+        // The pin is read from the process environment, so this test owns
+        // the variables for its duration and restores them. No other test
+        // in the crate reads or writes a `MYSBX_EGRESS_*` name, so the
+        // ownership cannot race (`cargo test` runs these in parallel).
+        let key = "MYSBX_EGRESS_BROKER";
+        let saved = std::env::var_os(key);
+        let mut run = |value: Option<std::ffi::OsString>| {
+            match &value {
+                Some(v) => unsafe { std::env::set_var(key, v) },
+                None => unsafe { std::env::remove_var(key) },
+            }
+            // A fixed set of pins, so the only variable is the broker one.
+            for (name, val) in [
+                ("MYSBX_EGRESS_SOCKET", "/run/mysbx-egress/litellm.sock"),
+                ("MYSBX_EGRESS_PORT", "4000"),
+                (
+                    "MYSBX_EGRESS_RELAY",
+                    "/nonexistent/mysbx-egress-relay-q1012",
+                ),
+                ("MYSBX_EGRESS_ETC", "/nonexistent/mysbx-egress-etc-q1012"),
+            ] {
+                unsafe { std::env::set_var(name, val) };
+            }
+            let mut checks = Vec::new();
+            egress_check(&mut checks);
+            for name in [
+                "MYSBX_EGRESS_SOCKET",
+                "MYSBX_EGRESS_PORT",
+                "MYSBX_EGRESS_RELAY",
+                "MYSBX_EGRESS_ETC",
+            ] {
+                unsafe { std::env::remove_var(name) };
+            }
+            checks
+        };
+
+        // No pin: no broker verdicts at all, and no SKIP on the probe.
+        let static_only = run(None);
+        assert!(
+            !static_only
+                .iter()
+                .any(|c| c.name == "egress broker confinement"),
+            "a static-forwarder build must not be judged by the broker's Landlock: {static_only:?}"
+        );
+        assert!(
+            !static_only.iter().any(|c| c.name == "egress channel probe"),
+            "the static path probes the socket directly: {static_only:?}"
+        );
+
+        // A pinned broker is judged (the binary is missing here, so the pin
+        // check fails and the probe is SKIPped — which is the contract).
+        let pinned = run(Some("/nonexistent/mysbx-egress-broker".into()));
+        assert!(
+            pinned
+                .iter()
+                .any(|c| c.name == "egress broker" && c.level == Level::Fail),
+            "{pinned:?}"
+        );
+        assert!(
+            pinned.iter().any(|c| c.name == "egress broker confinement"),
+            "a pinned broker must still be judged by Landlock: {pinned:?}"
+        );
+        assert!(
+            pinned
+                .iter()
+                .any(|c| c.name == "egress channel probe" && c.level == Level::Skip),
+            "{pinned:?}"
+        );
+
+        match saved {
+            Some(v) => unsafe { std::env::set_var(key, v) },
+            None => unsafe { std::env::remove_var(key) },
+        }
     }
 
     #[test]
