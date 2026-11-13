@@ -4,6 +4,12 @@
 /run/mysbx-egress
 /run/mysbx-egress
 --ro-bind
+/synth/store/bbbb-mysbx-egress-etc/hosts
+/etc/hosts
+--ro-bind
+/synth/store/bbbb-mysbx-egress-etc/nsswitch.conf
+/etc/nsswitch.conf
+--ro-bind
 /nix/store
 /nix/store
 --ro-bind

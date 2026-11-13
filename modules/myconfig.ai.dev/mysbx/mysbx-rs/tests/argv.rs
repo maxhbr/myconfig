@@ -137,6 +137,7 @@ fn egress_channel() -> mysbx::bwrap::EgressChannel<'static> {
         socket: "litellm.sock",
         port: 4000,
         relay_bin: "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
+        etc_dir: "/synth/store/bbbb-mysbx-egress-etc",
     }
 }
 
@@ -2215,6 +2216,23 @@ fn the_nix_daemon_rides_with_the_network() {
     let egress = pos_pair(&proxy, "--ro-bind", "/run/mysbx-egress");
     let store = pos_pair(&proxy, "--ro-bind", "/nix/store");
     assert!(egress < store, "the egress bind precedes the base binds");
+    // Name lookup comes from the fixed store files, never the host's
+    // /etc/hosts or /etc/nsswitch.conf: without them glibc tries DNS on
+    // 127.0.0.1:53 and even `localhost` fails (EAI_AGAIN).
+    for name in ["hosts", "nsswitch.conf"] {
+        let src = format!("/synth/store/bbbb-mysbx-egress-etc/{name}");
+        let dest = format!("/etc/{name}");
+        assert!(
+            proxy
+                .windows(3)
+                .any(|w| w[0] == "--ro-bind" && w[1] == src && w[2] == dest),
+            "{name} is bound from the egress etc dir: {proxy:?}"
+        );
+        assert!(
+            !proxy.windows(2).any(|w| w[1] == dest && w[0] != src),
+            "the host's {dest} is not bound: {proxy:?}"
+        );
+    }
 }
 
 #[test]

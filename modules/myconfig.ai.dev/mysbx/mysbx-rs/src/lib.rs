@@ -3359,6 +3359,7 @@ fn sandbox_pipeline(
             socket: &pinned.socket,
             port: pinned.port,
             relay_bin: &pinned.relay_bin,
+            etc_dir: &pinned.etc_dir,
         });
     let (report_shell, report_tools_path, report_mux_entry) =
         if backends::find(backend).is_some_and(|row| row.podman()) {
@@ -5890,11 +5891,14 @@ pub struct EgressPins {
     pub path: String,
     /// The relay binary.
     pub relay_bin: String,
+    /// The store directory with the sandbox's `hosts` and
+    /// `nsswitch.conf`.
+    pub etc_dir: String,
 }
 
 /// Resolve and validate the `proxy-only` egress channel from
-/// `MYSBX_EGRESS_SOCKET` / `MYSBX_EGRESS_PORT` / `MYSBX_EGRESS_RELAY`
-/// (docs/design/config.md D20, bd myconfig-mo3.2.6).
+/// `MYSBX_EGRESS_SOCKET` / `MYSBX_EGRESS_PORT` / `MYSBX_EGRESS_RELAY` /
+/// `MYSBX_EGRESS_ETC` (docs/design/config.md D20, bd myconfig-mo3.2.6).
 ///
 /// Runs in step 4b, BEFORE anything is created (`ensure_state_dirs`, the
 /// SSH key, the session clone) and before the `--dry-run` return.
@@ -5931,6 +5935,7 @@ pub fn resolve_egress(
     let socket_path = env_opt("MYSBX_EGRESS_SOCKET");
     let port_raw = env_opt("MYSBX_EGRESS_PORT");
     let relay = env_opt("MYSBX_EGRESS_RELAY");
+    let etc_dir = env_opt("MYSBX_EGRESS_ETC");
 
     let mut missing = Vec::new();
     if socket_path.is_none() {
@@ -5942,6 +5947,9 @@ pub fn resolve_egress(
     if relay.is_none() {
         missing.push("MYSBX_EGRESS_RELAY");
     }
+    if etc_dir.is_none() {
+        missing.push("MYSBX_EGRESS_ETC");
+    }
     if !missing.is_empty() {
         return complain(&format!(
             "network = \"proxy-only\" needs the LiteLLM forwarder's socket channel, \
@@ -5949,8 +5957,10 @@ pub fn resolve_egress(
             missing.join(", ")
         ));
     }
-    // Present, so the three are `Some`. Destructure without `unwrap`.
-    let (Some(path), Some(port_raw), Some(relay)) = (socket_path, port_raw, relay) else {
+    // Present, so all four are `Some`. Destructure without `unwrap`.
+    let (Some(path), Some(port_raw), Some(relay), Some(etc_dir)) =
+        (socket_path, port_raw, relay, etc_dir)
+    else {
         return complain("network = \"proxy-only\" is missing an egress pin");
     };
 
@@ -5987,6 +5997,7 @@ pub fn resolve_egress(
         port,
         path,
         relay_bin: relay,
+        etc_dir,
     }))
 }
 

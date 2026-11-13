@@ -394,6 +394,10 @@ pub struct EgressChannel<'a> {
     /// The `mysbx-egress-relay` binary (a store path from mysbx's own
     /// closure, `MYSBX_EGRESS_RELAY`).
     pub relay_bin: &'a str,
+    /// A store directory holding the sandbox's `hosts` and
+    /// `nsswitch.conf` (`MYSBX_EGRESS_ETC`), bound over `/etc/hosts`
+    /// and `/etc/nsswitch.conf`.
+    pub etc_dir: &'a str,
 }
 
 /// Where a `proxy-only` run binds the forwarder's socket DIRECTORY
@@ -679,6 +683,15 @@ pub fn bwrap_argv(
         argv.push("--ro-bind".into());
         argv.push(egress.socket_dir.into());
         argv.push(EGRESS_DIR.into());
+        // Name lookup without a resolver: the host's hosts file (which
+        // may list LAN names) stays out; a fixed one maps `localhost` to
+        // the relay's 127.0.0.1, and `hosts: files` keeps glibc from
+        // trying DNS on 127.0.0.1:53, where nothing listens.
+        for name in ["hosts", "nsswitch.conf"] {
+            argv.push("--ro-bind".into());
+            argv.push(format!("{}/{name}", egress.etc_dir).into());
+            argv.push(format!("/etc/{name}").into());
+        }
     }
 
     // 3. the base binds (docs/plan.md "The base" table, fixed absolute

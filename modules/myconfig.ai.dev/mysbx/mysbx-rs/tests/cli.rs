@@ -145,6 +145,7 @@ fn spawn_with_args<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> C
         .env_remove("MYSBX_EGRESS_SOCKET")
         .env_remove("MYSBX_EGRESS_PORT")
         .env_remove("MYSBX_EGRESS_RELAY")
+        .env_remove("MYSBX_EGRESS_ETC")
         // The detached-run registry root is not a fixture input: a
         // host-set value would make runs of this very sandbox depend
         // on the machine's runtime dir. Tests that exercise the
@@ -200,7 +201,8 @@ fn spawn_proxy_only<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> 
     .env(
         "MYSBX_EGRESS_RELAY",
         "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
-    );
+    )
+    .env("MYSBX_EGRESS_ETC", "/synth/store/bbbb-mysbx-egress-etc");
     cmd
 }
 
@@ -10206,7 +10208,8 @@ fn proxy_only_refuses_a_non_numeric_egress_port() {
         .env(
             "MYSBX_EGRESS_RELAY",
             "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
-        );
+        )
+        .env("MYSBX_EGRESS_ETC", "/synth/store/bbbb-mysbx-egress-etc");
         let (code, _stdout, stderr) = run_command(cmd);
         assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "{bad}: {stderr}");
         assert!(
@@ -10283,7 +10286,8 @@ fn proxy_only_refuses_a_socket_outside_the_pinned_directory() {
             .env(
                 "MYSBX_EGRESS_RELAY",
                 "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
-            );
+            )
+            .env("MYSBX_EGRESS_ETC", "/synth/store/bbbb-mysbx-egress-etc");
         let (code, stdout, stderr) = run_command(cmd);
         assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "{socket}: {stderr}");
         assert!(

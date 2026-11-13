@@ -1125,26 +1125,45 @@ fn host_endpoint_check(
 
 /// The `network = "proxy-only"` channel check (docs/design/config.md
 /// D20, bd myconfig-mo3.2.6): the wrapper pins `MYSBX_EGRESS_SOCKET`,
-/// `MYSBX_EGRESS_PORT` and `MYSBX_EGRESS_RELAY`. Report what a
+/// `MYSBX_EGRESS_PORT`, `MYSBX_EGRESS_RELAY` and `MYSBX_EGRESS_ETC`.
+/// Report what a
 /// `proxy-only` run would use, and CONNECT to the forwarder socket and
 /// send a `GET /v1/models` — a host-side probe of the same channel the
 /// sandbox reaches, so a stopped forwarder or a missing socket surfaces
 /// here rather than as a sandboxed agent that cannot reach its model.
 fn egress_check(checks: &mut Vec<Check>) {
-    let (Some(socket), Some(port), Some(relay)) = (
+    let (Some(socket), Some(port), Some(relay), Some(etc_dir)) = (
         crate::env_opt("MYSBX_EGRESS_SOCKET"),
         crate::env_opt("MYSBX_EGRESS_PORT"),
         crate::env_opt("MYSBX_EGRESS_RELAY"),
+        crate::env_opt("MYSBX_EGRESS_ETC"),
     ) else {
         checks.push(Check::warn(
             "egress channel",
             "network = \"proxy-only\" is not pinned on this host",
             "enable myconfig.ai.dev.litellm-forwarder.unixSocket.enable so the \
              host runs the forwarder and the wrapper pins MYSBX_EGRESS_SOCKET/\
-             PORT/RELAY",
+             PORT/RELAY/ETC",
         ));
         return;
     };
+    // The sandbox's name lookup files (bound over /etc/hosts and
+    // /etc/nsswitch.conf in a proxy-only run).
+    let etc = Path::new(&etc_dir);
+    checks.push(
+        if etc.join("hosts").is_file() && etc.join("nsswitch.conf").is_file() {
+            Check::ok(
+                "egress name lookup",
+                format!("{etc_dir} (localhost = 127.0.0.1, no DNS)"),
+            )
+        } else {
+            Check::fail(
+                "egress name lookup",
+                format!("{etc_dir} lacks hosts or nsswitch.conf"),
+                "rebuild mysbx from a store that carries mysbx-egress-etc",
+            )
+        },
+    );
     // The relay binary must be the pinned store path (the run needs it).
     checks.push(if Path::new(&relay).is_file() {
         Check::ok(

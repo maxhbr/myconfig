@@ -940,6 +940,17 @@ let
   # operator-knob reasoning of the pasta spec: a debugging run may
   # point them elsewhere, and a `proxy-only` run without a pinned
   # socket is refused (it fails closed).
+  # The name lookup of a `network = "proxy-only"` sandbox: an empty
+  # netns has no resolver, and without a hosts file glibc falls back to
+  # DNS on 127.0.0.1:53 and even `localhost` fails (EAI_AGAIN). The
+  # builder binds these two files over /etc/hosts and /etc/nsswitch.conf,
+  # so `localhost` is the relay's 127.0.0.1 (IPv4 only: the relay does
+  # not listen on ::1) and every other name fails fast as not found.
+  egressEtc = runCommand "mysbx-egress-etc" { } ''
+    mkdir "$out"
+    printf '127.0.0.1 localhost\n' > "$out/hosts"
+    printf 'hosts: files\n' > "$out/nsswitch.conf"
+  '';
   egressPins =
     lib.optionalString (egressSocket != null) "--set-default MYSBX_EGRESS_SOCKET '${egressSocket}' "
     + lib.optionalString (
@@ -947,7 +958,8 @@ let
     ) "--set-default MYSBX_EGRESS_PORT '${toString egressPort}' "
     # The in-sandbox relay binary (bd myconfig-mo3.2.5): a closure path,
     # so `--set`, not `--set-default` — it must match this build.
-    + "--set MYSBX_EGRESS_RELAY '${crate}/bin/mysbx-egress-relay'";
+    + "--set MYSBX_EGRESS_RELAY '${crate}/bin/mysbx-egress-relay' "
+    + "--set MYSBX_EGRESS_ETC '${egressEtc}'";
   # The nono backend pins of the layered backend (bd
   # myconfig-6di.4.3): the binary (`--set`, an absolute store path
   # like every other closure pin) and the mysbx profile (the
@@ -1138,6 +1150,8 @@ symlinkJoin {
     # The in-sandbox relay binary the wrapper pins (bd myconfig-mo3.2.5),
     # for the checks.nix gate that runs it live.
     egressRelay = "${crate}/bin/mysbx-egress-relay";
+    # The proxy-only sandbox's `hosts` and `nsswitch.conf`.
+    egressEtc = "${egressEtc}";
     # The disk's closure roots as store paths, for the same gate:
     # `vmStoreExtraRoots` (the guest nix wrappers, the
     # git-default-diff wrapper) must appear here when the module

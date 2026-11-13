@@ -1253,7 +1253,7 @@ as D21, and bubblewrap is the only enforcing backend in phase A:
 
 | backend | `network = "proxy-only"` means |
 | --- | --- |
-| `bubblewrap` | the enforcing backend: an unshared network namespace, the FIXED directory `/run/mysbx-egress` bound read-only, and the `mysbx-egress-relay` binary listening on `127.0.0.1:<litellm port>` and forwarding to the socket inside it (bd myconfig-mo3.2.6) |
+| `bubblewrap` | the enforcing backend: an unshared network namespace, the FIXED directory `/run/mysbx-egress` bound read-only, and the `mysbx-egress-relay` binary listening on `127.0.0.1:<litellm port>` and forwarding to the socket inside it; no resolver, but a fixed `/etc/hosts` (`127.0.0.1 localhost` only) and `/etc/nsswitch.conf` (`hosts: files`) from the store (`MYSBX_EGRESS_ETC`), so `localhost` reaches the relay and every other name fails at once as not found instead of timing out on DNS (bd myconfig-mo3.2.6) |
 | `nono` | refused — its Landlock/seccomp layer is no default-deny network fence; the profile there is bd myconfig-vpi9.1 |
 | `podman-gvisor` | refused — pasta's `--map-guest-addr` ADDS a route to the forwarder, it does not remove the default route (bd myconfig-6di.3) |
 | `podman-krun` | refused — libkrun's TSI is an unfiltered proxy from the container netns (bd myconfig-6di.5.5) |
