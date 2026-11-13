@@ -2094,7 +2094,7 @@ fn check_display_socket(mounts: &[Mount], state_dirs: &[String]) -> Result<(), E
 /// path to the same directory than the one the profile intends. The
 /// `socket_dir` source itself is trusted (the forwarder owns it), so
 /// only its in-sandbox DEST is guarded.
-fn check_egress_dir(mounts: &[Mount], state_dirs: &[String]) -> Result<(), Error> {
+pub fn check_egress_dir(mounts: &[Mount], state_dirs: &[String]) -> Result<(), Error> {
     let egress = Path::new(EGRESS_DIR);
     for m in mounts {
         let dest = normalize(m.dest.as_deref().unwrap_or(&m.path));

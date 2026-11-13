@@ -2812,6 +2812,15 @@ fn sandbox_pipeline(
         Ok(pins) => pins,
         Err(()) => return EXIT_INFRASTRUCTURE,
     };
+    // Nothing may mount or persist over the directory the channel binds.
+    // The argv builder checks this too; checking it here as well keeps
+    // the refusal ahead of the state dirs, the SSH key and the clone.
+    if egress.is_some() {
+        if let Err(e) = bwrap::check_egress_dir(&merged.mounts, &merged.effective_state_dirs()) {
+            eprintln!("mysbx: {e}");
+            return EXIT_INFRASTRUCTURE;
+        }
+    }
 
     // The credential rules of `network = "proxy-only"` (docs/design/config.md
     // D28, bd myconfig-t24): the profile is the no-key path — the host

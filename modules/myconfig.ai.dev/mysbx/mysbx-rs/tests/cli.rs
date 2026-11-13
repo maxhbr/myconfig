@@ -10317,6 +10317,32 @@ fn proxy_only_refusal_creates_no_state_dir_or_key() {
 }
 
 #[test]
+fn proxy_only_refuses_a_mount_over_the_egress_directory() {
+    // bd myconfig-mo3.2.6: a mount whose destination covers
+    // /run/mysbx-egress would shadow the channel; step 4b refuses it
+    // (exit 70) before anything is created, and a dry run audits it.
+    let (inv, repo, sidecar) = fixture("proxy-only-egress-mount", &[]);
+    let granted = repo.parent().unwrap().join("granted");
+    std::fs::create_dir_all(&granted).unwrap();
+    std::fs::write(
+        sidecar.join("config.toml"),
+        format!(
+            "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n\
+             [[mounts]]\npath = \"{}\"\ndest = \"/run/mysbx-egress\"\nmode = \"ro\"\n",
+            granted.display()
+        ),
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"]));
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("/run/mysbx-egress is related to /run/mysbx-egress"),
+        "the refusal names the covering destination: {stderr}"
+    );
+    assert!(stdout.is_empty(), "no argv or report: {stdout}");
+}
+
+#[test]
 fn proxy_only_refusal_creates_no_session_clone() {
     // bd myconfig-mo3.2.6: a real `--session` run with no
     // MYSBX_EGRESS_SOCKET is refused (exit 70) before the clone exists.

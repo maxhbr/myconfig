@@ -1276,7 +1276,8 @@ but not the filesystem.
 The refusal is exit `70` with a backend-specific reason, before
 anything is created (`ensure_state_dirs`, the SSH key, the session
 clone) and before the `--dry-run` early return, so a dry run audits
-it. Bubblewrap enforces the profile; a run whose pinned
+it. The same holds for a mount or a `state-dirs` entry that would
+cover `/run/mysbx-egress`. Bubblewrap enforces the profile; a run whose pinned
 forwarder socket or wrapper pins are missing is REFUSED (exit `70`,
 naming the option to enable) — the profile fails closed, never falls
 back to a shared network. Phase B–D (per-backend transports, the
