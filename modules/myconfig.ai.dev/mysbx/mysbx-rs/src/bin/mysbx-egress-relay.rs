@@ -261,7 +261,8 @@ fn accept_loop(listener: TcpListener, connect: &str, stop: &AtomicBool) {
                     io::ErrorKind::ConnectionAborted | io::ErrorKind::Interrupted
                 ) => {}
             // Descriptor pressure: back off briefly instead of spinning
-            // (EMFILE/ENFILE surface as `Other` with those raw codes).
+            // (EMFILE, ENFILE, ENOBUFS and ENOMEM surface as `Other`
+            // with those raw codes).
             Err(ref e) if is_transient_accept_pressure(e) => {
                 std::thread::sleep(Duration::from_millis(100));
             }
@@ -275,9 +276,10 @@ fn accept_loop(listener: TcpListener, connect: &str, stop: &AtomicBool) {
     }
 }
 
-/// Whether an accept error is descriptor exhaustion (`EMFILE` on the
-/// process, `ENFILE` system-wide), where a short back-off — rather than
-/// a hot spin or a dead relay — is the right response.
+/// Whether an accept error is transient resource pressure — descriptor
+/// exhaustion (`EMFILE`, `ENFILE`) or no kernel memory for the new
+/// socket (`ENOBUFS`, `ENOMEM`) — where a short back-off, rather than a
+/// hot spin or a dead relay, is the right response.
 fn is_transient_accept_pressure(e: &io::Error) -> bool {
     // EMFILE, ENFILE (descriptor exhaustion) and ENOBUFS, ENOMEM (the
     // kernel out of memory for the new socket): all transient under load,

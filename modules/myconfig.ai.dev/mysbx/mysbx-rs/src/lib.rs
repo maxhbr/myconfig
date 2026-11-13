@@ -2536,7 +2536,6 @@ fn sandbox_pipeline(
         return EXIT_INFRASTRUCTURE;
     }
 
-    // 3b. the state-dir backing stores (docs/design/config.md D15):
     // 4. the backend is explicit, never auto-detected (cli.md D7): a
     // silently downgraded isolation level would be a security bug.
     // The accepted set is enforced here for BOTH sources — a config
@@ -2804,7 +2803,7 @@ fn sandbox_pipeline(
     // The `network = "proxy-only"` channel (docs/design/config.md D20,
     // bd myconfig-mo3.2.6): resolve and validate the wrapper's pins in
     // step 4b — BEFORE the session clone (step 4a) and before the
-    // `--dry-run` return — so a broken configuration creates nothing
+    // `--dry-run` return — so a broken configuration creates nothing.
     // The missing-setting, path-shape and — for a REAL run only —
     // socket-existence refusals live here; the argv builder later takes
     // the same values as a `bwrap::EgressChannel`.
@@ -2959,7 +2958,8 @@ fn sandbox_pipeline(
     // State and keys are CREATED only after every refusal above (bd
     // myconfig-mo3.2.6): a broken configuration must leave nothing
     // behind — no state directories, no SSH key, no clone.
-    // one directory per merged `state-dirs` entry under
+    // The state-dir backing stores (docs/design/config.md D15): one
+    // directory per merged `state-dirs` entry under
     // `<sidecar>/state/`, so the rw binds of the argv have an existing
     // source (bwrap needs one) and the payload's writes persist there
     // across runs. After the merge (the entries come from both layers)
@@ -7053,8 +7053,8 @@ const SIDECAR_TEMPLATE_ROOT: &str = r#"# mysbx sidecar config
 #
 # backend = "bubblewrap"         # bubblewrap | nono | podman-gvisor | podman-krun | krun | microvm-qemu | microvm-ch
 # network = "shared"             # none | proxy-only | shared (D20; the bool
-#                                 # false/true stay aliases of none/shared); a
-#                                 # sidecar may tighten, never widen
+#                                # false/true stay aliases of none/shared); a
+#                                # sidecar may tighten, never widen
 # display = "off"                # off | waypipe, a Wayland channel (D18)
 #
 # Nested virtualization (D27): hand the guest hardware virtualization
@@ -7494,8 +7494,9 @@ mod tests {
     fn the_egress_dir_check_refuses_a_symlink_and_names_a_missing_dir() {
         // `check_egress_socket_dir` reads `symlink_metadata`, so a
         // symlink is refused as "not a real directory" regardless of the
-        // build user (the nix sandbox runs as root, so the ownership
-        // rule itself is covered by the pure predicate above).
+        // build user (its uid differs between a dev shell and a nix
+        // build, so the ownership rule itself is covered by the pure
+        // predicate above).
         let base = std::env::temp_dir().join(format!("mysbx-egress-dir-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(&base).expect("temp dir");

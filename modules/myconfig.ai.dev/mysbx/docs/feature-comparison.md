@@ -86,7 +86,7 @@ never execs the OCI process (`backends.md` D2).
 | `qemu` | SLiRP NAT outbound + one host-loopback SSH port | `AGENT_QEMU_{PI,HERDR}_NETWORK=0` (`allowNetwork = false`) | none | `qemu-agent-sandbox/builders.nix`, `runner.nix` |
 | `gvisor` | pasta `--map-guest-addr` to the LiteLLM forwarder, full outbound NAT | `--network none` | none | `gvisor-agent-sandbox/README.md` "Model access" |
 | `microvm` | `networkProfile = "proxy-only"`: bridge-only LiteLLM endpoint, nothing else | `offline` | `package-access` (one proxy port), `internet` (+`acknowledgeInsecureNetwork`). All profiles drop guest-to-guest, RFC1918 and metadata traffic | `microvm/default.nix` `networkProfile` |
-| `mysbx` | `network = true`: host namespace (bwrap/nono), pasta (Podman; `podman-krun` uses TSI through it), host-namespace TSI (direct krun), SLiRP (QEMU) | `network = false` on all six backends | allowlist keys supported on `nono` only, with caveats below; `egress` is rejected everywhere | `config.md` D5/D21, `backends.md` D6/D9; current guide |
+| `mysbx` | `network = true`: host namespace (bwrap/nono), pasta (Podman; `podman-krun` uses TSI through it), host-namespace TSI (direct krun), SLiRP (QEMU) | `network = false` (`"none"`) on all seven backends | `network = "proxy-only"` (host LiteLLM only, D20) enforced on `bubblewrap`, refused elsewhere; allowlist keys supported on `nono` only, with caveats below | `config.md` D5/D21, `backends.md` D6/D9; current guide |
 
 How `mysbx` handles each network key, per backend. "Refused" means the
 run exits `70` before anything is created, including under `--dry-run`

@@ -14,8 +14,8 @@
 #
 # backend = "bubblewrap"         # bubblewrap | nono | podman-gvisor | podman-krun | krun | microvm-qemu | microvm-ch
 # network = "shared"             # none | proxy-only | shared (D20; the bool
-#                                 # false/true stay aliases of none/shared); a
-#                                 # sidecar may tighten, never widen
+#                                # false/true stay aliases of none/shared); a
+#                                # sidecar may tighten, never widen
 # display = "off"                # off | waypipe, a Wayland channel (D18)
 #
 # Which nix store the sandbox sees (docs/design/guest-store.md): `baked`

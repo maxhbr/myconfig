@@ -165,9 +165,7 @@ in
       };
 
       name = mkOption {
-        type = types.addCheck types.str (
-          n: builtins.match "[A-Za-z0-9._-]+" n != null && n != "." && n != ".."
-        );
+        type = types.strMatching "[A-Za-z0-9._-]+";
         default = "litellm.sock";
         description = ''
           File name of the Unix socket inside the FIXED directory
@@ -274,6 +272,13 @@ in
             myconfig.ai.dev.litellm-forwarder.unixSocket.enable is on, but
             services.litellm is not enabled — the socket would forward to
             127.0.0.1:${port}, where nothing listens.
+          '';
+        }
+        {
+          assertion = cfg.unixSocket.name != "." && cfg.unixSocket.name != "..";
+          message = ''
+            myconfig.ai.dev.litellm-forwarder.unixSocket.name must be a plain
+            file name, not `.` or `..` (got `${cfg.unixSocket.name}`).
           '';
         }
       ];

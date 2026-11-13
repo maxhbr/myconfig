@@ -186,8 +186,7 @@ fn run_binary_with(inv: &Invocation, args: &[&str]) -> (i32, String, String) {
 /// A `spawn_with_args` command carrying the `network = "proxy-only"`
 /// channel pins (docs/design/config.md D20, bd myconfig-mo3.2.6), so a
 /// run reaches the argv/report stages instead of the missing-pin
-/// refusal. The socket dir is a real tempdir so a non-dry run would
-/// find it.
+/// refusal.
 fn spawn_proxy_only<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> Command {
     // The socket path is pinned to /run/mysbx-egress/<name>
     // (docs/design/config.md D20); a `--dry-run` never touches it, so
@@ -8575,6 +8574,21 @@ fn doctor_passes_on_a_healthy_bubblewrap_host() {
     );
     assert_eq!(recorded, want);
     assert!(!recorded.contains("--share-net"), "{recorded}");
+
+    // network = "proxy-only": the line quotes the string form.
+    std::fs::write(sidecar.join("config.toml"), "network = \"proxy-only\"\n").unwrap();
+    let (_code, stdout, _stderr) = run_doctor(
+        &inv,
+        &["doctor"],
+        &[("MYSBX_BWRAP", bwrap.as_str()), ("MYSBX_SHELL", "/bin/sh")],
+    );
+    assert!(
+        stdout.contains(
+            "OK   model endpoint: not applicable: the network is proxy-only \
+             (network = \"proxy-only\")"
+        ),
+        "{stdout}"
+    );
 }
 
 #[test]
@@ -10129,8 +10143,6 @@ fn proxy_only_drops_forward_env_beyond_the_base_and_reports_it() {
         "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n         forward-env = [\"OPENAI_API_KEY\", \"OPENAI_BASE_URL\"]\n",
     )
     .unwrap();
-    let socket_dir = repo.parent().unwrap().join("egress");
-    std::fs::create_dir_all(&socket_dir).unwrap();
     let mut cmd = spawn_proxy_only(&inv, &["--verbose", "--dry-run"]);
     cmd.env("OPENAI_API_KEY", "sk-real-secret")
         .env("TERM", "xterm");
@@ -10390,8 +10402,6 @@ fn proxy_only_refuses_a_credential_shaped_env_key() {
          [env]\nANTHROPIC_AUTH_TOKEN = \"secret\"\n",
     )
     .unwrap();
-    let socket_dir = repo.parent().unwrap().join("egress");
-    std::fs::create_dir_all(&socket_dir).unwrap();
     let (code, _stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"]));
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(stderr.contains("ANTHROPIC_AUTH_TOKEN"), "{stderr}");
@@ -10411,8 +10421,6 @@ fn proxy_only_refuses_a_credential_shaped_env_key() {
          [env]\nopenai_api_key = \"secret\"\n",
     )
     .unwrap();
-    let socket_dir = repo.parent().unwrap().join("egress");
-    std::fs::create_dir_all(&socket_dir).unwrap();
     let (code, _stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"]));
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(stderr.contains("openai_api_key"), "{stderr}");
