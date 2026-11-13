@@ -514,6 +514,70 @@ let
     else
       "ok";
 
+  # Both halves of the host forwarder carry ONE confinement block
+  # (../../myconfig.ai.dev.litellm-forwarder.nix, bd myconfig-n8kv.1.5):
+  # no privileges and a DESTINATION fence, so a compromised forwarder
+  # cannot reach the LAN, the VPN or a cloud-metadata endpoint. Checked at
+  # eval time because a dropped or widened setting would otherwise only
+  # fail on a host, at run time.
+  forwarderHardeningGate =
+    let
+      unitsOf = extraModules: (evaluated extraModules).systemd;
+      withForwarder = unitsOf [
+        {
+          services.litellm = {
+            enable = true;
+            port = 4000;
+          };
+          myconfig.ai.dev.litellm-forwarder.enable = true;
+        }
+      ];
+      withoutTcp = unitsOf [
+        {
+          services.litellm = {
+            enable = true;
+            port = 4000;
+          };
+          myconfig.ai.dev.litellm-forwarder = {
+            enable = false;
+            unixSocket.enable = true;
+          };
+        }
+      ];
+      tcp = withForwarder.services.agent-litellm-forward.serviceConfig;
+      unix = withoutTcp.services.agent-litellm-forward-unix.serviceConfig;
+      expected = {
+        IPAddressAllow = "localhost";
+        IPAddressDeny = "any";
+        RestrictAddressFamilies = [
+          "AF_UNIX"
+          "AF_INET"
+        ];
+        DynamicUser = true;
+        NoNewPrivileges = true;
+        ProtectHome = true;
+      };
+      wrongOf =
+        config:
+        builtins.filter (key: (config.${key} or null) != expected.${key}) (builtins.attrNames expected);
+      tcpWrong = wrongOf tcp;
+      unixWrong = wrongOf unix;
+    in
+    if tcpWrong != [ ] then
+      throw "mysbx generated-config test: the TCP forwarder lost its hardening (${builtins.concatStringsSep ", " tcpWrong})"
+    else if unixWrong != [ ] then
+      throw "mysbx generated-config test: the Unix forwarder lost its hardening (${builtins.concatStringsSep ", " unixWrong})"
+    else if tcp.Accept or null != null then
+      throw "mysbx generated-config test: the TCP forwarder must keep Accept at its default (systemd-socket-proxyd inherits the listening socket)"
+    else if withForwarder.sockets.agent-litellm-forward.socketConfig.Accept or false != false then
+      throw "mysbx generated-config test: the TCP forwarder's socket must keep Accept=no"
+    else if tcp.PrivateNetwork != false then
+      throw "mysbx generated-config test: the TCP forwarder must keep the host netns to reach 127.0.0.1 (got ${builtins.toJSON tcp.PrivateNetwork})"
+    else if withoutTcp.services ? agent-litellm-forward then
+      throw "mysbx generated-config test: the TCP forwarder unit exists although the forwarder is off"
+    else
+      "ok";
+
   # The microvm-qemu backend's env pins (bd myconfig-mzys): the
   # SLiRP guest's loopback is its own, so the module must pin the
   # model endpoint at the SLiRP gateway `10.0.2.2` — which maps to
@@ -753,6 +817,7 @@ pkgs.runCommand "mysbx-generated-config-test"
       assertionGate
       gvisorPinGate
       egressPinGate
+      forwarderHardeningGate
       qemuEnvGate
       chEnvGate
       krunPinGate
