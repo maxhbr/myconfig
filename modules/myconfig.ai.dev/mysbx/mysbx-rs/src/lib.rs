@@ -30,6 +30,7 @@ pub mod detach;
 pub mod doctor;
 pub mod handoff;
 pub mod krun;
+pub mod landlock;
 pub mod loadimage;
 pub mod merge;
 pub mod microvm_ch;
