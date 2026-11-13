@@ -7056,6 +7056,14 @@ fn start_egress_broker(
     unsafe {
         cmd.pre_exec(move || die_with_parent(parent_at_fork));
     }
+    // Unlink a socket left by an EARLIER run before spawning, the
+    // waypipe rule: the directory is named after this pid and this run
+    // owns it, so whatever sits there belongs to a run that is gone. The
+    // wait below polls for the socket's EXISTENCE, which a leftover would
+    // satisfy before the new broker had bound anything — the payload would
+    // then start on a channel that had already failed (exec-mode runs
+    // leave their directory behind, and a reused pid lands here).
+    let _ = std::fs::remove_file(&socket);
     let mut spawned = cmd
         .spawn()
         .map_err(|e| format!("cannot start the egress broker {broker_bin}: {e}"))?;
@@ -9316,6 +9324,78 @@ mod tests {
     }
 
     #[test]
+    fn a_stale_socket_does_not_read_as_broker_readiness() {
+        // The regression (bd myconfig-1012): the wait polls for the
+        // socket's EXISTENCE, and an exec-mode run leaves its directory
+        // (and socket) behind, so a later run on the SAME pid would see
+        // the leftover and call the channel ready before the new broker
+        // had bound anything. `start_egress_broker` therefore unlinks the
+        // stale socket first; this drives the two halves directly: the
+        // stale socket satisfies a bare existence check, and removing it
+        // the way the spawn does makes the wait fail honestly.
+        let dir = std::env::temp_dir().join(format!("mysbx-stale-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("create the dir");
+        let socket = dir.join("litellm.sock");
+        // A socket file left by "the previous run".
+        let stale = std::os::unix::net::UnixListener::bind(&socket).expect("bind the stale socket");
+        drop(stale);
+        assert!(socket.exists(), "the fixture must leave a socket behind");
+
+        // A broker child that never binds anything.
+        let mut child = std::process::Command::new("/bin/sh")
+            .args(["-c", "sleep 5"])
+            .spawn()
+            .expect("spawn a sleeping child");
+        // WITH the leftover in place, the wait returns Ok immediately,
+        // without the child ever having bound — the bug's exact mechanism.
+        let bogus = wait_for_egress_socket(&socket, &mut child, std::time::Duration::from_secs(1));
+        assert!(
+            bogus.is_ok(),
+            "documents the hazard: a leftover socket reads as ready"
+        );
+
+        // With the stale socket removed as the spawn now does, the same
+        // wait cannot be fooled, and a dead broker is refused.
+        let _ = std::fs::remove_file(&socket);
+        let outcome =
+            wait_for_egress_socket(&socket, &mut child, std::time::Duration::from_millis(200));
+        assert!(
+            outcome.is_err(),
+            "without the stale socket the wait must not claim readiness"
+        );
+        let _ = child.kill();
+        let _ = child.wait();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn wait_for_egress_socket_reports_a_dead_broker() {
+        // The wait watches the child while it polls, so a broker that
+        // exits before binding ends the wait AT ONCE with its status
+        // rather than burning the whole budget (docs/design/egress.md E5).
+        let dir = std::env::temp_dir().join(format!("mysbx-wait-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("create the dir");
+        let socket = dir.join("litellm.sock");
+        let mut child = std::process::Command::new("/bin/sh")
+            .args(["-c", "exit 3"])
+            .spawn()
+            .expect("spawn a child that exits");
+        // Let it exit, so `try_wait` reports the status on the first poll.
+        let _ = child.wait();
+        let started = std::time::Instant::now();
+        let outcome =
+            wait_for_egress_socket(&socket, &mut child, std::time::Duration::from_secs(30));
+        let elapsed = started.elapsed();
+        let _ = std::fs::remove_dir_all(&dir);
+        let err = outcome.expect_err("a dead broker must not read as ready");
+        assert!(err.contains("exited"), "the refusal names the exit: {err}");
+        assert!(
+            elapsed < std::time::Duration::from_secs(5),
+            "the wait must end on the child's exit, not the budget ({elapsed:?})"
+        );
+    }
+
     fn resolve_program_matches_execvp_rules() {
         // Owned so the OsStr borrows below stay alive for the calls.
         let bin = std::path::Path::new("/bin").as_os_str().to_owned();
