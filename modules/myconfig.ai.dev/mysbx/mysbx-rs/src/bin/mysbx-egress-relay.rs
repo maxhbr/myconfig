@@ -24,24 +24,24 @@
 //! 1. Parse `--listen 127.0.0.1:<port> --connect <uds> -- <cmd...>`
 //!    (`--help` prints the usage and exits 0; a usage error exits 2).
 //! 2. Do every fallible setup step — bind the TCP listener, make it
-//!    non-blocking, install the signal handlers — BEFORE the spawn
-//!    (failure → exit 70 with a message).
-//! 3. Spawn `<cmd>`, with its stdin/stdout/stderr inherited, then
-//!    record its pid for the signal handlers. The termination signals
-//!    are blocked across that spawn+store so a signal in the window is
-//!    delivered once the pid is known.
-//!
-//! Signal-forwarding rule: SIGHUP and SIGTERM are always forwarded to
-//! the payload (a supervisor's shutdown must stop it). SIGINT is
-//! forwarded only when the relay is NOT in the terminal's foreground
-//! process group — in the foreground the terminal already delivered ^C
-//! to the payload too, so forwarding would signal it twice.
+//!    non-blocking — BEFORE the spawn (failure → exit 70 with a
+//!    message).
+//! 3. Block SIGHUP/SIGINT/SIGTERM, install their handlers, spawn
+//!    `<cmd>` with its stdin/stdout/stderr inherited, record its pid,
+//!    then unblock: a signal arriving anywhere in that window stays
+//!    pending and is forwarded once the pid is known.
 //! 4. One accept thread: per connection, connect to the Unix socket
 //!    and copy both ways until EOF, then half-close the peer.
 //!    Transient accept errors retry, descriptor pressure backs off,
 //!    a fatal one is printed once.
 //! 5. Exit with the child's status; a failed `wait` is exit 70. The
 //!    relay never outlives the payload.
+//!
+//! Signal-forwarding rule: SIGHUP and SIGTERM are always forwarded to
+//! the payload (a supervisor's shutdown must stop it). SIGINT is
+//! forwarded only when the relay is NOT in the terminal's foreground
+//! process group — in the foreground the terminal already delivered ^C
+//! to the payload too, so forwarding would signal it twice.
 //!
 //! The relay makes no allow/deny decisions of its own: the fence is
 //! the empty netns plus the single bound socket. It exists only to
@@ -165,16 +165,18 @@ fn run(inv: &Invocation) -> Result<i32, String> {
         .map_err(|e| format!("cannot poll {}: {e}", inv.listen))?;
 
     // A `^C` (or a supervisor's SIGTERM/SIGHUP) must stop the PAYLOAD,
-    // not leave it orphaned while the relay dies. The handlers are
-    // installed before the spawn, and the three signals are BLOCKED
-    // across the spawn+pid-store so a signal arriving in that window is
-    // delivered afterwards, once the pid is known — never lost, never
-    // killing the relay alone (the payload's own mask is reset by
-    // `Command::spawn`, so it does not inherit the block).
-    forward_signals();
+    // not leave it orphaned while the relay dies. The three signals are
+    // BLOCKED first, then the handlers are installed, and the block
+    // lasts across the spawn+pid-store: a signal arriving anywhere in
+    // that window stays pending and is forwarded once the pid is known
+    // (with the handlers installed before the block, a signal in between
+    // would reach a handler with no pid and be dropped). The payload's
+    // own mask is reset by `Command::spawn`, so it does not inherit the
+    // block.
     let blocked =
         unsafe { mysbx::sig::set_of(&[mysbx::sig::HUP, mysbx::sig::INT, mysbx::sig::TERM]) };
     let saved = unsafe { mysbx::sig::mask(mysbx::sig::BLOCK, &blocked) };
+    forward_signals();
 
     let child = Command::new(&inv.payload[0])
         .args(&inv.payload[1..])
