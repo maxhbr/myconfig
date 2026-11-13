@@ -155,9 +155,9 @@ const USAGE: &str =
     "usage: mysbx-egress-relay --listen 127.0.0.1:<port> --connect <unix-socket> -- <cmd...>";
 
 fn run(inv: &Invocation) -> Result<i32, String> {
-    // Every fallible setup step happens BEFORE the payload is spawned
-    // (review C): a relay that cannot listen must fail visibly, never
-    // start the payload and then die around it.
+    // Every fallible setup step happens BEFORE the payload is spawned: a
+    // relay that cannot listen must fail visibly, never start the payload
+    // and then die around it.
     let listener =
         TcpListener::bind(&inv.listen).map_err(|e| format!("cannot bind {}: {e}", inv.listen))?;
     listener
@@ -238,7 +238,7 @@ fn accept_loop(listener: TcpListener, connect: &str, stop: &AtomicBool) {
                 std::thread::sleep(Duration::from_millis(50));
             }
             // Transient: the peer aborted the connection before accept
-            // finished, or a signal interrupted the syscall (review C).
+            // finished, or a signal interrupted the syscall.
             Err(ref e)
                 if matches!(
                     e.kind(),

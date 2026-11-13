@@ -216,9 +216,9 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     .into_iter()
     .flatten()
     .collect();
-    // The D21 allowlist line: printed only when a layer actually set an
-    // allowlist key or the network is proxy-only (review F) — a shared
-    // config without one keeps its previous `--verbose` output.
+    // The D21 allowlist line: printed only when a layer set an allowlist
+    // key or the network is proxy-only, so a shared config without one
+    // keeps its `--verbose` output.
     if !allow.is_empty() || r.merged.network == crate::config::Network::ProxyOnly {
         p(format!(
             "allowlist:      {}",
@@ -1093,8 +1093,8 @@ mod tests {
         );
         // With user_mount_count == 2 both mounts belong to the user layer.
         assert!(!joined.contains("[sidecar config]"), "{joined}");
-        // Review F: a plain shared config gets NEITHER the allowlist nor
-        // the env-drop line — its `--verbose` output is unchanged.
+        // A plain shared config gets NEITHER the allowlist nor the
+        // env-drop line.
         assert!(!joined.contains("allowlist:"), "{joined}");
         assert!(!joined.contains("env dropped:"), "{joined}");
     }

@@ -355,8 +355,8 @@ impl Network {
         }
     }
 
-    /// Whether the network is shared at all — the predicate the rest
-    /// of the crate asks instead of the old network bool. `false` for
+    /// Whether the network is shared at all — the predicate the rest of
+    /// the crate asks. `false` for
     /// both `None` and `ProxyOnly`: a proxy-only run has NO direct
     /// route, so every "is the network up" question answers no.
     pub fn is_shared(self) -> bool {

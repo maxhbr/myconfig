@@ -995,9 +995,7 @@ fn sidecar_network_true_still_cannot_reenable() {
     std::fs::write(sidecar.join("config.toml"), "network = true\n").unwrap();
     let (code, stdout, stderr) = run_binary(&inv);
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stdout: {stdout}");
-    // Review F: check the full message, both values and both files —
-    // the old full-message assertion was dropped when the wording
-    // changed.
+    // The full message: both values and both files.
     let msg = stderr.trim();
     assert!(
         msg.contains("network = \"shared\" widens the network the user config"),
@@ -8562,8 +8560,8 @@ fn doctor_passes_on_a_healthy_bubblewrap_host() {
         &[("MYSBX_BWRAP", bwrap.as_str()), ("MYSBX_SHELL", "/bin/sh")],
     );
     assert_eq!(code, 0, "stdout: {stdout}\nstderr: {stderr}");
-    // Review F: the full line, and the bool rendering `false` (not
-    // `none`) for a config that spelled `network = false`.
+    // The full line, and the bool rendering `false` (not `none`) for a
+    // config that spelled `network = false`.
     assert!(
         stdout.contains(
             "OK   model endpoint: not applicable: the network is denied (network = false)"
@@ -10146,8 +10144,7 @@ fn proxy_only_drops_forward_env_beyond_the_base_and_reports_it() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     let report = report_lines(&stdout).join("\n");
     // Both names are announced as dropped. The credential-shaped one
-    // says it got the placeholder (review E); the base-URL one is a
-    // bare drop.
+    // says it got the placeholder; the base-URL one is a bare drop.
     assert!(
         report.contains("OPENAI_API_KEY [dropped — set to placeholder \"mysbx-proxy-only\", D28]"),
         "{report}"
@@ -10348,14 +10345,14 @@ fn proxy_only_refuses_a_credential_shaped_env_key() {
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(stderr.contains("ANTHROPIC_AUTH_TOKEN"), "{stderr}");
     assert!(stderr.contains("D28"), "{stderr}");
-    // The refusal names the FILE (review E): the sidecar config path.
+    // The refusal names the FILE: the sidecar config path.
     assert!(
         stderr.contains(&sidecar.join("config.toml").display().to_string()),
         "the refusal names the file: {stderr}"
     );
 
-    // Review E: the match is case-insensitive — a lowercase
-    // `openai_api_key` is refused too.
+    // The match is case-insensitive: a lowercase `openai_api_key` is
+    // refused too.
     let (inv, repo, sidecar) = fixture("proxy-only-env-key-lower", &[]);
     std::fs::write(
         sidecar.join("config.toml"),

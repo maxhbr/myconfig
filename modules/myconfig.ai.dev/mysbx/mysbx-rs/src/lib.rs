@@ -2322,9 +2322,9 @@ fn sandbox_pipeline(
     // `home` is also what `~/…` mount paths expand against (config.md
     // D8) — on the HOST, before bwrap runs, so the sandbox's own
     // (cleared) environment never enters the resolution.
-    // The D28 credential-name refusals want the FILE each offending key
-    // came from (review E), but the merge consumes the layers — so
-    // record the per-layer offenders now, before that.
+    // The D28 credential-name refusals name the FILE each offending key
+    // came from, but the merge consumes the layers — so the per-layer
+    // offenders are recorded here, before it.
     let mut credential_offences: Vec<(std::path::PathBuf, String, String)> = Vec::new();
     for (path, layer) in [
         (&user_config_path, &layers.user.0),
@@ -2805,10 +2805,9 @@ fn sandbox_pipeline(
     // bd myconfig-mo3.2.6): resolve and validate the wrapper's pins in
     // step 4b — BEFORE the session clone (step 4a) and before the
     // `--dry-run` return — so a broken configuration creates nothing
-    // (review B2). The missing-setting, path-shape (review A1) and —
-    // for a REAL run only — socket-existence (review B1) refusals live
-    // here; the argv builder later takes the same values as a
-    // `bwrap::EgressChannel`.
+    // The missing-setting, path-shape and — for a REAL run only —
+    // socket-existence refusals live here; the argv builder later takes
+    // the same values as a `bwrap::EgressChannel`.
     let egress: Option<EgressPins> = match resolve_egress(merged.network, backend, dry_run) {
         Ok(pins) => pins,
         Err(()) => return EXIT_INFRASTRUCTURE,
@@ -2822,8 +2821,8 @@ fn sandbox_pipeline(
     // The forward-env DROP (rule 6a/6d) happens later, in
     // `collect_host_env`; this only refuses what it cannot drop.
     if merged.network == config::Network::ProxyOnly {
-        // The refusal names the FILE and the KEY (bead acceptance,
-        // review E) from the offenders recorded before the merge.
+        // The refusal names the FILE and the KEY, from the offenders
+        // recorded before the merge.
         if let Some((path, table, key)) = credential_offences.first() {
             if table == "env" {
                 eprintln!(
@@ -5695,9 +5694,8 @@ pub mod sig {
 /// parts and the `APIKEY` suffix, not substrings. A documented
 /// residual risk remains: a secret under an innocent name.
 pub fn credential_shape(name: &str) -> bool {
-    // Case-insensitive (review E): `openai_api_key` must be refused
-    // just like `OPENAI_API_KEY`. The `APIKEY` suffix is matched the
-    // same way.
+    // Case-insensitive: `openai_api_key` is refused like
+    // `OPENAI_API_KEY`; the `APIKEY` suffix likewise.
     let upper = name.to_ascii_uppercase();
     if upper.ends_with("APIKEY") {
         return true;
@@ -7374,7 +7372,7 @@ mod tests {
             "TOKEN",
             "APIKEY",
             "MYAPIKEY",
-            // Lowercase spellings match too (review E).
+            // Lowercase spellings match too.
             "openai_api_key",
             "anthropic_auth_token",
             "db_password",
@@ -7414,7 +7412,7 @@ mod tests {
             "litellm.sock"
         );
         for bad in [
-            // Escape attempts that survived the old depth/deny-list rule.
+            // Escape attempts the pinned-directory rule must refuse.
             "/run/x/../litellm.sock",
             "/run/mysbx-egress/../x.sock",
             "/run/mysbx-egress/./x.sock",
