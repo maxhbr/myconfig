@@ -5561,32 +5561,12 @@ fn trusted_policy(path: &std::path::Path) -> bwrap::PolicyPath {
 /// unprotected.
 const SYMLINK_BUDGET: usize = 40;
 
-/// The effective forwarded list for one run, in precedence order:
-///
-/// 1. the merged `forward-env` of the configuration layers
-///    (docs/design/config.md — the host-wide `~/.config/mysbx/config.toml`
-///    and the sidecar both declare; their lists concatenate), APPENDED
-///    to the built-in default — the layers ADD names (e.g. a model
-///    credential, which the default never carries), they never need to
-///    restate the default block to keep it;
-/// 2. the `MYSBX_FORWARD_ENV` wrapper pin (a space-separated list of
-///    names, the same wrapper idiom as `MYSBX_BWRAP`), appended to
-///    whichever list step 1 picked — the Nix wrapper's extension
-///    point without a rebuild of the host config;
-/// 3. the built-in [`FORWARDED_ENV_VARS`] default, always the base of
-///    the list — an unwrapped `cargo run` forwards the same
-///    terminal/locale + model-credential set a wrapped, unconfigured
-///    build does.
-///
-/// Duplicates drop (first occurrence wins), so a layer that names a
-/// variable the default already carries costs nothing. A name
-/// forwards only when actually set at launch, so an absent variable
-/// costs nothing either.
-/// The one place the crate names the libc signal symbols
-/// (`signal(2)`, `kill(2)`) — the dependency-free approach the std
-/// library uses internally, shared by `main.rs` (SIGPIPE back to its
-/// default) and `mysbx-egress-relay` (forward the termination signals
-/// to the payload) so the binding is declared once (review C).
+/// The crate's only libc signal binding (`signal(2)`, `kill(2)`,
+/// `pthread_sigmask(3)`, `getpgrp`/`tcgetpgrp`): the dependency-free
+/// approach the std library uses internally, so the crate keeps zero
+/// dependencies. Shared by `main.rs` (SIGPIPE back to its default) and
+/// `mysbx-egress-relay` (mask a window, forward termination signals to
+/// the payload).
 ///
 /// The crate targets unix; the module compiles away elsewhere.
 #[cfg(unix)]
@@ -5983,6 +5963,27 @@ fn dropped_forward_env(merged: &merge::Merged) -> Vec<String> {
         .collect()
 }
 
+/// The effective forwarded list for one run, in precedence order:
+///
+/// 1. the merged `forward-env` of the configuration layers
+///    (docs/design/config.md — the host-wide `~/.config/mysbx/config.toml`
+///    and the sidecar both declare; their lists concatenate), APPENDED
+///    to the built-in default — the layers ADD names (e.g. a model
+///    credential, which the default never carries), they never need to
+///    restate the default block to keep it;
+/// 2. the `MYSBX_FORWARD_ENV` wrapper pin (a space-separated list of
+///    names, the same wrapper idiom as `MYSBX_BWRAP`), appended to
+///    whichever list step 1 picked — the Nix wrapper's extension
+///    point without a rebuild of the host config;
+/// 3. the built-in [`FORWARDED_ENV_VARS`] default, always the base of
+///    the list — an unwrapped `cargo run` forwards the same
+///    terminal/locale + model-credential set a wrapped, unconfigured
+///    build does.
+///
+/// Duplicates drop (first occurrence wins), so a layer that names a
+/// variable the default already carries costs nothing. A name
+/// forwards only when actually set at launch, so an absent variable
+/// costs nothing either.
 fn forwarded_env_vars(merged: &merge::Merged) -> Vec<String> {
     let mut names: Vec<String> = FORWARDED_ENV_VARS.iter().map(|&s| s.to_string()).collect();
     let pin = env_opt("MYSBX_FORWARD_ENV").unwrap_or_default();
@@ -7017,9 +7018,9 @@ const SIDECAR_TEMPLATE_ROOT: &str = r#"# mysbx sidecar config
 # bound at its host path is invisible there (config.md D14).
 #
 # backend = "bubblewrap"         # bubblewrap | nono | podman-gvisor | podman-krun | krun | microvm-qemu | microvm-ch
-# network = "shared"    # none | proxy-only | shared (D20; the bool
-#                        # false/true stay aliases of none/shared); a
-#                        # sidecar may tighten, never widen
+# network = "shared"             # none | proxy-only | shared (D20; the bool
+#                                 # false/true stay aliases of none/shared); a
+#                                 # sidecar may tighten, never widen
 # display = "off"                # off | waypipe, a Wayland channel (D18)
 #
 # Nested virtualization (D27): hand the guest hardware virtualization

@@ -1087,7 +1087,7 @@ fn host_endpoint_check(
                 if merged.network.is_none() {
                     "false"
                 } else {
-                    "proxy-only"
+                    "\"proxy-only\""
                 }
             ),
         ));
@@ -1628,7 +1628,7 @@ fn podman_checks(
                 if merged.network.is_none() {
                     "false"
                 } else {
-                    "proxy-only"
+                    "\"proxy-only\""
                 }
             ),
         ));
