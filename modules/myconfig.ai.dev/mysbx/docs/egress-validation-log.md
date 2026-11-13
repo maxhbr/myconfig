@@ -13,6 +13,24 @@ One block per host run: host, date, kernel, PASS/FAIL per section. A FAIL
 invalidates the decision row — a bead goes against the decision document,
 not this log.
 
+The phase-A run below was transcribed from a bead's closing record. The
+phase-B run (the per-run egress broker, [design](./design/egress.md)) has
+a SCRIPTED half, so its probes are reproducible rather than prose:
+
+```bash
+MYSBX=<path-to-mysbx> ./nix/egress-broker-live-validation.sh <repo-dir>
+```
+
+Run it on f13 with the host's LiteLLM proxy up and the rebuilt wrapper in
+place. It covers: the pins, a dry run that creates nothing and names the
+per-run channel, a real run that starts the broker and logs to the
+sidecar, the run directory's removal after a waited run, `mysbx diagnose
+egress` reading the log back, a broken broker pin refusing the run
+create-nothing, and every other backend still refusing the profile. It
+prints the remaining HUMAN steps (an agent's model request from `pi` and
+`opencode`, killing the broker mid-run, and `--detach` survival) rather
+than pretending to press keys. Paste its output into the dated block.
+
 ## 2026-11-13, host 'f13' — `network = "proxy-only"` on bubblewrap (bd myconfig-mo3.2.8)
 
 Provenance: the run was executed by hand on f13 after commit `df45536b73`
@@ -94,3 +112,23 @@ No kernel version, no timings, and no per-probe transcript are recorded — the
 closing record names the sections as passed, not their raw output. A later
 re-run should fill those in rather than treat this block as a template for
 them.
+
+## 2026-11-13+, host 'f13' — the per-run egress broker (bd myconfig-n8kv.1.6)
+
+**Not yet run.** Phase B's code is in place (design record in
+[`design/egress.md`](./design/egress.md)) and the scripted runbook above
+is ready; this block is the placeholder an f13 session fills in. When it
+is done, record:
+
+- host, date, kernel;
+- the `nix/egress-broker-live-validation.sh` output verbatim (PASS lines
+  per probe);
+- the three manual probes: one model request each from `pi` and
+  `opencode` inside the sandbox, the broker killed mid-run (the sandbox's
+  requests must fail, with an `unreachable` line rather than an `allow`),
+  and a `--detach`/attach cycle (the broker survives the outer, dies with
+  the inner);
+- whether the static `agent-litellm-forward-unix` unit can now be dropped
+  (design decision E6) — dropping it is ONE commit, and it touches
+  `myconfig.ai.dev.litellm-forwarder.nix`, `nix/mysbx.nix` and
+  `nix/config-eval-test.nix`.

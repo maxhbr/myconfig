@@ -656,6 +656,10 @@
                   # (bd myconfig-9wkp, backends.md D11): same category.
                   "modules/myconfig.ai.dev/mysbx/nix/cloud-hypervisor-direct-spike.sh"
                   "modules/myconfig.ai.dev/mysbx/nix/microvm-ch-live-validation.sh"
+                  # The phase-B egress broker runbook (bd myconfig-n8kv.1.6,
+                  # docs/design/egress.md): same category — a plain script
+                  # executed by a human on f13, with the host's LiteLLM up.
+                  "modules/myconfig.ai.dev/mysbx/nix/egress-broker-live-validation.sh"
                   # The wedged-krun-sandbox triage collector (bd
                   # myconfig-dj4 §6.1 of docs/krun-live-validation.md):
                   # same category — a plain read-only /proc inspection
