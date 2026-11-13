@@ -5805,6 +5805,27 @@ fn egress_dir_metadata_ok(is_dir: bool, uid: u32, mode: u32) -> Result<(), &'sta
     Ok(())
 }
 
+/// The on-disk state of the `proxy-only` SOCKET file itself
+/// (bd myconfig-mo3.2.6): it must exist and be a Unix socket. Split out
+/// from [`resolve_egress`] so the rule is testable with a temp path.
+pub fn check_egress_socket_file(path: &std::path::Path) -> Result<(), String> {
+    use std::os::unix::fs::FileTypeExt;
+    match std::fs::metadata(path) {
+        Ok(meta) if meta.file_type().is_socket() => Ok(()),
+        Ok(_) => Err(format!(
+            "MYSBX_EGRESS_SOCKET = `{p}` is not a Unix socket; the forwarder \
+             (agent-litellm-forward-unix.socket) must be running",
+            p = path.display()
+        )),
+        Err(e) => Err(format!(
+            "MYSBX_EGRESS_SOCKET = `{p}` does not exist ({e}); the forwarder \
+             (agent-litellm-forward-unix.socket) must be running for a \
+             network = \"proxy-only\" run",
+            p = path.display()
+        )),
+    }
+}
+
 /// Check the on-disk state of a `proxy-only` socket directory
 /// (bd myconfig-mo3.2.6): a real directory (`symlink_metadata`, so a
 /// symlink is refused), root-owned, not group- or world-writable. Called
@@ -5929,22 +5950,8 @@ pub fn resolve_egress(
         if let Err(message) = check_egress_socket_dir(dir) {
             return complain(&format!("{message} (MYSBX_EGRESS_SOCKET = `{path}`)"));
         }
-        use std::os::unix::fs::FileTypeExt;
-        match std::fs::metadata(&path) {
-            Ok(meta) if meta.file_type().is_socket() => {}
-            Ok(_) => {
-                return complain(&format!(
-                    "MYSBX_EGRESS_SOCKET = `{path}` is not a Unix socket; the forwarder \
-                     (agent-litellm-forward-unix.socket) must be running"
-                ))
-            }
-            Err(e) => {
-                return complain(&format!(
-                    "MYSBX_EGRESS_SOCKET = `{path}` does not exist ({e}); the forwarder \
-                     (agent-litellm-forward-unix.socket) must be running for a \
-                     network = \"proxy-only\" run"
-                ))
-            }
+        if let Err(message) = check_egress_socket_file(std::path::Path::new(&path)) {
+            return complain(&message);
         }
     }
 
@@ -7464,6 +7471,32 @@ mod tests {
         let missing = base.join("nope");
         let e = check_egress_socket_dir(&missing).expect_err("a missing dir must be refused");
         assert!(e.contains("agent-litellm-forward-unix.socket"), "{e}");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn the_egress_socket_file_must_be_a_socket() {
+        let base = std::env::temp_dir().join(format!("mysbx-sockfile-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("temp dir");
+
+        // Missing.
+        let e = check_egress_socket_file(&base.join("nope.sock"))
+            .expect_err("a missing socket must be refused");
+        assert!(e.contains("does not exist"), "{e}");
+        assert!(e.contains("agent-litellm-forward-unix.socket"), "{e}");
+
+        // Present but a REGULAR FILE.
+        let file = base.join("plain.sock");
+        std::fs::write(&file, b"x").expect("write");
+        let e = check_egress_socket_file(&file).expect_err("a plain file must be refused");
+        assert!(e.contains("is not a Unix socket"), "{e}");
+
+        // A real Unix socket passes.
+        let sock = base.join("real.sock");
+        let _listener = std::os::unix::net::UnixListener::bind(&sock).expect("bind a unix socket");
+        assert!(check_egress_socket_file(&sock).is_ok());
+
         let _ = std::fs::remove_dir_all(&base);
     }
 

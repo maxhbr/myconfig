@@ -1005,7 +1005,21 @@ fn sidecar_network_true_still_cannot_reenable() {
     );
     assert!(msg.contains("set to \"none\""), "{msg}");
     assert!(msg.contains("never widen it"), "{msg}");
-    assert!(msg.contains("config.toml"), "{msg}");
+    // Both full file paths, not just the file name.
+    assert!(
+        msg.contains(&sidecar.join("config.toml").display().to_string()),
+        "the sidecar path is named: {msg}"
+    );
+    assert!(
+        msg.contains(
+            &inv.xdg
+                .join("mysbx")
+                .join("config.toml")
+                .display()
+                .to_string()
+        ),
+        "the user config path is named: {msg}"
+    );
     assert!(msg.contains("docs/design/config.md D20"), "{msg}");
 }
 
@@ -10361,7 +10375,7 @@ fn proxy_only_refuses_nix_access_tokens_and_netrc() {
     // D28 rule 3: `[nix]` access-tokens and netrc-file carry
     // credentials and are refused under the profile.
     for key in ["access-tokens", "netrc-file"] {
-        let (inv, repo, sidecar) = fixture(&format!("proxy-only-nix-{key}"), &[]);
+        let (inv, _, sidecar) = fixture(&format!("proxy-only-nix-{key}"), &[]);
         std::fs::write(
             sidecar.join("config.toml"),
             format!(
@@ -10370,12 +10384,15 @@ fn proxy_only_refuses_nix_access_tokens_and_netrc() {
             ),
         )
         .unwrap();
-        let socket_dir = repo.parent().unwrap().join("egress");
-        std::fs::create_dir_all(&socket_dir).unwrap();
         let (code, _stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"]));
         assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "{key}: {stderr}");
         assert!(stderr.contains(key), "{key}: {stderr}");
         assert!(stderr.contains("D28"), "{key}: {stderr}");
+        // The refusal names the FILE it came from.
+        assert!(
+            stderr.contains(&sidecar.join("config.toml").display().to_string()),
+            "{key}: the refusal names the file: {stderr}"
+        );
     }
 }
 
