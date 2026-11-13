@@ -188,18 +188,20 @@ fn run_binary_with(inv: &Invocation, args: &[&str]) -> (i32, String, String) {
 /// run reaches the argv/report stages instead of the missing-pin
 /// refusal. The socket dir is a real tempdir so a non-dry run would
 /// find it.
-fn spawn_proxy_only<S: AsRef<std::ffi::OsStr>>(
-    inv: &Invocation,
-    args: &[S],
-    socket_dir: &Path,
-) -> Command {
+fn spawn_proxy_only<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> Command {
+    // The socket path is pinned to /run/mysbx-egress/<name>
+    // (docs/design/config.md D20); a `--dry-run` never touches it, so
+    // the directory need not exist.
     let mut cmd = spawn_with_args(inv, args);
-    cmd.env("MYSBX_EGRESS_SOCKET", socket_dir.join("litellm.sock"))
-        .env("MYSBX_EGRESS_PORT", "4000")
-        .env(
-            "MYSBX_EGRESS_RELAY",
-            "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
-        );
+    cmd.env(
+        "MYSBX_EGRESS_SOCKET",
+        format!("{}/litellm.sock", mysbx::EGRESS_SOCKET_DIR),
+    )
+    .env("MYSBX_EGRESS_PORT", "4000")
+    .env(
+        "MYSBX_EGRESS_RELAY",
+        "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
+    );
     cmd
 }
 
@@ -10117,7 +10119,7 @@ fn proxy_only_drops_forward_env_beyond_the_base_and_reports_it() {
     .unwrap();
     let socket_dir = repo.parent().unwrap().join("egress");
     std::fs::create_dir_all(&socket_dir).unwrap();
-    let mut cmd = spawn_proxy_only(&inv, &["--verbose", "--dry-run"], &socket_dir);
+    let mut cmd = spawn_proxy_only(&inv, &["--verbose", "--dry-run"]);
     cmd.env("OPENAI_API_KEY", "sk-real-secret")
         .env("TERM", "xterm");
     let out = cmd.output().expect("failed to spawn mysbx");
@@ -10162,21 +10164,82 @@ fn proxy_only_drops_forward_env_beyond_the_base_and_reports_it() {
 }
 
 #[test]
-fn proxy_only_refuses_a_shared_parent_directory_socket() {
-    // Review A1 (bd myconfig-mo3.2.6): the sandbox binds the socket's
-    // PARENT directory read-only, so a `MYSBX_EGRESS_SOCKET` sitting
-    // straight in `/run` (or `/x.sock`, a relative path, an empty file
-    // name) would leak the whole host directory — `/run/user/<uid>`
-    // holds D-Bus, Wayland and ssh-agent sockets. Refused with exit 70
-    // naming the setting and the path.
+fn proxy_only_refuses_a_non_numeric_egress_port() {
+    // bd myconfig-mo3.2.6: a set-but-invalid port (non-numeric or 0) is
+    // INVALID, not missing.
+    for bad in ["not-a-port", "0", "70000"] {
+        let (inv, _, sidecar) = fixture("proxy-only-bad-port", &[]);
+        std::fs::write(
+            sidecar.join("config.toml"),
+            "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+        )
+        .unwrap();
+        let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+        cmd.env(
+            "MYSBX_EGRESS_SOCKET",
+            format!("{}/litellm.sock", mysbx::EGRESS_SOCKET_DIR),
+        )
+        .env("MYSBX_EGRESS_PORT", bad)
+        .env(
+            "MYSBX_EGRESS_RELAY",
+            "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
+        );
+        let (code, _stdout, stderr) = run_command(cmd);
+        assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "{bad}: {stderr}");
+        assert!(
+            stderr.contains("is not a valid port"),
+            "{bad}: the invalid value is named as invalid, not missing: {stderr}"
+        );
+    }
+}
+
+#[test]
+fn proxy_only_real_run_needs_a_real_socket_at_the_pinned_path() {
+    // bd myconfig-mo3.2.6: a REAL run requires /run/mysbx-egress to be
+    // a real root-owned directory and the socket file to exist and be a
+    // Unix socket. --dry-run skips the filesystem checks (it creates
+    // nothing) but still enforces the path shape.
+    let (inv, _, sidecar) = fixture("proxy-only-real-socket", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+
+    // --dry-run always succeeds and shows the channel.
+    let (code, stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("mysbx-egress-relay"), "{stdout}");
+
+    // A real run against the real host directory: this test host has no
+    // root-owned /run/mysbx-egress, so the run refuses — either because
+    // the directory is missing/user-owned or because the socket is
+    // missing. Both name the unit.
+    let (code, _stdout, stderr) = run_command(spawn_proxy_only(&inv, &["run", "--", "/bin/true"]));
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("MYSBX_EGRESS_SOCKET")
+            && stderr.contains("agent-litellm-forward-unix.socket"),
+        "the refusal names the setting and the unit: {stderr}"
+    );
+}
+
+#[test]
+fn proxy_only_refuses_a_socket_outside_the_pinned_directory() {
+    // bd myconfig-mo3.2.6: the socket path is exactly
+    // /run/mysbx-egress/<plain-name>. A `..`, a subdirectory, a shared
+    // directory or a relative path is refused with exit 70, naming the
+    // setting, the value and the expected form — even under --dry-run.
     for socket in [
-        "/run/litellm.sock",
-        "/x.sock",
-        "/tmp/litellm.sock",
-        "litellm.sock",
+        "/run/x/../litellm.sock",
+        "/run/mysbx-egress/../x.sock",
+        "/run/mysbx-egress/./x.sock",
+        "/run/mysbx-egress/a/b.sock",
         "/run/mysbx-egress/",
+        "/run/x.sock",
+        "litellm.sock",
     ] {
-        let (inv, _, sidecar) = fixture("proxy-only-bad-socket-parent", &[]);
+        let (inv, _, sidecar) = fixture("proxy-only-bad-socket", &[]);
         std::fs::write(
             sidecar.join("config.toml"),
             "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
@@ -10193,111 +10256,17 @@ fn proxy_only_refuses_a_shared_parent_directory_socket() {
         assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "{socket}: {stderr}");
         assert!(
             stderr.contains("MYSBX_EGRESS_SOCKET") && stderr.contains(socket),
-            "{socket}: the refusal names the setting and the path: {stderr}"
+            "{socket}: the refusal names the setting and the value: {stderr}"
         );
         assert!(
-            stderr.contains("dedicated directory"),
-            "{socket}: the remedy is stated: {stderr}"
+            stderr.contains("/run/mysbx-egress/<name>"),
+            "{socket}: the expected form is stated: {stderr}"
         );
         assert!(
             !stdout.contains("--clearenv"),
             "{socket}: no argv: {stdout}"
         );
     }
-    // The dedicated directory (/run/mysbx-egress/litellm.sock) passes
-    // the shape check and reaches the argv (the socket itself need not
-    // exist for a --dry-run).
-    let (inv, repo, sidecar) = fixture("proxy-only-good-socket-parent", &[]);
-    std::fs::write(
-        sidecar.join("config.toml"),
-        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
-    )
-    .unwrap();
-    let dir = repo.parent().unwrap().join("egress");
-    std::fs::create_dir_all(&dir).unwrap();
-    let (code, stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"], &dir));
-    assert_eq!(code, 0, "stderr: {stderr}");
-    assert!(stdout.contains("mysbx-egress-relay"), "{stdout}");
-}
-
-#[test]
-fn proxy_only_refuses_a_non_numeric_egress_port() {
-    // Review G: a set-but-unparsable port is INVALID, not missing.
-    let (inv, repo, sidecar) = fixture("proxy-only-bad-port", &[]);
-    std::fs::write(
-        sidecar.join("config.toml"),
-        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
-    )
-    .unwrap();
-    let dir = repo.parent().unwrap().join("egress");
-    std::fs::create_dir_all(&dir).unwrap();
-    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
-    cmd.env("MYSBX_EGRESS_SOCKET", dir.join("litellm.sock"))
-        .env("MYSBX_EGRESS_PORT", "not-a-port")
-        .env(
-            "MYSBX_EGRESS_RELAY",
-            "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
-        );
-    let (code, _stdout, stderr) = run_command(cmd);
-    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
-    assert!(
-        stderr.contains("is not a valid port"),
-        "the invalid value is named as invalid, not missing: {stderr}"
-    );
-}
-
-#[test]
-fn proxy_only_real_run_needs_the_socket_to_exist() {
-    // Review B1 (bd myconfig-mo3.2.6): a REAL run (not --dry-run) must
-    // find a Unix socket at MYSBX_EGRESS_SOCKET; a missing file exits
-    // 70 naming the option and the unit. --dry-run succeeds regardless
-    // (it creates nothing and audits the channel).
-    let (inv, repo, sidecar) = fixture("proxy-only-missing-socket", &[]);
-    std::fs::write(
-        sidecar.join("config.toml"),
-        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
-    )
-    .unwrap();
-    let dir = repo.parent().unwrap().join("egress");
-    std::fs::create_dir_all(&dir).unwrap();
-
-    // A real run: the socket does not exist → exit 70.
-    let mut cmd = spawn_proxy_only(&inv, &["run", "--", "/bin/true"], &dir);
-    cmd.env_remove("MYSBX_BWRAP"); // never reached; refuse before exec
-    let (code, _stdout, stderr) = run_command(cmd);
-    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
-    assert!(
-        stderr.contains("does not exist") && stderr.contains("MYSBX_EGRESS_SOCKET"),
-        "{stderr}"
-    );
-    assert!(
-        stderr.contains("agent-litellm-forward-unix.socket"),
-        "the refusal names the unit: {stderr}"
-    );
-
-    // --dry-run of the SAME run succeeds and shows the channel.
-    let (code, stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"], &dir));
-    assert_eq!(code, 0, "stderr: {stderr}");
-    assert!(stdout.contains("mysbx-egress-relay"), "{stdout}");
-
-    // With a real Unix socket present, the real run reaches the argv
-    // (a --dry-run of it is enough to prove the check passed). The
-    // socket lives in a SHORT directory: the test tempdir path plus
-    // "litellm.sock" can exceed the Unix SUN_LEN limit (the same
-    // constraint the forwarder's own option docs note).
-    let short = std::path::PathBuf::from(format!("/tmp/mysbx-egress-test-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&short);
-    std::fs::create_dir_all(&short).unwrap();
-    let sock = short.join("litellm.sock");
-    let _listener = std::os::unix::net::UnixListener::bind(&sock).unwrap();
-    let (code, stdout, stderr) = run_command(spawn_proxy_only(
-        &inv,
-        &["run", "--dry-run", "--", "/bin/true"],
-        &short,
-    ));
-    let _ = std::fs::remove_dir_all(&short);
-    assert_eq!(code, 0, "a present socket passes the check: {stderr}");
-    assert!(stdout.contains("mysbx-egress-relay"), "{stdout}");
 }
 
 #[test]
@@ -10345,7 +10314,7 @@ fn proxy_only_refuses_a_credential_shaped_env_key() {
     .unwrap();
     let socket_dir = repo.parent().unwrap().join("egress");
     std::fs::create_dir_all(&socket_dir).unwrap();
-    let (code, _stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"], &socket_dir));
+    let (code, _stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"]));
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(stderr.contains("ANTHROPIC_AUTH_TOKEN"), "{stderr}");
     assert!(stderr.contains("D28"), "{stderr}");
@@ -10366,7 +10335,7 @@ fn proxy_only_refuses_a_credential_shaped_env_key() {
     .unwrap();
     let socket_dir = repo.parent().unwrap().join("egress");
     std::fs::create_dir_all(&socket_dir).unwrap();
-    let (code, _stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"], &socket_dir));
+    let (code, _stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"]));
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(stderr.contains("openai_api_key"), "{stderr}");
 }
@@ -10387,8 +10356,7 @@ fn proxy_only_refuses_nix_access_tokens_and_netrc() {
         .unwrap();
         let socket_dir = repo.parent().unwrap().join("egress");
         std::fs::create_dir_all(&socket_dir).unwrap();
-        let (code, _stdout, stderr) =
-            run_command(spawn_proxy_only(&inv, &["--dry-run"], &socket_dir));
+        let (code, _stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"]));
         assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "{key}: {stderr}");
         assert!(stderr.contains(key), "{key}: {stderr}");
         assert!(stderr.contains("D28"), "{key}: {stderr}");

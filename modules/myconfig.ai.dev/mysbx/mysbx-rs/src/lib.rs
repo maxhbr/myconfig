@@ -2537,45 +2537,6 @@ fn sandbox_pipeline(
     }
 
     // 3b. the state-dir backing stores (docs/design/config.md D15):
-    // one directory per merged `state-dirs` entry under
-    // `<sidecar>/state/`, so the rw binds of the argv have an existing
-    // source (bwrap needs one) and the payload's writes persist there
-    // across runs. After the merge (the entries come from both layers),
-    // before the backend check (a broken state dir is as fatal as a
-    // broken config), and only for a real run — `--dry-run` stays
-    // side-effect-free and prints the argv with the would-be sources.
-    // Creation is idempotent; a failure is a runtime error like the
-    // sidecar creation above.
-    //
-    // A run with `ssh-key` additionally generates the keypair under
-    // `<sidecar>/state/.ssh/` — the same state tree, the same
-    // live-runs-only gate: the dry run audits the bind, the real run
-    // ends with a usable keypair. The keypair is unconditional
-    // (docs/design/config.md D22): every run binds it.
-    //
-    // In a CLONE run the `state-dirs` are NOT handled at all
-    // (workspace.md D4): no backing store is created, nothing is
-    // bound — per-session versus shared agent state is deliberately
-    // deferred to a follow-up bead. Scratch space stays the tmpfs
-    // home and `/tmp`, as in any run.
-    if !preflight_only && session.is_none() {
-        if let Err(msg) = ensure_state_dirs(&repo, &merged.state_dirs) {
-            eprintln!("mysbx: {msg}");
-            return EXIT_INFRASTRUCTURE;
-        }
-        // The `ssh-keygen` of the run: the wrapper's pin
-        // (`MYSBX_SSH_KEYGEN`, this build's own closure) with the
-        // PATH fallback of the unwrapped crate — the same idiom as
-        // `MYSBX_BWRAP`. Refused, not ignored: a run whose keypair
-        // it cannot generate must not continue with an `~/.ssh`
-        // bind that does not exist.
-        let keygen = env_or("MYSBX_SSH_KEYGEN", "ssh-keygen");
-        if let Err(msg) = ensure_ssh_key(&repo, &repo.sidecar.join("state"), &keygen) {
-            eprintln!("mysbx: {msg}");
-            return EXIT_INFRASTRUCTURE;
-        }
-    }
-
     // 4. the backend is explicit, never auto-detected (cli.md D7): a
     // silently downgraded isolation level would be a security bug.
     // The accepted set is enforced here for BOTH sources — a config
@@ -2987,6 +2948,48 @@ fn sandbox_pipeline(
         return EXIT_INFRASTRUCTURE;
     }
 
+    // State and keys are CREATED only after every refusal above (bd
+    // myconfig-mo3.2.6): a broken configuration must leave nothing
+    // behind — no state directories, no SSH key, no clone.
+    // one directory per merged `state-dirs` entry under
+    // `<sidecar>/state/`, so the rw binds of the argv have an existing
+    // source (bwrap needs one) and the payload's writes persist there
+    // across runs. After the merge (the entries come from both layers)
+    // and after every refusal above (a broken configuration creates
+    // nothing), and only for a real run — `--dry-run` stays
+    // side-effect-free and prints the argv with the would-be sources.
+    // Creation is idempotent; a failure is a runtime error like the
+    // sidecar creation above.
+    //
+    // A run with `ssh-key` additionally generates the keypair under
+    // `<sidecar>/state/.ssh/` — the same state tree, the same
+    // live-runs-only gate: the dry run audits the bind, the real run
+    // ends with a usable keypair. The keypair is unconditional
+    // (docs/design/config.md D22): every run binds it.
+    //
+    // In a CLONE run the `state-dirs` are NOT handled at all
+    // (workspace.md D4): no backing store is created, nothing is
+    // bound — per-session versus shared agent state is deliberately
+    // deferred to a follow-up bead. Scratch space stays the tmpfs
+    // home and `/tmp`, as in any run.
+    if !preflight_only && session.is_none() {
+        if let Err(msg) = ensure_state_dirs(&repo, &merged.state_dirs) {
+            eprintln!("mysbx: {msg}");
+            return EXIT_INFRASTRUCTURE;
+        }
+        // The `ssh-keygen` of the run: the wrapper's pin
+        // (`MYSBX_SSH_KEYGEN`, this build's own closure) with the
+        // PATH fallback of the unwrapped crate — the same idiom as
+        // `MYSBX_BWRAP`. Refused, not ignored: a run whose keypair
+        // it cannot generate must not continue with an `~/.ssh`
+        // bind that does not exist.
+        let keygen = env_or("MYSBX_SSH_KEYGEN", "ssh-keygen");
+        if let Err(msg) = ensure_ssh_key(&repo, &repo.sidecar.join("state"), &keygen) {
+            eprintln!("mysbx: {msg}");
+            return EXIT_INFRASTRUCTURE;
+        }
+    }
+
     // 4a. the session clone (workspace.md D2): the FIRST `--session`
     // run creates it — the one deliberate exception to "a run creates
     // nothing" (cli.md D13), because `--session NAME` is an explicit
@@ -3337,29 +3340,18 @@ fn sandbox_pipeline(
     };
     let report_waypipe: Option<bwrap::Waypipe<'_>> = waypipe_params.clone();
     // The `network = "proxy-only"` channel (docs/design/config.md D20,
-    // bd myconfig-mo3.2.6): resolved from the wrapper's pins. The
-    // bubblewrap backend is the ONLY enforcing row (step 4b refuses the
-    // profile elsewhere), so the channel is built only for it; the
-    // other arms carry `None` and are never reached with the profile.
-    //
-    // Review B2: the SETTINGS and SHAPE were already validated in step
-    // 4b, before the session clone, so a broken configuration creates
-    // nothing. Here the pinned strings are simply rejoined into the
-    // channel the argv builder takes.
+    // bd myconfig-mo3.2.6): the bubblewrap backend is the ONLY enforcing
+    // row (step 4b refuses the profile elsewhere). Step 4b already
+    // validated the pins, so the channel is built from those values — a
+    // `proxy-only` bubblewrap run always has them; the `map` keeps the
+    // conversion total without an `expect`.
     let egress_params: Option<bwrap::EgressChannel<'_>> =
-        if merged.network == config::Network::ProxyOnly && backend == "bubblewrap" {
-            let pinned = egress
-                .as_ref()
-                .expect("step 4b resolved the egress channel for a proxy-only bubblewrap run");
-            Some(bwrap::EgressChannel {
-                socket_dir: &pinned.socket_dir,
-                socket: &pinned.socket,
-                port: pinned.port,
-                relay_bin: &pinned.relay_bin,
-            })
-        } else {
-            None
-        };
+        egress.as_ref().map(|pinned| bwrap::EgressChannel {
+            socket_dir: &pinned.socket_dir,
+            socket: &pinned.socket,
+            port: pinned.port,
+            relay_bin: &pinned.relay_bin,
+        });
     let (report_shell, report_tools_path, report_mux_entry) =
         if backends::find(backend).is_some_and(|row| row.podman()) {
             (
@@ -5671,81 +5663,94 @@ pub fn credential_shape(name: &str) -> bool {
     })
 }
 
-/// Directories a `proxy-only` forwarder socket must never live
-/// directly in (docs/design/config.md D20, bd myconfig-mo3.2.6): the
-/// sandbox binds the socket's PARENT directory read-only, so a socket
-/// placed straight in one of these would hand the sandbox the whole
-/// directory — `/run` would expose `/run/user/<uid>` (D-Bus, Wayland,
-/// ssh-agent), `/tmp` the world, `$HOME` the user's files.
-const FORBIDDEN_SOCKET_PARENTS: &[&str] = &[
-    "/", "/run", "/tmp", "/var", "/var/run", "/home", "/root", "/etc", "/usr",
-];
+/// The fixed host directory a `proxy-only` forwarder socket must live
+/// in (docs/design/config.md D20, bd myconfig-mo3.2.6).
+///
+/// The sandbox binds this ONE directory read-only at [`bwrap::EGRESS_DIR`],
+/// so it must never be a shared directory: `/run` would expose
+/// `/run/user/<uid>` (D-Bus, Wayland, ssh-agent), `$HOME` the user's
+/// files. A fixed directory with a pinned shape is the only rule that
+/// cannot be bypassed by a `..` component, a symlink or an unusual home.
+pub const EGRESS_SOCKET_DIR: &str = "/run/mysbx-egress";
 
-/// Validate a `proxy-only` forwarder socket path before its parent is
-/// bound into the sandbox (docs/design/config.md D20, bd myconfig-mo3.2.6,
-/// review A1).
+/// Validate a `proxy-only` forwarder socket path before its directory is
+/// bound into the sandbox (docs/design/config.md D20, bd myconfig-mo3.2.6).
 ///
-/// The rule: the path must be ABSOLUTE, have a non-empty file name, and
-/// live in a DEDICATED directory — at least two components deep below
-/// `/`, and not directly inside one of [`FORBIDDEN_SOCKET_PARENTS`].
-/// `/run/mysbx-egress/litellm.sock` passes; `/run/litellm.sock`,
-/// `/x.sock`, a relative path and an empty file name do not.
+/// The path must be EXACTLY `{EGRESS_SOCKET_DIR}/<name>`, compared as a
+/// literal string (never normalised — `/run/x/../litellm.sock` must not
+/// pass), where `<name>` is one plain file-name component matching
+/// `[A-Za-z0-9._-]+` and neither `.` nor `..`.
 ///
-/// Returns a full, operator-facing message naming the setting and the
-/// offending path.
-pub fn validate_egress_socket(setting: &str, path: &str) -> Result<(), String> {
-    let p = std::path::Path::new(path);
-    let complain = |why: &str| {
-        Err(format!(
-            "{setting} = `{path}` {why} — the sandbox binds the socket's PARENT \
-             DIRECTORY read-only, so it must sit in a dedicated directory of its \
-             own (e.g. /run/mysbx-egress/litellm.sock), never directly in /run, \
-             /tmp, $HOME or / (docs/design/config.md D20)"
-        ))
+/// Returns the file name on success, or a full operator-facing message
+/// naming the setting, the offending value and the expected form.
+pub fn validate_egress_socket(setting: &str, path: &str) -> Result<String, String> {
+    let prefix = format!("{EGRESS_SOCKET_DIR}/");
+    let complain = || {
+        format!(
+            "{setting} = `{path}` must be exactly `{EGRESS_SOCKET_DIR}/<name>` \
+             (e.g. `{EGRESS_SOCKET_DIR}/litellm.sock`): the sandbox binds that \
+             directory read-only, so the socket may not live in a shared \
+             directory, escape it with `..`, or sit in a subdirectory \
+             (docs/design/config.md D20)"
+        )
     };
-    if !p.is_absolute() {
-        return complain("is not an absolute path");
-    }
-    match p.file_name() {
-        Some(name) if !name.is_empty() => {}
-        _ => return complain("has no file name"),
-    }
-    // The parent, with redundant components folded away so `/run/./x`
-    // and `/run/x` compare alike.
-    let parent = match p.parent() {
-        Some(parent) => parent,
-        None => return complain("has no parent directory"),
+    let name = match path.strip_prefix(&prefix) {
+        Some(name) => name,
+        None => return Err(complain()),
     };
-    let normalized: std::path::PathBuf = parent.components().collect();
-    let depth = normalized
-        .components()
-        .filter(|c| matches!(c, std::path::Component::Normal(_)))
-        .count();
-    if depth < 2 {
-        return complain("does not sit in a dedicated directory (at least two levels below `/`)");
+    let plain = !name.is_empty()
+        && name != "."
+        && name != ".."
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'));
+    if !plain {
+        return Err(complain());
     }
-    if FORBIDDEN_SOCKET_PARENTS
-        .iter()
-        .any(|forbidden| normalized == std::path::Path::new(forbidden))
-    {
-        return complain("sits directly in a shared directory");
+    Ok(name.to_owned())
+}
+
+/// The metadata facts the `proxy-only` socket-directory check needs, as
+/// a pure predicate so the rules are testable without owning a
+/// root-owned directory (bd myconfig-mo3.2.6).
+///
+/// The directory must be a REAL directory (not a symlink), owned by
+/// root, and not writable by group or other — anything else means the
+/// sandbox's read-only bind would hand out (or could be redirected at)
+/// more than the forwarder's socket.
+fn egress_dir_metadata_ok(is_dir: bool, uid: u32, mode: u32) -> Result<(), &'static str> {
+    if !is_dir {
+        return Err("is not a real directory (a symlink or a plain file)");
     }
-    // `$HOME` itself (wherever it lives) and its conventional
-    // `/home/<user>` spelling: binding the user's home read-only is
-    // strictly worse than the `/home` case above.
-    let in_home = std::env::var_os("HOME")
-        .map(std::path::PathBuf::from)
-        .is_some_and(|home| normalized == home)
-        || (normalized.starts_with("/home")
-            && normalized
-                .components()
-                .filter(|c| matches!(c, std::path::Component::Normal(_)))
-                .count()
-                == 2);
-    if in_home {
-        return complain("sits in the user's home directory");
+    if uid != 0 {
+        return Err("is not owned by root");
+    }
+    if mode & 0o022 != 0 {
+        return Err("is writable by group or other");
     }
     Ok(())
+}
+
+/// Check the on-disk state of a `proxy-only` socket directory
+/// (bd myconfig-mo3.2.6): a real directory (`symlink_metadata`, so a
+/// symlink is refused), root-owned, not group- or world-writable. Called
+/// on a REAL run only; `--dry-run` skips it (nothing is created).
+pub fn check_egress_socket_dir(dir: &std::path::Path) -> Result<(), String> {
+    use std::os::unix::fs::MetadataExt;
+    let meta = std::fs::symlink_metadata(dir).map_err(|e| {
+        format!(
+            "{dir_display} does not exist ({e}); the forwarder \
+             (agent-litellm-forward-unix.socket) must be running",
+            dir_display = dir.display()
+        )
+    })?;
+    egress_dir_metadata_ok(meta.file_type().is_dir(), meta.uid(), meta.mode()).map_err(|why| {
+        format!(
+            "{dir_display} {why}; the sandbox binds it read-only, so it must be \
+             root-owned and not group- or world-writable",
+            dir_display = dir.display()
+        )
+    })
 }
 
 /// The `network = "proxy-only"` channel resolved from the wrapper's
@@ -5770,17 +5775,18 @@ pub struct EgressPins {
 /// `MYSBX_EGRESS_SOCKET` / `MYSBX_EGRESS_PORT` / `MYSBX_EGRESS_RELAY`
 /// (docs/design/config.md D20, bd myconfig-mo3.2.6).
 ///
-/// Runs in step 4b — BEFORE the session clone and before the
-/// `--dry-run` return — so a broken configuration creates nothing
-/// (review B2). Refuses with a printed, operator-facing message:
+/// Runs in step 4b, BEFORE anything is created (`ensure_state_dirs`, the
+/// SSH key, the session clone) and before the `--dry-run` return.
+/// Refuses with a printed, operator-facing message:
 ///
 /// - a missing setting (naming the option to enable),
-/// - a socket path in a shared directory ([`validate_egress_socket`],
-///   review A1),
-/// - a non-numeric port (invalid, not missing),
-/// - on a REAL run only, a socket that does not exist or is not a Unix
-///   socket (review B1) — a dry run still succeeds and shows the
-///   channel.
+/// - a socket path that is not exactly [`EGRESS_SOCKET_DIR`]`/<name>`
+///   ([`validate_egress_socket`]),
+/// - a port that is not 1-65535 (a set value is invalid, not missing),
+/// - on a REAL run only, a socket directory that is not a real,
+///   root-owned, non-group/world-writable directory
+///   ([`check_egress_socket_dir`]), and a socket that does not exist or
+///   is not a Unix socket.
 ///
 /// `Ok(None)` when the profile is not selected (or the backend is not
 /// bubblewrap).
@@ -5792,7 +5798,7 @@ pub fn resolve_egress(
     if network != config::Network::ProxyOnly || backend != "bubblewrap" {
         return Ok(None);
     }
-    let complain = |message: String| {
+    let complain = |message: &str| {
         eprintln!("mysbx: {message}");
         eprintln!(
             "  enable myconfig.ai.dev.litellm-forwarder.unixSocket.enable so the host \
@@ -5805,68 +5811,61 @@ pub fn resolve_egress(
     let port_raw = env_opt("MYSBX_EGRESS_PORT");
     let relay = env_opt("MYSBX_EGRESS_RELAY");
 
-    if let Some(path) = socket_path.as_deref() {
-        if let Err(message) = validate_egress_socket("MYSBX_EGRESS_SOCKET", path) {
-            return complain(message);
-        }
-    }
-    // A set-but-unparsable port is INVALID, not missing (review G).
-    let port: Option<u16> = port_raw.as_deref().and_then(|p| p.parse().ok());
-    if let (Some(raw), None) = (port_raw.as_deref(), port) {
-        return Err(complain(format!(
-            "MYSBX_EGRESS_PORT = `{raw}` is not a valid port (expected 1-65535); the \
-             wrapper pins the host LiteLLM port here (docs/design/config.md D20)"
-        ))
-        .unwrap_err());
-    }
-
     let mut missing = Vec::new();
     if socket_path.is_none() {
         missing.push("MYSBX_EGRESS_SOCKET");
     }
-    if port.is_none() {
+    if port_raw.is_none() {
         missing.push("MYSBX_EGRESS_PORT");
     }
     if relay.is_none() {
         missing.push("MYSBX_EGRESS_RELAY");
     }
     if !missing.is_empty() {
-        return complain(format!(
+        return complain(&format!(
             "network = \"proxy-only\" needs the LiteLLM forwarder's socket channel, \
              but this host pinned no {}",
             missing.join(", ")
         ));
     }
-    let (path, port, relay) = (
-        socket_path.expect("checked above"),
-        port.expect("checked above"),
-        relay.expect("checked above"),
-    );
-    let p = std::path::Path::new(&path);
-    let socket_dir = p
-        .parent()
-        .map(|d| d.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let socket = p
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default();
+    // Present, so the three are `Some`. Destructure without `unwrap`.
+    let (Some(path), Some(port_raw), Some(relay)) = (socket_path, port_raw, relay) else {
+        return complain("network = \"proxy-only\" is missing an egress pin");
+    };
 
-    // Review B1: a REAL run needs the socket to exist and to be a Unix
-    // socket. A `--dry-run` audits the channel without requiring the
-    // forwarder to be up (the run creates nothing either way).
+    let socket = match validate_egress_socket("MYSBX_EGRESS_SOCKET", &path) {
+        Ok(name) => name,
+        Err(message) => return complain(&message),
+    };
+
+    // A set-but-invalid port (non-numeric, 0 or out of range) is
+    // INVALID, not missing.
+    let port: u16 = match port_raw.parse::<u16>() {
+        Ok(0) | Err(_) => {
+            return complain(&format!(
+                "MYSBX_EGRESS_PORT = `{port_raw}` is not a valid port (expected 1-65535); \
+                 the wrapper pins the host LiteLLM port here (docs/design/config.md D20)"
+            ))
+        }
+        Ok(port) => port,
+    };
+
     if !dry_run {
+        let dir = std::path::Path::new(EGRESS_SOCKET_DIR);
+        if let Err(message) = check_egress_socket_dir(dir) {
+            return complain(&format!("{message} (MYSBX_EGRESS_SOCKET = `{path}`)"));
+        }
         use std::os::unix::fs::FileTypeExt;
         match std::fs::metadata(&path) {
             Ok(meta) if meta.file_type().is_socket() => {}
             Ok(_) => {
-                return complain(format!(
+                return complain(&format!(
                     "MYSBX_EGRESS_SOCKET = `{path}` is not a Unix socket; the forwarder \
                      (agent-litellm-forward-unix.socket) must be running"
                 ))
             }
             Err(e) => {
-                return complain(format!(
+                return complain(&format!(
                     "MYSBX_EGRESS_SOCKET = `{path}` does not exist ({e}); the forwarder \
                      (agent-litellm-forward-unix.socket) must be running for a \
                      network = \"proxy-only\" run"
@@ -5876,7 +5875,7 @@ pub fn resolve_egress(
     }
 
     Ok(Some(EgressPins {
-        socket_dir,
+        socket_dir: EGRESS_SOCKET_DIR.to_owned(),
         socket,
         port,
         path,
@@ -7322,37 +7321,76 @@ mod tests {
     // ---- the D20 egress socket shape (bd myconfig-mo3.2.6) -----------
 
     #[test]
-    fn egress_socket_must_live_in_a_dedicated_directory() {
-        // The sandbox binds the socket's PARENT directory read-only, so
-        // a shared directory would leak host state (review A1).
-        for good in [
-            "/run/mysbx-egress/litellm.sock",
-            "/srv/mysbx/litellm.sock",
-            "/var/lib/mysbx/litellm.sock",
-        ] {
-            assert!(
-                validate_egress_socket("MYSBX_EGRESS_SOCKET", good).is_ok(),
-                "{good} must be accepted"
-            );
-        }
+    fn egress_socket_must_be_exactly_the_pinned_directory() {
+        // The sandbox binds /run/mysbx-egress read-only, so the socket
+        // path is pinned to that directory plus one plain file name —
+        // compared literally, so a `..`, a subdirectory or a symlink
+        // spelling cannot escape it (docs/design/config.md D20).
+        assert_eq!(
+            validate_egress_socket("MYSBX_EGRESS_SOCKET", "/run/mysbx-egress/litellm.sock")
+                .expect("the canonical path must be accepted"),
+            "litellm.sock"
+        );
         for bad in [
-            "/run/litellm.sock",
-            "/x.sock",
-            "/tmp/litellm.sock",
-            "/var/litellm.sock",
-            "/var/run/litellm.sock",
-            "/home/litellm.sock",
-            "/home/someone/litellm.sock",
-            "/etc/litellm.sock",
-            "litellm.sock",
+            // Escape attempts that survived the old depth/deny-list rule.
+            "/run/x/../litellm.sock",
+            "/run/mysbx-egress/../x.sock",
+            "/run/mysbx-egress/./x.sock",
+            "/run/mysbx-egress/a/b.sock",
             "/run/mysbx-egress/",
+            "/run/mysbx-egress",
+            "/run/x.sock",
+            "/run/user/1000/x.sock",
+            "/tmp/litellm.sock",
+            "/var/lib/litellm.sock",
+            "/home/someone/.ssh/x.sock",
+            "litellm.sock",
+            "/run/mysbx-egress/.",
+            "/run/mysbx-egress/..",
+            "/run/mysbx-egress/",
+            "/run/mysbx-egress/bad name.sock",
             "",
         ] {
             let e = validate_egress_socket("MYSBX_EGRESS_SOCKET", bad)
                 .expect_err(&format!("{bad} must be refused"));
             assert!(e.contains("MYSBX_EGRESS_SOCKET"), "{bad}: {e}");
-            assert!(e.contains("dedicated directory"), "{bad}: {e}");
+            assert!(e.contains("/run/mysbx-egress/<name>"), "{bad}: {e}");
         }
+    }
+
+    #[test]
+    fn egress_dir_must_be_a_real_root_owned_non_writable_directory() {
+        // The metadata rules as a pure predicate (the real check reads
+        // `symlink_metadata`; a symlink reports `is_dir() == false`).
+        assert!(egress_dir_metadata_ok(true, 0, 0o755).is_ok());
+        assert!(egress_dir_metadata_ok(true, 0, 0o700).is_ok());
+        // A symlink (is_dir false) is refused.
+        assert!(egress_dir_metadata_ok(false, 0, 0o755).is_err());
+        // Not root-owned.
+        assert!(egress_dir_metadata_ok(true, 1000, 0o755).is_err());
+        // Group- or world-writable.
+        assert!(egress_dir_metadata_ok(true, 0, 0o775).is_err());
+        assert!(egress_dir_metadata_ok(true, 0, 0o757).is_err());
+        assert!(egress_dir_metadata_ok(true, 0, 0o777).is_err());
+    }
+
+    #[test]
+    fn the_egress_dir_check_refuses_a_symlink_and_names_a_missing_dir() {
+        // `check_egress_socket_dir` reads `symlink_metadata`, so a
+        // symlink is refused as "not a real directory" regardless of the
+        // build user (the nix sandbox runs as root, so the ownership
+        // rule itself is covered by the pure predicate above).
+        let base = std::env::temp_dir().join(format!("mysbx-egress-dir-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("temp dir");
+        let link = base.join("link");
+        std::os::unix::fs::symlink(&base, &link).expect("symlink");
+        let e = check_egress_socket_dir(&link).expect_err("a symlink must be refused");
+        assert!(e.contains("not a real directory"), "{e}");
+        let missing = base.join("nope");
+        let e = check_egress_socket_dir(&missing).expect_err("a missing dir must be refused");
+        assert!(e.contains("agent-litellm-forward-unix.socket"), "{e}");
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     // ---- the krun git trust file (bd myconfig-zj2) -------------------

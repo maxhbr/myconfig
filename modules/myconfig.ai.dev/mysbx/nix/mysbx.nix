@@ -314,11 +314,12 @@
   podmanPastaSpec ? null,
   # The host Unix socket of the `network = "proxy-only"` channel
   # (`MYSBX_EGRESS_SOCKET`, docs/design/config.md D20, bd
-  # myconfig-mo3.2.4): the path of the
-  # `agent-litellm-forward-unix` forwarder's socket, which the
-  # bubblewrap backend binds into the sandbox. `null` pins nothing — an
-  # unwrapped build's PATH fallback applies, and a `proxy-only` run
-  # without a pinned socket is REFUSED (it fails closed). Pinned with
+  # myconfig-mo3.2.4): the `agent-litellm-forward-unix` forwarder's
+  # socket path, which the bubblewrap backend binds into the sandbox.
+  # It must be exactly `/run/mysbx-egress/<name>` — that directory is
+  # the only host path the profile binds, and the Rust side refuses
+  # anything else. `null` pins nothing, and a `proxy-only` run without
+  # a pinned socket is REFUSED (it fails closed). Pinned with
   # `--set-default`: a debugging run may point it at another socket.
   egressSocket ? null,
   # The host LiteLLM port the in-sandbox relay listens on

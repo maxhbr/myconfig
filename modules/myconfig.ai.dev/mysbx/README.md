@@ -603,7 +603,11 @@ myconfig-mo3.2). The sandbox's network namespace is empty except one
 host channel: the LiteLLM forwarder's Unix socket
 (`myconfig.ai.dev.litellm-forwarder.unixSocket`, default
 `/run/mysbx-egress/litellm.sock`), whose DIRECTORY the backend binds
-read-only at `/run/mysbx-egress`. Inside the sandbox
+read-only at `/run/mysbx-egress`. The socket path is pinned to that one
+directory (only the file name is configurable, `unixSocket.name`), so a
+`..` or a shared directory cannot widen the bind; on a real run the
+directory must also be root-owned and not group-/world-writable. Inside
+the sandbox
 `mysbx-egress-relay` (`MYSBX_EGRESS_RELAY`) listens on
 `127.0.0.1:<litellm port>` and forwards every connection to that
 socket, so agents keep their baked `http://127.0.0.1:<port>/v1` URLs

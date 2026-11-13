@@ -71,6 +71,10 @@ let
 
   port = toString cfg.port;
   forwardPort = toString cfg.forwardPort;
+  # The socket path is fixed to the directory the sandbox binds
+  # (docs/design/config.md D20, bd myconfig-mo3.2.6); only the file name
+  # is configurable.
+  socketPath = "/run/mysbx-egress/${cfg.unixSocket.name}";
 in
 {
   options.myconfig.ai.dev.litellm-forwarder = with lib; {
@@ -160,18 +164,20 @@ in
         '';
       };
 
-      path = mkOption {
-        type = types.str;
-        default = "/run/mysbx-egress/litellm.sock";
+      name = mkOption {
+        type = types.addCheck types.str (
+          n: builtins.match "[A-Za-z0-9._-]+" n != null && n != "." && n != ".."
+        );
+        default = "litellm.sock";
         description = ''
-          Listen path of the Unix-socket forwarder. The socket file is
-          mode 0666; its parent DIRECTORY (created by systemd, mode
-          0755 root-owned) is what the mysbx bubblewrap backend binds
-          READ-ONLY into the sandbox at `/run/mysbx-egress`. The path
-          must therefore sit in a dedicated directory at least two
-          levels below `/` — `/run/mysbx-egress/litellm.sock` is fine,
-          but `/run/litellm.sock` would bind the whole of `/run`
-          (including `/run/user/<uid>`) into the sandbox.
+          File name of the Unix socket inside the FIXED directory
+          `/run/mysbx-egress` (the mysbx bubblewrap `proxy-only` backend
+          binds exactly that directory read-only into the sandbox,
+          docs/design/config.md D20, bd myconfig-mo3.2.6). One plain
+          file-name component — letters, digits, `.`, `_`, `-`, but not
+          `.` or `..` — so the path can never escape the directory.
+          The socket file is mode 0666; the directory is created by
+          systemd at 0755, root-owned.
         '';
       };
     };
@@ -270,68 +276,21 @@ in
             127.0.0.1:${port}, where nothing listens.
           '';
         }
-        {
-          # The mysbx `proxy-only` backend binds this socket's PARENT
-          # DIRECTORY read-only into the sandbox (docs/design/config.md
-          # D20), so the path must sit in a dedicated directory — never
-          # directly in /run, /tmp, /var or the like, where the bind
-          # would hand the sandbox the whole host directory (review A1).
-          # The Rust side refuses the same shapes at run time.
-          assertion = lib.all (p: p) [
-            (lib.hasPrefix "/" cfg.unixSocket.path) # absolute
-            (!(lib.hasSuffix "/" cfg.unixSocket.path)) # a socket FILE, not a dir
-            (builtins.baseNameOf cfg.unixSocket.path != "/") # a file name
-            (builtins.baseNameOf cfg.unixSocket.path != "") # a file name
-            # The parent is at least two components deep below `/`.
-            (
-              builtins.length (
-                builtins.filter (c: c != "") (lib.splitString "/" (builtins.dirOf cfg.unixSocket.path))
-              ) >= 2
-            )
-            # … and not a shared top-level directory nor a
-            # `/home/<user>` home.
-            (
-              !(lib.elem (builtins.dirOf cfg.unixSocket.path) [
-                "/"
-                "/run"
-                "/tmp"
-                "/var"
-                "/var/run"
-                "/home"
-                "/root"
-                "/etc"
-                "/usr"
-              ])
-            )
-            (
-              builtins.length (
-                builtins.filter (c: c != "") (lib.splitString "/" (builtins.dirOf cfg.unixSocket.path))
-              ) != 2
-              || !(lib.hasPrefix "/home/" (builtins.dirOf cfg.unixSocket.path))
-            )
-          ];
-          message = ''
-            myconfig.ai.dev.litellm-forwarder.unixSocket.path = "${cfg.unixSocket.path}"
-            must sit in a dedicated directory at least two levels below `/` — the
-            mysbx `network = "proxy-only"` sandbox binds the socket's PARENT
-            directory read-only, so `/run/mysbx-egress/litellm.sock` is fine but
-            `/run/litellm.sock` would expose the whole of /run (docs/design/config.md
-            D20).
-          '';
-        }
       ];
 
       systemd.sockets.agent-litellm-forward-unix = {
         description = "Unix socket for the agent LiteLLM egress forwarder";
         wantedBy = [ "sockets.target" ];
         socketConfig = {
-          # systemd creates the socket's parent directory itself (its
-          # `DirectoryMode=` default is 0755, root-owned), so no
-          # `ExecStartPre mkdir` is needed — the world-writable SOCKET
-          # (0666) inside a 0755 directory is the only relaxation, and a
-          # sandbox that binds the directory read-only sees exactly the
-          # one socket the mysbx backend expects.
-          ListenStream = cfg.unixSocket.path;
+          # The directory is created by systemd (no ExecStartPre mkdir)
+          # at an EXPLICIT 0755, root-owned: the world-writable SOCKET
+          # (0666) inside it is the only relaxation, and a sandbox that
+          # binds the directory read-only sees exactly the one socket
+          # the mysbx backend expects. The Rust side refuses a real run
+          # unless the directory is a non-symlink, root-owned and not
+          # group/world-writable.
+          DirectoryMode = "0755";
+          ListenStream = socketPath;
           # Mode 0666: the mysbx `proxy-only` sandbox binds the socket's
           # directory and connects as the sandbox user; the socket is no
           # wider than LiteLLM's own loopback TCP port (any host process
@@ -346,7 +305,7 @@ in
       };
 
       systemd.services.agent-litellm-forward-unix = {
-        description = "Agent LiteLLM Unix-socket egress forwarder (${cfg.unixSocket.path} -> 127.0.0.1:${port})";
+        description = "Agent LiteLLM Unix-socket egress forwarder (${socketPath} -> 127.0.0.1:${port})";
         requires = [
           "agent-litellm-forward-unix.socket"
           "litellm.service"
