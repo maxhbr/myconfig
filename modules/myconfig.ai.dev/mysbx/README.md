@@ -24,6 +24,8 @@ overview; design decisions and any other long text belong in `docs/`:
     model: the live repo default and the opt-in clone sessions
   - [`docs/design/backends.md`](./docs/design/backends.md) - how a backend
     confines the payload (the layered `nono` backend)
+  - [`docs/design/egress.md`](./docs/design/egress.md) - the per-run egress
+    broker that replaces the static `proxy-only` forwarder socket
 
 ## How to use:
 

@@ -1283,7 +1283,9 @@ naming the option to enable) — the profile fails closed, never falls
 back to a shared network. The f13 live run of the enforcing backend is
 in [`../egress-validation-log.md`](../egress-validation-log.md).
 Phase B–D (per-backend transports, the broker) live in bd
-myconfig-vpi9.
+myconfig-vpi9; the broker's own decision record is
+[`egress.md`](./egress.md) (bd myconfig-n8kv.1), and it replaces the
+root-owned-directory clause above with a user-owned per-run one.
 
 **Orca's shared-network requirement** stays unsatisfied under this
 profile: `multiplexer = "orca"` needs the shared network and is

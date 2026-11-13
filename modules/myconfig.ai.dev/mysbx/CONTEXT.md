@@ -99,7 +99,16 @@ _Avoid_: proxy bridge, port forward, tunnel
 **Egress relay**:
 The in-sandbox process (`mysbx-egress-relay`) that accepts loopback TCP
 clients and forwards to the host egress forwarder's socket. It makes
-proxy-aware clients work without giving them a route. A later
-host-side *egress broker* (bd myconfig-vpi9) may replace it; the relay
+proxy-aware clients work without giving them a route. The relay
 makes no allow/deny decisions of its own.
 _Avoid_: proxy server, sidecar, gateway
+
+**Egress broker**:
+The host process mysbx is DESIGNED to spawn once per run (bd
+myconfig-n8kv.1, not shipped yet) to own the sandbox's single network
+channel: it listens on a socket in a user-owned per-run directory, dials
+the host LiteLLM endpoint itself, and writes a JSONL decision log the
+payload cannot reach ([`docs/design/egress.md`](./docs/design/egress.md)).
+Where it replaces the static egress forwarder's Unix socket for
+`proxy-only` runs.
+_Avoid_: egress daemon, proxy service, gateway
