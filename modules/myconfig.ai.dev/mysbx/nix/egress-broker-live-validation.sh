@@ -24,7 +24,10 @@ repo=${1:?usage: egress-broker-live-validation.sh <repo-dir>}
 mysbx=${MYSBX:-mysbx}
 # cli.md D8: 70 is the refused-configuration code every refusal uses.
 MYSBX_EXIT_REFUSED=70
+# Normalised once: a trailing slash is harmless where this is used as a
+# path, but it would double the separator inside the case PATTERN below.
 runtime=${XDG_RUNTIME_DIR:-}
+runtime=${runtime%/}
 [ -n "$runtime" ] ||
     {
         echo "egress-broker-live-validation: XDG_RUNTIME_DIR is unset; the run
@@ -48,10 +51,8 @@ note() {
     printf '     %s\n' "$1"
 }
 
-# Every probe here either runs or FAILs the script. There is deliberately no
-# SKIP category: the one probe that could not be exercised (moving the
-# pinned broker aside) was replaced by a non-destructive injection, and a
-# category nothing ever reports would make the closing count assert
+# Every probe here either runs or fails the script, so there is no SKIP
+# category: one nothing ever reports would make the closing count assert
 # nothing.
 finish() {
     printf '\n%d probe(s) passed\n' "$passes"
@@ -99,21 +100,18 @@ pass "the wrapper pins a per-run broker (docs/design/egress.md E1)"
 before=$(count_run_dirs)
 dry=$("$mysbx" --dry-run --verbose 2>&1) || fail "dry run" "a --dry-run exited non-zero"
 grep -q "proxy-only" <<<"$dry" || fail "dry run" "the report does not name the proxy-only profile"
-# The verbose report prefixes every line with `## ` (so the unprefixed argv
-# block stays byte-identical to a bare --dry-run), so the anchor must allow
-# it: an `^network:` pattern matches nothing and would make the negative
-# check below silently vacuous.
+# Report lines are `## `-prefixed, so every anchor here allows the prefix.
 grep -qE '^(## )?network:.*via the relay from' <<<"$dry" ||
     fail "dry run" "the report names no per-run channel source: $(grep -E '^(## )?network:' <<<"$dry")"
-# The STATIC source is the fixed `EGRESS_SOCKET_DIR` constant
-# (mysbx::EGRESS_SOCKET_DIR, "/run/mysbx-egress"); the per-run one is
-# "$XDG_RUNTIME_DIR/mysbx-egress/<pid>". Compare those two spellings —
-# sniffing for "/run/" cannot tell them apart, because the per-run path
-# lives under /run/user/<uid>/ too.
+# The channel source is one of exactly two spellings, closed by `)` in the
+# report: the fixed EGRESS_SOCKET_DIR constant, or the per-run directory.
+# Sniffing for "/run/" cannot separate them — the per-run path is under
+# /run/user/<uid>/ — and the static arm is matched first, which is safe
+# because neither is a prefix of the other.
 static_dir=/run/mysbx-egress
 channel=$(grep -E '^(## )?network:' <<<"$dry" | head -1)
 case "$channel" in
-    *"via the relay from $static_dir"*)
+    *"via the relay from $static_dir)"*)
         fail "dry run" "the report names the STATIC forwarder directory as the source: $channel"
         ;;
     *"via the relay from $runtime/mysbx-egress/"*)
