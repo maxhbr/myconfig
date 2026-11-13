@@ -10281,21 +10281,20 @@ fn proxy_only_refuses_a_socket_outside_the_pinned_directory() {
 }
 
 #[test]
-fn proxy_only_refusal_creates_no_state_key_or_clone() {
+fn proxy_only_refusal_creates_no_state_dir_or_key() {
     // bd myconfig-mo3.2.6: the egress refusal runs before anything is
-    // created — no state directory, no SSH key, no session clone. A REAL
-    // run (not --dry-run) with no MYSBX_EGRESS_SOCKET exits 70 and
-    // leaves the sidecar's state tree empty.
-    let (inv, repo, sidecar) = fixture("proxy-only-no-create", &[]);
+    // created. A REAL run (not --dry-run, not --session: only a live run
+    // creates state directories and the SSH key) with no
+    // MYSBX_EGRESS_SOCKET exits 70 and leaves the sidecar's state tree
+    // empty.
+    let (inv, _repo, sidecar) = fixture("proxy-only-no-state", &[]);
     std::fs::write(
         sidecar.join("config.toml"),
         "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n\
          state-dirs = [\"cache\"]\n",
     )
     .unwrap();
-    // No egress pins at all (spawn_with_args removes them). A real
-    // `--session` run would create the clone; it must be refused before.
-    let (code, _stdout, stderr) = run_binary_with(&inv, &["--session", "s1"]);
+    let (code, _stdout, stderr) = run_binary_with(&inv, &[] as &[&str]);
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(
         stderr.contains("MYSBX_EGRESS_SOCKET"),
@@ -10315,7 +10314,24 @@ fn proxy_only_refusal_creates_no_state_key_or_clone() {
         "a refused run must create no SSH key, found {}",
         key.display()
     );
-    // No session clone.
+}
+
+#[test]
+fn proxy_only_refusal_creates_no_session_clone() {
+    // bd myconfig-mo3.2.6: a real `--session` run with no
+    // MYSBX_EGRESS_SOCKET is refused (exit 70) before the clone exists.
+    let (inv, repo, sidecar) = fixture("proxy-only-no-clone", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    let (code, _stdout, stderr) = run_binary_with(&inv, &["--session", "s1"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("MYSBX_EGRESS_SOCKET"),
+        "the refusal names the missing pin: {stderr}"
+    );
     let worktrees = repo.parent().unwrap().join(format!(
         "{}__worktrees",
         repo.file_name().unwrap().to_string_lossy()
