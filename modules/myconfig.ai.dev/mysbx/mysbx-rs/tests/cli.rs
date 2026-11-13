@@ -10270,25 +10270,41 @@ fn proxy_only_refuses_a_socket_outside_the_pinned_directory() {
 }
 
 #[test]
-fn proxy_only_missing_setting_is_refused_before_the_session_clone() {
-    // Review B2 (bd myconfig-mo3.2.6): the settings check must run
-    // BEFORE the session clone — a broken configuration creates
-    // nothing. A `--session` run with no MYSBX_EGRESS_SOCKET exits 70
-    // and leaves no clone behind.
-    let (inv, repo, sidecar) = fixture("proxy-only-session-no-pins", &[]);
+fn proxy_only_refusal_creates_no_state_key_or_clone() {
+    // bd myconfig-mo3.2.6: the egress refusal runs before anything is
+    // created — no state directory, no SSH key, no session clone. A REAL
+    // run (not --dry-run) with no MYSBX_EGRESS_SOCKET exits 70 and
+    // leaves the sidecar's state tree empty.
+    let (inv, repo, sidecar) = fixture("proxy-only-no-create", &[]);
     std::fs::write(
         sidecar.join("config.toml"),
-        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n\
+         state-dirs = [\"cache\"]\n",
     )
     .unwrap();
-    // No egress pins at all (spawn_with_args removes them).
-    let (code, _stdout, stderr) = run_binary_with(&inv, &["--session", "s1", "--dry-run"]);
+    // No egress pins at all (spawn_with_args removes them). A real
+    // `--session` run would create the clone; it must be refused before.
+    let (code, _stdout, stderr) = run_binary_with(&inv, &["--session", "s1"]);
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(
         stderr.contains("MYSBX_EGRESS_SOCKET"),
         "the refusal names the missing pin: {stderr}"
     );
-    // The session clone must not have been created.
+    // No state directory (the `cache` entry would back one).
+    let cache = sidecar.join("state").join("cache");
+    assert!(
+        !cache.exists(),
+        "a refused run must create no state dir, found {}",
+        cache.display()
+    );
+    // No SSH key.
+    let key = sidecar.join("state").join(".ssh").join("id_ed25519");
+    assert!(
+        !key.exists(),
+        "a refused run must create no SSH key, found {}",
+        key.display()
+    );
+    // No session clone.
     let worktrees = repo.parent().unwrap().join(format!(
         "{}__worktrees",
         repo.file_name().unwrap().to_string_lossy()
