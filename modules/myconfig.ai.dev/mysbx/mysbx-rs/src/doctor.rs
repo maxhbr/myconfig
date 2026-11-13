@@ -1071,10 +1071,24 @@ fn host_endpoint_check(
     merged: &merge::Merged,
     forwarded: &[(String, String)],
 ) {
-    if !merged.network {
+    if !merged.network.is_shared() {
         checks.push(Check::ok(
             "model endpoint",
-            "not applicable: the network is denied (network = false)",
+            format!(
+                "not applicable: the network is {} (network = {})",
+                if merged.network.is_none() {
+                    "denied"
+                } else {
+                    "proxy-only"
+                },
+                // The bool spellings render `false`/`true`; only the
+                // profile's string form prints a quoted string.
+                if merged.network.is_none() {
+                    "false"
+                } else {
+                    "\"proxy-only\""
+                }
+            ),
         ));
         return;
     }
@@ -1107,6 +1121,97 @@ fn host_endpoint_check(
             "start the model proxy (e.g. litellm.service) or fix the URL",
         ),
     });
+}
+
+/// The `network = "proxy-only"` channel check (docs/design/config.md
+/// D20, bd myconfig-mo3.2.6): the wrapper pins `MYSBX_EGRESS_SOCKET`,
+/// `MYSBX_EGRESS_PORT` and `MYSBX_EGRESS_RELAY`. Report what a
+/// `proxy-only` run would use, and CONNECT to the forwarder socket and
+/// send a `GET /v1/models` — a host-side probe of the same channel the
+/// sandbox reaches, so a stopped forwarder or a missing socket surfaces
+/// here rather than as a sandboxed agent that cannot reach its model.
+fn egress_check(checks: &mut Vec<Check>) {
+    let (Some(socket), Some(port), Some(relay)) = (
+        crate::env_opt("MYSBX_EGRESS_SOCKET"),
+        crate::env_opt("MYSBX_EGRESS_PORT"),
+        crate::env_opt("MYSBX_EGRESS_RELAY"),
+    ) else {
+        checks.push(Check::warn(
+            "egress channel",
+            "network = \"proxy-only\" is not pinned on this host",
+            "enable myconfig.ai.dev.litellm-forwarder.unixSocket.enable so the \
+             host runs the forwarder and the wrapper pins MYSBX_EGRESS_SOCKET/\
+             PORT/RELAY",
+        ));
+        return;
+    };
+    // The relay binary must be the pinned store path (the run needs it).
+    checks.push(if Path::new(&relay).is_file() {
+        Check::ok(
+            "egress relay",
+            format!("{relay} (listens on 127.0.0.1:{port} in a proxy-only run)"),
+        )
+    } else {
+        Check::fail(
+            "egress relay",
+            format!("{relay} does not exist"),
+            "rebuild mysbx from a store that carries mysbx-egress-relay",
+        )
+    });
+    // The socket → LiteLLM channel: a `GET /v1/models` over it is the
+    // same request a sandboxed agent makes.
+    checks.push(match uds_http_get(&socket, "/v1/models") {
+        Ok(answer) => Check::ok(
+            "egress socket",
+            format!("{socket} answered GET /v1/models ({})", answer.trim()),
+        ),
+        Err(e) => Check::warn(
+            "egress socket",
+            format!("{socket}: {e}"),
+            "start the forwarder (systemctl status agent-litellm-forward-unix \
+             .socket) and make sure litellm.service is up",
+        ),
+    });
+}
+
+/// A minimal `GET <path>` over a Unix socket, `Host: localhost`. The
+/// answer's first line is returned on success; the full error string
+/// otherwise. Bounded I/O so a wedged forwarder cannot hang doctor.
+fn uds_http_get(socket: &str, path: &str) -> Result<String, String> {
+    use std::io::{Read, Write};
+    use std::os::unix::net::UnixStream;
+    let mut stream = UnixStream::connect(socket).map_err(|e| format!("cannot connect: {e}"))?;
+    stream
+        .set_read_timeout(Some(Duration::from_secs(3)))
+        .map_err(|e| format!("set timeout: {e}"))?;
+    let request = format!("GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+    stream
+        .write_all(request.as_bytes())
+        .map_err(|e| format!("write: {e}"))?;
+    let mut answer = Vec::new();
+    let mut buf = [0u8; 1024];
+    loop {
+        match stream.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => {
+                answer.extend_from_slice(&buf[..n]);
+                if answer.len() > 64 * 1024 {
+                    break;
+                }
+            }
+            Err(e) => {
+                if answer.is_empty() {
+                    return Err(format!("read: {e}"));
+                }
+                break;
+            }
+        }
+    }
+    let text = String::from_utf8_lossy(&answer);
+    match text.lines().next() {
+        Some(line) if !line.is_empty() => Ok(line.to_owned()),
+        _ => Err("empty answer".to_owned()),
+    }
 }
 
 /// The direct-libkrun backend's checks: `/dev/kvm`, the launcher
@@ -1509,10 +1614,22 @@ fn podman_checks(
         }
     };
 
-    if !merged.network {
+    if !merged.network.is_shared() {
         checks.push(Check::ok(
             "model endpoint",
-            "not applicable: the network is denied (network = false)",
+            format!(
+                "not applicable: the network is {} (network = {})",
+                if merged.network.is_none() {
+                    "denied"
+                } else {
+                    "proxy-only"
+                },
+                if merged.network.is_none() {
+                    "false"
+                } else {
+                    "\"proxy-only\""
+                }
+            ),
         ));
         return;
     }
@@ -1839,11 +1956,17 @@ pub fn run(args: &[String]) -> i32 {
         let mut checks = Vec::new();
         match backend.as_str() {
             "bubblewrap" => {
-                bwrap_checks(&mut checks, merged.network);
+                bwrap_checks(&mut checks, merged.network.is_shared());
+                // The proxy-only channel (D20): probe it only when the
+                // merged network is the profile, so a shared/none
+                // bubblewrap doctor keeps its output.
+                if merged.network == crate::config::Network::ProxyOnly {
+                    egress_check(&mut checks);
+                }
                 host_endpoint_check(&mut checks, &merged, &forwarded);
             }
             "nono" => {
-                bwrap_checks(&mut checks, merged.network);
+                bwrap_checks(&mut checks, merged.network.is_shared());
                 nono_checks(&mut checks);
                 host_endpoint_check(&mut checks, &merged, &forwarded);
             }

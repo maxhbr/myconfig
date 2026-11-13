@@ -1,8 +1,8 @@
 # mysbx podman-load-image
 
 Load the shared agent image into the caller's Podman image storage.
-Both `podman-gvisor` and `podman-krun` use it. Direct `krun` and
-`microvm-qemu` do not need this command. See the
+Both `podman-gvisor` and `podman-krun` use it. Direct `krun`,
+`microvm-qemu` and `microvm-ch` do not need this command. See the
 [current backend comparison](backend-comparison.md) for the different
 store views, provisioning and validation limits.
 
@@ -56,9 +56,12 @@ pins; others are per-invocation overrides.
   `network = false` still forces `none`. The wrapper uses
   `--set-default`, so an invocation can override it. When the host runs
   `myconfig.ai.dev.litellm-forwarder`, the default is
-  `pasta:--map-guest-addr,<address>`. This maps the host's loopback
-  forwarder into the container network. The option is
-  `myconfig.ai.dev.mysbx.podman.pastaSpec`.
+  `pasta:--map-guest-addr,<address>`. This maps the container's
+  connections to the host's global address, where the forwarder bound
+  to `0.0.0.0` listens — not to the host loopback (that is
+  `--map-host-loopback`, which would expose every loopback port). Only
+  services already bound to `0.0.0.0` are reachable that way. The
+  option is `myconfig.ai.dev.mysbx.podman.pastaSpec`.
 - `MYSBX_PODMAN_ENV` carries space-separated `KEY=VALUE` entries for
   both variants. They override configuration-layer `[env]` values,
   but infrastructure variables such as `HOME`, `PATH` and XDG paths

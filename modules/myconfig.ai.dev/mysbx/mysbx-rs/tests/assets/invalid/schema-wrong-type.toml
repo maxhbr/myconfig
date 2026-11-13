@@ -1,2 +1,3 @@
-# Types are strict: `network` is a boolean.
+# Types are strict: `network` is one of none/proxy-only/shared (or a
+# boolean); a bare word is neither.
 network = "yes"

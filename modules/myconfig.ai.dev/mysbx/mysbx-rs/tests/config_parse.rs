@@ -50,6 +50,7 @@ fn every_asset_is_exercised() {
         "valid/relative-and-home-paths.toml",
         "valid/syntax-zoo.toml",
         "valid/user-config.toml",
+        "valid/network-string.toml",
         "invalid/schema-bad-mode.toml",
         "invalid/schema-empty-domain.toml",
         "invalid/schema-env-eq-key.toml",
@@ -72,6 +73,8 @@ fn every_asset_is_exercised() {
         "invalid/schema-store-wrong-type.toml",
         "invalid/schema-workmux-key-removed.toml",
         "invalid/schema-wrong-type.toml",
+        "invalid/schema-network-value.toml",
+        "invalid/schema-network-proxy-only-with-allowlist.toml",
         "invalid/syntax-duplicate-key.toml",
         "invalid/syntax-missing-value.toml",
         "invalid/syntax-unterminated-string.toml",
@@ -119,10 +122,39 @@ fn minimal_config_is_what_init_writes() {
 }
 
 #[test]
+fn network_accepts_the_string_values_and_the_bool_aliases() {
+    use mysbx::config::Network;
+    // D20: `network` is ONE key with three values; `true`/`false` stay
+    // PERMANENT aliases of `shared`/`none`, so a bool config keeps its
+    // byte-identical output.
+    let c = load_ok("valid/network-string.toml");
+    assert_eq!(c.network, Some(Network::ProxyOnly));
+    assert_eq!(
+        Network::parse("proxy-only", "network").unwrap(),
+        Network::ProxyOnly
+    );
+    // The ordering the merge relies on: none < proxy-only < shared.
+    assert!(Network::None < Network::ProxyOnly);
+    assert!(Network::ProxyOnly < Network::Shared);
+    // The aliases decode to the canonical values.
+    for (spelling, want) in [
+        ("network = true\n", Some(Network::Shared)),
+        ("network = false\n", Some(Network::None)),
+        ("network = \"shared\"\n", Some(Network::Shared)),
+        ("network = \"none\"\n", Some(Network::None)),
+        ("network = \"proxy-only\"\n", Some(Network::ProxyOnly)),
+        ("", None),
+    ] {
+        let c = Config::parse(spelling).unwrap();
+        assert_eq!(c.network, want, "input {spelling:?}");
+    }
+}
+
+#[test]
 fn full_config() {
     let c = load_ok("valid/full.toml");
     assert_eq!(c.backend.as_deref(), Some("bwrap"));
-    assert_eq!(c.network, Some(true));
+    assert_eq!(c.network, Some(mysbx::config::Network::Shared));
     // nested-virt (D27): tri-state like `network` — this layer denies.
     assert_eq!(c.nested_virt, Some(false));
     // multiplexer (D17): tri-state like `network`; the interactive
@@ -212,7 +244,7 @@ fn relative_and_home_paths_are_stored_verbatim() {
 fn syntax_zoo() {
     let c = load_ok("valid/syntax-zoo.toml");
     assert_eq!(c.backend.as_deref(), Some("bwrap"));
-    assert_eq!(c.network, Some(false));
+    assert_eq!(c.network, Some(mysbx::config::Network::None));
     assert_eq!(
         c.env["HASHED"], "home/user/src/pro#ject",
         "`#` inside a string must not start a comment"
@@ -248,7 +280,18 @@ fn invalid_schema_is_reported_with_the_offending_key() {
     let cases = [
         ("invalid/schema-unknown-key.toml", "unknown key `readonly`"),
         ("invalid/schema-bad-mode.toml", "invalid mode `readwrite`"),
-        ("invalid/schema-wrong-type.toml", "expected a boolean"),
+        (
+            "invalid/schema-wrong-type.toml",
+            "invalid network `yes`, expected one of `none`, `proxy-only`, `shared` or a boolean",
+        ),
+        (
+            "invalid/schema-network-value.toml",
+            "invalid network `public`, expected one of",
+        ),
+        (
+            "invalid/schema-network-proxy-only-with-allowlist.toml",
+            "contradicts it",
+        ),
         ("invalid/schema-relative-dest.toml", "must be absolute"),
         (
             "invalid/schema-tilde-user-path.toml",

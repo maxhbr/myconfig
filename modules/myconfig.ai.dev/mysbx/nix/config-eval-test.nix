@@ -356,6 +356,15 @@ let
       { myconfig.ai.dev.mysbx.config.nestedVirt = true; }
     ];
     nestedVirtOff = generated [ { myconfig.ai.dev.mysbx.config.nestedVirt = false; } ];
+    # The network policy (docs/design/config.md D20): the option takes
+    # the three canonical values AND stays a bool, so a host that keeps
+    # the `true` default renders `network = true` unchanged (the bool
+    # aliases are permanent). A `proxy-only` selection reaches the TOML
+    # as the string.
+    networkProxyOnly = generated [
+      { myconfig.ai.dev.mysbx.config.network = "proxy-only"; }
+    ];
+    networkDefault = generated [ { } ];
     # The sandbox's own ssh keypair is unconditional (../docs/design/
     # config.md D22): the option is gone, and the generated layer
     # never carries an `ssh-key` key — the crate refuses one as
@@ -474,6 +483,37 @@ let
       throw "mysbx generated-config test: a host without the forwarder pinned backend env (${builtins.toJSON off.env})"
     else
       "ok";
+  # The `network = "proxy-only"` channel pins (docs/design/config.md
+  # D20, bd myconfig-mo3.2.4): the wrapper pins the host forwarder's
+  # Unix socket and the relay port EXACTLY when the forwarder's
+  # socket half runs — gated on `services.litellm.enable` alone (the
+  # profile runs on plain bubblewrap, not only on podman hosts) — and
+  # pins NOTHING on a host without LiteLLM. Modelled on
+  # `gvisorPinGate`.
+  egressPinGate =
+    let
+      pinsOf = extraModules: (evaluated extraModules).myconfig.ai.dev.mysbx.package.passthru;
+      on = pinsOf [
+        {
+          services.litellm = {
+            enable = true;
+            port = 4000;
+          };
+        }
+      ];
+      off = pinsOf [ { } ];
+    in
+    if on.egressSocket != "/run/mysbx-egress/litellm.sock" then
+      throw "mysbx generated-config test: a litellm host did not pin the egress socket (got ${toString on.egressSocket})"
+    else if on.egressPort != 4000 then
+      throw "mysbx generated-config test: the egress port did not follow the litellm port (got ${toString on.egressPort})"
+    else if off.egressSocket != null then
+      throw "mysbx generated-config test: a host without litellm pinned the egress socket (${toString off.egressSocket})"
+    else if off.egressPort != null then
+      throw "mysbx generated-config test: a host without litellm pinned the egress port (${toString off.egressPort})"
+    else
+      "ok";
+
   # The microvm-qemu backend's env pins (bd myconfig-mzys): the
   # SLiRP guest's loopback is its own, so the module must pin the
   # model endpoint at the SLiRP gateway `10.0.2.2` — which maps to
@@ -704,12 +744,15 @@ pkgs.runCommand "mysbx-generated-config-test"
       scratchDirectOnly
       nestedVirtOn
       nestedVirtOff
+      networkProxyOnly
+      networkDefault
       sandboxToolsEnv
       sandboxToolsEnvOff
       ;
     inherit
       assertionGate
       gvisorPinGate
+      egressPinGate
       qemuEnvGate
       chEnvGate
       krunPinGate
@@ -862,6 +905,14 @@ pkgs.runCommand "mysbx-generated-config-test"
     if grep -q '^nested-virt' "$nonoBackend"; then
       fail "the null nestedVirt default leaked a key" "$nonoBackend"
     fi
+
+    # ... the D20 network policy: a proxy-only selection reaches the
+    # layer as the string, and the untouched bool default stays the
+    # bool `network = true` (byte-identical to the pre-D20 output).
+    grep -q '^network = "proxy-only"$' "$networkProxyOnly" \
+      || fail "the network = proxy-only seed is missing" "$networkProxyOnly"
+    grep -q '^network = true$' "$networkDefault" \
+      || fail "the default bool network seed changed" "$networkDefault"
 
     # 6a. the sandbox ssh keypair (D22) is unconditional: the option
     #     is gone, and the generated layer of a default config must

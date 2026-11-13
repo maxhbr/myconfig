@@ -33,6 +33,11 @@ fn synth_repo() -> Repo {
 }
 
 fn base(network: bool) -> Merged {
+    let network = if network {
+        mysbx::config::Network::Shared
+    } else {
+        mysbx::config::Network::None
+    };
     Merged {
         backend: Some("krun".into()),
         network,
@@ -115,6 +120,21 @@ fn run(cfg: &Merged, repo: &Repo, payload: &Payload, params: &Params<'_>) -> Vec
     std::env::set_var("MYSBX_RESOLV_SOURCE", "tests/assets/krun/resolv.conf");
     let host_env = BTreeMap::new();
     krun_argv(cfg, repo, payload, &host_env, params).expect("the argv builds")
+}
+
+#[test]
+fn proxy_only_is_refused_by_the_builder() {
+    // D20 (bd myconfig-6di.3): the direct-krun builder refuses
+    // `network = "proxy-only"` itself, defense in depth next to the
+    // pipeline's step-4b refusal — libkrun's TSI always has a gateway
+    // route.
+    let mut cfg = base(true);
+    cfg.network = mysbx::config::Network::ProxyOnly;
+    let params = params("/synth/rootfs", "/synth/shell", None, Workspace::Live);
+    let host_env = BTreeMap::new();
+    let err = krun_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env, &params)
+        .expect_err("a proxy-only krun run must be refused");
+    assert!(matches!(err, mysbx::krun::Error::ProxyOnlyRefused), "{err}");
 }
 
 #[test]

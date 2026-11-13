@@ -285,6 +285,12 @@ pub struct Params<'a> {
     /// channel, bound rw at itself so the guest finds it where the
     /// host created it.
     pub waypipe: Option<Waypipe<'a>>,
+    /// The `network = "proxy-only"` channel (docs/design/config.md
+    /// D20, bd myconfig-mo3.2.6), or `None` for every other network
+    /// policy. A `proxy-only` run WITHOUT this channel is a refused
+    /// run ([`Error::EgressChannelMissing`]) — the profile fails
+    /// closed rather than falling back to a shared network.
+    pub egress: Option<EgressChannel<'a>>,
     /// Whether THIS run is (the inner of) a detached run
     /// (docs/design/detach.md B7): the argv then carries
     /// `MYSBX_DETACHABLE=1`, set after `[env]` like `TMUX_TMPDIR`,
@@ -361,6 +367,39 @@ pub struct Waypipe<'a> {
     pub guest_bin: &'a str,
 }
 
+/// The `network = "proxy-only"` channel of a bubblewrap run
+/// (docs/design/config.md D20, bd myconfig-mo3.2.6): the host
+/// LiteLLM forwarder's Unix socket, the port the in-sandbox relay
+/// listens on, and the relay binary from mysbx's own closure.
+///
+/// The sandbox's network namespace is empty (`--unshare-all` without
+/// `--share-net`, so only `lo` is up); the socket directory is the ONE
+/// host path bound in, and the relay turns loopback TCP clients into
+/// connections on that socket. Agents keep their baked
+/// `http://127.0.0.1:<port>/v1` URLs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EgressChannel<'a> {
+    /// The host directory holding the forwarder's socket. The CLI
+    /// resolves it from the pinned socket path's parent; the builder
+    /// binds the DIRECTORY read-only at [`EGRESS_DIR`], so the socket
+    /// file inside it (recreated by a forwarder restart) stays visible
+    /// without a new bind.
+    pub socket_dir: &'a str,
+    /// The socket FILE name inside [`Self::socket_dir`] (the relay's
+    /// `--connect` target).
+    pub socket: &'a str,
+    /// The LiteLLM port the relay listens on inside the sandbox
+    /// (`127.0.0.1:<port>`), matching the baked agent URLs.
+    pub port: u16,
+    /// The `mysbx-egress-relay` binary (a store path from mysbx's own
+    /// closure, `MYSBX_EGRESS_RELAY`).
+    pub relay_bin: &'a str,
+}
+
+/// Where a `proxy-only` run binds the forwarder's socket DIRECTORY
+/// inside the sandbox (docs/design/config.md D20).
+pub const EGRESS_DIR: &str = "/run/mysbx-egress";
+
 /// A trusted policy file, represented by everything the payload must
 /// not be able to write for the file to still be the policy on the
 /// NEXT run (review-4 item 1).
@@ -416,7 +455,7 @@ impl PolicyPath {
 /// binds — do not reorder):
 ///
 /// 1. `--clearenv`
-/// 2. `--unshare-all`, then `--share-net` unless `cfg.network` is `false`
+/// 2. `--unshare-all`, then `--share-net` unless `cfg.network` is `none`
 ///    (the spec's `network = false` row: "network = false adds
 ///    `--unshare-net`" is realised as *absence of the re-share*, so
 ///    either direction is assertable in the golden tests)
@@ -523,13 +562,28 @@ pub fn bwrap_argv(
             return Err(Error::DisplayUnavailable);
         }
     }
+    // The `network = "proxy-only"` channel (docs/design/config.md D20,
+    // bd myconfig-mo3.2.6): resolved ONCE here and threaded through the
+    // rest of the builder, so the three uses below never re-check the
+    // mode nor unwrap an `Option`. The run needs the forwarder's
+    // socket directory and the relay binary; the profile fails closed
+    // (no channel is a refused run, never a silent fallback to a
+    // shared network), and NOTHING may mount or persist over the
+    // directory the channel binds.
+    let egress: Option<&EgressChannel<'_>> = if cfg.network == crate::config::Network::ProxyOnly {
+        let channel = params.egress.as_ref().ok_or(Error::EgressChannelMissing)?;
+        check_egress_dir(&cfg.mounts, &effective_state_dirs)?;
+        Some(channel)
+    } else {
+        None
+    };
     // A layered run's daemon bind fact, computed once (bd
     // myconfig-nj9): `/nix/var/nix` and the nix.conf pin below are
     // bound on the layered path exactly when the network is shared
     // WITHOUT an allowlist; the bubblewrap backend keeps its current
     // semantics (the allowlist is refused there anyway).
     let daemon_bound = params.inner.is_none()
-        || (cfg.network
+        || (cfg.network.is_shared()
             && cfg.allow_domains.is_empty()
             && cfg.connect_ports.is_empty()
             && cfg.listen_ports.is_empty());
@@ -541,7 +595,7 @@ pub fn bwrap_argv(
     if params.detachable {
         argv.push("--die-with-parent".into());
     }
-    if cfg.network {
+    if cfg.network.is_shared() {
         argv.push("--share-net".into());
         // Sharing the network namespace alone does not give the new
         // root DNS or TLS: `/etc/resolv.conf` and friends live on the
@@ -605,6 +659,26 @@ pub fn bwrap_argv(
             argv.push("/nix/var/nix".into());
             argv.push("/nix/var/nix".into());
         }
+    } else if let Some(egress) = egress {
+        // `network = "proxy-only"` (docs/design/config.md D20, bd
+        // myconfig-mo3.2.6): no `--share-net` (so bwrap brings up an
+        // empty netns with only `lo`), no resolver binds (there is no
+        // resolver to reach), no daemon bind (a daemon-built
+        // fixed-output derivation keeps network access the profile
+        // does not have). The ONE host path bound in is the LiteLLM
+        // forwarder's socket DIRECTORY, read-only at [`EGRESS_DIR`].
+        //
+        // The DIRECTORY, not the socket file: the forwarder recreates
+        // the socket when it restarts, and a ro bind of the directory
+        // makes the new socket visible without a new bind. A ro bind
+        // still allows `connect()` — only the listener's owner needs
+        // write permission on the socket path, checked at bind time.
+        //
+        // The `check_egress_dir` guard above already refused a mount
+        // covering this path, so the bind lands on the empty root.
+        argv.push("--ro-bind".into());
+        argv.push(egress.socket_dir.into());
+        argv.push(EGRESS_DIR.into());
     }
 
     // 3. the base binds (docs/plan.md "The base" table, fixed absolute
@@ -1019,7 +1093,7 @@ pub fn bwrap_argv(
     // in-sandbox ancestors of protected paths, so an ancestor SOURCE
     // was the one gap.
     const DAEMON_DIR: &str = "/nix/var/nix";
-    if !cfg.network || (params.inner.is_some() && !daemon_bound) {
+    if !cfg.network.is_shared() || (params.inner.is_some() && !daemon_bound) {
         // Every effective source, not just the configured mounts:
         // the workspace bind is checked too (review-3 item 2 said so
         // explicitly — in a clone run that is the CLONE's source,
@@ -1237,6 +1311,22 @@ pub fn bwrap_argv(
 
     // 8. the payload, verbatim.
     argv.push("--".into());
+    // The `network = "proxy-only"` relay (docs/design/config.md D20,
+    // bd myconfig-mo3.2.6): the innermost wrap, before waypipe and the
+    // nono layer, so the relay's own listener is the FIRST thing that
+    // runs and a client that connects immediately never races a
+    // half-started relay (decision 5 of the plan). It binds
+    // `127.0.0.1:<port>` inside the empty netns and forwards each
+    // connection to the bound host socket, then runs the payload (the
+    // rest of the chain) as its child, exiting with its status.
+    if let Some(egress) = egress {
+        argv.push(egress.relay_bin.into());
+        argv.push("--listen".into());
+        argv.push(format!("127.0.0.1:{}", egress.port).into());
+        argv.push("--connect".into());
+        argv.push(format!("{}/{}", EGRESS_DIR, egress.socket).into());
+        argv.push("--".into());
+    }
     // A `display = "waypipe"` run wraps EVERY payload form (D18): the
     // guest waypipe server presents the fake compositor socket to the
     // payload (it sets `WAYLAND_DISPLAY`) and connects to the client's
@@ -1470,6 +1560,17 @@ pub enum Error {
     /// and silently not getting them would be discovered only after a
     /// payload that needed the display failed.
     DisplayUnavailable,
+    /// `network = "proxy-only"` (docs/design/config.md D20) but this
+    /// run carries no [`EgressChannel`]: no pinned forwarder socket, no
+    /// relay binary. The profile fails closed — it never falls back to
+    /// a shared network.
+    EgressChannelMissing,
+    /// A mount or `state-dirs` entry is related to [`EGRESS_DIR`]
+    /// (docs/design/config.md D20): the `proxy-only` channel binds the
+    /// forwarder's socket directory there, so a host mount over it
+    /// would either shadow the channel or hand the payload a
+    /// different path to reach the same channel with.
+    EgressDirCovered { path: String },
     /// A mount `dest` is related to [`WAYPIPE_DISPLAY_PATH`]
     /// (docs/design/config.md D18): the fake compositor socket the
     /// guest waypipe server presents must be created inside the
@@ -1583,6 +1684,24 @@ impl fmt::Display for Error {
                  this repository instead of dying with the tmpfs home \
                  (docs/design/config.md D16/D17); the socket is deliberately not \
                  persistable, so drop the entry"
+            ),
+            Error::EgressChannelMissing => write!(
+                f,
+                "network = \"proxy-only\" but this run carries no egress channel \
+                 \u{2014} no pinned forwarder socket (MYSBX_EGRESS_SOCKET) or relay \
+                 binary (MYSBX_EGRESS_RELAY); enable \
+                 myconfig.ai.dev.litellm-forwarder.unixSocket.enable so the host \
+                 runs the forwarder, or set network = \"shared\"/\"none\" \
+                 (docs/design/config.md D20) \u{2014} the profile fails closed \
+                 rather than falling back to a shared network"
+            ),
+            Error::EgressDirCovered { path } => write!(
+                f,
+                "{path} is related to {EGRESS_DIR}, where a network = \"proxy-only\" \
+                 run binds the LiteLLM forwarder's socket directory \
+                 (docs/design/config.md D20) \u{2014} a mount there would shadow \
+                 the channel or hand the payload a second spelling of it; \
+                 mount it elsewhere, or drop network = \"proxy-only\""
             ),
             Error::DisplayUnavailable => write!(
                 f,
@@ -1966,6 +2085,36 @@ fn check_display_socket(mounts: &[Mount], state_dirs: &[String]) -> Result<(), E
     Ok(())
 }
 
+/// The `network = "proxy-only"` guards (docs/design/config.md D20,
+/// bd myconfig-mo3.2.6): a mount with a destination AT, ABOVE or BELOW
+/// [`EGRESS_DIR`], and a `state-dirs` entry that would back it, are
+/// refused. The channel binds the forwarder's socket directory at
+/// [`EGRESS_DIR`] read-only; a host mount over it would shadow the
+/// channel, and a mount below it would hand the payload a different
+/// path to the same directory than the one the profile intends. The
+/// `socket_dir` source itself is trusted (the forwarder owns it), so
+/// only its in-sandbox DEST is guarded.
+pub fn check_egress_dir(mounts: &[Mount], state_dirs: &[String]) -> Result<(), Error> {
+    let egress = Path::new(EGRESS_DIR);
+    for m in mounts {
+        let dest = normalize(m.dest.as_deref().unwrap_or(&m.path));
+        if dest.starts_with(egress) || egress.starts_with(&dest) {
+            return Err(Error::EgressDirCovered {
+                path: dest.to_string_lossy().into_owned(),
+            });
+        }
+    }
+    for entry in state_dirs {
+        let dest = normalize(&format!("{SANDBOX_HOME}/{entry}"));
+        if dest.starts_with(egress) || egress.starts_with(&dest) {
+            return Err(Error::EgressDirCovered {
+                path: dest.to_string_lossy().into_owned(),
+            });
+        }
+    }
+    Ok(())
+}
+
 fn check_hidden_mounts(
     mounts: &[Mount],
     repo_root: &str,
@@ -2321,7 +2470,7 @@ mod tests {
     fn merged() -> Merged {
         Merged {
             backend: Some("bubblewrap".into()),
-            network: true,
+            network: crate::config::Network::Shared,
             nested_virt: false,
             mounts: Vec::new(),
             env: BTreeMap::new(),
@@ -2355,6 +2504,7 @@ mod tests {
             workspace: Workspace::Live,
             inner: None,
             detachable: false,
+            egress: None,
         }
     }
 
@@ -2475,7 +2625,7 @@ mod tests {
         assert!(argv.contains(&"--share-net".to_string()));
 
         let mut deny = cfg;
-        deny.network = false;
+        deny.network = crate::config::Network::None;
         let argv = bwrap_argv(&deny, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
         assert!(!argv.contains(&"--share-net".to_string()));
         // But --unshare-all stays.

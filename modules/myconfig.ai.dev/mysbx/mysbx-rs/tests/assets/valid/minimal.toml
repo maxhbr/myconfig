@@ -12,9 +12,10 @@
 # /mysbx-home: HOME is /mysbx-home inside the sandbox, so a config
 # bound at its host path is invisible there (config.md D14).
 #
-# backend = "bubblewrap"         # bubblewrap | nono | podman-gvisor | podman-krun | krun
-# network = false                # the network is shared unless a layer denies
-#                                # it; a sidecar may deny, never re-enable (D7)
+# backend = "bubblewrap"         # bubblewrap | nono | podman-gvisor | podman-krun | krun | microvm-qemu | microvm-ch
+# network = "shared"             # none | proxy-only | shared (D20; the bool
+#                                # false/true stay aliases of none/shared); a
+#                                # sidecar may tighten, never widen
 # display = "off"                # off | waypipe, a Wayland channel (D18)
 #
 # Which nix store the sandbox sees (docs/design/guest-store.md): `baked`

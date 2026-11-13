@@ -77,7 +77,7 @@
 //! item 4 (the argv builder) accepts. `Config` values are layer *inputs*
 //! and never leave this module's boundary as effective configuration.
 
-use crate::config::{Config, Display, Mount, Multiplexer, Store};
+use crate::config::{Config, Display, Mount, Multiplexer, Network, Store};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -90,23 +90,24 @@ pub struct Merged {
     /// neither layer named one (docs/design/cli.md D7: never
     /// auto-detected).
     pub backend: Option<String>,
-    /// The effective network sense, resolved once from the layers'
-    /// tri-state values — a plain `bool` on purpose: the default (shared,
-    /// docs/plan.md) is already applied, and nothing downstream of the
-    /// merge may re-decide it.
-    pub network: bool,
+    /// The effective network policy (docs/design/config.md D20),
+    /// resolved once from the layers' tri-state values — the stricter
+    /// explicit value, with the shared default applied, so nothing
+    /// downstream of the merge may re-decide it.
+    pub network: Network,
     /// The effective nested-virtualization sense of a `microvm-qemu`
     /// run (docs/design/config.md D27), resolved once from the layers'
     /// tri-state values — a plain `bool` on purpose, like `network`:
     /// the default (off) is already applied, and nothing downstream
-    /// of the merge may re-decide it. The SAME narrowing rule as
-    /// `network`: a user-config `false` is a host-wide deny the
+    /// of the merge may re-decide it. The same narrowing SHAPE as
+    /// `network`'s (a sidecar may not widen), but the rule is a
+    /// boolean one: a user-config `false` is a host-wide deny the
     /// sidecar cannot lift (`NestedVirtUpgrade` is the hard error),
     /// otherwise either layer may enable it.
     pub nested_virt: bool,
     /// Which multiplexer the interactive payload is
     /// (docs/design/config.md D17): resolved once from the layers'
-    /// tri-state values, like `network`, so nothing downstream may
+    /// tri-state values, like `backend`, so nothing downstream may
     /// re-decide it. Unlike `network` there is no narrowing rule —
     /// the key grants no host access, so the sidecar simply wins when
     /// both layers decide (D17).
@@ -598,27 +599,32 @@ pub fn merge(
         check_home_exposure(canon, &home_canon)?;
     }
 
-    // network: the sidecar may deny (false), not re-enable (D7). A layer
-    // that does not mention `network` decided nothing (None) — an
-    // omitted sidecar value must not re-enable what the user config
-    // denied, and an omitted user value grants nothing either, so the
-    // merge sees only EXPLICIT values here. The shared-by-default
-    // `true` of docs/plan.md is applied once, below, after the layers.
-    if user.network == Some(false) && sidecar.network == Some(true) {
-        return Err(Error::NetworkUpgrade {
-            message: format!(
-                "{}: network = true re-enables the network the user config {} denied with `network = false` — the sidecar may deny the network, never re-enable it (docs/design/config.md D7)",
-                sidecar_file.display(),
-                user_file.display(),
-            ),
-        });
+    // network (docs/design/config.md D20): ONE key with three values
+    // ordered `none < proxy-only < shared`. The merge takes the
+    // STRICTER explicit value — a layer may tighten, never widen. A
+    // sidecar wider than the user layer is the `NetworkUpgrade` hard
+    // error (the same shape the old bool's re-enable was). A layer
+    // that does not mention `network` decided nothing (`None`), so the
+    // shared default is applied AFTER the layers, never inside one.
+    if let (Some(user_net), Some(sidecar_net)) = (user.network, sidecar.network) {
+        if sidecar_net > user_net {
+            return Err(Error::NetworkUpgrade {
+                message: format!(
+                    "{}: network = \"{}\" widens the network the user config {} set to \"{}\" — the sidecar may tighten the network, never widen it (docs/design/config.md D20)",
+                    sidecar_file.display(),
+                    sidecar_net,
+                    user_file.display(),
+                    user_net,
+                ),
+            });
+        }
     }
-    // Merge rule: explicit `false` in either layer denies (D7 — the
-    // sidecar may narrow); when neither denied, the default of
-    // docs/plan.md applies (shared).
     let network = match (user.network, sidecar.network) {
-        (Some(false), _) | (_, Some(false)) => false,
-        _ => true,
+        (None, None) => Network::Shared,
+        (Some(a), None) => a,
+        (None, Some(b)) => b,
+        // The stricter (lower-ordered) value wins; equal values agree.
+        (Some(a), Some(b)) => a.min(b),
     };
 
     // nested-virt (docs/design/config.md D27): the SAME layer rule as
@@ -919,6 +925,7 @@ fn check_home_exposure(source: &Path, home_canon: &Path) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Network;
     use crate::config::{Config, Mode};
 
     /// A fresh temporary directory per test; hand-rolled, the crate has
@@ -1192,10 +1199,11 @@ mod tests {
 
     #[test]
     fn network_upgrade_rejected() {
+        use crate::config::Network;
         let mut u = Config::default();
-        u.network = Some(false);
+        u.network = Some(Network::None);
         let mut s = Config::default();
-        s.network = Some(true); // the sidecar re-enables: hard error
+        s.network = Some(Network::Shared); // the sidecar widens: hard error
 
         let e = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap_err();
         assert!(matches!(e, Error::NetworkUpgrade { .. }), "{e}");
@@ -1292,7 +1300,7 @@ mod tests {
         // config) must merge to denied — not trip the NetworkUpgrade
         // guard, which the old bool-with-default-true layers did.
         let mut u = Config::default();
-        u.network = Some(false);
+        u.network = Some(Network::None);
         let merged = merge(
             u.clone(),
             Config::default(),
@@ -1301,12 +1309,12 @@ mod tests {
             &no_home(),
         )
         .unwrap();
-        assert!(!merged.network);
+        assert!(merged.network.is_none());
 
         // Symmetric: a user config that says nothing plus an explicit
         // sidecar deny is still a deny (D7: the sidecar may narrow).
         let mut s = Config::default();
-        s.network = Some(false);
+        s.network = Some(Network::None);
         let merged = merge(
             Config::default(),
             s,
@@ -1315,7 +1323,7 @@ mod tests {
             &no_home(),
         )
         .unwrap();
-        assert!(!merged.network);
+        assert!(merged.network.is_none());
     }
 
     #[test]
@@ -1330,17 +1338,17 @@ mod tests {
             &no_home(),
         )
         .unwrap();
-        assert!(merged.network);
+        assert!(merged.network.is_shared());
 
         // And the fourth combination of the explicit table: both layers
         // say `true` — shared, with the guard silent (nothing was
         // re-enabled; the post-merge default already is `true`).
         let mut u = Config::default();
-        u.network = Some(true);
+        u.network = Some(Network::Shared);
         let mut s = Config::default();
-        s.network = Some(true);
+        s.network = Some(Network::Shared);
         let merged = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap();
-        assert!(merged.network);
+        assert!(merged.network.is_shared());
     }
 
     #[test]
@@ -1440,23 +1448,73 @@ mod tests {
     #[test]
     fn network_false_narrowing_accepted() {
         let mut u = Config::default();
-        u.network = Some(true);
+        u.network = Some(Network::Shared);
         let mut s = Config::default();
-        s.network = Some(false);
+        s.network = Some(Network::None);
 
         let merged = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap();
-        assert!(!merged.network);
+        assert!(merged.network.is_none());
+    }
+
+    /// Every (user, sidecar) pair of [`Network`] values: the merge
+    /// takes the STRICTER one, and a sidecar wider than the user value
+    /// is the `NetworkUpgrade` hard error (docs/design/config.md D20).
+    #[test]
+    fn the_network_merge_takes_the_stricter_value() {
+        use Network::{None as N, ProxyOnly as P, Shared as S};
+        // (user, sidecar) -> Ok(stricter) | Err(widening)
+        let cases = [
+            (N, N, Ok(N)),
+            (N, P, Err(())),
+            (N, S, Err(())),
+            (P, N, Ok(N)),
+            (P, P, Ok(P)),
+            (P, S, Err(())),
+            (S, N, Ok(N)),
+            (S, P, Ok(P)),
+            (S, S, Ok(S)),
+        ];
+        for (user, sidecar, want) in cases {
+            let mut u = Config::default();
+            u.network = Some(user);
+            let mut s = Config::default();
+            s.network = Some(sidecar);
+            let got = merge(u, s, &user_file(), &sidecar_file(), &no_home());
+            match want {
+                Ok(w) => {
+                    let merged = got.unwrap_or_else(|e| {
+                        panic!("{user:?} + {sidecar:?} must merge to {w:?}: {e}")
+                    });
+                    assert_eq!(
+                        merged.network, w,
+                        "{user:?} + {sidecar:?} must take the stricter value"
+                    );
+                }
+                Err(()) => {
+                    let e = got.err().unwrap_or_else(|| {
+                        panic!("{user:?} + {sidecar:?} widens and must be refused")
+                    });
+                    assert!(
+                        matches!(e, Error::NetworkUpgrade { .. }),
+                        "{user:?} + {sidecar:?}: {e}"
+                    );
+                    let msg = e.to_string();
+                    assert!(msg.contains(user.name()), "{msg}");
+                    assert!(msg.contains(sidecar.name()), "{msg}");
+                }
+            }
+        }
     }
 
     #[test]
     fn network_false_in_both_stays_false() {
         let mut u = Config::default();
-        u.network = Some(false);
+        u.network = Some(Network::None);
         let mut s = Config::default();
-        s.network = Some(false);
+        s.network = Some(Network::None);
 
         let merged = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap();
-        assert!(!merged.network);
+        assert!(merged.network.is_none());
     }
 
     #[test]
@@ -1491,7 +1549,7 @@ mod tests {
         // With an absent user config, env introduction and network denial
         // stay allowed too — the empty user layer restricts nothing.
         let mut s = Config::default();
-        s.network = Some(false);
+        s.network = Some(Network::None);
         let merged = merge(
             Config::default(),
             cfg("[env]\nFOO = \"1\"\n"),
@@ -1510,7 +1568,7 @@ mod tests {
             &no_home(),
         )
         .unwrap();
-        assert!(!merged.network);
+        assert!(merged.network.is_none());
         assert!(merged.mounts.is_empty());
     }
 
@@ -1741,7 +1799,7 @@ mod tests {
         assert_eq!(merged.env.len(), 2);
         assert_eq!(merged.env.get("EDITOR").unwrap(), "nvim");
         assert_eq!(merged.env.get("PROJECT").unwrap(), "x");
-        assert!(merged.network);
+        assert!(merged.network.is_shared());
     }
 
     #[test]
@@ -1756,14 +1814,14 @@ mod tests {
         // error.
         let layers = load_layers(&home, None, &sd).unwrap();
         assert_eq!(layers.user.0, Config::default());
-        assert_eq!(layers.sidecar.0.network, Some(false));
+        assert_eq!(layers.sidecar.0.network, Some(Network::None));
 
         // An XDG_CONFIG_HOME pointing at a directory without a mysbx
         // config: also an empty user layer.
         let layers =
             load_layers(&home, Some(&home.join(".config").to_string_lossy()), &sd).unwrap();
         assert_eq!(layers.user.0, Config::default());
-        assert_eq!(layers.sidecar.0.network, Some(false));
+        assert_eq!(layers.sidecar.0.network, Some(Network::None));
     }
 
     #[test]

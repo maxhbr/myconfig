@@ -364,7 +364,18 @@ variables it needs in `forward-env` — the private flake does this via
 hard-coded in this repository (bd myconfig-20j). A credential lives
 only in the host environment, never in a store path, so an `[env]`
 entry cannot forward it and only the variable NAME travels through a
-configuration layer. A repo sidecar declares its own mounts independently — both
+configuration layer.
+
+Under `network = "proxy-only"` (bubblewrap, `docs/design/config.md`
+D20/D28) the credential story flips to the no-key path: the host
+LiteLLM proxy holds the model credential and the sandbox reaches only
+its endpoint. The forwarded environment narrows to the technical base
+(`TERM COLORTERM LANG LC_ALL EDITOR VISUAL`) and the report lists every
+dropped name; a credential-shaped `[env]` name or `[nix]`
+`access-tokens`/`netrc-file` refuses the run (exit 70); and a dropped
+credential name (e.g. `OPENAI_API_KEY`) is set to the fixed
+`mysbx-proxy-only` placeholder so an agent that insists on a key still
+runs against the keyless proxy. A repo sidecar declares its own mounts independently — both
 configuration files are trusted (`docs/design/config.md` D7). Per-agent
 modules
 append their own config files to `myconfig.ai.mysbx.config.mounts` and
@@ -584,6 +595,32 @@ namespace, where the baked URLs are already right.
 No credential travels with them: the proxy this repo configures is
 keyless, and API keys reach a sandbox only through
 `forwardedEnvVars`.
+
+## Proxy-only network (`network = "proxy-only"`)
+
+The bubblewrap no-key profile (`docs/design/config.md` D20/D28, bd
+myconfig-mo3.2). The sandbox's network namespace is empty except one
+host channel: the LiteLLM forwarder's Unix socket
+(`myconfig.ai.dev.litellm-forwarder.unixSocket`, default
+`/run/mysbx-egress/litellm.sock`), whose DIRECTORY the backend binds
+read-only at `/run/mysbx-egress`. The socket path is pinned to that one
+directory (only the file name is configurable, `unixSocket.name`), so a
+`..` or a shared directory cannot widen the bind; on a real run the
+directory must also be root-owned and not group-/world-writable. Inside
+the sandbox
+`mysbx-egress-relay` (`MYSBX_EGRESS_RELAY`) listens on
+`127.0.0.1:<litellm port>` and forwards every connection to that
+socket, so agents keep their baked `http://127.0.0.1:<port>/v1` URLs
+while the only reachable endpoint is the host proxy.
+
+The module turns the socket half on wherever `services.litellm` runs
+and pins `MYSBX_EGRESS_SOCKET` / `MYSBX_EGRESS_PORT` /
+`MYSBX_EGRESS_RELAY`. A `proxy-only` run with a missing pin, or on any
+backend but bubblewrap, is refused (exit 70) — never weakened to a
+shared network. `mysbx doctor` probes the socket with a `GET
+/v1/models`. The credential rules (forward-env narrowing, the
+credential-name refusal, the placeholder) are in the "Environment"
+section above and in `config.md` D28.
 
 ## Browser automation
 

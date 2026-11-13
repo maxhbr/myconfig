@@ -86,19 +86,20 @@ never execs the OCI process (`backends.md` D2).
 | `qemu` | SLiRP NAT outbound + one host-loopback SSH port | `AGENT_QEMU_{PI,HERDR}_NETWORK=0` (`allowNetwork = false`) | none | `qemu-agent-sandbox/builders.nix`, `runner.nix` |
 | `gvisor` | pasta `--map-guest-addr` to the LiteLLM forwarder, full outbound NAT | `--network none` | none | `gvisor-agent-sandbox/README.md` "Model access" |
 | `microvm` | `networkProfile = "proxy-only"`: bridge-only LiteLLM endpoint, nothing else | `offline` | `package-access` (one proxy port), `internet` (+`acknowledgeInsecureNetwork`). All profiles drop guest-to-guest, RFC1918 and metadata traffic | `microvm/default.nix` `networkProfile` |
-| `mysbx` | `network = true`: host namespace (bwrap/nono), pasta (Podman; `podman-krun` uses TSI through it), host-namespace TSI (direct krun), SLiRP (QEMU) | `network = false` on all six backends | allowlist keys supported on `nono` only, with caveats below; `egress` is rejected everywhere | `config.md` D5/D21, `backends.md` D6/D9; current guide |
+| `mysbx` | `network = true`: host namespace (bwrap/nono), pasta (Podman; `podman-krun` uses TSI through it), host-namespace TSI (direct krun), SLiRP (QEMU) | `network = false` (`"none"`) on all seven backends | `network = "proxy-only"` (host LiteLLM only, D20) enforced on `bubblewrap`, refused elsewhere; allowlist keys supported on `nono` only, with caveats below | `config.md` D5/D21, `backends.md` D6/D9; current guide |
 
 How `mysbx` handles each network key, per backend. "Refused" means the
 run exits `70` before anything is created, including under `--dry-run`
 (`lib.rs` step 4b):
 
-| Key | `bubblewrap` | `nono` | `podman-gvisor` | `podman-krun` | `krun` | `microvm-qemu` |
-| --- | --- | --- | --- | --- | --- | --- |
-| `network = false` | no `--share-net` | bwrap netns + `--block-net` | `--network none` | `--network none`, TSI dials from an empty netns | implicit vsock disabled + bwrap netns | no netdev + bwrap netns |
-| `allow-domains` / `connect-ports` / `listen-ports` | refused | proxy/port grants; see caveats below. `listen-ports` alone and URL forms refused | refused | refused | refused | refused |
-| allowlist + `network = false` | refused | refused | refused | refused | refused | refused |
-| `egress` (including `"proxy-only"`) | unknown schema key; rejected | same | same | same | same | same |
-| implicit host nix daemon `/nix/var/nix` | only with shared network | only with shared network and no allowlist | none | none | none (host-store db copy is not daemon access) | none (same) |
+| Key | `bubblewrap` | `nono` | `podman-gvisor` | `podman-krun` | `krun` | `microvm-qemu` | `microvm-ch` |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `network = false` | no `--share-net` | bwrap netns + `--block-net` | `--network none` | `--network none`, TSI dials from an empty netns | implicit vsock disabled + bwrap netns | no netdev + bwrap netns | no netdev + bwrap netns |
+| `allow-domains` / `connect-ports` / `listen-ports` | refused | proxy/port grants; see caveats below. `listen-ports` alone and URL forms refused | refused | refused | refused | refused | refused |
+| allowlist + `network = false` | refused | refused | refused | refused | refused | refused | refused |
+| `network = "proxy-only"` (D20) | enforced: empty netns + forwarder socket + relay | refused | refused (pasta keeps the default route) | refused (TSI proxy) | refused (TSI) | refused (SLiRP gateway) | refused (passt gateway) |
+| `egress` (including `"proxy-only"`) | unknown schema key; rejected | same | same | same | same | same | same |
+| implicit host nix daemon `/nix/var/nix` | only with shared network | only with shared network and no allowlist | none | none | none (host-store db copy is not daemon access) | none (same) | none (same) |
 
 Nono domain and port grants are **not a conjunction**. Port-only grants
 are host-independent; domains use a hostname proxy. With both, Landlock
@@ -126,12 +127,15 @@ endpoint probe is not proof of payload reachability under its policy.
 | `qemu` | real key, pushed over the SSH session env at launch | seeded config copy (`fns/seed-agent-config.nix`) | `builders.nix` header |
 | `gvisor` | whatever the user passes (`--env`, `--env-file`). The generated env file holds only the base URL | allowlisted home seed (`home.seedPaths`) with endpoint rewrites | `gvisor-agent-sandbox/README.md` |
 | `microvm` | never in the guest: the host LiteLLM holds it, the guest has placeholders | root-staged config seed, allowlist + credential denylist | `agent-microvm-security-model.md` |
-| `mysbx` | none by default. Credential names must be declared in `forward-env` (`myconfig.ai.dev.mysbx.forwardedEnvVars`, set by the private flake). Podman backends can reach the keyless proxy through the forwarder | live runs get a per-repo ed25519 keypair in `<repo>.mysbx/state/.ssh`; clone sessions receive neither that key nor persisted state. No implicit host `~/.ssh` or `SSH_AUTH_SOCK` (`config.md` D22) | `lib.rs` `FORWARDED_ENV_VARS`, `default.nix` `forwardedEnvVars` |
+| `mysbx` | none by default. A plain run forwards credential names only when declared in `forward-env` (`myconfig.ai.dev.mysbx.forwardedEnvVars`, set by the private flake). Under `network = "proxy-only"` (bubblewrap) the host LiteLLM holds the key: the forward-env narrows to the technical base, credential-shaped `[env]`/`[nix]` names are refused, and dropped credential names get the `mysbx-proxy-only` placeholder (`config.md` D28, bd myconfig-mo3.2/t24). Podman backends can reach the keyless proxy through the forwarder | live runs get a per-repo ed25519 keypair in `<repo>.mysbx/state/.ssh`; clone sessions receive neither that key nor persisted state. No implicit host `~/.ssh` or `SSH_AUTH_SOCK` (`config.md` D22) | `lib.rs` `FORWARDED_ENV_VARS`, `default.nix` `forwardedEnvVars` |
 
-A keyless proxy can be used by configuration, but `mysbx` has no
-implemented proxy-only egress profile that guarantees it is the sole
-endpoint. `egress` is a proposal (`config.md` D20, bd myconfig-mo3.2),
-not an accepted key.
+A keyless proxy can be used by configuration. `network = "proxy-only"`
+(bubblewrap only) is the implemented no-key profile: an empty netns,
+one forwarder Unix socket, and the in-sandbox relay, so the LiteLLM
+endpoint is the sole reach (`config.md` D20/D28, bd myconfig-mo3.2); the
+podman, krun and VM backends REFUSE it. The separate `egress` key
+remains a rejected unknown key — the profile is a value of `network`,
+not a key of its own.
 
 ## 5. Workspace model
 
@@ -336,7 +340,7 @@ validation may still be incomplete.
 
 | Gap | Old tier that has it | Bead |
 | --- | --- | --- |
-| model key never inside the sandbox (proxy-only egress) | `microvm` `networkProfile = "proxy-only"` | bd myconfig-mo3.2, bd myconfig-t24. podman side bd myconfig-6di.3 |
+| model key never inside the sandbox on every backend (proxy-only egress) | `microvm` `networkProfile = "proxy-only"` | landed for bubblewrap (`config.md` D20/D28: bd myconfig-mo3.2, myconfig-t24); podman/krun/VM backends refuse it (bd myconfig-6di.3). Nono + per-backend transports in bd myconfig-vpi9 |
 | public egress without the host LAN / private ranges | `microvm` (every profile) | bd myconfig-fvi |
 | any limit on bwrap/nono (the config keys exist, `config.md` D23) | `microvm` `resourceClasses`, `qemu` `vcpu`/`mem` | bd myconfig-cea |
 | detached interactive runs implemented on bwrap/nono/direct krun/QEMU; refused on Podman, live matrix unrecorded | `gvisor` `run --detach` + `shell`, `microvm` `submit` | bd myconfig-7ioq; [`detach-validation-log.md`](./detach-validation-log.md) |

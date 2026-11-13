@@ -13,9 +13,9 @@ for implemented support, known gaps and validation limits.
   holding per-repo configuration and state.
 - **user config** — `$XDG_CONFIG_HOME/mysbx/config.toml`, host-wide
   defaults.
-- **backend** — one of the six implemented execution paths:
-  `bubblewrap`, `nono`, `podman-gvisor`, `podman-krun`, `krun`, or
-  `microvm-qemu`.
+- **backend** — one of the seven implemented execution paths:
+  `bubblewrap`, `nono`, `podman-gvisor`, `podman-krun`, `krun`,
+  `microvm-qemu`, or `microvm-ch`.
 
 ## Decisions
 
@@ -84,10 +84,11 @@ config that can execute is config that can escape.
 - nested virtualization for a `microvm-qemu` run (`nested-virt`,
   see D27): whether the guest gets hardware virtualization and its
   own `/dev/kvm` — opt-in, honored by exactly one backend
-- network policy (`network = false` is the deny switch; networking is
-  enabled by default through the backend's transport; D21's allowlist
-  keys are enforced only on nono). D20's proposed `egress` key is not
-  accepted by the parser.
+- network policy (`network`, one key with `"none" | "proxy-only" |
+  "shared"`; `true`/`false` stay aliases of `"shared"`/`"none"`, and
+  `"shared"` is the default through the backend's transport). D21's
+  allowlist keys are enforced only on nono; D20's `"proxy-only"`
+  profile is enforced on bubblewrap and refused elsewhere.
 - environment forwarded into the sandbox (`[env]`)
 - nix settings forwarded into the sandbox (`[nix]`, D24): rendered as
   the sandbox's `NIX_CONFIG`
@@ -212,12 +213,14 @@ What the sidecar still may **not** do:
   controls), but it may not override a variable the user config sets —
   overriding is how a repo would redirect a tool at something the user
   did not choose, and the user config is the more global statement.
-- **`network`**: it may set `false`, never `true` over a user-config
-  `false`. `network` is a host-wide policy switch with no per-entry
+- **`network`**: the sidecar may pick a STRICTER value than the user
+  layer — `"shared"` → `"proxy-only"` → `"none"` — never a wider one;
+  a value wider than the user layer's is a `NetworkUpgrade` error.
+  `network` is a host-wide policy switch with no per-entry
   granularity: a user who denied the network host-wide means it for
   every sandbox, and a repo re-enabling it is exactly the thing that
-  switch exists to prevent. D20 proposes a similar merge rule for
-  `egress`, but that key is not implemented.
+  switch exists to prevent. D20 records the three-value order and the
+  merge rule.
 
 `backend` passes through from whichever layer named it (the sidecar
 wins when both do, per the layer precedence of D6); it is not an access
@@ -332,14 +335,18 @@ have planted a symlink in it.
 
 ### D9: A strong accident barrier, a moderate malice barrier
 
-The MVP's base is deliberately permissive: the network is shared by default
-and the backend base exposes the usual tool environment. The claim is
-therefore **not** deny-by-default confinement — it is the one the sandboxing
-ladder already makes for its bubblewrap tier: *a strong accident barrier and
-a moderate malice barrier*. A sandboxed process cannot stumble into host
-state it should not touch, and an attacker inside the sandbox does not
-trivially escape — but the shared network and the permissive base are real
-exposure, and the doc says so instead of overstating the confinement.
+The MVP's base is deliberately permissive: the network is shared by
+default (`network = "shared"`, its `true` alias included) and the
+backend base exposes the usual tool environment. The claim is
+therefore **not** deny-by-default confinement — it is the one the
+sandboxing ladder already makes for its bubblewrap tier: *a strong
+accident barrier and a moderate malice barrier*. A sandboxed process
+cannot stumble into host state it should not touch, and an attacker
+inside the sandbox does not trivially escape — but the shared network
+and the permissive base are real exposure, and the doc says so instead
+of overstating the confinement. The `network = "proxy-only"` profile
+(D20) and `network = "none"` are the narrower settings; each is opt-in
+per layer, never the default.
 
 The filesystem view consists of the backend's fixed infrastructure plus
 approved workspace, Git metadata, worktrees, state and configured
@@ -1044,10 +1051,14 @@ over the WebSocket pairing endpoint the server prints on readiness
 an operator must know:
 
 * **It needs the shared network** (D5/D9): the pairing client connects
-  to the sandboxed server from outside, so `network = false` leaves the
-  session unreachable — tmux, workmux, herdr and aoe are driven through
-  the terminal mysbx already attaches and do not care, but `orca` is
-  the first multiplexer whose control surface is a network endpoint.
+  to the sandboxed server from outside, so `network = "none"` (and the
+  `false` alias) leaves the session unreachable, and
+  `network = "proxy-only"` reaches only the LiteLLM endpoint, so the
+  pairing client cannot connect either — an orca session under that
+  profile is refused (D20). tmux, workmux, herdr and aoe are driven
+  through the terminal mysbx already attaches and do not care, but
+  `orca` is the first multiplexer whose control surface is a network
+  endpoint.
   A loopback-advertised pairing works wherever the client runs on the
   same host; a remote client needs the host's routing and an
   advertised address it can reach, exactly like the host-side
@@ -1207,30 +1218,74 @@ compositor socket and the per-run channel directory. Its recorded live
 probe used nono 0.74.0 (bd myconfig-6di.4.6); it is not a fresh 0.80.0
 acceptance run.
 
-### D20: `egress = "proxy-only"` is a profile, not an allowlist
+### D20: `network = "proxy-only"` is a profile, not an allowlist (bd myconfig-mo3.2, myconfig-t24)
 
-**Proposed, not implemented.** `egress` is absent from `Config::KEYS`.
-Any `egress = "proxy-only"` or `egress = "shared"` assignment fails
-strict parsing on every backend, before backend-specific enforcement.
-The existing controls are `network` and D21's nono allowlists.
+**Accepted.** `network` is ONE key with three values, in this order:
 
-The proposed profile (bd myconfig-mo3.2, myconfig-t24) would permit
-only the host LiteLLM endpoint while keeping its model credential on
-the host. It would retain `network = false` as a stronger deny switch
-and allow a sidecar to tighten, not widen, a user-layer profile.
-These merge and credential rules are requirements, not shipped checks.
+```toml
+network = "none" | "proxy-only" | "shared"
+```
 
-The proposed bubblewrap transport is an isolated network namespace,
-one Unix socket to a host forwarder, and an in-sandbox loopback relay.
-It has not been implemented. Podman's current pasta gateway mapping
-provides reachability, not a default-deny route policy, so it cannot
-alone enforce the proposed profile. VM transports would also need
-explicit enforcement.
+`true` and `false` stay permanent aliases of `"shared"` and `"none"`:
+they are accepted forever, never deprecated, and a bool config's
+generated TOML and argv stay byte-identical. The order is
+`none < proxy-only < shared`; a later `"public"` value (bd
+myconfig-fvi) would sit between `proxy-only` and `shared`.
 
-The profile is distinct from D21's hostname/port policy. Mutual
-exclusion with that policy is a design requirement, not a dedicated
-parser rule today: the parser simply rejects the unknown `egress` key.
-Orca's shared-network requirement would remain unsatisfied.
+**Merge: the stricter value wins** — the same direction as the bool
+switch always had, generalised to three values. A layer may tighten
+(`shared` → `proxy-only` → `none`), never widen: a sidecar that names
+a value wider than the user layer's is a `NetworkUpgrade` error, not a
+silent downgrade (D7's trust argument does not extend to widening the
+network, whose whole point is that a host-wide decision holds).
+
+**What `proxy-only` grants.** Only the host's LiteLLM endpoint is
+reachable, and no model credential exists inside the sandbox — the
+proxy holds it (D28 records the credential rules, including the
+residual risks the profile does NOT remove). The profile is mutually
+exclusive with D21's hostname/port allowlists: those keys describe
+what a sandbox with a *shared* network may reach, so they are a schema
+error next to `network = "proxy-only"` in one file and a refused run
+(exit `70`) when the layers combine them.
+
+**Enforcement is per backend** — the same accepted-never-ignored rule
+as D21, and bubblewrap is the only enforcing backend in phase A:
+
+| backend | `network = "proxy-only"` means |
+| --- | --- |
+| `bubblewrap` | the enforcing backend: an unshared network namespace, the FIXED directory `/run/mysbx-egress` bound read-only, and the `mysbx-egress-relay` binary listening on `127.0.0.1:<litellm port>` and forwarding to the socket inside it (bd myconfig-mo3.2.6) |
+| `nono` | refused — its Landlock/seccomp layer is no default-deny network fence; the profile there is bd myconfig-vpi9.1 |
+| `podman-gvisor` | refused — pasta's `--map-guest-addr` ADDS a route to the forwarder, it does not remove the default route (bd myconfig-6di.3) |
+| `podman-krun` | refused — libkrun's TSI is an unfiltered proxy from the container netns (bd myconfig-6di.5.5) |
+| `krun` | refused — direct libkrun TSI has no default-deny network mode |
+| `microvm-qemu` | refused — the SLiRP net device always has a gateway route |
+| `microvm-ch` | refused — passt's vhost-user net device always has a gateway route |
+
+**The socket path is pinned.** `MYSBX_EGRESS_SOCKET` must be exactly
+`/run/mysbx-egress/<name>`, `<name>` one plain file name
+(`[A-Za-z0-9._-]+`, not `.`/`..`) — compared as a literal string, so a
+`..` component, a subdirectory or a symlinked spelling can never widen
+the bind to a shared directory (`/run` would expose
+`/run/user/<uid>`: D-Bus, Wayland, ssh-agent). The nix option is
+`unixSocket.name` for the same reason; the path itself is fixed. On a
+real run the directory must also be a non-symlink, root-owned and not
+group- or world-writable — the bind grants exactly one directory, so
+its ownership has to be trustworthy. `--dry-run` checks the path shape
+but not the filesystem.
+
+The refusal is exit `70` with a backend-specific reason, before
+anything is created (`ensure_state_dirs`, the SSH key, the session
+clone) and before the `--dry-run` early return, so a dry run audits
+it. The same holds for a mount or a `state-dirs` entry that would
+cover `/run/mysbx-egress`. Bubblewrap enforces the profile; a run whose pinned
+forwarder socket or wrapper pins are missing is REFUSED (exit `70`,
+naming the option to enable) — the profile fails closed, never falls
+back to a shared network. Phase B–D (per-backend transports, the
+broker) live in bd myconfig-vpi9.
+
+**Orca's shared-network requirement** stays unsatisfied under this
+profile: `multiplexer = "orca"` needs the shared network and is
+refused with `proxy-only` (D17).
 
 ### D21: the network allowlist keys are backend-agnostic; enforcement is per backend
 
@@ -1280,6 +1335,10 @@ a security bug:
 | `podman-krun` | refused — libkrun's TSI is an UNFILTERED proxy: the VMM dials whatever the guest connects to, from the container's own netns (pasta by default, the empty netns under `network = false`); no per-domain or per-port hook exists in the muxer (verified against the sources, bd myconfig-6di.5.5) |
 | `krun` | refused — direct libkrun TSI has no implemented allowlist hook |
 | `microvm-qemu` | refused — the SLiRP network path has no implemented allowlist enforcement |
+| `microvm-ch` | refused — passt's vhost-user net device (D11's SLiRP-compatible address plan) has no implemented allowlist hook |
+
+Every backend's row is asked of the registry (`network_allowlist`,
+bd myconfig-mo3.2.1), not matched by name at the call site.
 
 The first enforcement is the nono backend (bd myconfig-6di.2). The
 refusal fires while the argv is laid out, BEFORE the `--dry-run` early
@@ -1305,11 +1364,15 @@ host-name grants, not a URL-filtering configuration.
 
 **`network = false` plus any allowlist key is a contradiction refused on
 every backend**: the switch denies the network, the allowlist names what
-may be reached through it — both cannot hold at once.
+may be reached through it — both cannot hold at once. The same holds
+for `network = "none"`, its alias.
 
-`egress = "proxy-only"` remains an unimplemented proposal (D20).
-Any assignment to `egress` is an unknown-key error, with or without
-an allowlist.
+The allowlist keys describe what a sandbox with the network **shared**
+may reach, so they may only be combined with `network = "shared"`
+(the bool `true` alias included): next to `network = "proxy-only"`
+they are a schema error in one file and a refused run (`70`) when the
+layers combine them — the profile already names the one reachable
+endpoint (D20).
 
 ### D22: the sandbox's own SSH keypair, generated into the sidecar state
 
@@ -1711,3 +1774,53 @@ KVM, KVM_INTEL and KVM_AMD in (`nix/microvm-qemu-kernel.nix`) — the
 static init loads no modules. They are inert without VMX/SVM, so
 ONE kernel serves both modes and the plain run's argv stays
 byte-identical.
+
+### D28: Credentials under `network = "proxy-only"` (bd myconfig-t24)
+
+`network = "proxy-only"` (D20) is the no-key path: the host LiteLLM
+proxy holds the model credential, and the sandbox reaches only that
+proxy. The rules below make "no credential in the sandbox" an
+enforced property instead of an intention. They apply to the profile
+only — `network = "shared"` keeps today's `forward-env` behaviour.
+
+**Forward-env is narrowed to the display/locale/editor base.** Under
+the profile the forwarded environment is exactly
+`TERM COLORTERM LANG LC_ALL EDITOR VISUAL`. Every other name is
+dropped, whether it came from a layer's `forward-env` (the generated
+user config always carries the private flake's
+`myconfig.ai.dev.mysbx.forwardedEnvVars` — model key, token and
+base-URL names) or from `MYSBX_FORWARD_ENV`. Each dropped name is
+listed in the report as `[dropped — network = "proxy-only", D28]`,
+so the narrowing is visible, never silent.
+
+**Credential-shaped `[env]` names are refused.** Every `[env]` name is
+split at `_`; a part equal to `KEY`, `TOKEN`, `SECRET`, `PASSWORD`,
+`PASSWD`, `CREDENTIAL`, `CREDENTIALS` or `AUTH`, or a name ending in
+`APIKEY`, refuses the run (exit `70`, naming the file and the key).
+`GIT_AUTHOR_NAME` and `KEYMAP` pass — the split is on `_` parts and
+on the `APIKEY` suffix, not on substrings. `[nix]`'s `access-tokens`
+and `netrc-file` are refused by the same rule.
+
+**Dropped credential names get a fixed placeholder.** A name dropped
+by the forward-env narrowing whose `_` parts match the credential
+rule is set to the fixed value `mysbx-proxy-only` by mysbx, AFTER the
+`[env]` check (so the injected name is not itself a refusal) and
+announced in the report. A base-URL name is dropped without a
+placeholder: the agents keep their baked `127.0.0.1:<litellm port>`
+URLs, which under the profile resolve to the relay. The local LiteLLM
+is keyless, so the placeholder is harmless.
+
+**The D22 SSH key stays bound.** The profile does not remove the
+per-repo keypair (D22) the payload can read. Documented residual
+risks:
+
+- A secret under an innocent-looking `[env]` name is not caught —
+the rule is a heuristic on names, not a proof.
+- The agent can read the bound D22 private key, and that key could
+leave through the prompts the agent sends via LiteLLM to the model
+provider. The profile constrains the sandbox's own sockets; it does
+not construe the content the agent chooses to send.
+
+Credential injection into the proxy (the egress broker adding the
+LiteLLM master key on approved requests) is later work: bd
+myconfig-n8kv.3 and `doc/TODOs/litellm-master-key-hardening.md`.

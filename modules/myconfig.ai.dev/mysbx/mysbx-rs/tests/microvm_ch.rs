@@ -33,7 +33,7 @@ fn synth_repo() -> Repo {
 fn base() -> Merged {
     Merged {
         backend: Some("microvm-ch".into()),
-        network: true,
+        network: mysbx::config::Network::Shared,
         nested_virt: false,
         mounts: Vec::new(),
         env: BTreeMap::new(),
@@ -87,6 +87,28 @@ fn assert_parity(cfg: &Merged, params: &Params<'_>) -> Vec<String> {
         .unwrap_or_else(|e| panic!("the qemu argv builds: {e}"));
     assert_eq!(ch, qemu, "the CH argv drifted from the qemu twin's");
     ch
+}
+
+#[test]
+fn proxy_only_is_refused_by_the_builder() {
+    // D20 (bd myconfig-6di.3): the CH builder refuses
+    // `network = "proxy-only"` itself — passt's vhost-user net device
+    // always has a gateway route.
+    let mut cfg = base();
+    cfg.network = mysbx::config::Network::ProxyOnly;
+    let p = params();
+    let host_env = BTreeMap::new();
+    let err = microvm_ch_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env,
+        &p,
+        KERNEL,
+        &[],
+    )
+    .expect_err("a proxy-only CH run must be refused");
+    assert!(matches!(err, mysbx::krun::Error::ProxyOnlyRefused), "{err}");
 }
 
 #[test]

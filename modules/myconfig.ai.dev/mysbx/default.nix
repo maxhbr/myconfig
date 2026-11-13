@@ -491,6 +491,18 @@ in
         podmanShell = if cfg.podman.enable then cfg.podman.shell else null;
         podmanPastaSpec = if cfg.podman.enable then cfg.podman.pastaSpec else null;
         podmanEnv = if cfg.podman.enable then cfg.podman.env else { };
+        # The `network = "proxy-only"` channel pins (../docs/design/
+        # config.md D20, bd myconfig-mo3.2.4): the LiteLLM forwarder's
+        # Unix socket and the port the in-sandbox relay listens on.
+        # Pinned whenever the forwarder's socket half runs — that gate
+        # is `services.litellm.enable`, independent of the podman
+        # backends (the profile runs on plain bubblewrap).
+        egressSocket =
+          if litellmForwarder.unixSocket.enable then
+            "/run/mysbx-egress/${litellmForwarder.unixSocket.name}"
+          else
+            null;
+        egressPort = if litellmForwarder.unixSocket.enable then litellmForwarder.port else null;
         # The podman-krun runtime (backends.md D2): the backend is
         # `podman-gvisor` with the runtime swapped, so it rides the
         # podman flag — the shared image is what makes it runnable.
@@ -551,7 +563,7 @@ in
         nono = cfg.nono.package;
         ssh-keygen = pkgs.openssh;
       };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries enabledBackends; alacritty = cfg.terminal.package; shell = cfg.shell.path; podmanImage = if cfg.podman.enable then cfg.podman.image else null; podmanShell = if cfg.podman.enable then cfg.podman.shell else null; podmanPastaSpec = if cfg.podman.enable then cfg.podman.pastaSpec else null; podmanEnv = if cfg.podman.enable then cfg.podman.env else { }; krunRuntime = if cfg.podman.enable then cfg.krun.runtime else null; krunLauncher = if cfg.krun.enable then cfg.krun.direct.launcher else null; krunRootfs = if cfg.krun.enable then cfg.krun.direct.rootfs else null; vmStoreBaked = cfg.vm.store.enable; vmStoreExtraRoots = lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages ++ lib.optionals hmDifftasticExternal [ gitDefaultDiff ]; microvmQemuLauncher = if cfg.microvm-qemu.enable then cfg.microvm-qemu.launcher else null; microvmQemuRootfs = if cfg.microvm-qemu.enable then cfg.microvm-qemu.rootfs else null; microvmQemuKernel = if cfg.microvm-qemu.enable then \"${cfg.microvm-qemu.kernel}/bzImage\" else null; microvmQemuEnv = if cfg.microvm-qemu.enable then cfg.microvm-qemu.env else { }; microvmChLauncher = if cfg.microvm-ch.enable then cfg.microvm-ch.launcher else null; microvmChRootfs = if cfg.microvm-ch.enable then cfg.microvm-ch.rootfs else null; microvmChKernel = if cfg.microvm-ch.enable then \"${cfg.microvm-ch.kernel}/bzImage\" else null; microvmChEnv = if cfg.microvm-ch.enable then cfg.microvm-ch.env else { }; waypipe = cfg.display.package; dtach = pkgs.dtach; podmanWaypipe = if cfg.podman.enable then cfg.podman.waypipe else null; podmanMuxEntries = if cfg.podman.enable then cfg.podman.muxEntries else { }; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
+      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries enabledBackends; alacritty = cfg.terminal.package; shell = cfg.shell.path; podmanImage = if cfg.podman.enable then cfg.podman.image else null; podmanShell = if cfg.podman.enable then cfg.podman.shell else null; podmanPastaSpec = if cfg.podman.enable then cfg.podman.pastaSpec else null; podmanEnv = if cfg.podman.enable then cfg.podman.env else { }; egressSocket = if litellmForwarder.unixSocket.enable then \"/run/mysbx-egress/\${litellmForwarder.unixSocket.name}\" else null; egressPort = if litellmForwarder.unixSocket.enable then litellmForwarder.port else null; krunRuntime = if cfg.podman.enable then cfg.krun.runtime else null; krunLauncher = if cfg.krun.enable then cfg.krun.direct.launcher else null; krunRootfs = if cfg.krun.enable then cfg.krun.direct.rootfs else null; vmStoreBaked = cfg.vm.store.enable; vmStoreExtraRoots = lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages ++ lib.optionals hmDifftasticExternal [ gitDefaultDiff ]; microvmQemuLauncher = if cfg.microvm-qemu.enable then cfg.microvm-qemu.launcher else null; microvmQemuRootfs = if cfg.microvm-qemu.enable then cfg.microvm-qemu.rootfs else null; microvmQemuKernel = if cfg.microvm-qemu.enable then \"${cfg.microvm-qemu.kernel}/bzImage\" else null; microvmQemuEnv = if cfg.microvm-qemu.enable then cfg.microvm-qemu.env else { }; microvmChLauncher = if cfg.microvm-ch.enable then cfg.microvm-ch.launcher else null; microvmChRootfs = if cfg.microvm-ch.enable then cfg.microvm-ch.rootfs else null; microvmChKernel = if cfg.microvm-ch.enable then \"${cfg.microvm-ch.kernel}/bzImage\" else null; microvmChEnv = if cfg.microvm-ch.enable then cfg.microvm-ch.env else { }; waypipe = cfg.display.package; dtach = pkgs.dtach; podmanWaypipe = if cfg.podman.enable then cfg.podman.waypipe else null; podmanMuxEntries = if cfg.podman.enable then cfg.podman.muxEntries else { }; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -1734,9 +1746,23 @@ in
             description = "Sandbox backend (`bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`, `krun`, `microvm-qemu` or `microvm-ch`); `null` leaves the choice to the sidecar.";
           };
           network = mkOption {
-            type = types.bool;
+            type = types.either types.bool (
+              types.enum [
+                "none"
+                "proxy-only"
+                "shared"
+              ]
+            );
             default = true;
-            description = "Share the host network; `false` is the deny switch.";
+            description = ''
+              The sandbox's network policy (`./docs/design/config.md`
+              D20): `"none"` (the `false` alias) denies the network,
+              `"proxy-only"` grants only the host model endpoint, and
+              `"shared"` (the `true` alias, the default) shares it.
+              The bool aliases stay accepted forever, so a host that
+              keeps the default renders `network = true` and its
+              generated TOML is unchanged. A sidecar may tighten the
+              value, never widen it.'';
           };
           nestedVirt = mkOption {
             type = types.nullOr types.bool;
@@ -1966,9 +1992,9 @@ in
               Enforcement is per backend and NEVER accepted-and-ignored
               (D21): enforced on `backend = "nono"` (nono's egress
               proxy, plain host names only — a URL/path form is refused,
-              bd myconfig-6di.4.4); `bubblewrap` and `podman-gvisor`
-              refuse the run when any allowlist key is set. These
-              options just seed the layer: the backend choice stays
+              bd myconfig-6di.4.4); every other backend refuses the
+              run when any allowlist key is set. These options just
+              seed the layer: the backend choice stays
               per repository (sidecar) or per run (`--backend`).
             '';
           };
@@ -2287,6 +2313,15 @@ in
     myconfig.ai.dev.litellm-forwarder.enable = lib.mkIf (
       cfg.podman.enable && config.services.litellm.enable
     ) true;
+
+    # The Unix-socket half of the same forwarder (bd myconfig-mo3.2.4):
+    # the host channel the bubblewrap `network = "proxy-only"` profile
+    # binds into the sandbox (docs/design/config.md D20). Gated on the
+    # host running LiteLLM alone — it is independent of the podman
+    # backends, because the profile runs on plain bubblewrap. The
+    # forwarder is socket-activated, so an enabled-but-unused one runs
+    # nothing until a `proxy-only` sandbox connects.
+    myconfig.ai.dev.litellm-forwarder.unixSocket.enable = lib.mkIf config.services.litellm.enable true;
 
     # The endpoint as the CONTAINER sees it, for tools that read
     # `OPENAI_BASE_URL`. The agent CLIs whose model

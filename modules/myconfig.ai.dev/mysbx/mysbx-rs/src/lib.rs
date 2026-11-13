@@ -2322,6 +2322,23 @@ fn sandbox_pipeline(
     // `home` is also what `~/…` mount paths expand against (config.md
     // D8) — on the HOST, before bwrap runs, so the sandbox's own
     // (cleared) environment never enters the resolution.
+    // The D28 credential-name refusals name the FILE each offending key
+    // came from, but the merge consumes the layers — so the per-layer
+    // offenders are recorded here, before it.
+    let mut credential_offences: Vec<(std::path::PathBuf, String, String)> = Vec::new();
+    for (path, layer) in [
+        (&user_config_path, &layers.user.0),
+        (&sidecar_config_path, &layers.sidecar.0),
+    ] {
+        if let Some(bad) = credential_env_key(&layer.env) {
+            credential_offences.push((path.clone(), "env".to_owned(), bad.to_owned()));
+        }
+        for key in ["access-tokens", "netrc-file"] {
+            if layer.nix.contains_key(key) {
+                credential_offences.push((path.clone(), "nix".to_owned(), key.to_owned()));
+            }
+        }
+    }
     let mut merged = match merge::merge(
         layers.user.0,
         layers.sidecar.0,
@@ -2519,46 +2536,6 @@ fn sandbox_pipeline(
         return EXIT_INFRASTRUCTURE;
     }
 
-    // 3b. the state-dir backing stores (docs/design/config.md D15):
-    // one directory per merged `state-dirs` entry under
-    // `<sidecar>/state/`, so the rw binds of the argv have an existing
-    // source (bwrap needs one) and the payload's writes persist there
-    // across runs. After the merge (the entries come from both layers),
-    // before the backend check (a broken state dir is as fatal as a
-    // broken config), and only for a real run — `--dry-run` stays
-    // side-effect-free and prints the argv with the would-be sources.
-    // Creation is idempotent; a failure is a runtime error like the
-    // sidecar creation above.
-    //
-    // A run with `ssh-key` additionally generates the keypair under
-    // `<sidecar>/state/.ssh/` — the same state tree, the same
-    // live-runs-only gate: the dry run audits the bind, the real run
-    // ends with a usable keypair. The keypair is unconditional
-    // (docs/design/config.md D22): every run binds it.
-    //
-    // In a CLONE run the `state-dirs` are NOT handled at all
-    // (workspace.md D4): no backing store is created, nothing is
-    // bound — per-session versus shared agent state is deliberately
-    // deferred to a follow-up bead. Scratch space stays the tmpfs
-    // home and `/tmp`, as in any run.
-    if !preflight_only && session.is_none() {
-        if let Err(msg) = ensure_state_dirs(&repo, &merged.state_dirs) {
-            eprintln!("mysbx: {msg}");
-            return EXIT_INFRASTRUCTURE;
-        }
-        // The `ssh-keygen` of the run: the wrapper's pin
-        // (`MYSBX_SSH_KEYGEN`, this build's own closure) with the
-        // PATH fallback of the unwrapped crate — the same idiom as
-        // `MYSBX_BWRAP`. Refused, not ignored: a run whose keypair
-        // it cannot generate must not continue with an `~/.ssh`
-        // bind that does not exist.
-        let keygen = env_or("MYSBX_SSH_KEYGEN", "ssh-keygen");
-        if let Err(msg) = ensure_ssh_key(&repo, &repo.sidecar.join("state"), &keygen) {
-            eprintln!("mysbx: {msg}");
-            return EXIT_INFRASTRUCTURE;
-        }
-    }
-
     // 4. the backend is explicit, never auto-detected (cli.md D7): a
     // silently downgraded isolation level would be a security bug.
     // The accepted set is enforced here for BOTH sources — a config
@@ -2713,8 +2690,61 @@ fn sandbox_pipeline(
     .into_iter()
     .flatten()
     .collect();
+    // The proxy-only profile (docs/design/config.md D20, bd
+    // myconfig-mo3.2.3): `network = "proxy-only"` grants only the host
+    // model endpoint. It is enforced by the backends whose registry
+    // row says so — bubblewrap alone until the other transports land —
+    // and REFUSED by every other backend with a backend-specific
+    // reason, before the session clone and before the `--dry-run`
+    // return (a dry run audits the refusal too). The cross-layer
+    // allowlist contradiction is refused here as well; the SAME-file
+    // form is a schema error (config.rs).
+    if merged.network == config::Network::ProxyOnly {
+        if !allowlist_keys.is_empty() {
+            eprintln!(
+                "mysbx: network = \"proxy-only\" grants only the host model endpoint; an allowlist ({}) contradicts it — the allowlist keys describe a shared network (docs/design/config.md D20/D21); drop the keys or share the network",
+                allowlist_keys
+                    .iter()
+                    .map(|k| format!("`{k}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            return EXIT_INFRASTRUCTURE;
+        }
+        if !backends::find(backend).is_some_and(|row| row.network_proxy_only) {
+            let reason = match backend {
+                "podman-gvisor" => {
+                    "pasta's --map-guest-addr ADDS a route to the LiteLLM forwarder, it does not remove the container's default route (bd myconfig-6di.3)"
+                }
+                "podman-krun" | "krun" => {
+                    "libkrun's TSI is an UNFILTERED proxy: the VMM dials whatever the guest connects to, from a netns with a default route"
+                }
+                "microvm-qemu" => {
+                    "the SLiRP net device always has a gateway route"
+                }
+                "microvm-ch" => {
+                    "passt's vhost-user net device always has a gateway route"
+                }
+                "nono" => {
+                    "its Landlock/seccomp layer is no default-deny network fence yet (bd myconfig-vpi9.1)"
+                }
+                _ => "the backend cannot express a default-deny network",
+            };
+            eprintln!(
+                "mysbx: network = \"proxy-only\" is not enforced on the `{backend}` backend — {reason} (docs/design/config.md D20); the run is refused, never weakened to a shared network"
+            );
+            eprintln!(
+                "  switch the backend to `bubblewrap` for the profile, or drop `network = \"proxy-only\"`"
+            );
+            return EXIT_INFRASTRUCTURE;
+        }
+    }
+
     if !allowlist_keys.is_empty() {
-        if backend != "nono" {
+        // Asked of the registry (bd myconfig-mo3.2.1): the row's
+        // network_allowlist predicate is D21's enforcement table —
+        // nono alone enforces an allowlist today.
+        if !backends::find(backend).is_some_and(|row| row.network_allowlist) {
             eprintln!(
                 "mysbx: the configuration sets {} — only the `nono` backend enforces them; the `{backend}` backend cannot (bubblewrap shares or unshares the whole network namespace; the podman backends dial from an unfiltered netns — pasta on `podman-gvisor`, libkrun's TSI proxy on `podman-krun`, bd myconfig-6di.3/myconfig-6di.5.5)",
                 allowlist_keys
@@ -2728,10 +2758,10 @@ fn sandbox_pipeline(
         }
         // The same contradiction the nono argv builder refuses as
         // defense in depth (Error::AllowlistUnderDeniedNetwork),
-        // refused here for EVERY backend: `network = false` denies
+        // refused here for EVERY backend: `network = none` denies
         // the network, an allowlist names what may be reached — both
         // cannot hold at once.
-        if !merged.network {
+        if merged.network.is_none() {
             eprintln!(
                 "mysbx: network = false denies the network; an allowlist ({}) contradicts it — drop the keys or share the network",
                 allowlist_keys
@@ -2770,6 +2800,58 @@ fn sandbox_pipeline(
     // `--dry-run` early return, so a dry run audits it too — the
     // same accepted-never-ignored rule the allowlist refusal
     // follows.
+    // The `network = "proxy-only"` channel (docs/design/config.md D20,
+    // bd myconfig-mo3.2.6): resolve and validate the wrapper's pins in
+    // step 4b — BEFORE the session clone (step 4a) and before the
+    // `--dry-run` return — so a broken configuration creates nothing.
+    // The missing-setting, path-shape and — for a REAL run only —
+    // socket-existence refusals live here; the argv builder later takes
+    // the same values as a `bwrap::EgressChannel`.
+    let egress: Option<EgressPins> = match resolve_egress(merged.network, backend, dry_run) {
+        Ok(pins) => pins,
+        Err(()) => return EXIT_INFRASTRUCTURE,
+    };
+    // Nothing may mount or persist over the directory the channel binds.
+    // The argv builder checks this too; checking it here as well keeps
+    // the refusal ahead of the state dirs, the SSH key and the clone.
+    if egress.is_some() {
+        if let Err(e) = bwrap::check_egress_dir(&merged.mounts, &merged.effective_state_dirs()) {
+            eprintln!("mysbx: {e}");
+            return EXIT_INFRASTRUCTURE;
+        }
+    }
+
+    // The credential rules of `network = "proxy-only"` (docs/design/config.md
+    // D28, bd myconfig-t24): the profile is the no-key path — the host
+    // LiteLLM proxy holds the model credential — so no config layer may
+    // put one into the sandbox. Refused here, before the session clone
+    // and before the `--dry-run` early return (a dry run audits it too).
+    // The forward-env DROP (rule 6a/6d) happens later, in
+    // `collect_host_env`; this only refuses what it cannot drop.
+    if merged.network == config::Network::ProxyOnly {
+        // The refusal names the FILE and the KEY, from the offenders
+        // recorded before the merge.
+        if let Some((path, table, key)) = credential_offences.first() {
+            if table == "env" {
+                eprintln!(
+                    "mysbx: {}: [env] {key} looks like a model credential, and \
+                     network = \"proxy-only\" keeps credentials on the host \
+                     (docs/design/config.md D28) — the host LiteLLM proxy holds \
+                     the model key; drop the entry",
+                    path.display()
+                );
+            } else {
+                eprintln!(
+                    "mysbx: {}: [nix] {key} carries a credential, and \
+                     network = \"proxy-only\" keeps credentials on the host \
+                     (docs/design/config.md D28) — drop the setting",
+                    path.display()
+                );
+            }
+            return EXIT_INFRASTRUCTURE;
+        }
+    }
+
     if merged.nested_virt && !backends::find(backend).is_some_and(|row| row.nested_virt) {
         eprintln!(
             "mysbx: nested-virt = true is not supported on the `{backend}` backend \
@@ -2871,6 +2953,49 @@ fn sandbox_pipeline(
         );
         eprintln!("  set display = \"off\", or switch the backend to `podman-gvisor`");
         return EXIT_INFRASTRUCTURE;
+    }
+
+    // State and keys are CREATED only after every refusal above (bd
+    // myconfig-mo3.2.6): a broken configuration must leave nothing
+    // behind — no state directories, no SSH key, no clone.
+    // The state-dir backing stores (docs/design/config.md D15): one
+    // directory per merged `state-dirs` entry under
+    // `<sidecar>/state/`, so the rw binds of the argv have an existing
+    // source (bwrap needs one) and the payload's writes persist there
+    // across runs. After the merge (the entries come from both layers)
+    // and after every refusal above (a broken configuration creates
+    // nothing), and only for a real run — `--dry-run` stays
+    // side-effect-free and prints the argv with the would-be sources.
+    // Creation is idempotent; a failure is a runtime error like the
+    // sidecar creation above.
+    //
+    // A run with `ssh-key` additionally generates the keypair under
+    // `<sidecar>/state/.ssh/` — the same state tree, the same
+    // live-runs-only gate: the dry run audits the bind, the real run
+    // ends with a usable keypair. The keypair is unconditional
+    // (docs/design/config.md D22): every run binds it.
+    //
+    // In a CLONE run the `state-dirs` are NOT handled at all
+    // (workspace.md D4): no backing store is created, nothing is
+    // bound — per-session versus shared agent state is deliberately
+    // deferred to a follow-up bead. Scratch space stays the tmpfs
+    // home and `/tmp`, as in any run.
+    if !preflight_only && session.is_none() {
+        if let Err(msg) = ensure_state_dirs(&repo, &merged.state_dirs) {
+            eprintln!("mysbx: {msg}");
+            return EXIT_INFRASTRUCTURE;
+        }
+        // The `ssh-keygen` of the run: the wrapper's pin
+        // (`MYSBX_SSH_KEYGEN`, this build's own closure) with the
+        // PATH fallback of the unwrapped crate — the same idiom as
+        // `MYSBX_BWRAP`. Refused, not ignored: a run whose keypair
+        // it cannot generate must not continue with an `~/.ssh`
+        // bind that does not exist.
+        let keygen = env_or("MYSBX_SSH_KEYGEN", "ssh-keygen");
+        if let Err(msg) = ensure_ssh_key(&repo, &repo.sidecar.join("state"), &keygen) {
+            eprintln!("mysbx: {msg}");
+            return EXIT_INFRASTRUCTURE;
+        }
     }
 
     // 4a. the session clone (workspace.md D2): the FIRST `--session`
@@ -2991,6 +3116,15 @@ fn sandbox_pipeline(
     }
 
     // 5. the argv — its single source is `bwrap::bwrap_argv` (mvp-4).
+    let dropped_env: Vec<String> = dropped_forward_env(&merged);
+    // The subset that got the D28 rule-6d placeholder (its name matched
+    // the credential shape) — the report names them differently from
+    // the bare drops.
+    let placeholder_env: Vec<String> = dropped_env
+        .iter()
+        .filter(|n| credential_shape(n))
+        .cloned()
+        .collect();
     let mut host_env = collect_host_env(&merged);
     // The console size marker (bd myconfig-a2uq, backends.md D9): the
     // qemu guest's serial console carries no winsize, so the caller's
@@ -3213,6 +3347,19 @@ fn sandbox_pipeline(
         None
     };
     let report_waypipe: Option<bwrap::Waypipe<'_>> = waypipe_params.clone();
+    // The `network = "proxy-only"` channel (docs/design/config.md D20,
+    // bd myconfig-mo3.2.6): the bubblewrap backend is the ONLY enforcing
+    // row (step 4b refuses the profile elsewhere). Step 4b already
+    // validated the pins, so the channel is built from those values — a
+    // `proxy-only` bubblewrap run always has them; the `map` keeps the
+    // conversion total without an `expect`.
+    let egress_params: Option<bwrap::EgressChannel<'_>> =
+        egress.as_ref().map(|pinned| bwrap::EgressChannel {
+            socket_dir: &pinned.socket_dir,
+            socket: &pinned.socket,
+            port: pinned.port,
+            relay_bin: &pinned.relay_bin,
+        });
     let (report_shell, report_tools_path, report_mux_entry) =
         if backends::find(backend).is_some_and(|row| row.podman()) {
             (
@@ -3252,6 +3399,9 @@ fn sandbox_pipeline(
         // a detached run's report is the outer's pre-flight one.
         detachable,
         inner: None,
+        // The egress channel the report's `network:` line describes;
+        // the bubblewrap arm below consumes the same value.
+        egress: egress_params.clone(),
     };
     // The backend dispatch produces the backend binary, the argv and
     // — for podman-gvisor — the container image. Every backend's
@@ -3275,6 +3425,7 @@ fn sandbox_pipeline(
                 workspace: workspace.clone(),
                 detachable,
                 inner: None,
+                egress: egress_params.clone(),
             };
             let argv = match bwrap::bwrap_argv(&merged, &repo, &payload, &host_env, &params) {
                 Ok(a) => a,
@@ -3606,7 +3757,7 @@ fn sandbox_pipeline(
 
             // Network spec: explicit "none" when network is denied, otherwise podman default (shared)
             let pasta_spec = env_opt("MYSBX_PODMAN_PASTA_SPEC");
-            let network_spec: Option<&str> = if !merged.network {
+            let network_spec: Option<&str> = if !merged.network.is_shared() {
                 Some("none")
             } else {
                 pasta_spec.as_deref()
@@ -4205,7 +4356,7 @@ fn sandbox_pipeline(
             // launcher's own netns away too — the TSI proxy would
             // otherwise still dial from a netns that has a route.
             // Both layers, defense in depth.
-            if !merged.network {
+            if !merged.network.is_shared() {
                 argv.push("--unshare-net".into());
             }
             // The staging trees (the slot budget's grouping, bd
@@ -4387,6 +4538,10 @@ fn sandbox_pipeline(
                     argv: &inner_argv,
                     env_bin: &env_bin,
                 }),
+                // The layered nono path is never reached with the
+                // profile (step 4b refuses proxy-only on nono), so it
+                // carries no channel.
+                egress: egress_params.clone(),
             };
             let argv = match bwrap::bwrap_argv(&merged, &repo, &payload, &host_env, &params) {
                 Ok(a) => a,
@@ -4421,6 +4576,8 @@ fn sandbox_pipeline(
             user_mount_count,
             cli_mount_count,
             host_env: &host_env,
+            dropped_env: &dropped_env,
+            placeholder_env: &placeholder_env,
             params: &report_params,
             bwrap_bin: &backend_bin,
             backend,
@@ -5412,6 +5569,446 @@ fn trusted_policy(path: &std::path::Path) -> bwrap::PolicyPath {
 /// unprotected.
 const SYMLINK_BUDGET: usize = 40;
 
+/// The crate's shared libc signal binding (`sigaction(2)`, `kill(2)`,
+/// `pthread_sigmask(3)`): the dependency-free
+/// approach the std library uses internally, so the crate keeps zero
+/// dependencies. Shared by `main.rs` (SIGPIPE back to its default) and
+/// `mysbx-egress-relay` (mask a window, forward termination signals to
+/// the payload).
+///
+/// The crate targets unix; the module compiles away elsewhere.
+#[cfg(unix)]
+pub mod sig {
+    #[allow(non_snake_case)]
+    extern "C" {
+        fn kill(pid: i32, sig: i32) -> i32;
+        fn pthread_sigmask(how: i32, set: *const SigSet, old: *mut SigSet) -> i32;
+        fn sigemptyset(set: *mut SigSet) -> i32;
+        fn sigaddset(set: *mut SigSet, signum: i32) -> i32;
+        fn sigaction(signum: i32, act: *const SigAction, old: *mut SigAction) -> i32;
+    }
+
+    /// The platform's `sigset_t`: a 128-byte block, which glibc and musl
+    /// both accept as an over-large (never under-large) buffer for the
+    /// mask they see. Only `sigemptyset`/`sigaddset`/`pthread_sigmask`
+    /// and `sigaction` (as `sa_mask`) touch it, always starting from
+    /// zeroed bytes.
+    #[repr(C, align(8))]
+    #[derive(Clone, Copy)]
+    pub struct SigSet([u8; 128]);
+
+    impl SigSet {
+        /// A zeroed set — the starting point for `sigemptyset`.
+        pub fn empty() -> Self {
+            SigSet([0u8; 128])
+        }
+    }
+
+    /// `SIG_BLOCK`.
+    pub const BLOCK: i32 = 0;
+    /// `SIG_UNBLOCK`.
+    pub const UNBLOCK: i32 = 1;
+
+    /// Build a set from `signals` via `sigemptyset` + `sigaddset`.
+    ///
+    /// # Safety
+    /// Pure libc calls on a local buffer; `signals` must be valid
+    /// signal numbers.
+    pub unsafe fn set_of(signals: &[i32]) -> SigSet {
+        let mut set = SigSet::empty();
+        unsafe {
+            sigemptyset(&mut set);
+            for &sig in signals {
+                sigaddset(&mut set, sig);
+            }
+        }
+        set
+    }
+
+    /// Block or unblock `set` on the calling thread, returning the
+    /// previous mask.
+    ///
+    /// # Safety
+    /// Like [`on_info`]: the caller owns this thread's signal policy.
+    pub unsafe fn mask(how: i32, set: &SigSet) -> SigSet {
+        let mut old = SigSet::empty();
+        unsafe {
+            pthread_sigmask(how, set, &mut old);
+        }
+        old
+    }
+
+    /// Restore a previously saved mask.
+    ///
+    /// # Safety
+    /// As [`mask`]; `old` must come from [`mask`].
+    pub unsafe fn restore_mask(old: &SigSet) {
+        unsafe {
+            pthread_sigmask(2, old, std::ptr::null_mut()); // SIG_SETMASK
+        }
+    }
+
+    /// The libc `struct sigaction` (glibc and musl, x86_64 and aarch64:
+    /// handler, 128-byte mask, `int` flags, restorer — 152 bytes).
+    #[repr(C)]
+    struct SigAction {
+        sa_sigaction: usize,
+        sa_mask: SigSet,
+        sa_flags: i32,
+        sa_restorer: usize,
+    }
+
+    /// `SA_SIGINFO`: the handler receives a `siginfo_t`.
+    const SA_SIGINFO: i32 = 0x4;
+    /// `SA_RESTART`: restart interrupted system calls, as `signal()` does.
+    const SA_RESTART: i32 = 0x1000_0000;
+
+    /// `SI_KERNEL`: the signal was raised by the kernel itself — for
+    /// `SIGINT`, the terminal driver's `^C` to the foreground process
+    /// group. A `kill(2)` from a process carries `SI_USER` instead.
+    pub const SI_KERNEL: i32 = 0x80;
+
+    /// An `SA_SIGINFO` handler: `(signum, siginfo_t *, ucontext *)`.
+    pub type InfoHandler = unsafe extern "C" fn(i32, *const u8, *mut u8);
+
+    /// The `si_code` of a `siginfo_t` (the third `int`: `si_signo`,
+    /// `si_errno`, `si_code` on Linux).
+    ///
+    /// # Safety
+    /// `info` must be the `siginfo_t` pointer an [`InfoHandler`] got.
+    pub unsafe fn si_code(info: *const u8) -> i32 {
+        unsafe { std::ptr::read_unaligned(info.add(8) as *const i32) }
+    }
+
+    /// `SIGHUP`.
+    pub const HUP: i32 = 1;
+    /// `SIGINT`.
+    pub const INT: i32 = 2;
+    /// `SIGPIPE`.
+    pub const PIPE: i32 = 13;
+    /// `SIGTERM`.
+    pub const TERM: i32 = 15;
+
+    /// Restore a signal to its default action (`SIG_DFL`). Uses
+    /// `sigaction`, which is async-signal-safe, so it may also run in a
+    /// child between `fork` and `exec`.
+    ///
+    /// # Safety
+    /// Signals are process-global: the caller must own the process'
+    /// handler policy for `signum` (the two binaries do, at startup).
+    pub unsafe fn to_default(signum: i32) {
+        let act = SigAction {
+            sa_sigaction: 0, // SIG_DFL
+            sa_mask: SigSet::empty(),
+            sa_flags: 0,
+            sa_restorer: 0,
+        };
+        unsafe { sigaction(signum, &act, std::ptr::null_mut()) };
+    }
+
+    /// `kill(pid, signum)`.
+    ///
+    /// # Safety
+    /// The caller is responsible for the target pid.
+    pub unsafe fn kill_pid(pid: i32, signum: i32) {
+        unsafe { kill(pid, signum) };
+    }
+
+    /// Install `handler` for `signum` with `SA_SIGINFO | SA_RESTART`, so
+    /// the handler can tell who raised the signal ([`si_code`]).
+    ///
+    /// # Safety
+    /// Process-global handler policy, as [`to_default`].
+    pub unsafe fn on_info(signum: i32, handler: InfoHandler) -> std::io::Result<()> {
+        let act = SigAction {
+            sa_sigaction: handler as *const () as usize,
+            sa_mask: unsafe { set_of(&[]) },
+            sa_flags: SA_SIGINFO | SA_RESTART,
+            sa_restorer: 0,
+        };
+        if unsafe { sigaction(signum, &act, std::ptr::null_mut()) } == 0 {
+            Ok(())
+        } else {
+            Err(std::io::Error::last_os_error())
+        }
+    }
+}
+
+/// Whether a `[env]` / forwarded name looks like a model credential
+/// (docs/design/config.md D28, bd myconfig-t24): split at `_`; a part
+/// equal to `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`,
+/// `CREDENTIAL`, `CREDENTIALS` or `AUTH`, or a name ending in `APIKEY`,
+/// matches. `GIT_AUTHOR_NAME` and `KEYMAP` pass — the split is on `_`
+/// parts and the `APIKEY` suffix, not substrings. A documented
+/// residual risk remains: a secret under an innocent name.
+pub fn credential_shape(name: &str) -> bool {
+    // Case-insensitive: `openai_api_key` is refused like
+    // `OPENAI_API_KEY`; the `APIKEY` suffix likewise.
+    let upper = name.to_ascii_uppercase();
+    if upper.ends_with("APIKEY") {
+        return true;
+    }
+    upper.split('_').any(|part| {
+        matches!(
+            part,
+            "KEY"
+                | "TOKEN"
+                | "SECRET"
+                | "PASSWORD"
+                | "PASSWD"
+                | "CREDENTIAL"
+                | "CREDENTIALS"
+                | "AUTH"
+        )
+    })
+}
+
+/// The fixed host directory a `proxy-only` forwarder socket must live
+/// in (docs/design/config.md D20, bd myconfig-mo3.2.6).
+///
+/// The sandbox binds this ONE directory read-only at [`bwrap::EGRESS_DIR`],
+/// so it must never be a shared directory: `/run` would expose
+/// `/run/user/<uid>` (D-Bus, Wayland, ssh-agent), `$HOME` the user's
+/// files. A fixed directory with a pinned shape is the only rule that
+/// cannot be bypassed by a `..` component, a symlink or an unusual home.
+pub const EGRESS_SOCKET_DIR: &str = "/run/mysbx-egress";
+
+/// Validate a `proxy-only` forwarder socket path before its directory is
+/// bound into the sandbox (docs/design/config.md D20, bd myconfig-mo3.2.6).
+///
+/// The path must be EXACTLY `{EGRESS_SOCKET_DIR}/<name>`, compared as a
+/// literal string (never normalised — `/run/x/../litellm.sock` must not
+/// pass), where `<name>` is one plain file-name component matching
+/// `[A-Za-z0-9._-]+` and neither `.` nor `..`.
+///
+/// Returns the file name on success, or a full operator-facing message
+/// naming the setting, the offending value and the expected form.
+pub fn validate_egress_socket(setting: &str, path: &str) -> Result<String, String> {
+    let prefix = format!("{EGRESS_SOCKET_DIR}/");
+    let complain = || {
+        format!(
+            "{setting} = `{path}` must be exactly `{EGRESS_SOCKET_DIR}/<name>` \
+             (e.g. `{EGRESS_SOCKET_DIR}/litellm.sock`): the sandbox binds that \
+             directory read-only, so the socket may not live in a shared \
+             directory, escape it with `..`, or sit in a subdirectory \
+             (docs/design/config.md D20)"
+        )
+    };
+    let name = match path.strip_prefix(&prefix) {
+        Some(name) => name,
+        None => return Err(complain()),
+    };
+    let plain = !name.is_empty()
+        && name != "."
+        && name != ".."
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'));
+    if !plain {
+        return Err(complain());
+    }
+    Ok(name.to_owned())
+}
+
+/// The metadata facts the `proxy-only` socket-directory check needs, as
+/// a pure predicate so the rules are testable without owning a
+/// root-owned directory (bd myconfig-mo3.2.6).
+///
+/// The directory must be a REAL directory (not a symlink), owned by
+/// root, and not writable by group or other — anything else means the
+/// sandbox's read-only bind would hand out (or could be redirected at)
+/// more than the forwarder's socket.
+fn egress_dir_metadata_ok(is_dir: bool, uid: u32, mode: u32) -> Result<(), &'static str> {
+    if !is_dir {
+        return Err("is not a real directory (a symlink or a plain file)");
+    }
+    if uid != 0 {
+        return Err("is not owned by root");
+    }
+    if mode & 0o022 != 0 {
+        return Err("is writable by group or other");
+    }
+    Ok(())
+}
+
+/// The on-disk state of the `proxy-only` SOCKET file itself
+/// (bd myconfig-mo3.2.6): it must exist and be a Unix socket. Split out
+/// from [`resolve_egress`] so the rule is testable with a temp path.
+pub fn check_egress_socket_file(path: &std::path::Path) -> Result<(), String> {
+    use std::os::unix::fs::FileTypeExt;
+    match std::fs::metadata(path) {
+        Ok(meta) if meta.file_type().is_socket() => Ok(()),
+        Ok(_) => Err(format!(
+            "MYSBX_EGRESS_SOCKET = `{p}` is not a Unix socket; the forwarder \
+             (agent-litellm-forward-unix.socket) must be running",
+            p = path.display()
+        )),
+        Err(e) => Err(format!(
+            "MYSBX_EGRESS_SOCKET = `{p}` does not exist ({e}); the forwarder \
+             (agent-litellm-forward-unix.socket) must be running for a \
+             network = \"proxy-only\" run",
+            p = path.display()
+        )),
+    }
+}
+
+/// Check the on-disk state of a `proxy-only` socket directory
+/// (bd myconfig-mo3.2.6): a real directory (`symlink_metadata`, so a
+/// symlink is refused), root-owned, not group- or world-writable. Called
+/// on a REAL run only; `--dry-run` skips it (nothing is created).
+pub fn check_egress_socket_dir(dir: &std::path::Path) -> Result<(), String> {
+    use std::os::unix::fs::MetadataExt;
+    let meta = std::fs::symlink_metadata(dir).map_err(|e| {
+        format!(
+            "{dir_display} does not exist ({e}); the forwarder \
+             (agent-litellm-forward-unix.socket) must be running",
+            dir_display = dir.display()
+        )
+    })?;
+    egress_dir_metadata_ok(meta.file_type().is_dir(), meta.uid(), meta.mode()).map_err(|why| {
+        format!(
+            "{dir_display} {why}; the sandbox binds it read-only, so it must be \
+             root-owned and not group- or world-writable",
+            dir_display = dir.display()
+        )
+    })
+}
+
+/// The `network = "proxy-only"` channel resolved from the wrapper's
+/// pins (bd myconfig-mo3.2.6), owned so it can be validated in step 4b
+/// (before the session clone) and used later to build the argv.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EgressPins {
+    /// The socket's parent directory (bound read-only at
+    /// [`bwrap::EGRESS_DIR`]).
+    pub socket_dir: String,
+    /// The socket file name inside it.
+    pub socket: String,
+    /// The LiteLLM port the relay listens on inside the sandbox.
+    pub port: u16,
+    /// The full host socket path, for the existence check.
+    pub path: String,
+    /// The relay binary.
+    pub relay_bin: String,
+}
+
+/// Resolve and validate the `proxy-only` egress channel from
+/// `MYSBX_EGRESS_SOCKET` / `MYSBX_EGRESS_PORT` / `MYSBX_EGRESS_RELAY`
+/// (docs/design/config.md D20, bd myconfig-mo3.2.6).
+///
+/// Runs in step 4b, BEFORE anything is created (`ensure_state_dirs`, the
+/// SSH key, the session clone) and before the `--dry-run` return.
+/// Refuses with a printed, operator-facing message:
+///
+/// - a missing setting (naming the option to enable),
+/// - a socket path that is not exactly [`EGRESS_SOCKET_DIR`]`/<name>`
+///   ([`validate_egress_socket`]),
+/// - a port that is not 1-65535 (a set value is invalid, not missing),
+/// - on a REAL run only, a socket directory that is not a real,
+///   root-owned, non-group/world-writable directory
+///   ([`check_egress_socket_dir`]), and a socket that does not exist or
+///   is not a Unix socket.
+///
+/// `Ok(None)` when the profile is not selected (or the backend is not
+/// bubblewrap).
+pub fn resolve_egress(
+    network: config::Network,
+    backend: &str,
+    dry_run: bool,
+) -> Result<Option<EgressPins>, ()> {
+    if network != config::Network::ProxyOnly || backend != "bubblewrap" {
+        return Ok(None);
+    }
+    let complain = |message: &str| {
+        eprintln!("mysbx: {message}");
+        eprintln!(
+            "  enable myconfig.ai.dev.litellm-forwarder.unixSocket.enable so the host \
+             runs the forwarder (agent-litellm-forward-unix.socket) and the wrapper pins \
+             its socket, or set network = \"shared\"/\"none\" (docs/design/config.md D20)"
+        );
+        Err(())
+    };
+    let socket_path = env_opt("MYSBX_EGRESS_SOCKET");
+    let port_raw = env_opt("MYSBX_EGRESS_PORT");
+    let relay = env_opt("MYSBX_EGRESS_RELAY");
+
+    let mut missing = Vec::new();
+    if socket_path.is_none() {
+        missing.push("MYSBX_EGRESS_SOCKET");
+    }
+    if port_raw.is_none() {
+        missing.push("MYSBX_EGRESS_PORT");
+    }
+    if relay.is_none() {
+        missing.push("MYSBX_EGRESS_RELAY");
+    }
+    if !missing.is_empty() {
+        return complain(&format!(
+            "network = \"proxy-only\" needs the LiteLLM forwarder's socket channel, \
+             but this host pinned no {}",
+            missing.join(", ")
+        ));
+    }
+    // Present, so the three are `Some`. Destructure without `unwrap`.
+    let (Some(path), Some(port_raw), Some(relay)) = (socket_path, port_raw, relay) else {
+        return complain("network = \"proxy-only\" is missing an egress pin");
+    };
+
+    let socket = match validate_egress_socket("MYSBX_EGRESS_SOCKET", &path) {
+        Ok(name) => name,
+        Err(message) => return complain(&message),
+    };
+
+    // A set-but-invalid port (non-numeric, 0 or out of range) is
+    // INVALID, not missing.
+    let port: u16 = match port_raw.parse::<u16>() {
+        Ok(0) | Err(_) => {
+            return complain(&format!(
+                "MYSBX_EGRESS_PORT = `{port_raw}` is not a valid port (expected 1-65535); \
+                 the wrapper pins the host LiteLLM port here (docs/design/config.md D20)"
+            ))
+        }
+        Ok(port) => port,
+    };
+
+    if !dry_run {
+        let dir = std::path::Path::new(EGRESS_SOCKET_DIR);
+        if let Err(message) = check_egress_socket_dir(dir) {
+            return complain(&format!("{message} (MYSBX_EGRESS_SOCKET = `{path}`)"));
+        }
+        if let Err(message) = check_egress_socket_file(std::path::Path::new(&path)) {
+            return complain(&message);
+        }
+    }
+
+    Ok(Some(EgressPins {
+        socket_dir: EGRESS_SOCKET_DIR.to_owned(),
+        socket,
+        port,
+        path,
+        relay_bin: relay,
+    }))
+}
+
+/// The first credential-shaped `[env]` name, if any (D28 rule 6b).
+fn credential_env_key(env: &std::collections::BTreeMap<String, String>) -> Option<&str> {
+    env.keys().map(String::as_str).find(|k| credential_shape(k))
+}
+
+/// The forwarded env names a `proxy-only` run DROPS (D28 rules 6a/6d):
+/// every name beyond [`FORWARDED_ENV_VARS`]. Returned so the report can
+/// list them and the placeholder can be set for the credential-shaped
+/// ones. Empty under every other network policy.
+fn dropped_forward_env(merged: &merge::Merged) -> Vec<String> {
+    if merged.network != config::Network::ProxyOnly {
+        return Vec::new();
+    }
+    forwarded_env_vars(merged)
+        .into_iter()
+        .filter(|n| !FORWARDED_ENV_VARS.contains(&n.as_str()))
+        .collect()
+}
+
 /// The effective forwarded list for one run, in precedence order:
 ///
 /// 1. the merged `forward-env` of the configuration layers
@@ -5454,6 +6051,15 @@ fn forwarded_env_vars(merged: &merge::Merged) -> Vec<String> {
 /// place that reads the real process environment; the argv builder stays
 /// pure and receives the values as a parameter.
 fn collect_host_env(merged: &merge::Merged) -> bwrap::HostEnv {
+    // Under `network = "proxy-only"` the forwarded environment is
+    // narrowed to [`FORWARDED_ENV_VARS`] (D28 rule 6a): every other
+    // forward-env name is DROPPED, whether a layer declared it or
+    // `MYSBX_FORWARD_ENV` did. A dropped name whose parts match the
+    // credential shape (rule 6d) gets the fixed placeholder
+    // [`PROXY_ONLY_PLACEHOLDER`]; a base-URL name is dropped bare (the
+    // agents keep their baked 127.0.0.1 URLs). The list of dropped
+    // names lives in the report.
+    let dropped: Vec<String> = dropped_forward_env(merged);
     let mut env = bwrap::HostEnv::new();
     for name in forwarded_env_vars(merged) {
         // The detached-run marker (docs/design/detach.md B8) is never
@@ -5465,12 +6071,26 @@ fn collect_host_env(merged: &merge::Merged) -> bwrap::HostEnv {
         if name == "MYSBX_DETACHED" {
             continue;
         }
+        if dropped.iter().any(|d| d == &name) {
+            // Rule 6d: the credential-shaped droppees get the fixed
+            // placeholder so an agent that insists on a key still runs
+            // (the local LiteLLM is keyless). Base-URL names stay out.
+            if credential_shape(&name) {
+                env.insert(name, PROXY_ONLY_PLACEHOLDER.to_owned());
+            }
+            continue;
+        }
         if let Ok(value) = std::env::var(&name) {
             env.insert(name, value);
         }
     }
     env
 }
+
+/// The fixed placeholder a `proxy-only` run sets for a dropped,
+/// credential-shaped forwarded name (docs/design/config.md D28 rule
+/// 6d). The local LiteLLM proxy is keyless, so the value is inert.
+pub const PROXY_ONLY_PLACEHOLDER: &str = "mysbx-proxy-only";
 
 /// `std::env::var` with the empty-means-unset rule, for pins that have
 /// no fallback at all: `MYSBX_NIX_CONF` unset means "bind no nix
@@ -6443,9 +7063,10 @@ const SIDECAR_TEMPLATE_ROOT: &str = r#"# mysbx sidecar config
 # /mysbx-home: HOME is /mysbx-home inside the sandbox, so a config
 # bound at its host path is invisible there (config.md D14).
 #
-# backend = "bubblewrap"         # bubblewrap | nono | podman-gvisor | podman-krun | krun | microvm-qemu
-# network = false                # the network is shared unless a layer denies
-#                                # it; a sidecar may deny, never re-enable (D7)
+# backend = "bubblewrap"         # bubblewrap | nono | podman-gvisor | podman-krun | krun | microvm-qemu | microvm-ch
+# network = "shared"             # none | proxy-only | shared (D20; the bool
+#                                # false/true stay aliases of none/shared); a
+#                                # sidecar may tighten, never widen
 # display = "off"                # off | waypipe, a Wayland channel (D18)
 #
 # Nested virtualization (D27): hand the guest hardware virtualization
@@ -6781,6 +7402,151 @@ pub(crate) fn write_atomically(path: &std::path::Path, contents: &str) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- the D28 credential-name rule (bd myconfig-t24) --------------
+
+    #[test]
+    fn credential_shape_matches_underscore_parts_and_the_apikey_suffix() {
+        // Every rule-6b word, as a whole `_` part or a bare name.
+        for name in [
+            "OPENAI_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "AWS_SECRET_ACCESS_KEY",
+            "DB_PASSWORD",
+            "DB_PASSWD",
+            "GITHUB_CREDENTIAL",
+            "GITHUB_CREDENTIALS",
+            "AUTH",
+            "TOKEN",
+            "APIKEY",
+            "MYAPIKEY",
+            // Lowercase spellings match too.
+            "openai_api_key",
+            "anthropic_auth_token",
+            "db_password",
+            "myapikey",
+        ] {
+            assert!(credential_shape(name), "{name} must be credential-shaped");
+        }
+        // The innocent names the bead calls out must PASS: the split is
+        // on `_` parts, not substrings.
+        for name in [
+            "GIT_AUTHOR_NAME",
+            "KEYMAP",
+            "MONKEY",
+            "KEYBOARD",
+            "TERM",
+            "OPENAI_BASE_URL",
+            "MY_KEYRING",
+        ] {
+            assert!(
+                !credential_shape(name),
+                "{name} must NOT be credential-shaped"
+            );
+        }
+    }
+
+    // ---- the D20 egress socket shape (bd myconfig-mo3.2.6) -----------
+
+    #[test]
+    fn egress_socket_must_be_exactly_the_pinned_directory() {
+        // The sandbox binds /run/mysbx-egress read-only, so the socket
+        // path is pinned to that directory plus one plain file name —
+        // compared literally, so a `..`, a subdirectory or a symlink
+        // spelling cannot escape it (docs/design/config.md D20).
+        assert_eq!(
+            validate_egress_socket("MYSBX_EGRESS_SOCKET", "/run/mysbx-egress/litellm.sock")
+                .expect("the canonical path must be accepted"),
+            "litellm.sock"
+        );
+        for bad in [
+            // Escape attempts the pinned-directory rule must refuse.
+            "/run/x/../litellm.sock",
+            "/run/mysbx-egress/../x.sock",
+            "/run/mysbx-egress/./x.sock",
+            "/run/mysbx-egress/a/b.sock",
+            "/run/mysbx-egress/",
+            "/run/mysbx-egress",
+            "/run/x.sock",
+            "/run/user/1000/x.sock",
+            "/tmp/litellm.sock",
+            "/var/lib/litellm.sock",
+            "/home/someone/.ssh/x.sock",
+            "litellm.sock",
+            "/run/mysbx-egress/.",
+            "/run/mysbx-egress/..",
+            "/run/mysbx-egress/",
+            "/run/mysbx-egress/bad name.sock",
+            "",
+        ] {
+            let e = validate_egress_socket("MYSBX_EGRESS_SOCKET", bad)
+                .expect_err(&format!("{bad} must be refused"));
+            assert!(e.contains("MYSBX_EGRESS_SOCKET"), "{bad}: {e}");
+            assert!(e.contains("/run/mysbx-egress/<name>"), "{bad}: {e}");
+        }
+    }
+
+    #[test]
+    fn egress_dir_must_be_a_real_root_owned_non_writable_directory() {
+        // The metadata rules as a pure predicate (the real check reads
+        // `symlink_metadata`; a symlink reports `is_dir() == false`).
+        assert!(egress_dir_metadata_ok(true, 0, 0o755).is_ok());
+        assert!(egress_dir_metadata_ok(true, 0, 0o700).is_ok());
+        // A symlink (is_dir false) is refused.
+        assert!(egress_dir_metadata_ok(false, 0, 0o755).is_err());
+        // Not root-owned.
+        assert!(egress_dir_metadata_ok(true, 1000, 0o755).is_err());
+        // Group- or world-writable.
+        assert!(egress_dir_metadata_ok(true, 0, 0o775).is_err());
+        assert!(egress_dir_metadata_ok(true, 0, 0o757).is_err());
+        assert!(egress_dir_metadata_ok(true, 0, 0o777).is_err());
+    }
+
+    #[test]
+    fn the_egress_dir_check_refuses_a_symlink_and_names_a_missing_dir() {
+        // `check_egress_socket_dir` reads `symlink_metadata`, so a
+        // symlink is refused as "not a real directory" regardless of the
+        // build user (its uid differs between a dev shell and a nix
+        // build, so the ownership rule itself is covered by the pure
+        // predicate above).
+        let base = std::env::temp_dir().join(format!("mysbx-egress-dir-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("temp dir");
+        let link = base.join("link");
+        std::os::unix::fs::symlink(&base, &link).expect("symlink");
+        let e = check_egress_socket_dir(&link).expect_err("a symlink must be refused");
+        assert!(e.contains("not a real directory"), "{e}");
+        let missing = base.join("nope");
+        let e = check_egress_socket_dir(&missing).expect_err("a missing dir must be refused");
+        assert!(e.contains("agent-litellm-forward-unix.socket"), "{e}");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn the_egress_socket_file_must_be_a_socket() {
+        let base = std::env::temp_dir().join(format!("mysbx-sockfile-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("temp dir");
+
+        // Missing.
+        let e = check_egress_socket_file(&base.join("nope.sock"))
+            .expect_err("a missing socket must be refused");
+        assert!(e.contains("does not exist"), "{e}");
+        assert!(e.contains("agent-litellm-forward-unix.socket"), "{e}");
+
+        // Present but a REGULAR FILE.
+        let file = base.join("plain.sock");
+        std::fs::write(&file, b"x").expect("write");
+        let e = check_egress_socket_file(&file).expect_err("a plain file must be refused");
+        assert!(e.contains("is not a Unix socket"), "{e}");
+
+        // A real Unix socket passes.
+        let sock = base.join("real.sock");
+        let _listener = std::os::unix::net::UnixListener::bind(&sock).expect("bind a unix socket");
+        assert!(check_egress_socket_file(&sock).is_ok());
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
 
     // ---- the krun git trust file (bd myconfig-zj2) -------------------
 

@@ -139,6 +139,12 @@ fn spawn_with_args<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> C
         // foreground runs.
         .env_remove("MYSBX_DTACH")
         .env_remove("MYSBX_DETACHED")
+        // The `network = "proxy-only"` channel pins (D20, bd
+        // myconfig-mo3.2.6): wrapper-provided, so an unwrapped test run
+        // sees none unless it pins them itself.
+        .env_remove("MYSBX_EGRESS_SOCKET")
+        .env_remove("MYSBX_EGRESS_PORT")
+        .env_remove("MYSBX_EGRESS_RELAY")
         // The detached-run registry root is not a fixture input: a
         // host-set value would make runs of this very sandbox depend
         // on the machine's runtime dir. Tests that exercise the
@@ -170,6 +176,38 @@ fn run_binary_with(inv: &Invocation, args: &[&str]) -> (i32, String, String) {
     let out = spawn_with_args(inv, args)
         .output()
         .expect("failed to spawn the mysbx binary");
+    (
+        out.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+/// A `spawn_with_args` command carrying the `network = "proxy-only"`
+/// channel pins (docs/design/config.md D20, bd myconfig-mo3.2.6), so a
+/// run reaches the argv/report stages instead of the missing-pin
+/// refusal.
+fn spawn_proxy_only<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> Command {
+    // The socket path is pinned to /run/mysbx-egress/<name>
+    // (docs/design/config.md D20); a `--dry-run` never touches it, so
+    // the directory need not exist.
+    let mut cmd = spawn_with_args(inv, args);
+    cmd.env(
+        "MYSBX_EGRESS_SOCKET",
+        format!("{}/litellm.sock", mysbx::EGRESS_SOCKET_DIR),
+    )
+    .env("MYSBX_EGRESS_PORT", "4000")
+    .env(
+        "MYSBX_EGRESS_RELAY",
+        "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
+    );
+    cmd
+}
+
+/// Like [`run_binary_with`], but on a caller-built [`Command`] (the
+/// proxy-only tests need the egress pins, which `spawn` does not set).
+fn run_command(mut cmd: Command) -> (i32, String, String) {
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
     (
         out.status.code().unwrap_or(-1),
         String::from_utf8_lossy(&out.stdout).into_owned(),
@@ -942,9 +980,10 @@ fn user_network_deny_survives_a_fresh_sidecar() {
 
 #[test]
 fn sidecar_network_true_still_cannot_reenable() {
-    // The guard itself is unchanged: an EXPLICIT sidecar `network = true`
-    // against a user deny stays the hard error of docs/design/config.md
-    // D7 — the tri-state only stops ABSENT values from counting as true.
+    // The guard, generalised by D20: an EXPLICIT sidecar value WIDER
+    // than the user layer's (here `shared` against a `none` deny, the
+    // old `true`-over-`false` case) is the NetworkUpgrade hard error —
+    // the tri-state only stops ABSENT values from counting as shared.
     let (inv, _, sidecar) = fixture("explicit-reenable", &["--dry-run"]);
     std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
     std::fs::write(
@@ -955,7 +994,30 @@ fn sidecar_network_true_still_cannot_reenable() {
     std::fs::write(sidecar.join("config.toml"), "network = true\n").unwrap();
     let (code, stdout, stderr) = run_binary(&inv);
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stdout: {stdout}");
-    assert!(stderr.contains("never re-enable it"), "stderr: {stderr}");
+    // The full message: both values and both files.
+    let msg = stderr.trim();
+    assert!(
+        msg.contains("network = \"shared\" widens the network the user config"),
+        "{msg}"
+    );
+    assert!(msg.contains("set to \"none\""), "{msg}");
+    assert!(msg.contains("never widen it"), "{msg}");
+    // Both full file paths, not just the file name.
+    assert!(
+        msg.contains(&sidecar.join("config.toml").display().to_string()),
+        "the sidecar path is named: {msg}"
+    );
+    assert!(
+        msg.contains(
+            &inv.xdg
+                .join("mysbx")
+                .join("config.toml")
+                .display()
+                .to_string()
+        ),
+        "the user config path is named: {msg}"
+    );
+    assert!(msg.contains("docs/design/config.md D20"), "{msg}");
 }
 
 #[test]
@@ -8497,8 +8559,12 @@ fn doctor_passes_on_a_healthy_bubblewrap_host() {
         &[("MYSBX_BWRAP", bwrap.as_str()), ("MYSBX_SHELL", "/bin/sh")],
     );
     assert_eq!(code, 0, "stdout: {stdout}\nstderr: {stderr}");
+    // The full line, and the bool rendering `false` (not `none`) for a
+    // config that spelled `network = false`.
     assert!(
-        stdout.contains("OK   model endpoint: not applicable: the network is denied"),
+        stdout.contains(
+            "OK   model endpoint: not applicable: the network is denied (network = false)"
+        ),
         "{stdout}"
     );
     let recorded = std::fs::read_to_string(&record).unwrap();
@@ -8508,6 +8574,21 @@ fn doctor_passes_on_a_healthy_bubblewrap_host() {
     );
     assert_eq!(recorded, want);
     assert!(!recorded.contains("--share-net"), "{recorded}");
+
+    // network = "proxy-only": the line quotes the string form.
+    std::fs::write(sidecar.join("config.toml"), "network = \"proxy-only\"\n").unwrap();
+    let (_code, stdout, _stderr) = run_doctor(
+        &inv,
+        &["doctor"],
+        &[("MYSBX_BWRAP", bwrap.as_str()), ("MYSBX_SHELL", "/bin/sh")],
+    );
+    assert!(
+        stdout.contains(
+            "OK   model endpoint: not applicable: the network is proxy-only \
+             (network = \"proxy-only\")"
+        ),
+        "{stdout}"
+    );
 }
 
 #[test]
@@ -9771,8 +9852,9 @@ fn nono_report_labels_the_backend() {
     // the executed binary `nono:` — the layered run's argv[0] IS
     // bwrap (backends.md D1), and the label says so: a nono run
     // execs bwrap, and the argv it describes wraps `nono run` inside.
-    // `network = false` keeps the run accepted (the shared-network
-    // default would be refused — nono mediates per connection).
+    // `network = false` keeps the run accepted (the run needs no
+    // network stance: nono runs in every network mode, backends.md
+    // D1's table — the dry run just labels the backend).
     let (inv, _, _) = fixture_nono_config(
         "nono-report",
         &["--backend", "nono", "--verbose", "--dry-run"],
@@ -9869,6 +9951,513 @@ fn allowlist_on_podman_krun_is_refused() {
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
     assert!(stderr.contains("podman-krun"), "{stderr}");
     assert!(stderr.contains("listen-ports"), "{stderr}");
+}
+
+#[test]
+fn allowlist_on_krun_is_refused() {
+    // Direct libkrun's TSI has no allowlist hook (config.md D21's
+    // table): an allowlist is refused on the direct `krun` backend
+    // too — the registry predicate (bd myconfig-mo3.2.1), never a
+    // name match. The refusal sits before the --dry-run return, so
+    // no launcher pins are needed.
+    let Some((inv, _, sidecar)) = krun_fixture("nono-allowlist-krun", &[]) else {
+        return; // no placeable krun fixture root here
+    };
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"krun\"\nconnect-ports = [443]\n",
+    )
+    .unwrap();
+    let (code, _, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(stderr.contains("krun"), "{stderr}");
+    assert!(stderr.contains("connect-ports"), "{stderr}");
+    assert!(
+        stderr.contains("only the `nono` backend enforces them"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn allowlist_on_microvm_qemu_is_refused() {
+    // The SLiRP net device has no per-domain/per-port hook either
+    // (config.md D21's table): an allowlist is refused on
+    // `microvm-qemu` exactly like on the other non-nono backends.
+    let Some((inv, _, sidecar)) = krun_fixture("nono-allowlist-microvm-qemu", &[]) else {
+        return; // no placeable fixture root here
+    };
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"microvm-qemu\"\nallow-domains = [\"api.openai.com\"]\n",
+    )
+    .unwrap();
+    let (code, _, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(stderr.contains("microvm-qemu"), "{stderr}");
+    assert!(stderr.contains("allow-domains"), "{stderr}");
+}
+
+#[test]
+fn allowlist_on_microvm_ch_is_refused() {
+    // The passt child of the SLiRP-compatible address plan (backends.md
+    // D11) has no allowlist hook either: an allowlist is refused on
+    // `microvm-ch`, closing the D21 test gap (bd myconfig-mo3.2.1).
+    let Some((inv, _, sidecar)) = krun_fixture("nono-allowlist-microvm-ch", &[]) else {
+        return; // no placeable fixture root here
+    };
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"microvm-ch\"\nlisten-ports = [8080]\n",
+    )
+    .unwrap();
+    let (code, _, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(stderr.contains("microvm-ch"), "{stderr}");
+    assert!(stderr.contains("listen-ports"), "{stderr}");
+}
+
+#[test]
+fn proxy_only_is_refused_on_every_backend_but_bubblewrap() {
+    // D20 (bd myconfig-mo3.2.3, mo3.2.6): `network = "proxy-only"` is
+    // enforced by bubblewrap ALONE; every other backend refuses it
+    // (exit 70) with a backend-specific reason, before the session
+    // clone and before the --dry-run return, so a dry run audits it.
+    // (Bubblewrap's own refusal — the missing-pins fail-closed — is
+    // `proxy_only_on_bubblewrap_without_pins_is_refused`.)
+    for backend in [
+        "nono",
+        "podman-gvisor",
+        "podman-krun",
+        "krun",
+        "microvm-qemu",
+        "microvm-ch",
+    ] {
+        let base = match backend {
+            // The VM backends need a fixture root the guest can place a
+            // share under; the refusal fires before any share is made,
+            // but the fixture shape is shared with their other tests.
+            "krun" | "microvm-qemu" | "microvm-ch" | "podman-krun" => {
+                match krun_fixture(&format!("proxy-only-refused-{backend}"), &[]) {
+                    Some(t) => t,
+                    None => continue, // no placeable fixture root here
+                }
+            }
+            _ => fixture(&format!("proxy-only-refused-{backend}"), &[]),
+        };
+        let (inv, _, sidecar) = base;
+        std::fs::write(
+            sidecar.join("config.toml"),
+            format!("backend = \"{backend}\"\nnetwork = \"proxy-only\"\n"),
+        )
+        .unwrap();
+        let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+        assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "{backend}: {stderr}");
+        assert!(
+            stderr.contains(&format!(
+                "network = \"proxy-only\" is not enforced on the `{backend}` backend"
+            )),
+            "{backend}: the refusal names the backend and the profile: {stderr}"
+        );
+        assert!(
+            stderr.contains("never weakened to a shared network"),
+            "{backend}: the refused-not-weakened rule is stated: {stderr}"
+        );
+        assert!(
+            !stdout.contains("--clearenv"),
+            "{backend}: no argv on refusal: {stdout}"
+        );
+    }
+}
+
+#[test]
+fn proxy_only_with_an_allowlist_is_refused_cross_layer() {
+    // D20/D21: the SAME-file form is a schema error (config.rs); a
+    // user-layer profile with a sidecar allowlist is refused at run
+    // time, exit 70, naming both keys.
+    let (inv, _, sidecar) = fixture("proxy-only-cross-layer-allowlist", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "allow-domains = [\"api.openai.com\"]\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("network = \"proxy-only\" grants only the host model endpoint"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("allow-domains"), "{stderr}");
+    assert!(
+        !stdout.contains("--clearenv"),
+        "no argv on refusal: {stdout}"
+    );
+}
+
+#[test]
+fn proxy_only_on_bubblewrap_without_pins_is_refused() {
+    // D20 enforced by bubblewrap (bd myconfig-mo3.2.6), but the
+    // channel needs the wrapper's MYSBX_EGRESS_SOCKET/PORT/RELAY pins.
+    // A run without them FAILS CLOSED: exit 70 naming the option to
+    // enable, never a silent fallback to a shared network. This test
+    // runs an UNWRAPPED fixture (no pins), the shape an unwrapped
+    // build has.
+    let (inv, _, sidecar) = fixture("proxy-only-bwrap-no-pins", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("network = \"proxy-only\" needs the LiteLLM forwarder")
+            && stderr.contains("MYSBX_EGRESS_SOCKET"),
+        "the refusal names the harness and the pins: {stderr}"
+    );
+    assert!(
+        stderr.contains("unixSocket.enable"),
+        "the refusal names the option to enable: {stderr}"
+    );
+    assert!(
+        !stdout.contains("--clearenv"),
+        "no argv on refusal: {stdout}"
+    );
+}
+
+#[test]
+fn proxy_only_drops_forward_env_beyond_the_base_and_reports_it() {
+    // D28 rule 6a/6d: under `network = "proxy-only"` the forwarded
+    // environment narrows to FORWARDED_ENV_VARS; every other name is
+    // dropped and listed in the report. A credential-shaped droppee
+    // gets the fixed placeholder (the keyless local LiteLLM ignores
+    // it); a base-URL name is dropped bare.
+    let (inv, repo, sidecar) = fixture("proxy-only-drop-env", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n         forward-env = [\"OPENAI_API_KEY\", \"OPENAI_BASE_URL\"]\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["--verbose", "--dry-run"]);
+    cmd.env("OPENAI_API_KEY", "sk-real-secret")
+        .env("TERM", "xterm");
+    let out = cmd.output().expect("failed to spawn mysbx");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let report = report_lines(&stdout).join("\n");
+    // Both names are announced as dropped. The credential-shaped one
+    // says it got the placeholder; the base-URL one is a bare drop.
+    assert!(
+        report.contains("OPENAI_API_KEY [dropped — set to placeholder \"mysbx-proxy-only\", D28]"),
+        "{report}"
+    );
+    assert!(
+        report.contains("OPENAI_BASE_URL [dropped — network = \"proxy-only\", D28]"),
+        "{report}"
+    );
+    assert!(report.contains("OPENAI_API_KEY"), "{report}");
+    assert!(report.contains("OPENAI_BASE_URL"), "{report}");
+    // The real secret never reaches the argv...
+    assert!(
+        !stdout.contains("sk-real-secret"),
+        "the real key must not be forwarded: {stdout}"
+    );
+    // ...the credential-shaped name gets the fixed placeholder...
+    assert!(
+        stdout.contains("OPENAI_API_KEY=mysbx-proxy-only"),
+        "the placeholder is set: {stdout}"
+    );
+    // ...and the base-URL name is dropped bare (not even set).
+    assert!(
+        !stdout.contains("OPENAI_BASE_URL="),
+        "a dropped base-URL name is not set: {stdout}"
+    );
+    // TERM is in the base set: still forwarded.
+    assert!(stdout.contains("TERM=xterm"), "{stdout}");
+}
+
+#[test]
+fn proxy_only_refuses_a_non_numeric_egress_port() {
+    // bd myconfig-mo3.2.6: a set-but-invalid port (non-numeric or 0) is
+    // INVALID, not missing.
+    for bad in ["not-a-port", "0", "70000"] {
+        let (inv, _, sidecar) = fixture("proxy-only-bad-port", &[]);
+        std::fs::write(
+            sidecar.join("config.toml"),
+            "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+        )
+        .unwrap();
+        let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+        cmd.env(
+            "MYSBX_EGRESS_SOCKET",
+            format!("{}/litellm.sock", mysbx::EGRESS_SOCKET_DIR),
+        )
+        .env("MYSBX_EGRESS_PORT", bad)
+        .env(
+            "MYSBX_EGRESS_RELAY",
+            "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
+        );
+        let (code, _stdout, stderr) = run_command(cmd);
+        assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "{bad}: {stderr}");
+        assert!(
+            stderr.contains("is not a valid port"),
+            "{bad}: the invalid value is named as invalid, not missing: {stderr}"
+        );
+    }
+}
+
+#[test]
+fn proxy_only_real_run_needs_a_real_socket_at_the_pinned_path() {
+    // bd myconfig-mo3.2.6: a REAL run requires /run/mysbx-egress to be
+    // a real root-owned directory and the socket file to exist and be a
+    // Unix socket. --dry-run skips the filesystem checks (it creates
+    // nothing) but still enforces the path shape.
+    let (inv, _, sidecar) = fixture("proxy-only-real-socket", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+
+    // --dry-run always succeeds and shows the channel.
+    let (code, stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("mysbx-egress-relay"), "{stdout}");
+
+    // A real run against the real host directory, with a socket name no
+    // forwarder uses: the run refuses whether /run/mysbx-egress is
+    // missing or user-owned (a build sandbox) or a valid forwarder
+    // directory (a host running agent-litellm-forward-unix.socket),
+    // so it never goes on to start a sandbox. Both refusals name the
+    // unit.
+    let absent = format!(
+        "{}/mysbx-test-absent-{}.sock",
+        mysbx::EGRESS_SOCKET_DIR,
+        std::process::id()
+    );
+    let mut cmd = spawn_proxy_only(&inv, &["run", "--", "/bin/true"]);
+    cmd.env("MYSBX_EGRESS_SOCKET", &absent);
+    let (code, _stdout, stderr) = run_command(cmd);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("MYSBX_EGRESS_SOCKET")
+            && stderr.contains("agent-litellm-forward-unix.socket"),
+        "the refusal names the setting and the unit: {stderr}"
+    );
+}
+
+#[test]
+fn proxy_only_refuses_a_socket_outside_the_pinned_directory() {
+    // bd myconfig-mo3.2.6: the socket path is exactly
+    // /run/mysbx-egress/<plain-name>. A `..`, a subdirectory, a shared
+    // directory or a relative path is refused with exit 70, naming the
+    // setting, the value and the expected form — even under --dry-run.
+    for socket in [
+        "/run/x/../litellm.sock",
+        "/run/mysbx-egress/../x.sock",
+        "/run/mysbx-egress/./x.sock",
+        "/run/mysbx-egress/a/b.sock",
+        "/run/mysbx-egress/",
+        "/run/x.sock",
+        "litellm.sock",
+    ] {
+        let (inv, _, sidecar) = fixture("proxy-only-bad-socket", &[]);
+        std::fs::write(
+            sidecar.join("config.toml"),
+            "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+        )
+        .unwrap();
+        let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+        cmd.env("MYSBX_EGRESS_SOCKET", socket)
+            .env("MYSBX_EGRESS_PORT", "4000")
+            .env(
+                "MYSBX_EGRESS_RELAY",
+                "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
+            );
+        let (code, stdout, stderr) = run_command(cmd);
+        assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "{socket}: {stderr}");
+        assert!(
+            stderr.contains("MYSBX_EGRESS_SOCKET") && stderr.contains(socket),
+            "{socket}: the refusal names the setting and the value: {stderr}"
+        );
+        assert!(
+            stderr.contains("/run/mysbx-egress/<name>"),
+            "{socket}: the expected form is stated: {stderr}"
+        );
+        assert!(
+            !stdout.contains("--clearenv"),
+            "{socket}: no argv: {stdout}"
+        );
+    }
+}
+
+#[test]
+fn proxy_only_refusal_creates_no_state_dir_or_key() {
+    // bd myconfig-mo3.2.6: the egress refusal runs before anything is
+    // created. A REAL run (not --dry-run, not --session: only a live run
+    // creates state directories and the SSH key) with no
+    // MYSBX_EGRESS_SOCKET exits 70 and leaves the sidecar's state tree
+    // empty.
+    let (inv, _repo, sidecar) = fixture("proxy-only-no-state", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n\
+         state-dirs = [\"cache\"]\n",
+    )
+    .unwrap();
+    let (code, _stdout, stderr) = run_binary_with(&inv, &[] as &[&str]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("MYSBX_EGRESS_SOCKET"),
+        "the refusal names the missing pin: {stderr}"
+    );
+    // No state directory (the `cache` entry would back one).
+    let cache = sidecar.join("state").join("cache");
+    assert!(
+        !cache.exists(),
+        "a refused run must create no state dir, found {}",
+        cache.display()
+    );
+    // No SSH key.
+    let key = sidecar.join("state").join(".ssh").join("id_ed25519");
+    assert!(
+        !key.exists(),
+        "a refused run must create no SSH key, found {}",
+        key.display()
+    );
+}
+
+#[test]
+fn proxy_only_refuses_a_mount_over_the_egress_directory() {
+    // bd myconfig-mo3.2.6: a mount whose destination covers
+    // /run/mysbx-egress would shadow the channel; step 4b refuses it
+    // (exit 70) before anything is created, and a dry run audits it.
+    let (inv, repo, sidecar) = fixture("proxy-only-egress-mount", &[]);
+    let granted = repo.parent().unwrap().join("granted");
+    std::fs::create_dir_all(&granted).unwrap();
+    std::fs::write(
+        sidecar.join("config.toml"),
+        format!(
+            "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n\
+             [[mounts]]\npath = \"{}\"\ndest = \"/run/mysbx-egress\"\nmode = \"ro\"\n\
+             [env]\nOPENAI_API_KEY = \"x\"\n",
+            granted.display()
+        ),
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"]));
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    // The credential-shaped [env] key would be refused later in step 4b
+    // (D28); the egress-directory refusal must come first, which shows it
+    // runs in step 4b and not only in the argv builder.
+    assert!(
+        !stderr.contains("looks like a model credential"),
+        "the egress-directory refusal must fire before the credential rule: {stderr}"
+    );
+    assert!(
+        stderr.contains("/run/mysbx-egress is related to /run/mysbx-egress"),
+        "the refusal names the covering destination: {stderr}"
+    );
+    assert!(stdout.is_empty(), "no argv or report: {stdout}");
+}
+
+#[test]
+fn proxy_only_refusal_creates_no_session_clone() {
+    // bd myconfig-mo3.2.6: a real `--session` run with no
+    // MYSBX_EGRESS_SOCKET is refused (exit 70) before the clone exists.
+    let (inv, repo, sidecar) = fixture("proxy-only-no-clone", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    let (code, _stdout, stderr) = run_binary_with(&inv, &["--session", "s1"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("MYSBX_EGRESS_SOCKET"),
+        "the refusal names the missing pin: {stderr}"
+    );
+    let worktrees = repo.parent().unwrap().join(format!(
+        "{}__worktrees",
+        repo.file_name().unwrap().to_string_lossy()
+    ));
+    let cloned = worktrees.join("s1");
+    assert!(
+        !cloned.exists(),
+        "a refused run must create no clone, found {}",
+        cloned.display()
+    );
+}
+
+#[test]
+fn proxy_only_refuses_a_credential_shaped_env_key() {
+    // D28 rule 6b: a `[env]` name whose `_` parts include a credential
+    // word is refused (exit 70), naming the file and the key.
+    let (inv, repo, sidecar) = fixture("proxy-only-env-key", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n\
+         [env]\nANTHROPIC_AUTH_TOKEN = \"secret\"\n",
+    )
+    .unwrap();
+    let (code, _stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"]));
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(stderr.contains("ANTHROPIC_AUTH_TOKEN"), "{stderr}");
+    assert!(stderr.contains("D28"), "{stderr}");
+    // The refusal names the FILE: the sidecar config path.
+    assert!(
+        stderr.contains(&sidecar.join("config.toml").display().to_string()),
+        "the refusal names the file: {stderr}"
+    );
+
+    // The match is case-insensitive: a lowercase `openai_api_key` is
+    // refused too.
+    let (inv, repo, sidecar) = fixture("proxy-only-env-key-lower", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n\
+         [env]\nopenai_api_key = \"secret\"\n",
+    )
+    .unwrap();
+    let (code, _stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"]));
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(stderr.contains("openai_api_key"), "{stderr}");
+}
+
+#[test]
+fn proxy_only_refuses_nix_access_tokens_and_netrc() {
+    // D28 rule 3: `[nix]` access-tokens and netrc-file carry
+    // credentials and are refused under the profile.
+    for key in ["access-tokens", "netrc-file"] {
+        let (inv, _, sidecar) = fixture(&format!("proxy-only-nix-{key}"), &[]);
+        std::fs::write(
+            sidecar.join("config.toml"),
+            format!(
+                "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n\
+                 [nix]\n{key} = \"/some/secret\"\n"
+            ),
+        )
+        .unwrap();
+        let (code, _stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"]));
+        assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "{key}: {stderr}");
+        assert!(stderr.contains(key), "{key}: {stderr}");
+        assert!(stderr.contains("D28"), "{key}: {stderr}");
+        // The refusal names the FILE it came from.
+        assert!(
+            stderr.contains(&sidecar.join("config.toml").display().to_string()),
+            "{key}: the refusal names the file: {stderr}"
+        );
+    }
 }
 
 #[test]

@@ -342,6 +342,12 @@ pub enum Error {
     /// infrastructure is a loud failure, never a plain-shell
     /// fallback).
     MultiplexerUnavailable { multiplexer: Multiplexer },
+    /// `network = "proxy-only"` (docs/design/config.md D20) is refused
+    /// on the VM backends: their net device (libkrun TSI, SLiRP,
+    /// passt's vhost-user) always has a gateway route, so the profile
+    /// is not enforceable here (bd myconfig-6di.3, mo3.2.6); the run is
+    /// refused, never weakened to a shared network.
+    ProxyOnlyRefused,
     /// A `pids-limit` a whole-VM run cannot express: the VM is the
     /// boundary, no pids controller is wired for it — the same
     /// refusal as the podman-krun variant (backends.md D2).
@@ -413,6 +419,13 @@ impl std::fmt::Display for Error {
             Error::MultiplexerUnavailable { multiplexer } => write!(
                 f,
                 "the configuration selects multiplexer `{multiplexer}` but no entry is baked for the krun guest (MYSBX_MUX_ENTRY_{multiplexer:?} unset)"
+            ),
+            Error::ProxyOnlyRefused => write!(
+                f,
+                "network = \"proxy-only\" is not enforceable on a VM backend: its net device \
+                 (libkrun TSI, SLiRP, passt's vhost-user) always has a gateway route \
+                 (docs/design/config.md D20, bd myconfig-6di.3); the run is refused, \
+                 never weakened to a shared network"
             ),
             Error::PidsLimit { pids } => write!(
                 f,
@@ -746,7 +759,7 @@ pub fn stage_binds(
     // needs no host db either: the image carries its own REGISTERED
     // db (the includeNixDB recipe), one that cannot diverge from
     // its store — the mxu reconcile never runs there.
-    if cfg.network && params.scratch.is_some() && !params.baked() {
+    if cfg.network.is_shared() && params.scratch.is_some() && !params.baked() {
         binds.push(("/nix/var/nix".to_owned(), true, "nix-var".to_owned()));
     }
     Ok(binds)
@@ -869,7 +882,7 @@ fn krun_shares(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Result<Vec<Sha
     // of the stage_binds entry, same gate, LINKLESS (NOLINK_DEST).
     // The baked-store run skips it with the same extra gate: its db
     // rides inside the image, registered against its own store.
-    if cfg.network && params.scratch.is_some() && !params.baked() {
+    if cfg.network.is_shared() && params.scratch.is_some() && !params.baked() {
         shares.push(Share {
             slot: "nix-var".to_owned(),
             sandbox_path: NOLINK_DEST.to_owned(),
@@ -970,6 +983,14 @@ pub(crate) fn spec_of(
     host_env: &HostEnv,
     params: &Params<'_>,
 ) -> Result<Spec, Error> {
+    // `network = "proxy-only"` (docs/design/config.md D20, bd
+    // myconfig-6di.3): refused on every VM backend — the net device
+    // always has a gateway route (libkrun TSI, SLiRP, passt), so the
+    // profile is not enforceable. Defense in depth next to the
+    // pipeline's step-4b refusal.
+    if cfg.network == crate::config::Network::ProxyOnly {
+        return Err(Error::ProxyOnlyRefused);
+    }
     // The multiplexer applies to the INTERACTIVE payload only (cli.md
     // D11), like on every backend: a one-shot `run -- CMD` is never
     // wrapped. A session multiplexer without a pinned entry is
@@ -1075,7 +1096,11 @@ pub(crate) fn spec_of(
         // way.
         workdir: repo.root.to_string_lossy().into_owned(),
         payload: payload_argv,
-        network: cfg.network,
+        // The launcher protocol keeps its bool: a proxy-only run has
+        // no route either, so `--network none` is the fence it needs
+        // until the krun transport lands (refused at pipeline step 4b
+        // anyway).
+        network: cfg.network.is_shared(),
         scratch: params.scratch.map(str::to_owned),
         // The store disk rides the same route as the scratch: the
         // flag names the image, the env announces it, the init mounts
@@ -1249,7 +1274,7 @@ fn sandbox_env(
     // are tab-separated). Set ONLY when the network is shared —
     // network = false has no resolver to reach and the entry would
     // advertise one.
-    if cfg.network {
+    if cfg.network.is_shared() {
         // The tests pin the resolver source to a fixture — the host
         // file itself differs per machine (bd myconfig-dak.6).
         let source =

@@ -71,6 +71,14 @@ pub struct Report<'a> {
     /// The forwarded host variables (already filtered to the ones that
     /// were actually set).
     pub host_env: &'a HostEnv,
+    /// The forward-env names a `proxy-only` run DROPPED (docs/design/
+    /// config.md D28 rule 6a). Empty under every other network policy.
+    pub dropped_env: &'a [String],
+    /// The subset of [`Self::dropped_env`] whose NAME matched the
+    /// credential shape and therefore received the fixed placeholder
+    /// (`mysbx::PROXY_ONLY_PLACEHOLDER`, D28 rule 6d). The rest were
+    /// dropped bare (a base-URL name keeps its baked value).
+    pub placeholder_env: &'a [String],
     pub params: &'a Params<'a>,
     /// The backend binary that would be executed (`MYSBX_BWRAP` /
     /// `MYSBX_PODMAN` / `MYSBX_NONO` after their fallbacks).
@@ -149,14 +157,94 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
             ""
         }
     ));
-    p(format!(
-        "network:        {}",
-        if r.merged.network {
-            "shared (--share-net)"
-        } else {
-            "denied (--unshare-all, no --share-net)"
+    // The shared and denied strings are byte-identical to the pre-D20
+    // output (the goldens depend on it); proxy-only names its channel.
+    match r.merged.network {
+        crate::config::Network::Shared => {
+            p("network:        shared (--share-net)".to_string());
         }
-    ));
+        crate::config::Network::None => {
+            p("network:        denied (--unshare-all, no --share-net)".to_string());
+        }
+        crate::config::Network::ProxyOnly => {
+            match &r.params.egress {
+                Some(e) => p(format!(
+                    "network:        proxy-only (no --share-net; 127.0.0.1:{} -> {}/{} via the relay)",
+                    e.port,
+                    crate::bwrap::EGRESS_DIR,
+                    e.socket,
+                )),
+                // Unreachable for a runnable run (the builder refuses a
+                // channel-less profile); said out loud rather than
+                // guessed if a caller ever builds a report without one.
+                None => p(
+                    "network:        proxy-only (no enforced channel — the run is refused)"
+                        .to_string(),
+                ),
+            }
+        }
+    }
+    // The D21 allowlist, when a layer declared one: it narrows a SHARED
+    // network only (proxy-only/denied refuse it earlier), so the line
+    // appears exactly when it governs the run.
+    let allow: Vec<String> = [
+        (!r.merged.allow_domains.is_empty())
+            .then(|| format!("domains {}", r.merged.allow_domains.join(", "))),
+        (!r.merged.connect_ports.is_empty()).then(|| {
+            format!(
+                "connect-ports {}",
+                r.merged
+                    .connect_ports
+                    .iter()
+                    .map(u16::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        }),
+        (!r.merged.listen_ports.is_empty()).then(|| {
+            format!(
+                "listen-ports {}",
+                r.merged
+                    .listen_ports
+                    .iter()
+                    .map(u16::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        }),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    // The D21 allowlist line: printed only when a layer set an allowlist
+    // key or the network is proxy-only, so a shared config without one
+    // keeps its `--verbose` output.
+    if !allow.is_empty() || r.merged.network == crate::config::Network::ProxyOnly {
+        p(format!(
+            "allowlist:      {}",
+            if allow.is_empty() {
+                "none (proxy-only grants only the model endpoint)".to_owned()
+            } else {
+                allow.join("; ")
+            }
+        ));
+    }
+    // The D28 rule 6a drop list: every forward-env name beyond the
+    // terminal/locale/editor base, said out loud rather than silently
+    // narrowed. A name that got the rule-6d placeholder says so; the
+    // rest are dropped bare.
+    for name in r.dropped_env {
+        if r.placeholder_env.iter().any(|n| n == name) {
+            p(format!(
+                "env dropped:    {name} [dropped — set to placeholder \"{}\", D28]",
+                crate::PROXY_ONLY_PLACEHOLDER
+            ));
+        } else {
+            p(format!(
+                "env dropped:    {name} [dropped — network = \"proxy-only\", D28]"
+            ));
+        }
+    }
 
     // The nix store this run sees (docs/design/guest-store.md): said
     // out loud like the network — which store backs the sandbox is a
@@ -696,7 +784,7 @@ mod tests {
         env.insert("EDITOR".to_owned(), "nvim".to_owned());
         let merged = Merged {
             backend: Some("bubblewrap".into()),
-            network: false,
+            network: crate::config::Network::None,
             nested_virt: false,
             mounts: vec![
                 Mount {
@@ -747,6 +835,7 @@ mod tests {
             workspace: Workspace::Live,
             inner: None,
             detachable: false,
+            egress: None,
         };
         lines(&Report {
             repo: &repo,
@@ -760,6 +849,8 @@ mod tests {
             user_mount_count: 1,
             cli_mount_count: 0,
             host_env: &host,
+            dropped_env: &[],
+            placeholder_env: &[],
             params: &params,
             bwrap_bin: "/synth/bin/bwrap",
             backend: "bubblewrap",
@@ -859,6 +950,7 @@ mod tests {
             workspace: Workspace::Live,
             inner: None,
             detachable: false,
+            egress: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -872,6 +964,8 @@ mod tests {
             user_mount_count: 1,
             cli_mount_count: 0,
             host_env: &host,
+            dropped_env: &[],
+            placeholder_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -910,6 +1004,7 @@ mod tests {
             workspace: Workspace::Live,
             inner: None,
             detachable: false,
+            egress: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -923,6 +1018,8 @@ mod tests {
             user_mount_count: 1,
             cli_mount_count: 0,
             host_env: &host,
+            dropped_env: &[],
+            placeholder_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -949,7 +1046,7 @@ mod tests {
     #[test]
     fn network_shared_and_exec_mode_are_said_out_loud() {
         let (repo, mut merged, host) = fixture_report();
-        merged.network = true;
+        merged.network = crate::config::Network::Shared;
         let params = Params {
             shell: "/synth/bin/bash",
             tools_path: "/synth/bin",
@@ -962,6 +1059,7 @@ mod tests {
             workspace: Workspace::Live,
             inner: None,
             detachable: false,
+            egress: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -975,6 +1073,8 @@ mod tests {
             user_mount_count: 2,
             cli_mount_count: 0,
             host_env: &host,
+            dropped_env: &[],
+            placeholder_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -993,6 +1093,10 @@ mod tests {
         );
         // With user_mount_count == 2 both mounts belong to the user layer.
         assert!(!joined.contains("[sidecar config]"), "{joined}");
+        // A plain shared config gets NEITHER the allowlist nor the
+        // env-drop line.
+        assert!(!joined.contains("allowlist:"), "{joined}");
+        assert!(!joined.contains("env dropped:"), "{joined}");
     }
 
     #[test]
@@ -1016,6 +1120,7 @@ mod tests {
             workspace: Workspace::Live,
             inner: None,
             detachable: false,
+            egress: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -1029,6 +1134,8 @@ mod tests {
             user_mount_count: 2,
             cli_mount_count: 0,
             host_env: &host,
+            dropped_env: &[],
+            placeholder_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -1071,6 +1178,7 @@ mod tests {
             workspace: Workspace::Live,
             inner: None,
             detachable: false,
+            egress: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -1084,6 +1192,8 @@ mod tests {
             user_mount_count: 2,
             cli_mount_count: 0,
             host_env: &host,
+            dropped_env: &[],
+            placeholder_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -1131,6 +1241,7 @@ mod tests {
                 workspace: Workspace::Live,
                 inner: None,
                 detachable: false,
+                egress: None,
             };
             let report_of = |payload: &Payload| {
                 lines(&Report {
@@ -1145,6 +1256,8 @@ mod tests {
                     user_mount_count: 1,
                     cli_mount_count: 0,
                     host_env: &host,
+                    dropped_env: &[],
+                    placeholder_env: &[],
                     params: &params,
                     bwrap_bin: "bwrap",
                     backend: "bubblewrap",
@@ -1218,6 +1331,7 @@ mod tests {
                 workspace,
                 inner: None,
                 detachable: false,
+                egress: None,
             }
         }
         let report_of = |repo: Repo, workspace: Workspace| {
@@ -1235,6 +1349,8 @@ mod tests {
                 user_mount_count: 1,
                 cli_mount_count: 0,
                 host_env: &host,
+                dropped_env: &[],
+                placeholder_env: &[],
                 params: &herdr_params(workspace),
                 bwrap_bin: "bwrap",
                 backend: "bubblewrap",
@@ -1311,6 +1427,7 @@ mod tests {
             workspace: Workspace::Live,
             inner: None,
             detachable: false,
+            egress: None,
         };
         let report_of = |payload: &Payload| {
             lines(&Report {
@@ -1325,6 +1442,8 @@ mod tests {
                 user_mount_count: 1,
                 cli_mount_count: 0,
                 host_env: &host,
+                dropped_env: &[],
+                placeholder_env: &[],
                 params: &params,
                 bwrap_bin: "bwrap",
                 backend: "bubblewrap",
@@ -1373,6 +1492,8 @@ mod tests {
             user_mount_count: 1,
             cli_mount_count: 0,
             host_env: &forwarded,
+            dropped_env: &[],
+            placeholder_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -1406,6 +1527,8 @@ mod tests {
             user_mount_count: 1,
             cli_mount_count: 0,
             host_env: &host,
+            dropped_env: &[],
+            placeholder_env: &[],
             params: &unrefused,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -1456,6 +1579,7 @@ mod tests {
             workspace: Workspace::Live,
             inner: None,
             detachable: false,
+            egress: None,
         };
         let payload = Payload::Shell;
         let out = lines(&Report {
@@ -1470,6 +1594,8 @@ mod tests {
             user_mount_count: 1,
             cli_mount_count: 1,
             host_env: &host,
+            dropped_env: &[],
+            placeholder_env: &[],
             params: &params,
             bwrap_bin: "/synth/bin/bwrap",
             backend: "bubblewrap",
@@ -1512,6 +1638,7 @@ mod tests {
             workspace: Workspace::Live,
             inner: None,
             detachable: false,
+            egress: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -1525,6 +1652,8 @@ mod tests {
             user_mount_count: 1,
             cli_mount_count: 0,
             host_env: &host,
+            dropped_env: &[],
+            placeholder_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -1570,6 +1699,7 @@ mod tests {
             },
             inner: None,
             detachable: false,
+            egress: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -1583,6 +1713,8 @@ mod tests {
             user_mount_count: 1,
             cli_mount_count: 0,
             host_env: &host,
+            dropped_env: &[],
+            placeholder_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -1656,6 +1788,7 @@ mod tests {
             workspace: Workspace::Live,
             inner: None,
             detachable: false,
+            egress: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -1669,6 +1802,8 @@ mod tests {
             user_mount_count: 1,
             cli_mount_count: 0,
             host_env: &host,
+            dropped_env: &[],
+            placeholder_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",

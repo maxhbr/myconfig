@@ -40,6 +40,11 @@ fn synth_repo() -> Repo {
 }
 
 fn base(network: bool) -> Merged {
+    let network = if network {
+        mysbx::config::Network::Shared
+    } else {
+        mysbx::config::Network::None
+    };
     Merged {
         backend: Some("microvm-qemu".into()),
         network,
@@ -124,6 +129,28 @@ fn run(cfg: &Merged, repo: &Repo, payload: &Payload, params: &Params<'_>) -> Vec
     let host_env = BTreeMap::new();
     microvm_qemu_argv(cfg, repo, payload, &host_env, params, KERNEL, &[])
         .unwrap_or_else(|e| panic!("the argv builds: {e}"))
+}
+
+#[test]
+fn proxy_only_is_refused_by_the_builder() {
+    // D20 (bd myconfig-6di.3): the qemu builder refuses
+    // `network = "proxy-only"` itself — the SLiRP net device always
+    // has a gateway route.
+    let mut cfg = base(true);
+    cfg.network = mysbx::config::Network::ProxyOnly;
+    let p = params("/synth/rootfs", "/synth/shell", None, Workspace::Live);
+    let host_env = BTreeMap::new();
+    let err = microvm_qemu_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env,
+        &p,
+        KERNEL,
+        &[],
+    )
+    .expect_err("a proxy-only qemu run must be refused");
+    assert!(matches!(err, mysbx::krun::Error::ProxyOnlyRefused), "{err}");
 }
 
 #[test]

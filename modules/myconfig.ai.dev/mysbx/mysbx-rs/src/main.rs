@@ -5,24 +5,11 @@ fn main() {
     // Unix expectation of `| head`: a closed pipe must end us quietly
     // with SIGPIPE, not panic with "failed printing to stdout: Broken
     // pipe" — the Rust runtime ignores SIGPIPE by default, so restore
-    // the default action before anything prints.
+    // the default action before anything prints. The libc binding
+    // itself lives once in `mysbx::sig`.
+    #[cfg(unix)]
     unsafe {
-        libc_sigpipe_dfl();
+        mysbx::sig::to_default(mysbx::sig::PIPE);
     }
     std::process::exit(mysbx::run(std::env::args().skip(1).collect()));
-}
-
-/// Restore `SIGPIPE` to its default action, with zero dependencies:
-/// `signal(2)` via the raw libc symbol (the same approach the std
-/// library uses internally). No-op on non-unix (the crate targets
-/// unix).
-#[cfg(unix)]
-unsafe fn libc_sigpipe_dfl() {
-    #[allow(non_snake_case)]
-    extern "C" {
-        fn signal(signum: i32, handler: usize) -> usize;
-    }
-    const SIGPIPE: i32 = 13;
-    const SIG_DFL: usize = 0;
-    signal(SIGPIPE, SIG_DFL);
 }

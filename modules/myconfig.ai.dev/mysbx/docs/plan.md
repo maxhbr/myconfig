@@ -190,21 +190,27 @@ to expose by default.
 **2b — credentials and the model API.** The original tier comparison
 contrasted host-key forwarding, SSH seeding, endpoint rewrites and a
 host-held proxy key. Current mysbx forwards credential variables only
-when declared in `forward-env`; a keyless proxy is usable, but a
-proxy-only egress profile remains unimplemented. Transport is backend
+when declared in `forward-env`; a keyless proxy is usable, and the
+`network = "proxy-only"` profile (`config.md` D20/D28, bd myconfig-mo3.2)
+is its no-key enforcement on bubblewrap: the sandbox reaches only the
+host LiteLLM endpoint, the forward-env narrows to the technical base,
+credential-shaped `[env]`/`[nix]` names are refused, and the dropped
+credential names get a fixed placeholder. Transport is backend
 specific: host namespace for bwrap/nono, pasta for Podman (TSI from the
 container namespace on Podman-krun), host-namespace TSI for direct krun,
-and SLiRP for QEMU. `MYSBX_PODMAN_ENV` and
+a single forwarder Unix socket for a `proxy-only` bubblewrap run, and
+SLiRP for QEMU. `MYSBX_PODMAN_ENV` and
 `MYSBX_PODMAN_PASTA_SPEC` are consumed by **both** Podman variants.
 
 **2c — network policy.** The finer-than-on/off sketch became nono's
-`--allow-domain` / `--allow-connect-port` policy. It is not the separate
-proxy-only egress proposal, and is not a domain-and-port conjunction.
+`--allow-domain` / `--allow-connect-port` policy — not a domain-and-port
+conjunction. The proxy-only profile is `network`'s middle value
+(see the LANDED note below), a separate axis from the allowlist.
 
 LANDED. The allowlist schema (bd myconfig-mo3.1) is
 `allow-domains`/`connect-ports`/`listen-ports` (`config.md` D21): both
 layers concatenate, user first, deduped keeping the first occurrence.
-Only nono supports these keys; the other five backends refuse them.
+Only nono supports these keys; the other six backends refuse them.
 `listen-ports` alone, URL-form domains, and allowlists combined with
 `network = false` are refused.
 
@@ -217,10 +223,15 @@ independent grants are not proof of an arbitrary-host bypass, and
 proxy-bypass variables can instead create connectivity conflicts. Exact
 combined policies need live testing; see the current guide.
 
-PROPOSED, NOT LANDED: `egress = "proxy-only"` (`config.md` D20, bd
-myconfig-mo3.2). The strict parser rejects `egress` on **every** backend,
-including bubblewrap. The isolated namespace plus LiteLLM socket relay
-is a design proposal, not a shipped enforcement path.
+LANDED (bubblewrap): `network = "proxy-only"` (`config.md` D20, bd
+myconfig-mo3.2). It is a value of the ONE `network` key, not a separate
+`egress` key — the parser still rejects `egress` everywhere. On
+bubblewrap the profile is an empty netns plus the host LiteLLM
+forwarder's Unix socket and the in-sandbox `mysbx-egress-relay`
+(bd myconfig-mo3.2.4/.5/.6); every other backend refuses it (exit 70).
+The credential rules under the profile are `config.md` D28
+(bd myconfig-t24). Nono and the per-backend VM transports are later
+work (bd myconfig-vpi9).
 
 **2d — the toolchain and `myconfig.ai.sandboxTools`.** DONE (bd
 myconfig-9mw): `mysbx` consumes

@@ -1,0 +1,4 @@
+# D20: `network` accepts "none", "proxy-only", "shared" (and the
+# permanent bool aliases false/true) — "public" is a later value that
+# does not exist yet, and an unknown spelling is a schema error.
+network = "public"

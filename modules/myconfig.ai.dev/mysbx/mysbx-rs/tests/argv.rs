@@ -53,6 +53,11 @@ fn worktree_repo(git_dirs: &[&str]) -> Repo {
 
 /// A synthetic `Merged`: bubblewrap, the given network switch, nothing else.
 fn base(network: bool) -> Merged {
+    let network = if network {
+        mysbx::config::Network::Shared
+    } else {
+        mysbx::config::Network::None
+    };
     Merged {
         backend: Some("bubblewrap".into()),
         network,
@@ -111,6 +116,35 @@ fn params() -> Params<'static> {
         workspace: Workspace::Live,
         inner: None,
         detachable: false,
+        egress: None,
+    }
+}
+
+/// A `network = "proxy-only"` base (docs/design/config.md D20): the
+/// bubblewrap row enforces it (bd myconfig-mo3.2.6).
+fn proxy_only_base() -> Merged {
+    let mut cfg = base(false);
+    cfg.network = mysbx::config::Network::ProxyOnly;
+    cfg
+}
+
+/// The egress channel a `proxy-only` run needs (bd myconfig-mo3.2.6):
+/// the forwarder's socket directory, its file name, the relay port and
+/// the relay binary.
+fn egress_channel() -> mysbx::bwrap::EgressChannel<'static> {
+    mysbx::bwrap::EgressChannel {
+        socket_dir: "/run/mysbx-egress",
+        socket: "litellm.sock",
+        port: 4000,
+        relay_bin: "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
+    }
+}
+
+/// [`params`] carrying the egress channel (a `proxy-only` run needs it).
+fn proxy_only_params() -> Params<'static> {
+    Params {
+        egress: Some(egress_channel()),
+        ..params()
     }
 }
 
@@ -593,6 +627,46 @@ fn golden_network_false() {
 }
 
 #[test]
+fn golden_proxy_only() {
+    // `network = "proxy-only"` (docs/design/config.md D20, bd
+    // myconfig-mo3.2.6): no --share-net, no resolver/daemon binds, the
+    // forwarder's socket DIRECTORY bound ro at /run/mysbx-egress, and
+    // the payload wrapped in the relay that binds 127.0.0.1:<port>.
+    let argv = bwrap_argv(
+        &proxy_only_base(),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &proxy_only_params(),
+    )
+    .unwrap();
+    assert_golden("egress-proxy-only.txt", &argv);
+}
+
+#[test]
+fn golden_proxy_only_waypipe() {
+    // The relay wraps INNERMOST, so a waypipe proxy-only run nests the
+    // waypipe server inside it (the relay owns the listener, waypipe
+    // owns the display channel).
+    let mut params = proxy_only_params();
+    params.waypipe = Some(mysbx::bwrap::Waypipe {
+        socket_dir: "/synth/repo.mysbx/waypipe/1",
+        guest_bin: "/synth/store/aaaa-waypipe/bin/waypipe",
+    });
+    let mut cfg = proxy_only_base();
+    cfg.display = Display::Waypipe;
+    let argv = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    assert_golden("egress-proxy-only-waypipe.txt", &argv);
+}
+
+#[test]
 fn the_pinned_ca_bundle_sets_the_tls_env_after_config_env() {
     // bd myconfig-938, step 2: a pinned `MYSBX_CA_BUNDLE` sets
     // `SSL_CERT_FILE`/`GIT_SSL_CAINFO`/`NIX_SSL_CERT_FILE` AFTER the
@@ -813,6 +887,7 @@ fn a_detached_run_sets_mysbx_detachable_after_the_config_env() {
     // promise, checked against the same fixture with the flag off).
     let params = Params {
         detachable: true,
+        egress: None,
         ..params()
     };
     let mut cfg = base(true);
@@ -876,6 +951,7 @@ fn a_detached_run_sets_mysbx_detachable_after_the_config_env() {
 fn a_detached_run_carries_die_with_parent_before_the_first_dashdash() {
     let params = Params {
         detachable: true,
+        egress: None,
         ..params()
     };
     let argv = bwrap_argv(
@@ -930,6 +1006,7 @@ fn a_detached_nono_run_carries_die_with_parent_in_the_bwrap_root_segment() {
     // segment.
     let p = Params {
         detachable: true,
+        egress: None,
         inner: Some(Inner {
             argv: &["nono".to_owned(), "run".to_owned()],
             env_bin: "env",
@@ -986,6 +1063,7 @@ fn a_detached_nono_run_carries_the_mark_in_the_payload_env_segment() {
     // mark rides the payload env segment beside `TMUX_TMPDIR`.
     let p = Params {
         detachable: true,
+        egress: None,
         inner: Some(Inner {
             argv: &["nono".to_owned(), "run".to_owned()],
             env_bin: "env",
@@ -1059,7 +1137,7 @@ fn golden_both_layers_contribute_mounts() {
     // first, sidecar mounts after (config.md D7).
     let cfg = Merged {
         backend: Some("bubblewrap".into()),
-        network: true,
+        network: mysbx::config::Network::Shared,
         nested_virt: false,
         mounts: vec![
             make_mount("/synth/data/refs", None, Mode::Ro), // user
@@ -1430,6 +1508,18 @@ fn share_net_iff_network_true() {
         assert_eq!(argv.contains(&"--share-net".to_string()), expect_share);
         assert!(argv.contains(&"--unshare-all".to_string()));
     }
+    // `proxy-only` (D20) shares NO netns either: the whole point is the
+    // empty namespace with the relay's loopback as the only listener.
+    let proxy = bwrap_argv(
+        &proxy_only_base(),
+        &repo,
+        &Payload::Shell,
+        &host_env(&[]),
+        &proxy_only_params(),
+    )
+    .unwrap();
+    assert!(!proxy.contains(&"--share-net".to_string()));
+    assert!(proxy.contains(&"--unshare-all".to_string()));
 }
 
 #[test]
@@ -1441,7 +1531,7 @@ fn mount_order_is_preserved() {
     // the order is pinned on disjoint paths instead.)
     let cfg = Merged {
         backend: Some("bubblewrap".into()),
-        network: true,
+        network: mysbx::config::Network::Shared,
         nested_virt: false,
         mounts: vec![
             make_mount("/synth/data/outer", None, Mode::Ro),
@@ -2104,6 +2194,27 @@ fn the_nix_daemon_rides_with_the_network() {
     // The store itself stays readable either way: running the shipped
     // tools needs it, and it exposes no daemon.
     assert!(denied.contains(&"/nix/store".to_string()));
+
+    // `proxy-only` (D20) binds no daemon and no resolver: it has no
+    // network to reach either, and a daemon-built fixed-output
+    // derivation keeps network access the profile does not have.
+    let proxy = bwrap_argv(
+        &proxy_only_base(),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &proxy_only_params(),
+    )
+    .unwrap();
+    assert!(!proxy.contains(&"/nix/var/nix".to_string()), "{proxy:?}");
+    assert!(
+        !proxy.contains(&"/etc/resolv.conf".to_string()),
+        "no resolver binds under proxy-only: {proxy:?}"
+    );
+    // The ONE host path bound in is the forwarder's socket directory.
+    let egress = pos_pair(&proxy, "--ro-bind", "/run/mysbx-egress");
+    let store = pos_pair(&proxy, "--ro-bind", "/nix/store");
+    assert!(egress < store, "the egress bind precedes the base binds");
 }
 
 #[test]
@@ -2145,6 +2256,7 @@ fn a_pinned_sanitized_nix_conf_is_bound_read_only() {
         workspace: Workspace::Live,
         inner: None,
         detachable: false,
+        egress: None,
     };
     let argv = bwrap_argv(
         &base(true),
@@ -2186,6 +2298,7 @@ fn a_pinned_bin_sh_is_bound_read_only_into_the_empty_root() {
         workspace: Workspace::Live,
         inner: None,
         detachable: false,
+        egress: None,
     };
     let argv = bwrap_argv(
         &base(true),
@@ -3054,6 +3167,7 @@ fn a_relocated_writable_parent_of_the_sidecar_is_refused() {
         workspace: Workspace::Live,
         inner: None,
         detachable: false,
+        egress: None,
     };
     let mut cfg = base(true);
     cfg.mounts
@@ -3086,6 +3200,7 @@ fn a_writable_mount_of_the_sidecar_directory_itself_is_refused() {
         workspace: Workspace::Live,
         inner: None,
         detachable: false,
+        egress: None,
     };
     let mut cfg = base(true);
     cfg.mounts
@@ -3120,6 +3235,7 @@ fn a_read_only_mount_of_the_sidecar_stays_allowed() {
         workspace: Workspace::Live,
         inner: None,
         detachable: false,
+        egress: None,
     };
     let mut cfg = base(true);
     cfg.mounts
@@ -3147,6 +3263,7 @@ fn a_writable_mount_unrelated_to_the_policy_files_stays_allowed() {
         workspace: Workspace::Live,
         inner: None,
         detachable: false,
+        egress: None,
     };
     let mut cfg = base(true);
     cfg.mounts
@@ -3175,6 +3292,7 @@ fn the_implicit_repo_bind_exposing_a_policy_file_is_refused() {
         workspace: Workspace::Live,
         inner: None,
         detachable: false,
+        egress: None,
     };
     let cfg = base(true);
     let err = bwrap_argv(&cfg, &repo, &Payload::Shell, &host_env(&[]), &params)
@@ -3205,6 +3323,7 @@ fn a_git_dir_exposing_a_policy_file_is_refused() {
         workspace: Workspace::Live,
         inner: None,
         detachable: false,
+        egress: None,
     };
     let mut cfg = base(true);
     cfg.git_dirs = vec![PathBuf::from("/synth/main/.git")];
@@ -3239,6 +3358,7 @@ fn an_absent_policy_file_does_not_forbid_its_would_be_parent() {
         workspace: Workspace::Live,
         inner: None,
         detachable: false,
+        egress: None,
     };
     let mut cfg = base(true);
     cfg.mounts
@@ -3272,6 +3392,7 @@ fn params_with(policy: &[mysbx::bwrap::PolicyPath]) -> Params<'_> {
         workspace: Workspace::Live,
         inner: None,
         detachable: false,
+        egress: None,
     }
 }
 
@@ -3479,6 +3600,7 @@ fn clone_params() -> Params<'static> {
         },
         inner: None,
         detachable: false,
+        egress: None,
     }
 }
 
@@ -3901,6 +4023,11 @@ fn podman_params() -> PodmanParams<'static> {
 
 /// A podman-gvisor base config.
 fn podman_base(network: bool) -> Merged {
+    let network = if network {
+        mysbx::config::Network::Shared
+    } else {
+        mysbx::config::Network::None
+    };
     Merged {
         backend: Some("podman-gvisor".into()),
         network,
@@ -4129,6 +4256,30 @@ fn podman_config_env_cannot_repoint_the_xdg_base_dirs() {
             "XDG_CACHE_HOME=/mysbx-home/.cache".to_string()
         ],
         "the config entry must parse first and lose last: {hits:?}"
+    );
+}
+
+#[test]
+fn proxy_only_is_refused_by_the_podman_builder() {
+    // D20 (bd myconfig-6di.3): the shared podman builder refuses
+    // `network = "proxy-only"` itself — pasta adds a route to the
+    // forwarder without removing the default route — defense in depth
+    // next to the pipeline's step-4b refusal. The SAME builder serves
+    // podman-gvisor and podman-krun, so one test covers both.
+    let mut cfg = podman_base(true);
+    cfg.network = mysbx::config::Network::ProxyOnly;
+    let params = podman_params();
+    let err = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .expect_err("a proxy-only podman run must be refused");
+    assert!(
+        matches!(err, mysbx::podman_gvisor::Error::ProxyOnlyRefused),
+        "{err}"
     );
 }
 
@@ -4419,7 +4570,7 @@ fn podman_no_run_no_host_home_beyond_declared_mounts() {
 fn podman_mount_order_is_preserved() {
     let cfg = Merged {
         backend: Some("podman-gvisor".into()),
-        network: true,
+        network: mysbx::config::Network::Shared,
         nested_virt: false,
         mounts: vec![
             make_mount("/synth/data/outer", None, Mode::Ro),
@@ -5628,6 +5779,11 @@ fn nono_params() -> NonoParams<'static> {
 /// A nono base config: no allowlist entries — callers that test the
 /// network mapping fill them.
 fn nono_base(network: bool) -> Merged {
+    let network = if network {
+        mysbx::config::Network::Shared
+    } else {
+        mysbx::config::Network::None
+    };
     Merged {
         backend: Some("nono".into()),
         network,
@@ -6880,6 +7036,7 @@ fn nono_a_daemon_source_is_refused_under_an_allowlist_too() {
     let p = Params {
         inner: None,
         detachable: false,
+        egress: None,
         ..params()
     };
     bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &p)

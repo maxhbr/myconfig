@@ -64,6 +64,18 @@ pub struct Backend {
     /// table): AF_UNIX socket objects do not cross virtiofs, so
     /// the VM backends with no guest channel for it refuse it.
     pub waypipe_refused: bool,
+    /// Whether the backend enforces D21's allowlist keys
+    /// (`allow-domains`/`connect-ports`/`listen-ports`):
+    /// `true` only for nono (nono's per-domain proxy and
+    /// Landlock/seccomp port grants). Every other backend refuses
+    /// an allowlist (config.md D21), never accepts-and-ignores it.
+    pub network_allowlist: bool,
+    /// Whether the backend enforces the D20 proxy-only network
+    /// profile (`network = "proxy-only"`): `true` only for
+    /// bubblewrap, whose unshared netns plus forwarder socket and
+    /// in-sandbox relay is the shipped transport (bd
+    /// myconfig-mo3.2.6). Every other backend refuses the profile.
+    pub network_proxy_only: bool,
 }
 
 impl Backend {
@@ -91,6 +103,8 @@ pub const REGISTRY: &[Backend] = &[
         nested_virt: false,
         detach_refused: false,
         waypipe_refused: false,
+        network_allowlist: false,
+        network_proxy_only: true,
     },
     Backend {
         name: "podman-gvisor",
@@ -102,6 +116,8 @@ pub const REGISTRY: &[Backend] = &[
         nested_virt: false,
         detach_refused: true,
         waypipe_refused: false,
+        network_allowlist: false,
+        network_proxy_only: false,
     },
     Backend {
         name: "nono",
@@ -113,6 +129,8 @@ pub const REGISTRY: &[Backend] = &[
         nested_virt: false,
         detach_refused: false,
         waypipe_refused: false,
+        network_allowlist: true,
+        network_proxy_only: false,
     },
     Backend {
         name: "podman-krun",
@@ -124,6 +142,8 @@ pub const REGISTRY: &[Backend] = &[
         nested_virt: false,
         detach_refused: true,
         waypipe_refused: true,
+        network_allowlist: false,
+        network_proxy_only: false,
     },
     Backend {
         name: "krun",
@@ -135,6 +155,8 @@ pub const REGISTRY: &[Backend] = &[
         nested_virt: false,
         detach_refused: false,
         waypipe_refused: true,
+        network_allowlist: false,
+        network_proxy_only: false,
     },
     Backend {
         name: "microvm-qemu",
@@ -146,6 +168,8 @@ pub const REGISTRY: &[Backend] = &[
         nested_virt: true,
         detach_refused: false,
         waypipe_refused: true,
+        network_allowlist: false,
+        network_proxy_only: false,
     },
     Backend {
         name: "microvm-ch",
@@ -157,6 +181,8 @@ pub const REGISTRY: &[Backend] = &[
         nested_virt: true,
         detach_refused: false,
         waypipe_refused: true,
+        network_allowlist: false,
+        network_proxy_only: false,
     },
 ];
 
@@ -249,6 +275,24 @@ mod tests {
                     b.name
                 );
             }
+            // D21's allowlist is enforced by exactly one backend
+            // (nono); D20's proxy-only profile by exactly one
+            // (bubblewrap). The registry predicates the egress work
+            // asks stay derivable from the table (bd myconfig-mo3.2.1).
+            assert_eq!(
+                b.network_allowlist,
+                b.name == "nono",
+                "`{}`: network_allowlist must match config.md D21's table",
+                b.name
+            );
+            // D20's proxy-only profile is enforced by the bubblewrap row
+            // alone (bd myconfig-mo3.2.6); every other backend refuses it.
+            assert_eq!(
+                b.network_proxy_only,
+                b.name == "bubblewrap",
+                "`{}`: network_proxy_only must match config.md D20's table",
+                b.name
+            );
         }
     }
 

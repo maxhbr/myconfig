@@ -292,6 +292,92 @@ impl fmt::Display for Display {
     }
 }
 
+/// The sandbox's network policy (docs/design/config.md D20): ONE key
+/// with three values, ordered `None < ProxyOnly < Shared`. The bool
+/// spellings `false`/`true` stay PERMANENT aliases of `None`/`Shared`
+/// — a bool config's generated TOML, argv and output stay
+/// byte-identical, and this enum never gains a deprecation for them.
+///
+/// A layer's `network` is tri-state like `backend`: an omitted key
+/// decides nothing (`Option<Network>`), and the shared default is
+/// applied AFTER the merge, never inside a layer (config.md D7).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Network {
+    /// No network at all: an empty netns on bubblewrap, `--network
+    /// none` on the podman backends, no net device on the VM
+    /// backends. The `network = false` alias.
+    None,
+    /// Only the host's LiteLLM endpoint (config.md D20): bubblewrap
+    /// enforces it (an empty netns, the forwarder's Unix socket and the
+    /// in-sandbox relay, bd myconfig-mo3.2.6); every other backend
+    /// refuses it rather than weaken the profile. The
+    /// no-model-credential path (D28).
+    ProxyOnly,
+    /// The whole network the backend's transport gives (D21's
+    /// allowlist narrows what may be reached). The `network = true`
+    /// alias, and the built-in default.
+    Shared,
+}
+
+impl Network {
+    /// The accepted STRING spellings, in the order the schema error
+    /// lists them. The bool aliases are not strings: `network = false`
+    /// is TOML's boolean false, and the error says so.
+    pub const NAMES: &'static [&'static str] = &["none", "proxy-only", "shared"];
+
+    /// Parse the canonical value form (`none`/`proxy-only`/`shared`).
+    /// The bool aliases are handled by the TOML-type dispatch in
+    /// `from_table`; this only sees strings.
+    pub fn parse(s: &str, at: &str) -> Result<Network, Error> {
+        match s {
+            "none" => Ok(Network::None),
+            "proxy-only" => Ok(Network::ProxyOnly),
+            "shared" => Ok(Network::Shared),
+            other => Err(Error::Schema(format!(
+                "{at}: invalid network `{other}`, expected one of {} or a boolean (false = none, true = shared)",
+                Network::NAMES
+                    .iter()
+                    .map(|n| format!("`{n}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ))),
+        }
+    }
+
+    /// The canonical value spelling — the one the report, the status
+    /// line and every message use. A bool config reports `none` /
+    /// `shared`: those are the canonical names the aliases map to.
+    pub fn name(self) -> &'static str {
+        match self {
+            Network::None => "none",
+            Network::ProxyOnly => "proxy-only",
+            Network::Shared => "shared",
+        }
+    }
+
+    /// Whether the network is shared at all — the predicate the rest of
+    /// the crate asks. `false` for
+    /// both `None` and `ProxyOnly`: a proxy-only run has NO direct
+    /// route, so every "is the network up" question answers no.
+    pub fn is_shared(self) -> bool {
+        self == Network::Shared
+    }
+
+    /// Whether the network is denied outright. Distinct from
+    /// `!is_shared()`: `ProxyOnly` is not a denial, so the two
+    /// questions stay separate (the allowlist contradiction check
+    /// must fire for `None` but not for the profile).
+    pub fn is_none(self) -> bool {
+        self == Network::None
+    }
+}
+
+impl fmt::Display for Network {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 /// Which nix store a run's sandbox sees (docs/design/guest-store.md):
 /// a closed enum on purpose, like [`Display`] — a layer may say WHICH
 /// store, never a path. The VM backends (`krun`, `microvm-qemu`) attach
@@ -400,14 +486,14 @@ pub struct Config {
     /// Sandbox technology; `None` means "not decided by this layer"
     /// (docs/design/cli.md D7: never auto-detected).
     pub backend: Option<String>,
-    /// Whether the network is shared. `None` means "not decided by
-    /// this layer" — like `backend`: a layer that does not mention
-    /// `network` must not count as an explicit `true` (which would
-    /// make an omitted sidecar value re-enable what the user config
-    /// denied, docs/design/config.md D7). The shared-by-default `true`
-    /// of docs/plan.md is applied AFTER the merge (see
-    /// `crate::merge::merge`), never inside a layer.
-    pub network: Option<bool>,
+    /// The sandbox's network policy (docs/design/config.md D20), one
+    /// of [`Network`]. `None` means "not decided by this layer" —
+    /// like `backend`: a layer that does not mention `network` must
+    /// not count as an explicit `shared` (which would make an omitted
+    /// sidecar value re-enable what the user config denied,
+    /// docs/design/config.md D7). The shared default is applied AFTER
+    /// the merge (see `crate::merge::merge`), never inside a layer.
+    pub network: Option<Network>,
     /// Which multiplexer the *interactive* payload is, instead of a
     /// plain shell (docs/design/config.md D17, cli.md D11). `None`
     /// means "not decided by this layer", like `backend`; the
@@ -641,7 +727,7 @@ impl Config {
         for (key, value) in root {
             match key.as_str() {
                 "backend" => config.backend = Some(string(value, "backend")?.to_owned()),
-                "network" => config.network = Some(boolean(value, "network")?),
+                "network" => config.network = Some(network(value)?),
                 "nested-virt" => {
                     config.nested_virt = Some(boolean(value, "nested-virt")?)
                 }
@@ -708,6 +794,32 @@ impl Config {
                     ))
                 }
                 other => return Err(unknown("top level", other)),
+            }
+        }
+        // `network = "proxy-only"` names the ONE reachable endpoint
+        // (docs/design/config.md D20/D21): D21's allowlist keys
+        // describe what a SHARED network may reach, so naming both in
+        // one file is a schema error. The cross-layer variant is
+        // refused at run time (lib.rs step 4b), where the merged
+        // values are known.
+        if config.network == Some(Network::ProxyOnly) {
+            let keys: Vec<&str> = [
+                (!config.allow_domains.is_empty()).then_some("allow-domains"),
+                (!config.connect_ports.is_empty()).then_some("connect-ports"),
+                (!config.listen_ports.is_empty()).then_some("listen-ports"),
+            ]
+            .into_iter()
+            .flatten()
+            .collect();
+            if !keys.is_empty() {
+                return Err(Error::Schema(format!(
+                    "top level: network = \"proxy-only\" grants only the host model endpoint, so {} contradict{} it — the allowlist keys describe a shared network (docs/design/config.md D20/D21); drop them or drop the profile",
+                    keys.iter()
+                        .map(|k| format!("`{k}`"))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    if keys.len() == 1 { "s" } else { "" },
+                )));
             }
         }
         Ok(config)
@@ -1100,6 +1212,24 @@ fn boolean(value: &Value, at: &str) -> Result<bool, Error> {
             value.type_name()
         ))
     })
+}
+
+/// The `network` key (docs/design/config.md D20): a string
+/// (`none`/`proxy-only`/`shared`) or a bool, whose `false`/`true` are
+/// PERMANENT aliases of `none`/`shared` — never deprecated, so a bool
+/// config keeps its byte-identical output. Any other type or string is
+/// a D11 schema error naming the key.
+fn network(value: &Value) -> Result<Network, Error> {
+    if let Some(b) = value.as_bool() {
+        return Ok(if b { Network::Shared } else { Network::None });
+    }
+    if let Some(s) = value.as_str() {
+        return Network::parse(s, "network");
+    }
+    Err(Error::Schema(format!(
+        "network: expected \"none\", \"proxy-only\", \"shared\" or a boolean, found {}",
+        value.type_name()
+    )))
 }
 
 fn table<'v>(value: &'v Value, at: &str) -> Result<&'v Table, Error> {
