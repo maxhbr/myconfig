@@ -1280,8 +1280,10 @@ it. The same holds for a mount or a `state-dirs` entry that would
 cover `/run/mysbx-egress`. Bubblewrap enforces the profile; a run whose pinned
 forwarder socket or wrapper pins are missing is REFUSED (exit `70`,
 naming the option to enable) — the profile fails closed, never falls
-back to a shared network. Phase B–D (per-backend transports, the
-broker) live in bd myconfig-vpi9.
+back to a shared network. The f13 live run of the enforcing backend is
+in [`../egress-validation-log.md`](../egress-validation-log.md).
+Phase B–D (per-backend transports, the broker) live in bd
+myconfig-vpi9.
 
 **Orca's shared-network requirement** stays unsatisfied under this
 profile: `multiplexer = "orca"` needs the shared network and is

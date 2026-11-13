@@ -230,8 +230,9 @@ bubblewrap the profile is an empty netns plus the host LiteLLM
 forwarder's Unix socket and the in-sandbox `mysbx-egress-relay`
 (bd myconfig-mo3.2.4/.5/.6); every other backend refuses it (exit 70).
 The credential rules under the profile are `config.md` D28
-(bd myconfig-t24). Nono and the per-backend VM transports are later
-work (bd myconfig-vpi9).
+(bd myconfig-t24). The f13 live run is in
+[`egress-validation-log.md`](./egress-validation-log.md). Nono and the
+per-backend VM transports are later work (bd myconfig-vpi9).
 
 **2d — the toolchain and `myconfig.ai.sandboxTools`.** DONE (bd
 myconfig-9mw): `mysbx` consumes
@@ -291,8 +292,9 @@ The later silent direct store-walk failure has no confirmed fd root
 cause. QEMU's eleven KVM probes prove their listed scope, including
 initial terminal size, not mid-session resize, baked-store acceptance,
 scratch stress, nested Podman or detach. See
-[`krun-validation-log.md`](./krun-validation-log.md) and
-[`microvm-qemu-validation-log.md`](./microvm-qemu-validation-log.md).
+[`krun-validation-log.md`](./krun-validation-log.md),
+[`microvm-qemu-validation-log.md`](./microvm-qemu-validation-log.md) and
+[`egress-validation-log.md`](./egress-validation-log.md).
 
 **2g — per-repo opt-out of user mounts.** `config.md` D7 settled the other
 direction (a sidecar declares its own mounts), but leaves open how a user

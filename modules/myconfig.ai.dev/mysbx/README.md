@@ -620,7 +620,8 @@ backend but bubblewrap, is refused (exit 70) — never weakened to a
 shared network. `mysbx doctor` probes the socket with a `GET
 /v1/models`. The credential rules (forward-env narrowing, the
 credential-name refusal, the placeholder) are in the "Environment"
-section above and in `config.md` D28.
+section above and in `config.md` D28. The f13 live run is in
+[`docs/egress-validation-log.md`](./docs/egress-validation-log.md).
 
 ## Browser automation
 
