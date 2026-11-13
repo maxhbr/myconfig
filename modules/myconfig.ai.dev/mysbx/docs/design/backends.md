@@ -95,7 +95,7 @@ every network mode, so the backend still has one process-chain shape.
 | Merged config | bubblewrap | nono |
 | --- | --- | --- |
 | `network = "none"` (bool `false`) | no `--share-net`: an empty netns | `--block-net` |
-| `network = "proxy-only"` (D20) | empty netns + the forwarder socket DIRECTORY bound ro at `/run/mysbx-egress` + `mysbx-egress-relay` innermost (bd myconfig-mo3.2.6) | REFUSED (exit 70): its Landlock/seccomp layer is no default-deny fence yet (bd myconfig-vpi9.1) |
+| `network = "proxy-only"` (D20) | empty netns + the forwarder socket DIRECTORY bound ro at `/run/mysbx-egress` + `mysbx-egress-relay` innermost (bd myconfig-mo3.2.6) | the same bwrap channel, plus `--block-net` and ONE `--allow-connect-port <litellm port>` for the relay's loopback listener (bd myconfig-vpi9.1) |
 | `network = "shared"` (bool `true`), no allowlist | `--share-net` | no network flag (nono's default is outbound allowed) |
 | `network = "shared"`, allowlist (config.md D21) | `--share-net` | `--allow-domain`, `--allow-connect-port`, `--listen-port` per merged entry |
 

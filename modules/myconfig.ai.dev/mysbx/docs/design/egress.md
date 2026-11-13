@@ -317,6 +317,14 @@ checked against it:
   `egressPinGate` in `nix/config-eval-test.nix`;
 - the root-owned-directory rule of D20 (already replaced by E3).
 
+**The removal is gated on the broker serving BOTH bwrap-built tiers.**
+Since bd myconfig-vpi9.1 the layered `nono` backend enforces the profile
+through the same bwrap channel, so it is a SECOND consumer of the static
+unit: dropping the unit while only bubblewrap has the broker would break
+`proxy-only` on nono. The broker path is backend-agnostic (it is chosen by
+the wrapper pins, not the backend name), so the live check in step 2 must
+cover a nono run as well as a bubblewrap one before step 3 executes.
+
 The TCP half of the forwarder is NOT part of this: it serves the podman
 backends (bd myconfig-jq2) and is hardened separately in n8kv.1.5.
 
@@ -327,4 +335,5 @@ backends (bd myconfig-jq2) and is hardened separately in n8kv.1.5.
 - Credential injection and TLS interception, per-binary identity,
   interactive approval, seccomp-notify interception — bd myconfig-n8kv.3.
 - Datagram/raw-socket/`io_uring` denial — bd myconfig-n8kv.4.
-- Whether nono adopts the same profile — bd myconfig-vpi9.1.
+- nono's own grants — bd myconfig-vpi9.1 (LANDED: `--block-net` plus one
+  `--allow-connect-port`; the broker path covers it unchanged).

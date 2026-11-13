@@ -1249,12 +1249,13 @@ error next to `network = "proxy-only"` in one file and a refused run
 (exit `70`) when the layers combine them.
 
 **Enforcement is per backend** — the same accepted-never-ignored rule
-as D21, and bubblewrap is the only enforcing backend in phase A:
+as D21. The bwrap-built tiers enforce it (bubblewrap, and the layered
+`nono` backend, which is bubblewrap plus nono inside):
 
 | backend | `network = "proxy-only"` means |
 | --- | --- |
 | `bubblewrap` | the enforcing backend: an unshared network namespace, the FIXED directory `/run/mysbx-egress` bound read-only, and the `mysbx-egress-relay` binary listening on `127.0.0.1:<litellm port>` and forwarding to the socket inside it; no resolver, but a fixed `/etc/hosts` (`127.0.0.1 localhost` only) and `/etc/nsswitch.conf` (`hosts: files`) from the store (`MYSBX_EGRESS_ETC`), so `localhost` reaches the relay and every other name fails at once as not found instead of timing out on DNS (bd myconfig-mo3.2.6) |
-| `nono` | refused — its Landlock/seccomp layer is no default-deny network fence; the profile there is bd myconfig-vpi9.1 |
+| `nono` | the same bwrap channel, PLUS nono's own deny: `--block-net` with ONE `--allow-connect-port <litellm port>` (bd myconfig-vpi9.1). The deny is what makes the profile real on this layer rather than a bare consequence of the empty netns — it also denies UDP and raw sockets, which a Landlock port grant alone does not. The relay runs OUTSIDE nono (bwrap's innermost wrap), so the socket directory and the relay's listener are not this layer's grants. The port grant carries no address (Landlock grants ports); harmless here because the netns holds nothing but `lo` |
 | `podman-gvisor` | refused — pasta's `--map-guest-addr` ADDS a route to the forwarder, it does not remove the default route (bd myconfig-6di.3) |
 | `podman-krun` | refused — libkrun's TSI is an unfiltered proxy from the container netns (bd myconfig-6di.5.5) |
 | `krun` | refused — direct libkrun TSI has no default-deny network mode |
@@ -1277,7 +1278,7 @@ The refusal is exit `70` with a backend-specific reason, before
 anything is created (`ensure_state_dirs`, the SSH key, the session
 clone) and before the `--dry-run` early return, so a dry run audits
 it. The same holds for a mount or a `state-dirs` entry that would
-cover `/run/mysbx-egress`. Bubblewrap enforces the profile; a run whose pinned
+cover `/run/mysbx-egress`. A bwrap-tier run whose pinned
 forwarder socket or wrapper pins are missing is REFUSED (exit `70`,
 naming the option to enable) — the profile fails closed, never falls
 back to a shared network. The f13 live run of the enforcing backend is
