@@ -4639,6 +4639,14 @@ fn sandbox_pipeline(
         }
     }
 
+    // Resolved BEFORE the environment is cleared and before the audit
+    // lines print it, so `--dry-run`/`--verbose` name the exact program
+    // the run execs. An unpinned build's backend is a BARE name
+    // (`bwrap`, `nono` — the wrapper pins absolute store paths, a source
+    // build does not), and the `env_clear` below leaves `PATH` nothing to
+    // search.
+    let backend_program = resolve_program(&backend_bin);
+
     // 7. print the argv, or exec it.
     if dry_run {
         // `mysbx --detach --dry-run` (detach.md B9): the dtach
@@ -4688,7 +4696,7 @@ fn sandbox_pipeline(
                 println!("{arg}");
             }
             println!();
-            println!("{backend_bin}");
+            println!("{backend_program}");
             for arg in &argv {
                 println!("{arg}");
             }
@@ -4702,7 +4710,7 @@ fn sandbox_pipeline(
         // `MYSBX_BWRAP` was read only after the early return). Golden
         // tests compare bytes and `mysbx run --dry-run -- ls | wc -l`
         // stays meaningful — one line more.
-        println!("{backend_bin}");
+        println!("{backend_program}");
         for arg in &argv {
             println!("{arg}");
         }
@@ -4720,7 +4728,7 @@ fn sandbox_pipeline(
     // `## exec` block for it — the inner under dtach reports its own
     // argv when it runs verbose.
     if flags.verbose && !matches!(mode, RunMode::Detached | RunMode::Detachable) {
-        println!("## exec: {backend_bin}");
+        println!("## exec: {backend_program}");
         for arg in &argv {
             println!("## arg:  {arg}");
         }
@@ -4827,7 +4835,13 @@ fn sandbox_pipeline(
         }
     }
 
-    let mut cmd = std::process::Command::new(&backend_bin);
+    // `env_clear` below drops PATH, and an unpinned backend is a BARE
+    // program name (`bwrap`, `nono` — the wrapper pins absolute store
+    // paths, a source build does not). `Command::new` resolves the name
+    // against the environment the way it is at spawn time, so the lookup
+    // has to happen BEFORE the clear or the run dies with ENOENT on a
+    // host whose backend is only on PATH.
+    let mut cmd = std::process::Command::new(&backend_program);
     cmd.args(&argv);
     // The backend reads nothing from mysbx's environment (bwrap's argv
     // clears and re-sets it, and the VM launchers get their own pins as
@@ -6328,6 +6342,52 @@ pub(crate) fn refuse_renamed_podman_pins(prefix: &str) -> bool {
 
 fn env_opt(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|v| !v.is_empty())
+}
+
+/// Resolve the backend program to what `Command::new` would exec: a name
+/// with a `/` is already a path, a bare name is looked up in `PATH` and
+/// the first executable regular file wins. An unresolved name comes back
+/// VERBATIM, so the spawn's own error names what the operator typed.
+///
+/// Resolved before the spawn because a run clears the child's environment
+/// (bd myconfig-q8zg): afterwards there is no `PATH` for a bare name like
+/// the `bwrap`/`nono` fallbacks to be found in.
+fn resolve_program(name: &str) -> String {
+    resolve_program_in(name, std::env::var_os("PATH").as_deref())
+}
+
+/// The pure half of [`resolve_program`], against an explicit `path`, so
+/// the rules are testable without touching the process environment.
+fn resolve_program_in(name: &str, path: Option<&std::ffi::OsStr>) -> String {
+    use std::os::unix::fs::PermissionsExt;
+    if name.contains('/') || name.is_empty() {
+        return name.to_owned();
+    }
+    let Some(path) = path else {
+        return name.to_owned();
+    };
+    for dir in std::env::split_paths(path) {
+        // `execvp` would treat an empty element as the cwd; this
+        // deliberately does not, so a relative hit can never pick up a
+        // file from whatever directory mysbx happens to run in.
+        if dir.as_os_str().is_empty() {
+            continue;
+        }
+        let candidate = dir.join(name);
+        if is_executable_file(&candidate) {
+            return candidate.to_string_lossy().into_owned();
+        }
+    }
+    name.to_owned()
+}
+
+/// Whether `path` is an executable regular file — the predicate
+/// [`resolve_program_in`] searches with.
+fn is_executable_file(path: &std::path::Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::metadata(path)
+        .map(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
+        .unwrap_or(false)
 }
 
 /// `std::env::var` with the empty-means-unset rule: an empty value falls
@@ -9256,6 +9316,96 @@ mod tests {
     }
 
     #[test]
+    fn resolve_program_matches_execvp_rules() {
+        // Owned so the OsStr borrows below stay alive for the calls.
+        let bin = std::path::Path::new("/bin").as_os_str().to_owned();
+        let no_then_bin = std::ffi::OsString::from("/nope:/bin");
+        let crate_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .as_os_str()
+            .to_owned();
+        // A `/` makes it a path: no lookup, no rewrite — even when it does
+        // not exist, so the spawn's error keeps the operator's spelling.
+        assert_eq!(resolve_program_in("/bin/sh", None), "/bin/sh");
+        assert_eq!(resolve_program_in("./relative", None), "./relative");
+        assert_eq!(resolve_program_in("/nope/q1012", None), "/nope/q1012");
+        // Without a PATH there is nothing to search.
+        assert_eq!(resolve_program_in("bwrap", None), "bwrap");
+        assert_eq!(resolve_program_in("", Some(&bin)), "");
+
+        // A bare name resolves to the absolute executable.
+        assert_eq!(
+            resolve_program_in("sh", Some(&bin)),
+            std::path::Path::new("/bin").join("sh").to_string_lossy()
+        );
+        // Search order: the FIRST hit wins.
+        assert_eq!(
+            resolve_program_in("sh", Some(&no_then_bin)),
+            std::path::Path::new("/bin").join("sh").to_string_lossy()
+        );
+        // A non-executable file is skipped: the crate's Cargo.toml is not a
+        // program, and a PATH entry pointing at a directory is no hit
+        // either, so both fall through to the verbatim name.
+        assert_eq!(
+            resolve_program_in("Cargo.toml", Some(&crate_root)),
+            "Cargo.toml"
+        );
+        assert_eq!(resolve_program_in("src", Some(&crate_root)), "src");
+        // An unresolved name comes back VERBATIM.
+        let missing = "mysbx-no-such-program-q1012";
+        assert_eq!(resolve_program_in(missing, Some(&bin)), missing);
+        // An empty element means the cwd; this deliberately does not search
+        // it, so a file in the cwd is not found through it.
+        let with_empty = std::env::join_paths([std::path::PathBuf::new()]).expect("valid PATH");
+        assert_eq!(
+            resolve_program_in("Cargo.toml", Some(with_empty.as_os_str())),
+            "Cargo.toml"
+        );
+    }
+
+    #[test]
+    fn a_resolved_program_survives_the_cleared_environment() {
+        // The regression this fix exists for (bd myconfig-q1012): a run
+        // spawns its backend with `env_clear`, so a backend reachable only
+        // through a PATH entry fails with ENOENT while the pre-resolved
+        // path runs. glibc's `execvp` falls back to `/bin:/usr/bin` when
+        // PATH is unset, which is why the fixture lives in a throwaway
+        // directory: exactly the NixOS shape where a wrapper-only binary
+        // sits in a profile directory outside that fallback.
+        let dir = std::env::temp_dir().join(format!("mysbx-resolve-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("create the fixture dir");
+        let program = dir.join("mysbx-q1012-fixture");
+        std::fs::write(&program, "#!/bin/sh\nexit 0\n").expect("write the fixture");
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755))
+                .expect("chmod the fixture");
+        }
+
+        // (a) Baseline: the name is NOT reachable from the default
+        // fallback, so a bare name under `env_clear` fails. Asserting
+        // this keeps the rest of the test from passing vacuously.
+        let bare = std::process::Command::new("mysbx-q1012-fixture")
+            .env_clear()
+            .status();
+        assert!(
+            bare.is_err(),
+            "the fixture must be unreachable by bare name without PATH: {bare:?}"
+        );
+
+        // (b) Resolved against a PATH that holds it, the same spawn works
+        // under the same cleared environment.
+        let resolved = resolve_program_in("mysbx-q1012-fixture", Some(dir.as_os_str()));
+        assert_eq!(resolved, program.to_string_lossy());
+        let ran = std::process::Command::new(&resolved).env_clear().status();
+        assert!(
+            ran.as_ref().is_ok_and(std::process::ExitStatus::success),
+            "the resolved program must run under env_clear: {ran:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     fn editor_command_splits_arguments_and_refuses_a_blank_value() {
         // The env is process-global: this test owns both variables for
         // its duration and restores nothing else.
