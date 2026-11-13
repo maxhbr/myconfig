@@ -27,7 +27,15 @@
 //!    non-blocking, install the signal handlers — BEFORE the spawn
 //!    (failure → exit 70 with a message).
 //! 3. Spawn `<cmd>`, with its stdin/stdout/stderr inherited, then
-//!    record its pid for the signal handlers.
+//!    record its pid for the signal handlers. The termination signals
+//!    are blocked across that spawn+store so a signal in the window is
+//!    delivered once the pid is known.
+//!
+//! Signal-forwarding rule: SIGHUP and SIGTERM are always forwarded to
+//! the payload (a supervisor's shutdown must stop it). SIGINT is
+//! forwarded only when the relay is NOT in the terminal's foreground
+//! process group — in the foreground the terminal already delivered ^C
+//! to the payload too, so forwarding would signal it twice.
 //! 4. One accept thread: per connection, connect to the Unix socket
 //!    and copy both ways until EOF, then half-close the peer.
 //!    Transient accept errors retry, descriptor pressure backs off,
@@ -157,17 +165,34 @@ fn run(inv: &Invocation) -> Result<i32, String> {
         .map_err(|e| format!("cannot poll {}: {e}", inv.listen))?;
 
     // A `^C` (or a supervisor's SIGTERM/SIGHUP) must stop the PAYLOAD,
-    // not leave it orphaned while the relay dies. The handler is
-    // installed BEFORE the spawn so a signal landing in the spawn
-    // window cannot kill the relay and orphan a not-yet-recorded child;
-    // it forwards to CHILD_PID only once that is set (0 = nothing yet).
+    // not leave it orphaned while the relay dies. The handlers are
+    // installed before the spawn, and the three signals are BLOCKED
+    // across the spawn+pid-store so a signal arriving in that window is
+    // delivered afterwards, once the pid is known — never lost, never
+    // killing the relay alone (the payload's own mask is reset by
+    // `Command::spawn`, so it does not inherit the block).
     forward_signals();
+    let blocked =
+        unsafe { mysbx::sig::set_of(&[mysbx::sig::HUP, mysbx::sig::INT, mysbx::sig::TERM]) };
+    let saved = unsafe { mysbx::sig::mask(mysbx::sig::BLOCK, &blocked) };
 
-    let mut child = Command::new(&inv.payload[0])
+    let child = Command::new(&inv.payload[0])
         .args(&inv.payload[1..])
         .spawn()
-        .map_err(|e| format!("cannot start `{}`: {e}", inv.payload[0]))?;
-    set_child_pid(child.id());
+        .map_err(|e| format!("cannot start `{}`: {e}", inv.payload[0]));
+    let mut child = match child {
+        Ok(child) => {
+            set_child_pid(child.id());
+            unsafe { mysbx::sig::restore_mask(&saved) };
+            child
+        }
+        Err(e) => {
+            // Unblock before returning so the process is not left with a
+            // changed mask.
+            unsafe { mysbx::sig::restore_mask(&saved) };
+            return Err(e);
+        }
+    };
 
     let stop = Arc::new(AtomicBool::new(false));
     let connect = inv.connect.clone();
@@ -190,6 +215,9 @@ fn run(inv: &Invocation) -> Result<i32, String> {
         }
     };
     stop.store(true, Ordering::SeqCst);
+    // Clear the pid slot: a late signal must not hit a pid the OS may
+    // have reused.
+    set_child_pid(0);
     // The accept loop polls non-blocking with a short sleep; join it so
     // no in-flight copy keeps the process alive past the payload.
     let _ = acceptor.join();
@@ -218,7 +246,7 @@ fn accept_loop(listener: TcpListener, connect: &str, stop: &AtomicBool) {
                 ) => {}
             // Descriptor pressure: back off briefly instead of spinning
             // (EMFILE/ENFILE surface as `Other` with those raw codes).
-            Err(ref e) if is_descriptor_pressure(e) => {
+            Err(ref e) if is_transient_accept_pressure(e) => {
                 std::thread::sleep(Duration::from_millis(100));
             }
             // Fatal: report it once, on stderr, and stop accepting
@@ -234,8 +262,11 @@ fn accept_loop(listener: TcpListener, connect: &str, stop: &AtomicBool) {
 /// Whether an accept error is descriptor exhaustion (`EMFILE` on the
 /// process, `ENFILE` system-wide), where a short back-off — rather than
 /// a hot spin or a dead relay — is the right response.
-fn is_descriptor_pressure(e: &io::Error) -> bool {
-    matches!(e.raw_os_error(), Some(24) | Some(23)) // EMFILE, ENFILE
+fn is_transient_accept_pressure(e: &io::Error) -> bool {
+    // EMFILE, ENFILE (descriptor exhaustion) and ENOBUFS, ENOMEM (the
+    // kernel out of memory for the new socket): all transient under load,
+    // so the accept loop backs off and retries rather than dying.
+    matches!(e.raw_os_error(), Some(24) | Some(23) | Some(105) | Some(12))
 }
 
 /// Forward one client connection to the Unix socket and back until
@@ -347,6 +378,12 @@ fn set_child_pid(pid: u32) {
 fn forward_signals() {
     unsafe extern "C" fn forward(signum: i32) {
         let pid = CHILD_PID.load(Ordering::SeqCst);
+        // SIGINT: skip when the relay and the payload share the terminal's
+        // foreground process group — the terminal already delivered ^C to
+        // both, and forwarding it again would signal the payload twice.
+        if signum == mysbx::sig::INT && mysbx::sig::in_foreground_process_group() {
+            return;
+        }
         if pid > 0 {
             unsafe {
                 mysbx::sig::kill_pid(pid, signum);
@@ -492,9 +529,19 @@ mod tests {
     fn descriptor_pressure_is_recognised() {
         // EMFILE (24) / ENFILE (23) get a back-off, not a fatal break;
         // other errors do not.
-        assert!(is_descriptor_pressure(&io::Error::from_raw_os_error(24)));
-        assert!(is_descriptor_pressure(&io::Error::from_raw_os_error(23)));
-        assert!(!is_descriptor_pressure(&io::Error::from_raw_os_error(9)));
-        assert!(!is_descriptor_pressure(&io::Error::other("x")));
+        for transient in [24, 23, 105, 12] {
+            // EMFILE, ENFILE, ENOBUFS, ENOMEM.
+            assert!(
+                is_transient_accept_pressure(&io::Error::from_raw_os_error(transient)),
+                "{transient} must back off and retry"
+            );
+        }
+        for fatal in [9, 22] {
+            assert!(
+                !is_transient_accept_pressure(&io::Error::from_raw_os_error(fatal)),
+                "{fatal} must not be treated as transient"
+            );
+        }
+        assert!(!is_transient_accept_pressure(&io::Error::other("x")));
     }
 }

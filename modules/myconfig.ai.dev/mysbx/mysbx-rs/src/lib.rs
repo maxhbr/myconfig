@@ -5595,6 +5595,80 @@ pub mod sig {
     extern "C" {
         fn signal(signum: i32, handler: usize) -> usize;
         fn kill(pid: i32, sig: i32) -> i32;
+        fn pthread_sigmask(how: i32, set: *const SigSet, old: *mut SigSet) -> i32;
+        fn sigemptyset(set: *mut SigSet) -> i32;
+        fn sigaddset(set: *mut SigSet, signum: i32) -> i32;
+        fn getpgrp() -> i32;
+        fn tcgetpgrp(fd: i32) -> i32;
+    }
+
+    /// The platform's `sigset_t`: a 128-byte block, which glibc and musl
+    /// both accept as an over-large (never under-large) buffer for the
+    /// mask they see. Only `sigemptyset`/`sigaddset`/`pthread_sigmask`
+    /// touch it, and all three are given a pointer to zeroed bytes.
+    #[repr(C, align(8))]
+    pub struct SigSet([u8; 128]);
+
+    impl SigSet {
+        /// A zeroed set — the starting point for `sigemptyset`.
+        pub fn empty() -> Self {
+            SigSet([0u8; 128])
+        }
+    }
+
+    /// `SIG_BLOCK`.
+    pub const BLOCK: i32 = 0;
+    /// `SIG_UNBLOCK`.
+    pub const UNBLOCK: i32 = 1;
+
+    /// Build a set from `signals` via `sigemptyset` + `sigaddset`.
+    ///
+    /// # Safety
+    /// Pure libc calls on a local buffer; `signals` must be valid
+    /// signal numbers.
+    pub unsafe fn set_of(signals: &[i32]) -> SigSet {
+        let mut set = SigSet::empty();
+        unsafe {
+            sigemptyset(&mut set);
+            for &sig in signals {
+                sigaddset(&mut set, sig);
+            }
+        }
+        set
+    }
+
+    /// Block or unblock `set` on the calling thread, returning the
+    /// previous mask.
+    ///
+    /// # Safety
+    /// Like [`on`]: the caller owns this thread's signal policy.
+    pub unsafe fn mask(how: i32, set: &SigSet) -> SigSet {
+        let mut old = SigSet::empty();
+        unsafe {
+            pthread_sigmask(how, set, &mut old);
+        }
+        old
+    }
+
+    /// Restore a previously saved mask.
+    ///
+    /// # Safety
+    /// As [`mask`]; `old` must come from [`mask`].
+    pub unsafe fn restore_mask(old: &SigSet) {
+        unsafe {
+            pthread_sigmask(2, old, std::ptr::null_mut()); // SIG_SETMASK
+        }
+    }
+
+    /// Whether the calling process is in the FOREGROUND process group of
+    /// its controlling terminal — i.e. the terminal delivers `^C`
+    /// (`SIGINT`) to the relay and the payload alike.
+    pub fn in_foreground_process_group() -> bool {
+        // stdin is fd 0; a process with no controlling terminal gets
+        // `tcgetpgrp` = -1, which compares unequal to a real pgrp.
+        let fg = unsafe { tcgetpgrp(0) };
+        let own = unsafe { getpgrp() };
+        fg >= 0 && fg == own
     }
 
     /// `SIGHUP`.
