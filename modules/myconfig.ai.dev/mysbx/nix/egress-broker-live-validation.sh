@@ -22,6 +22,8 @@ set -euo pipefail
 
 repo=${1:?usage: egress-broker-live-validation.sh <repo-dir>}
 mysbx=${MYSBX:-mysbx}
+# cli.md D8: 70 is the refused-configuration code every refusal uses.
+MYSBX_EXIT_REFUSED=70
 runtime=${XDG_RUNTIME_DIR:-}
 [ -n "$runtime" ] ||
     {
@@ -36,12 +38,29 @@ fail() {
     exit 1
 }
 
+passes=0
+skips=0
 pass() {
+    passes=$((passes + 1))
     printf 'PASS %s\n' "$1"
+}
+
+# A probe that could not be exercised reports SKIP, never PASS: a check
+# that did not run must not read as evidence (bd myconfig-b102).
+skip() {
+    skips=$((skips + 1))
+    printf 'SKIP %s — %s\n' "$1" "$2"
 }
 
 note() {
     printf '     %s\n' "$1"
+}
+
+finish() {
+    printf '\n%d probe(s) passed, %d skipped (skipped probes are NOT evidence)\n' \
+        "$passes" "$skips"
+    [ "$skips" = 0 ] ||
+        printf 're-run the skipped probes by hand before recording results\n'
 }
 
 # How many per-run directories exist right now. A missing root is ZERO, not
@@ -59,15 +78,18 @@ find "$repo" -maxdepth 0 >/dev/null 2>&1 || fail "repo" "no such directory: $rep
 cd "$repo"
 
 # ---- effective pins, read THROUGH the wrapper ---------------------------
-doctor=$("$mysbx" doctor bubblewrap 2>&1) || {
-    # An unwrapped mysbx has no egress pins at all, so doctor warns (and
-    # this probe needs more). Say so instead of leaving the operator with a
-    # bare exit code.
-    if grep -q 'network = "proxy-only" is not pinned' <<<"$doctor"; then
+# doctor's exit code says whether ANY of its checks failed, which on a
+# healthy host can still be true for reasons this runbook does not care
+# about (a nested-virt probe, a missing bwrap). Only the egress line is
+# this probe's business, so the output is read and the status ignored.
+doctor=$("$mysbx" doctor bubblewrap 2>&1 || true)
+if ! grep -q 'egress broker:' <<<"$doctor"; then
+    # No egress pins at all: an unwrapped binary. Say so, rather than
+    # leaving the operator with a missing-line mystery.
+    grep -q 'network = "proxy-only" is not pinned' <<<"$doctor" &&
         fail "pins" "this mysbx pins no egress channel; run the WRAPPED binary (the Nix switch), not a cargo/debug build"
-    fi
-    fail "pins" "mysbx doctor exited non-zero: $doctor"
-}
+    fail "pins" "mysbx doctor reported no egress broker line: $doctor"
+fi
 broker_line=$(grep -E '^[A-Z]+ +egress broker:' <<<"$doctor" || true)
 [ -n "$broker_line" ] ||
     fail "pins" "mysbx doctor reported no egress broker line; is this the rebuilt wrapper?"
@@ -93,7 +115,12 @@ fi
 pass "a dry run creates nothing and names the per-run channel (docs/design/egress.md E5)"
 
 # ---- E1/E4: a REAL run brings the broker up and logs to the sidecar -----
-"$mysbx" run -- true >/dev/null 2>&1 || fail "real run" "a plain 'run -- true' failed"
+# `--result` makes this a WAITED run: mysbx stays the parent, so it reaps the
+# broker and removes the run directory (E2). A plain `run` is exec mode and
+# leaves the directory behind ON PURPOSE — the next run's sweep owns it —
+# so it cannot prove the E2/E3 cleanup.
+"$mysbx" run --result -- true >/dev/null 2>&1 ||
+    fail "real run" "a waited 'run --result -- true' failed"
 sidecar=$("$mysbx" status 2>/dev/null | sed -n 's/^## sidecar:  *\([^ ]*\).*/\1/p')
 [ -n "$sidecar" ] || fail "sidecar" "cannot resolve the sidecar from 'mysbx status'"
 latest=$(find "$sidecar/egress" -mindepth 2 -maxdepth 2 -name decisions.jsonl -printf '%h\n' 2>/dev/null |
@@ -122,38 +149,32 @@ grep -q '"pid":' <<<"$diag_json" || fail "diagnose --json" "no pid field: $diag_
 pass "mysbx diagnose egress reads the log back (cli.md D29)"
 
 # ---- E5: fail closed ----------------------------------------------------
-# The wrapper pins `MYSBX_EGRESS_BROKER` with `--set`, so overriding it in
-# THIS shell would be silently discarded — the probe has to remove the
-# program itself, not the variable. Moving the pinned binary aside for the
-# duration makes the wrapper's own pin point at nothing.
-moved="$broker.moved-$$"
-[ -e "$broker" ] || fail "fail closed" "the pinned broker does not exist: $broker"
-mv_broker() {
-    mv "$broker" "$moved" 2>/dev/null && return 0
-    # A store path cannot be moved; fall back to overriding PATH-free
-    # resolution by pointing the pin at a non-existent path via the one
-    # variable the wrapper leaves overridable.
-    return 1
-}
+# Inject the failure WITHOUT touching the pinned broker: the wrapper pins
+# `MYSBX_EGRESS_BROKER` with `--set` (immovable) but `MYSBX_EGRESS_SOCKET`
+# and `_PORT` with `--set-default`, so a run can be given a socket path
+# step 4b rejects. That is the same fail-closed path (exit 70, nothing
+# created) reached without moving a shared executable that a concurrent
+# mysbx run may be using.
 before=$(count_run_dirs)
-refused=1
-if mv_broker; then
-    "$mysbx" run -- true >/dev/null 2>&1 && refused=0
-    mv "$moved" "$broker"
-else
-    note "cannot move the pinned broker (a read-only store path); the"
-    note "fail-closed probe needs a writable pin — SKIPPED, run it by hand"
-fi
-[ "$refused" = 1 ] || fail "fail closed" "a run with an unusable broker pin SUCCEEDED"
+sidecar_before=$(find "$sidecar" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)
+MYSBX_EGRESS_SOCKET='/run/not-the-egress-dir/litellm.sock' \
+    "$mysbx" run -- true >/dev/null 2>&1 && refused=0 || refused=$?
+[ "$refused" = "$MYSBX_EXIT_REFUSED" ] ||
+    fail "fail closed" "a run with a broken egress pin exited $refused, expected $MYSBX_EXIT_REFUSED (E5)"
 [ "$before" = "$(count_run_dirs)" ] ||
-    fail "fail closed" "the refused run left a directory behind (E5)"
-pass "an unusable broker pin refuses the run and creates nothing (E5)"
+    fail "fail closed" "the refused run left a run directory behind (E5)"
+[ "$sidecar_before" = "$(find "$sidecar" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)" ] ||
+    fail "fail closed" "the refused run created sidecar state (E5)"
+pass "a broken egress pin refuses the run (exit $MYSBX_EXIT_REFUSED) and creates nothing (E5)"
 
 # ---- the profile's SUPPORTED backends still run ------------------------
+# `--verbose` is REQUIRED: the `network:` line (and with it the per-run
+# channel) is part of the report, which a bare --dry-run does not print —
+# it prints the argv only.
 for backend in bubblewrap nono; do
-    out=$("$mysbx" --backend "$backend" --dry-run 2>&1) ||
-        fail "supported backends" "$backend exited non-zero on --dry-run: $out"
-    grep -qiE "refus|cannot|not supported|not enforced" <<<"$out" &&
+    out=$("$mysbx" --backend "$backend" --dry-run --verbose 2>&1) ||
+        fail "supported backends" "$backend exited non-zero on --dry-run --verbose: $out"
+    grep -qiE "refus|not supported|not enforced" <<<"$out" &&
         fail "supported backends" "$backend refuses the profile: $out"
     grep -q "via the relay from" <<<"$out" ||
         fail "supported backends" "$backend's report names no egress channel"
@@ -190,3 +211,5 @@ cat <<'EOF'
 
 EOF
 printf 'PASS scripted probes (the agent, kill-mid-run and detach probes are manual)\n'
+passes=$((passes + 1))
+finish

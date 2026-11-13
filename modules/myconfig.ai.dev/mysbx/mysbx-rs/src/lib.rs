@@ -6930,8 +6930,28 @@ fn ensure_egress_run_dir(dir: &std::path::Path) -> Result<(), String> {
     let root = dir
         .parent()
         .ok_or_else(|| format!("{} has no parent directory", dir.display()))?;
-    ensure_plain_dir(root)?;
-    ensure_plain_dir(dir)?;
+    // One refusal for both levels, in this channel's own words: a
+    // symlink or a plain file where the run directory (or its root) must
+    // be is a broken channel, not a state directory (D15's message would
+    // name the wrong subsystem).
+    for path in [root, dir] {
+        match std::fs::symlink_metadata(path) {
+            Ok(meta) if meta.file_type().is_symlink() || !meta.is_dir() => {
+                return Err(format!(
+                    "{} exists and is not a real directory; the egress run directory \
+                     is a bind source and must not be redirected \
+                     (docs/design/egress.md E3)",
+                    path.display()
+                ))
+            }
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                std::fs::create_dir(path)
+                    .map_err(|e| format!("cannot create {}: {e}", path.display()))?;
+            }
+            Err(e) => return Err(format!("cannot inspect {}: {e}", path.display())),
+        }
+    }
     std::fs::set_permissions(
         dir,
         <std::fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o700),
