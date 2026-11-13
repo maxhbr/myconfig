@@ -39,28 +39,22 @@ fail() {
 }
 
 passes=0
-skips=0
 pass() {
     passes=$((passes + 1))
     printf 'PASS %s\n' "$1"
-}
-
-# A probe that could not be exercised reports SKIP, never PASS: a check
-# that did not run must not read as evidence (bd myconfig-b102).
-skip() {
-    skips=$((skips + 1))
-    printf 'SKIP %s — %s\n' "$1" "$2"
 }
 
 note() {
     printf '     %s\n' "$1"
 }
 
+# Every probe here either runs or FAILs the script. There is deliberately no
+# SKIP category: the one probe that could not be exercised (moving the
+# pinned broker aside) was replaced by a non-destructive injection, and a
+# category nothing ever reports would make the closing count assert
+# nothing.
 finish() {
-    printf '\n%d probe(s) passed, %d skipped (skipped probes are NOT evidence)\n' \
-        "$passes" "$skips"
-    [ "$skips" = 0 ] ||
-        printf 're-run the skipped probes by hand before recording results\n'
+    printf '\n%d probe(s) passed\n' "$passes"
 }
 
 # How many per-run directories exist right now. A missing root is ZERO, not
@@ -105,11 +99,30 @@ pass "the wrapper pins a per-run broker (docs/design/egress.md E1)"
 before=$(count_run_dirs)
 dry=$("$mysbx" --dry-run --verbose 2>&1) || fail "dry run" "a --dry-run exited non-zero"
 grep -q "proxy-only" <<<"$dry" || fail "dry run" "the report does not name the proxy-only profile"
-grep -q "via the relay from" <<<"$dry" ||
-    fail "dry run" "the report names no per-run channel source: $(grep '^network:' <<<"$dry")"
-if grep -qE "^network:.*via the relay from /run/" <<<"$dry"; then
-    fail "dry run" "the report still names the STATIC forwarder directory as the source"
-fi
+# The verbose report prefixes every line with `## ` (so the unprefixed argv
+# block stays byte-identical to a bare --dry-run), so the anchor must allow
+# it: an `^network:` pattern matches nothing and would make the negative
+# check below silently vacuous.
+grep -qE '^(## )?network:.*via the relay from' <<<"$dry" ||
+    fail "dry run" "the report names no per-run channel source: $(grep -E '^(## )?network:' <<<"$dry")"
+# The STATIC source is the fixed `EGRESS_SOCKET_DIR` constant
+# (mysbx::EGRESS_SOCKET_DIR, "/run/mysbx-egress"); the per-run one is
+# "$XDG_RUNTIME_DIR/mysbx-egress/<pid>". Compare those two spellings —
+# sniffing for "/run/" cannot tell them apart, because the per-run path
+# lives under /run/user/<uid>/ too.
+static_dir=/run/mysbx-egress
+channel=$(grep -E '^(## )?network:' <<<"$dry" | head -1)
+case "$channel" in
+    *"via the relay from $static_dir"*)
+        fail "dry run" "the report names the STATIC forwarder directory as the source: $channel"
+        ;;
+    *"via the relay from $runtime/mysbx-egress/"*)
+        : # the per-run channel, as it must be
+        ;;
+    *)
+        fail "dry run" "the report names neither the per-run channel nor the static one: $channel"
+        ;;
+esac
 [ "$before" = "$(count_run_dirs)" ] ||
     fail "dry run creates nothing" "the run directory count changed ($before -> $(count_run_dirs)); docs/design/egress.md E5"
 pass "a dry run creates nothing and names the per-run channel (docs/design/egress.md E5)"
