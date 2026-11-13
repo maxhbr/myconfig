@@ -5791,6 +5791,7 @@ fn nono_params() -> NonoParams<'static> {
         workspace: Workspace::Live,
         profile: "default",
         waypipe_socket_dir: None,
+        egress_port: None,
     }
 }
 
@@ -5855,12 +5856,55 @@ fn nono_layered_argv(
     host_env: &HostEnv,
     nono_params: &NonoParams<'_>,
 ) -> Result<Vec<String>, LayeredError> {
+    nono_layered_argv_with(cfg, repo, payload, host_env, nono_params, &[], None, None)
+}
+
+/// [`nono_layered_argv`] for a `network = "proxy-only"` run (docs/
+/// design/config.md D20, bd myconfig-vpi9.1): the same chain with the
+/// egress channel, as `lib.rs` threads it.
+fn nono_chain_proxy_only(cfg: &Merged) -> Vec<String> {
+    let channel = egress_channel();
+    let nono_params = NonoParams {
+        egress_port: Some(channel.port),
+        ..nono_params()
+    };
+    nono_layered_argv_with(
+        cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &nono_params,
+        &[],
+        None,
+        Some(channel.clone()),
+    )
+    .unwrap()
+}
+
+/// The body every layered helper shares: build the grants, prefix the
+/// nono binary, and lay them into the bwrap view as the inner command.
+/// `policy_paths`, `ca_bundle` and `egress` are the layout facts the
+/// individual helpers vary — a call site that does not care passes the
+/// empty/`None` value.
+fn nono_layered_argv_with(
+    cfg: &Merged,
+    repo: &Repo,
+    payload: &Payload,
+    host_env: &HostEnv,
+    nono_params: &NonoParams<'_>,
+    policy_paths: &[mysbx::bwrap::PolicyPath],
+    ca_bundle: Option<&'static str>,
+    egress: Option<mysbx::bwrap::EgressChannel<'static>>,
+) -> Result<Vec<String>, LayeredError> {
     let grants = nono_run_argv(cfg, repo, payload, nono_params).map_err(LayeredError::Nono)?;
     let mut inner_argv: Vec<String> = Vec::with_capacity(grants.len() + 1);
     inner_argv.push(NONO_BIN.into());
     inner_argv.extend(grants);
     let p = Params {
         workspace: nono_params.workspace.clone(),
+        policy_paths,
+        ca_bundle,
+        egress,
         inner: Some(Inner {
             argv: &inner_argv,
             env_bin: "env",
@@ -5881,20 +5925,16 @@ fn nono_layered_argv_with_policy(
     nono_params: &NonoParams<'_>,
     policy_paths: &[mysbx::bwrap::PolicyPath],
 ) -> Result<Vec<String>, LayeredError> {
-    let grants = nono_run_argv(cfg, repo, payload, nono_params).map_err(LayeredError::Nono)?;
-    let mut inner_argv: Vec<String> = Vec::with_capacity(grants.len() + 1);
-    inner_argv.push(NONO_BIN.into());
-    inner_argv.extend(grants);
-    let p = Params {
-        workspace: nono_params.workspace.clone(),
+    nono_layered_argv_with(
+        cfg,
+        repo,
+        payload,
+        host_env,
+        nono_params,
         policy_paths,
-        inner: Some(Inner {
-            argv: &inner_argv,
-            env_bin: "env",
-        }),
-        ..params()
-    };
-    bwrap_argv(cfg, repo, payload, host_env, &p).map_err(LayeredError::Bwrap)
+        None,
+        None,
+    )
 }
 
 /// [`nono_layered_argv`] with a CA bundle pin threaded into the bwrap
@@ -5907,20 +5947,16 @@ fn nono_layered_argv_with_pins(
     nono_params: &NonoParams<'_>,
     ca_bundle: Option<&'static str>,
 ) -> Result<Vec<String>, LayeredError> {
-    let grants = nono_run_argv(cfg, repo, payload, nono_params).map_err(LayeredError::Nono)?;
-    let mut inner_argv: Vec<String> = Vec::with_capacity(grants.len() + 1);
-    inner_argv.push(NONO_BIN.into());
-    inner_argv.extend(grants);
-    let p = Params {
-        workspace: nono_params.workspace.clone(),
+    nono_layered_argv_with(
+        cfg,
+        repo,
+        payload,
+        host_env,
+        nono_params,
+        &[],
         ca_bundle,
-        inner: Some(Inner {
-            argv: &inner_argv,
-            env_bin: "env",
-        }),
-        ..params()
-    };
-    bwrap_argv(cfg, repo, payload, host_env, &p).map_err(LayeredError::Bwrap)
+        None,
+    )
 }
 
 #[test]
@@ -6068,6 +6104,7 @@ fn nono_once_grants_the_visible_worktrees_dest() {
         },
         profile: "default",
         waypipe_socket_dir: None,
+        egress_port: None,
     };
     let argv = nono_run_argv(&cfg, &repo, &Payload::Shell, &once_params)
         .expect("the once-mode nono argv builds");
@@ -6922,6 +6959,120 @@ fn nono_golden_shared_network() {
         argv.windows(2)
             .any(|w| w[0] == "--allow-unix-socket" && w[1] == "/nix/var/nix/daemon-socket/socket"),
         "the daemon socket is granted with the shared network: {argv:?}"
+    );
+}
+
+#[test]
+fn nono_golden_proxy_only() {
+    // `network = "proxy-only"` on the LAYERED nono backend (docs/
+    // design/config.md D20, bd myconfig-vpi9.1): the bwrap half is
+    // the bubblewrap backend's channel unchanged — empty netns, the
+    // forwarder socket directory bound ro at EGRESS_DIR, the two
+    // name-lookup files, and the relay wrapped innermost so it is
+    // the first thing that runs — and nono's own argv maps the
+    // profile to `--block-net` plus ONE `--allow-connect-port` for
+    // the relay's loopback port. Nothing else is reachable: the
+    // deny is what makes the profile real on this layer (nono allows
+    // outbound by default), and a UDP/raw-socket payload hits it too.
+    let mut cfg = nono_base(false);
+    cfg.network = mysbx::config::Network::ProxyOnly;
+    let argv = nono_chain_proxy_only(&cfg);
+    assert_golden("nono-network-proxy-only.txt", &argv);
+    // The deny and its single port grant.
+    assert!(argv.contains(&"--block-net".to_string()), "{argv:?}");
+    let ports: Vec<&str> = argv
+        .windows(2)
+        .filter(|w| w[0] == "--allow-connect-port")
+        .map(|w| w[1].as_str())
+        .collect();
+    assert_eq!(ports, ["4000"], "exactly the relay port: {argv:?}");
+    // No shared-network machinery: no --share-net, no resolver binds,
+    // no daemon socket (a fixed-output-building daemon is a hole the
+    // profile does not have).
+    for absent in ["--share-net", "--allow-domain", "--listen-port"] {
+        assert!(!argv.contains(&absent.to_string()), "no {absent}: {argv:?}");
+    }
+    assert!(
+        !argv
+            .windows(2)
+            .any(|w| w[0] == "--ro-bind-try"
+                && (w[1] == "/etc/resolv.conf" || w[1] == "/nix/var/nix")),
+        "no resolver/daemon binds under proxy-only: {argv:?}"
+    );
+    assert!(
+        !argv.iter().any(|a| a == "--allow-unix-socket"),
+        "no daemon socket grant under proxy-only: {argv:?}"
+    );
+    // The bwrap half: the socket directory bound at the fixed path,
+    // the two lookup files, and the relay ahead of the nono chain.
+    assert!(
+        argv.windows(3)
+            .any(|w| w[0] == "--ro-bind" && w[2] == mysbx::bwrap::EGRESS_DIR),
+        "the egress dir is bound: {argv:?}"
+    );
+    for name in ["hosts", "nsswitch.conf"] {
+        assert!(
+            argv.windows(3)
+                .any(|w| w[0] == "--ro-bind" && w[2] == format!("/etc/{name}")),
+            "/etc/{name} is bound from the store: {argv:?}"
+        );
+    }
+    let relay = argv
+        .iter()
+        .position(|a| a == "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay")
+        .expect("the relay wraps the payload");
+    let nono_bin = argv
+        .iter()
+        .position(|a| a == NONO_BIN)
+        .expect("the nono chain is in the argv");
+    assert!(
+        relay < nono_bin,
+        "the relay runs OUTSIDE nono, so it comes first: {argv:?}"
+    );
+    assert!(
+        argv[relay + 1..relay + 3] == ["--listen", "127.0.0.1:4000"],
+        "the relay listens on the granted port: {argv:?}"
+    );
+}
+
+#[test]
+fn nono_proxy_only_without_the_channel_is_refused() {
+    // The profile fails closed (bd myconfig-vpi9.1): with no egress
+    // port there is no grant to make, and a nono run that silently
+    // fell back to `outbound allowed` would be the opposite of the
+    // policy.
+    let mut cfg = nono_base(false);
+    cfg.network = mysbx::config::Network::ProxyOnly;
+    let err = nono_run_argv(&cfg, &synth_repo(), &Payload::Shell, &nono_params())
+        .expect_err("a channel-less proxy-only nono run must be refused");
+    assert!(
+        matches!(err, NonoError::EgressChannelMissing),
+        "wrong error: {err}"
+    );
+    assert!(err.to_string().contains("proxy-only"), "{err}");
+}
+
+#[test]
+fn nono_proxy_only_with_an_allowlist_is_refused() {
+    // The profile names the one reachable endpoint itself; an
+    // allowlist next to it contradicts the deny (the pipeline refuses
+    // it in step 4b, the builder here as defense in depth).
+    let mut cfg = nono_base(false);
+    cfg.network = mysbx::config::Network::ProxyOnly;
+    cfg.allow_domains = vec!["api.openai.com".into()];
+    let err = nono_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &NonoParams {
+            egress_port: Some(4000),
+            ..nono_params()
+        },
+    )
+    .expect_err("an allowlist under proxy-only must be refused");
+    assert!(
+        matches!(err, NonoError::AllowlistUnderDeniedNetwork),
+        "wrong error: {err}"
     );
 }
 

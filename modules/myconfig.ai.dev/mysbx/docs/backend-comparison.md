@@ -86,12 +86,14 @@ A nonempty nono allowlist with `"none"` is refused.
 
 `network = "proxy-only"` is the no-key profile (`config.md` D20/D28):
 the sandbox reaches ONLY the host LiteLLM endpoint plus an in-sandbox
-loopback relay to the forwarder's Unix socket. **bubblewrap** enforces
-it; the podman, krun and VM backends REFUSE it (exit 70) because their
-net device always keeps a gateway route. Under the profile the
-forwarded environment narrows to the technical base, a credential-shaped
-`[env]`/`[nix]` name is refused, and a dropped credential name gets the
-fixed `mysbx-proxy-only` placeholder.
+loopback relay to the forwarder's Unix socket. **bubblewrap** and the
+layered **nono** backend enforce it (nono adds `--block-net` and one
+`--allow-connect-port` for the relay, so UDP and raw sockets are
+denied too); the podman, krun and VM backends REFUSE it (exit 70)
+because their net device always keeps a gateway route. Under the
+profile the forwarded environment narrows to the technical base, a
+credential-shaped `[env]`/`[nix]` name is refused, and a dropped
+credential name gets the fixed `mysbx-proxy-only` placeholder.
 
 Allowlist entries from the user and repository layers are additive and
 deduplicated. A repository list does not narrow the user list; the keys
@@ -103,7 +105,8 @@ its own key.
 Host-loopback endpoints under `"shared"` are transport-dependent:
 shared host networking, Podman's gateway mapping, libkrun TSI and
 QEMU's SLiRP gateway are not interchangeable. Under `"proxy-only"`
-bubblewrap the single forwarder socket is the only path.
+the single forwarder socket is the only path, reachable through the
+in-sandbox relay.
 
 | Nono configuration | Meaning in pinned 0.80.0 |
 | --- | --- |

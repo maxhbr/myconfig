@@ -2315,12 +2315,13 @@ in
     ) true;
 
     # The Unix-socket half of the same forwarder (bd myconfig-mo3.2.4):
-    # the host channel the bubblewrap `network = "proxy-only"` profile
-    # binds into the sandbox (docs/design/config.md D20). Gated on the
-    # host running LiteLLM alone — it is independent of the podman
-    # backends, because the profile runs on plain bubblewrap. The
-    # forwarder is socket-activated, so an enabled-but-unused one runs
-    # nothing until a `proxy-only` sandbox connects.
+    # the host channel the `network = "proxy-only"` profile binds
+    # into the sandbox (docs/design/config.md D20). Gated on the host
+    # running LiteLLM alone — it is independent of the podman
+    # backends, because the profile runs on the bwrap-built tiers
+    # (bubblewrap and the layered nono backend). The forwarder is
+    # socket-activated, so an enabled-but-unused one runs nothing
+    # until a `proxy-only` sandbox connects.
     myconfig.ai.dev.litellm-forwarder.unixSocket.enable = lib.mkIf config.services.litellm.enable true;
 
     # The endpoint as the CONTAINER sees it, for tools that read

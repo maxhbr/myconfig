@@ -765,7 +765,7 @@ never uses detached runs may have neither.
 | Backend | Checks |
 | --- | --- |
 | `bubblewrap` | the `MYSBX_BWRAP` and `MYSBX_SHELL` pins are executable, `user.max_user_namespaces` (warning only), a throwaway `bwrap --unshare-all [--share-net] … -- <shell> -c 'exit 0'` (`--share-net` when the run shares the network), the model endpoint by a host-side TCP connect (the sandbox shares the host network), and the `network = "proxy-only"` egress channel (config.md D20): the `MYSBX_EGRESS_SOCKET`/`_PORT`/`_RELAY` pins exist and the forwarder socket answers a `GET /v1/models` (WARN when the host pins no channel — the profile is optional) |
-| `nono` | the bubblewrap checks, the `MYSBX_NONO` pin, the `MYSBX_NONO_PROFILE` file (when it is a path), the kernel Landlock ABI |
+| `nono` | the bubblewrap checks (including the `network = "proxy-only"` egress channel, bd myconfig-vpi9.1), the `MYSBX_NONO` pin, the `MYSBX_NONO_PROFILE` file (when it is a path), the kernel Landlock ABI |
 | `podman-gvisor` | the `MYSBX_PODMAN` binary, runsc registered with podman (`podman --runtime=runsc info`), the `MYSBX_PODMAN_IMAGE` image in the store and its ID against `MYSBX_PODMAN_IMAGE_ID`, a throwaway `podman run --rm --pull=never --network none` with the run's runtime, runtime flags and cgroup manager, the model endpoint by `curl` inside a container on the run's network (`MYSBX_PODMAN_PASTA_SPEC`) |
 | `podman-krun` | the podman checks with the `MYSBX_KRUN_RUNTIME` pin, or `crun` on PATH (executable, `--version` lists `+LIBKRUN`), `/dev/kvm` rw access (`kvm_available`), and the probes with the krun annotation and `--group-add=keep-groups` |
 | `krun` | KVM access, launcher and rootfs pins/shape, optional store-disk file, and a non-booting launcher argument-parser probe |

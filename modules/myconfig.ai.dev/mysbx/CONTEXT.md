@@ -83,16 +83,16 @@ _Avoid_: state directory mount, persistent volume, cache dir
 **Proxy-only profile**:
 The `network = "proxy-only"` setting (config.md D20): the sandbox reaches
 only the host's LiteLLM endpoint and holds no model credential. Stricter
-than `"shared"`, weaker than `"none"`; enforced on bubblewrap and
-refused on every other backend in phase A. The credential rules it
-implies are config.md D28.
+than `"shared"`, weaker than `"none"`; enforced on the bwrap-built
+tiers (bubblewrap and nono) and refused on every other backend. The
+credential rules it implies are config.md D28.
 _Avoid_: egress mode, proxy mode, restricted network
 
 **Egress forwarder**:
 The host-side, port-scoped `systemd-socket-proxyd` listener
 (`myconfig.ai.dev.litellm-forwarder`) that makes the loopback-only LiteLLM
 proxy reachable from a sandbox. It is a static, socket-activated unit;
-under `proxy-only` its Unix socket is the one channel the bubblewrap
+under `proxy-only` its Unix socket is the one channel the
 sandbox has.
 _Avoid_: proxy bridge, port forward, tunnel
 

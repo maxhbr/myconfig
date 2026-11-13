@@ -10019,15 +10019,16 @@ fn allowlist_on_microvm_ch_is_refused() {
 }
 
 #[test]
-fn proxy_only_is_refused_on_every_backend_but_bubblewrap() {
-    // D20 (bd myconfig-mo3.2.3, mo3.2.6): `network = "proxy-only"` is
-    // enforced by bubblewrap ALONE; every other backend refuses it
-    // (exit 70) with a backend-specific reason, before the session
-    // clone and before the --dry-run return, so a dry run audits it.
-    // (Bubblewrap's own refusal — the missing-pins fail-closed — is
+fn proxy_only_is_refused_on_every_backend_but_the_bwrap_tiers() {
+    // D20 (bd myconfig-mo3.2.3, mo3.2.6, myconfig-vpi9.1):
+    // `network = "proxy-only"` is enforced by the bwrap-built tiers
+    // (bubblewrap and the layered nono backend on top of it); every
+    // other backend refuses it (exit 70) with a backend-specific
+    // reason, before the session clone and before the --dry-run
+    // return, so a dry run audits it. (The bwrap tiers' own
+    // missing-pins fail-closed refusal is
     // `proxy_only_on_bubblewrap_without_pins_is_refused`.)
     for backend in [
-        "nono",
         "podman-gvisor",
         "podman-krun",
         "krun",
@@ -10130,6 +10131,34 @@ fn proxy_only_on_bubblewrap_without_pins_is_refused() {
         !stdout.contains("--clearenv"),
         "no argv on refusal: {stdout}"
     );
+}
+
+#[test]
+fn proxy_only_is_accepted_on_nono() {
+    // bd myconfig-vpi9.1: step 4b no longer refuses the profile on the
+    // layered backend. The argv itself is locked by the
+    // `nono-network-proxy-only.txt` golden; what only a CLI run can
+    // show is that the pipeline lets the run through at all.
+    let (inv, _, _sidecar) =
+        fixture_nono_config("proxy-only-nono", &[], "network = \"proxy-only\"\n");
+    let (code, stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stdout.contains("\n--allow-connect-port\n4000\n"),
+        "the relay port is granted: {stdout}"
+    );
+    // The credential rules apply to this backend too (D28): a
+    // credential-shaped [env] name is refused on nono just like on
+    // bubblewrap, because the profile is the same no-key path.
+    let (inv, _, _sidecar) = fixture_nono_config(
+        "proxy-only-nono-env-key",
+        &[],
+        "network = \"proxy-only\"\n[env]\nOPENAI_API_KEY = \"sk-x\"\n",
+    );
+    let (code, _, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"]));
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(stderr.contains("OPENAI_API_KEY"), "{stderr}");
+    assert!(stderr.contains("proxy-only"), "{stderr}");
 }
 
 #[test]

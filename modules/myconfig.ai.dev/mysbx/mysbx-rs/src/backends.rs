@@ -71,10 +71,10 @@ pub struct Backend {
     /// an allowlist (config.md D21), never accepts-and-ignores it.
     pub network_allowlist: bool,
     /// Whether the backend enforces the D20 proxy-only network
-    /// profile (`network = "proxy-only"`): `true` only for
-    /// bubblewrap, whose unshared netns plus forwarder socket and
-    /// in-sandbox relay is the shipped transport (bd
-    /// myconfig-mo3.2.6). Every other backend refuses the profile.
+    /// profile (`network = "proxy-only"`): `true` for the bwrap-built
+    /// tiers, whose unshared netns plus forwarder socket and
+    /// in-sandbox relay is the shipped transport (bd myconfig-mo3.2.6,
+    /// myconfig-vpi9.1). Every other backend refuses the profile.
     pub network_proxy_only: bool,
 }
 
@@ -130,7 +130,7 @@ pub const REGISTRY: &[Backend] = &[
         detach_refused: false,
         waypipe_refused: false,
         network_allowlist: true,
-        network_proxy_only: false,
+        network_proxy_only: true,
     },
     Backend {
         name: "podman-krun",
@@ -276,20 +276,24 @@ mod tests {
                 );
             }
             // D21's allowlist is enforced by exactly one backend
-            // (nono); D20's proxy-only profile by exactly one
-            // (bubblewrap). The registry predicates the egress work
-            // asks stay derivable from the table (bd myconfig-mo3.2.1).
+            // (nono); D20's proxy-only profile by the bwrap-based
+            // tiers. The registry predicates the egress work asks
+            // stay derivable from the table (bd myconfig-mo3.2.1).
             assert_eq!(
                 b.network_allowlist,
                 b.name == "nono",
                 "`{}`: network_allowlist must match config.md D21's table",
                 b.name
             );
-            // D20's proxy-only profile is enforced by the bubblewrap row
-            // alone (bd myconfig-mo3.2.6); every other backend refuses it.
+            // D20's proxy-only profile needs an EMPTY network
+            // namespace to put one loopback port into, which only the
+            // bwrap-built tiers have (bd myconfig-mo3.2.6 for
+            // bubblewrap, bd myconfig-vpi9.1 for the layered nono
+            // backend, which IS bubblewrap plus nono inside). That is
+            // exactly the always-on base tier; every other backend
+            // refuses the profile.
             assert_eq!(
-                b.network_proxy_only,
-                b.name == "bubblewrap",
+                b.network_proxy_only, b.always_on,
                 "`{}`: network_proxy_only must match config.md D20's table",
                 b.name
             );

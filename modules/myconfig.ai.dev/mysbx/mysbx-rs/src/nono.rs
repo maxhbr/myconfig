@@ -93,20 +93,34 @@
 //! 7. network (the mapping of the D1 table, bd myconfig-6di.4.4):
 //!    `--block-net` when `network = false` (defense in depth next to
 //!    the empty netns — nono allows outbound by default); NO network
-//!    flag when the network is shared without an allowlist (nono
-//!    0.74.0's default IS outbound allowed — no mediation, the pure
-//!    seccomp baseline applies only under an allowlist); and the
-//!    allowlist mapping `--allow-domain`/`--allow-connect-port`/
-//!    `--listen-port` per merged entry otherwise (the proxy resolves
-//!    DNS itself, so no port 53/853 is added). Two refusals guard
-//!    the allowlist's honesty (bd myconfig-a14, bd
-//!    myconfig-6di.4.4): `listen-ports` alone does not restrict
-//!    outbound traffic (nono reports "outbound allowed" with only
-//!    listen ports) — an allowlist that does not restrict is a lie,
-//!    so the config is refused; and `allow-domains` entries are
-//!    plain host names only — a URL or path form (no matter how it
-//!    is spelled) would need nono's TLS interception, out of scope
-//!    on this backend.
+//!    flag when the network is shared without an allowlist (nono's
+//!    default IS outbound allowed — no mediation, the pure seccomp
+//!    baseline applies only under an allowlist); and the allowlist
+//!    mapping `--allow-domain`/`--allow-connect-port`/`--listen-port`
+//!    per merged entry otherwise (the proxy resolves DNS itself, so
+//!    no port 53/853 is added). Two refusals guard the allowlist's
+//!    honesty (bd myconfig-a14, bd myconfig-6di.4.4): `listen-ports`
+//!    alone does not restrict outbound traffic (nono reports
+//!    "outbound allowed" with only listen ports) — an allowlist that
+//!    does not restrict is a lie, so the config is refused; and
+//!    `allow-domains` entries are plain host names only — a URL or
+//!    path form (no matter how it is spelled) would need nono's TLS
+//!    interception, out of scope on this backend.
+//!
+//!    `network = "proxy-only"` (docs/design/config.md D20, bd
+//!    myconfig-vpi9.1) is `--block-net` plus ONE port grant, the
+//!    in-sandbox relay's loopback port: the payload reaches
+//!    `127.0.0.1:<port>` and nothing else. `--block-net` is what makes
+//!    the profile real on this backend rather than a bare
+//!    consequence of bwrap's empty netns — it denies UDP, raw sockets
+//!    and every TCP connect without a grant, so a payload cannot
+//!    reach the resolver-less void by any other protocol. The grant
+//!    is `--allow-connect-port` (connect only): `--open-port` would
+//!    also let the payload bind the port. The grant names a PORT, not
+//!    an address (Landlock grants ports) — harmless here because the
+//!    netns carries nothing but `lo`. The relay itself runs OUTSIDE
+//!    nono (this layer's parent, see [`crate::bwrap::bwrap_argv`]),
+//!    which is why its own listener needs no grant from here.
 //! 8. the WAYPIPE display channel (bd myconfig-6di.4.6, audited and
 //!    LIFTED): the guest waypipe server binds its fake compositor
 //!    socket at `/mysbx-home/wayland-0` ([`WAYPIPE_DISPLAY_PATH`], a
@@ -183,6 +197,11 @@ pub struct Params<'a> {
     /// `None` when the display is off or when this call runs before
     /// the socket dir exists (the bwrap layout refuses the run first).
     pub waypipe_socket_dir: Option<&'a str>,
+    /// The `network = "proxy-only"` channel's loopback port (docs/
+    /// design/config.md D20): the ONE port the payload may connect to.
+    /// `None` for every other network policy, and a `proxy-only` run
+    /// without it is refused rather than run ungranted.
+    pub egress_port: Option<u16>,
 }
 
 /// Validate the allowlist's honesty (bd myconfig-a14, bd
@@ -423,21 +442,30 @@ pub fn nono_run_argv(
     // 7. network mapping (backends.md D1's table, bd
     // myconfig-6di.4.4): bwrap owns the network namespace (the
     // `--share-net`/empty-netns switch), nono owns the EGRESS filter.
-    // nono's default IS outbound allowed (nono 0.74.0; `--allow-net`
-    // is deprecated): a shared network without an allowlist is the
+    // nono's default IS outbound allowed (`--allow-net` is
+    // deprecated): a shared network without an allowlist is the
     // default, no nono flag — the seccomp-medium baseline hides
     // behind bwrap's namespace, not behind a silently narrow egress
     // list.
-    if !cfg.network.is_shared() {
-        // The deny must be EXPLICIT under nono (allowed by default),
-        // and an allowlist next to it is a contradiction — the
-        // pipeline refuses it earlier (step 4b, lib.rs), and the
-        // builder refuses it too, defense in depth in a pure
-        // function.
+    //
+    // Every non-shared network is refused an allowlist first: an
+    // allowlist describes what a SHARED network may reach, the
+    // pipeline refuses the combination in step 4b, and this builder
+    // does too, defense in depth in a pure function.
+    if !cfg.network.is_shared() && has_allowlist {
+        return Err(Error::AllowlistUnderDeniedNetwork);
+    }
+    if cfg.network == crate::config::Network::ProxyOnly {
+        // The no-key profile (docs/design/config.md D20, bd
+        // myconfig-vpi9.1): deny everything, then grant the one
+        // loopback port the relay listens on. A run without the
+        // channel is refused — an ungranted deny is not the profile.
+        let port = params.egress_port.ok_or(Error::EgressChannelMissing)?;
         argv.push("--block-net".into());
-        if has_allowlist {
-            return Err(Error::AllowlistUnderDeniedNetwork);
-        }
+        argv.extend(["--allow-connect-port".into(), port.to_string()]);
+    } else if !cfg.network.is_shared() {
+        // The deny must be EXPLICIT under nono (allowed by default).
+        argv.push("--block-net".into());
     } else if has_allowlist {
         // The allowlist, in merged order (merge.rs concatenates user
         // layer first, deduplicated keeping the first occurrence).
@@ -506,11 +534,13 @@ pub enum Error {
         /// The offending entry.
         domain: String,
     },
-    /// `network = false` with a non-empty allowlist: the allowlist
-    /// contradicts the deny — refused by the pipeline before the
-    /// builder ever runs (step 4b, lib.rs), and again here, defense
-    /// in depth in a pure function.
+    /// An allowlist next to a network that is not shared
+    /// (`network = false` or `"proxy-only"`): the allowlist contradicts
+    /// the deny.
     AllowlistUnderDeniedNetwork,
+    /// `network = "proxy-only"` (docs/design/config.md D20) but this
+    /// run carries no loopback port to grant.
+    EgressChannelMissing,
 }
 
 impl fmt::Display for Error {
@@ -541,6 +571,14 @@ impl fmt::Display for Error {
                  (allow-domains/connect-ports/listen-ports) contradicts it — \
                  both cannot hold at once; drop the allowlist or share the \
                  network"
+            ),
+            Error::EgressChannelMissing => write!(
+                f,
+                "network = \"proxy-only\" needs the LiteLLM forwarder's \
+                 socket channel, and this run carries none: the in-sandbox \
+                 relay's loopback port is the only grant the profile makes \
+                 (docs/design/config.md D20) — the run is refused, never \
+                 weakened to a shared network"
             ),
         }
     }

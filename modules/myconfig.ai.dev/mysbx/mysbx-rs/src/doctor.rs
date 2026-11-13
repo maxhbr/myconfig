@@ -555,9 +555,20 @@ pub fn nested_virt_check(intel: Option<&str>, amd: Option<&str>) -> Check {
 
 /// The Landlock check of the nono backend; `abi` is the kernel's
 /// Landlock ABI version, `None` when Landlock is unavailable.
+///
+/// ABI < 4 is a full failure, not a warning: `network = "shared"` with
+/// an allowlist and `network = "proxy-only"` both rely on Landlock TCP
+/// port rules, which the kernel only enforces from ABI 4.
 pub fn landlock_check(abi: Option<i64>) -> Check {
     match abi {
-        Some(v) => Check::ok("Landlock", format!("ABI v{v}")),
+        Some(v) if v >= 4 => Check::ok("Landlock", format!("ABI v{v}")),
+        Some(v) => Check::fail(
+            "Landlock",
+            format!("ABI v{v} predates TCP port rules"),
+            "the nono backend's port grants (allow-connect-port, so both the allowlist and \
+             network = \"proxy-only\") need Landlock V4+; boot a newer kernel, or use the \
+             bubblewrap backend",
+        ),
         None => Check::fail(
             "Landlock",
             "not available in this kernel",
@@ -1987,6 +1998,13 @@ pub fn run(args: &[String]) -> i32 {
             "nono" => {
                 bwrap_checks(&mut checks, merged.network.is_shared());
                 nono_checks(&mut checks);
+                // The proxy-only channel (D20, bd myconfig-vpi9.1):
+                // the layered nono backend binds the same forwarder
+                // socket and wraps the same relay, so the probe is
+                // the bubblewrap one.
+                if merged.network == crate::config::Network::ProxyOnly {
+                    egress_check(&mut checks);
+                }
                 host_endpoint_check(&mut checks, &merged, &forwarded);
             }
             "krun" => krun_checks(&mut checks),

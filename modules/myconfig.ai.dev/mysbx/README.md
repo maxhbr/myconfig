@@ -615,11 +615,11 @@ while the only reachable endpoint is the host proxy.
 
 The module turns the socket half on wherever `services.litellm` runs
 and pins `MYSBX_EGRESS_SOCKET` / `MYSBX_EGRESS_PORT` /
-`MYSBX_EGRESS_RELAY`. A `proxy-only` run with a missing pin, or on any
-backend but bubblewrap, is refused (exit 70) — never weakened to a
-shared network. `mysbx doctor` probes the socket with a `GET
-/v1/models`. The credential rules (forward-env narrowing, the
-credential-name refusal, the placeholder) are in the "Environment"
+`MYSBX_EGRESS_RELAY`. A `proxy-only` run with a missing pin, or on a
+backend that does not enforce the profile, is refused (exit 70) —
+never weakened to a shared network. `mysbx doctor` probes the socket
+with a `GET /v1/models`. The credential rules (forward-env narrowing,
+the credential-name refusal, the placeholder) are in the "Environment"
 section above and in `config.md` D28.
 
 ## Browser automation

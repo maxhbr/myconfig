@@ -2693,8 +2693,9 @@ fn sandbox_pipeline(
     // The proxy-only profile (docs/design/config.md D20, bd
     // myconfig-mo3.2.3): `network = "proxy-only"` grants only the host
     // model endpoint. It is enforced by the backends whose registry
-    // row says so — bubblewrap alone until the other transports land —
-    // and REFUSED by every other backend with a backend-specific
+    // row says so
+    // ([`backends::Backend::network_proxy_only`]) and REFUSED by every
+    // other backend with a backend-specific
     // reason, before the session clone and before the `--dry-run`
     // return (a dry run audits the refusal too). The cross-layer
     // allowlist contradiction is refused here as well; the SAME-file
@@ -2725,16 +2726,13 @@ fn sandbox_pipeline(
                 "microvm-ch" => {
                     "passt's vhost-user net device always has a gateway route"
                 }
-                "nono" => {
-                    "its Landlock/seccomp layer is no default-deny network fence yet (bd myconfig-vpi9.1)"
-                }
                 _ => "the backend cannot express a default-deny network",
             };
             eprintln!(
                 "mysbx: network = \"proxy-only\" is not enforced on the `{backend}` backend — {reason} (docs/design/config.md D20); the run is refused, never weakened to a shared network"
             );
             eprintln!(
-                "  switch the backend to `bubblewrap` for the profile, or drop `network = \"proxy-only\"`"
+                "  switch the backend to `bubblewrap` (or `nono`) for the profile, or drop `network = \"proxy-only\"`"
             );
             return EXIT_INFRASTRUCTURE;
         }
@@ -3348,10 +3346,9 @@ fn sandbox_pipeline(
     };
     let report_waypipe: Option<bwrap::Waypipe<'_>> = waypipe_params.clone();
     // The `network = "proxy-only"` channel (docs/design/config.md D20,
-    // bd myconfig-mo3.2.6): the bubblewrap backend is the ONLY enforcing
-    // row (step 4b refuses the profile elsewhere). Step 4b already
-    // validated the pins, so the channel is built from those values — a
-    // `proxy-only` bubblewrap run always has them; the `map` keeps the
+    // bd myconfig-mo3.2.6): step 4b already validated the pins and
+    // refused every backend that does not enforce the profile, so the
+    // channel is built from those values — the `map` keeps the
     // conversion total without an `expect`.
     let egress_params: Option<bwrap::EgressChannel<'_>> =
         egress.as_ref().map(|pinned| bwrap::EgressChannel {
@@ -4507,6 +4504,13 @@ fn sandbox_pipeline(
                 // binds — one computed value, threaded like the
                 // bwrap::Params.waypipe above.
                 waypipe_socket_dir: waypipe_params.as_ref().map(|w| w.socket_dir),
+                // `network = "proxy-only"` (docs/design/config.md D20,
+                // bd myconfig-vpi9.1): the layered nono run binds the
+                // same bwrap channel as the bubblewrap backend and
+                // grants nono exactly the relay's loopback port. Only
+                // the port crosses: the relay and the socket stay
+                // outside nono's layer.
+                egress_port: egress_params.as_ref().map(|e| e.port),
             };
             // The grant argv of the `nono run` INSIDE the sandbox —
             // `run --profile <path> <grants> <network flags>`, derived
@@ -4539,9 +4543,11 @@ fn sandbox_pipeline(
                     argv: &inner_argv,
                     env_bin: &env_bin,
                 }),
-                // The layered nono path is never reached with the
-                // profile (step 4b refuses proxy-only on nono), so it
-                // carries no channel.
+                // The layered nono path binds the same proxy-only
+                // channel as the bubblewrap backend (bd
+                // myconfig-vpi9.1): the socket directory, the name
+                // lookup files and the relay wrap are bwrap's, and
+                // nono's own argv grants the one loopback port.
                 egress: egress_params.clone(),
             };
             let argv = match bwrap::bwrap_argv(&merged, &repo, &payload, &host_env, &params) {
@@ -5913,14 +5919,19 @@ pub struct EgressPins {
 ///   ([`check_egress_socket_dir`]), and a socket that does not exist or
 ///   is not a Unix socket.
 ///
-/// `Ok(None)` when the profile is not selected (or the backend is not
-/// bubblewrap).
+/// `Ok(None)` when the profile is not selected (or the backend does not
+/// enforce it, [`crate::backends::Backend::network_proxy_only`]).
 pub fn resolve_egress(
     network: config::Network,
     backend: &str,
     dry_run: bool,
 ) -> Result<Option<EgressPins>, ()> {
-    if network != config::Network::ProxyOnly || backend != "bubblewrap" {
+    // Asked of the registry, never matched by name here
+    // (backends.rs: every name-matching call site funnels through
+    // `find`): both bwrap-built tiers bind the same socket directory
+    // and wrap the same relay (bd myconfig-vpi9.1).
+    let enforces = backends::find(backend).is_some_and(|row| row.network_proxy_only);
+    if network != config::Network::ProxyOnly || !enforces {
         return Ok(None);
     }
     let complain = |message: &str| {

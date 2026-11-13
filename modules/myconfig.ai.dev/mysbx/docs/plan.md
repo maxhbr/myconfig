@@ -225,13 +225,14 @@ combined policies need live testing; see the current guide.
 
 LANDED (bubblewrap): `network = "proxy-only"` (`config.md` D20, bd
 myconfig-mo3.2). It is a value of the ONE `network` key, not a separate
-`egress` key — the parser still rejects `egress` everywhere. On
-bubblewrap the profile is an empty netns plus the host LiteLLM
-forwarder's Unix socket and the in-sandbox `mysbx-egress-relay`
-(bd myconfig-mo3.2.4/.5/.6); every other backend refuses it (exit 70).
-The credential rules under the profile are `config.md` D28
-(bd myconfig-t24). Nono and the per-backend VM transports are later
-work (bd myconfig-vpi9).
+`egress` key — the parser still rejects `egress` everywhere. The
+profile is an empty netns plus the host LiteLLM forwarder's Unix
+socket and the in-sandbox `mysbx-egress-relay`, on every backend
+built on the bubblewrap view (bd myconfig-mo3.2.4/.5/.6 for
+bubblewrap, myconfig-vpi9.1 for nono); every other backend refuses it
+(exit 70). The credential rules under the profile are `config.md` D28
+(bd myconfig-t24). The per-backend VM transports are later work (bd
+myconfig-vpi9).
 
 **2d — the toolchain and `myconfig.ai.sandboxTools`.** DONE (bd
 myconfig-9mw): `mysbx` consumes
