@@ -10222,11 +10222,20 @@ fn proxy_only_real_run_needs_a_real_socket_at_the_pinned_path() {
     assert_eq!(code, 0, "stderr: {stderr}");
     assert!(stdout.contains("mysbx-egress-relay"), "{stdout}");
 
-    // A real run against the real host directory: this test host has no
-    // root-owned /run/mysbx-egress, so the run refuses — either because
-    // the directory is missing/user-owned or because the socket is
-    // missing. Both name the unit.
-    let (code, _stdout, stderr) = run_command(spawn_proxy_only(&inv, &["run", "--", "/bin/true"]));
+    // A real run against the real host directory, with a socket name no
+    // forwarder uses: the run refuses whether /run/mysbx-egress is
+    // missing or user-owned (a build sandbox) or a valid forwarder
+    // directory (a host running agent-litellm-forward-unix.socket),
+    // so it never goes on to start a sandbox. Both refusals name the
+    // unit.
+    let absent = format!(
+        "{}/mysbx-test-absent-{}.sock",
+        mysbx::EGRESS_SOCKET_DIR,
+        std::process::id()
+    );
+    let mut cmd = spawn_proxy_only(&inv, &["run", "--", "/bin/true"]);
+    cmd.env("MYSBX_EGRESS_SOCKET", &absent);
+    let (code, _stdout, stderr) = run_command(cmd);
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(
         stderr.contains("MYSBX_EGRESS_SOCKET")
