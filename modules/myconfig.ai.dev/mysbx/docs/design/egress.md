@@ -325,6 +325,12 @@ unit: dropping the unit while only bubblewrap has the broker would break
 the wrapper pins, not the backend name), so the live check in step 2 must
 cover a nono run as well as a bubblewrap one before step 3 executes.
 
+Status of that gate: the bubblewrap half passed on host 'thing' on
+2026-11-14 ([validation log](../egress-validation-log.md) §1–§4). The nono
+half is still OUTSTANDING — nono's argv was only inspected (`--block-net`
+plus the one `--allow-connect-port`), not exercised as a real brokered
+run. Step 3 stays blocked until that run is recorded.
+
 The TCP half of the forwarder is NOT part of this: it serves the podman
 backends (bd myconfig-jq2) and is hardened separately in n8kv.1.5.
 

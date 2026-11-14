@@ -113,22 +113,87 @@ closing record names the sections as passed, not their raw output. A later
 re-run should fill those in rather than treat this block as a template for
 them.
 
-## 2026-11-13+, host 'f13' — the per-run egress broker (bd myconfig-n8kv.1.6)
+## 2026-11-14, host 'thing' — the per-run egress broker (bd myconfig-n8kv.1.6)
 
-**Not yet run.** Phase B's code is in place (design record in
-[`design/egress.md`](./design/egress.md)) and the scripted runbook above
-is ready; this block is the placeholder an f13 session fills in. When it
-is done, record:
+Run after PR #108 merged to `main` and the host was rebuilt, so this is
+the first evidence from a real wrapped `mysbx` on a real kernel — the
+earlier rounds could only exercise the code against a hand-built shim.
 
-- host, date, kernel;
-- the `nix/egress-broker-live-validation.sh` output verbatim (PASS lines
-  per probe);
-- the three manual probes: one model request each from `pi` and
-  `opencode` inside the sandbox, the broker killed mid-run (the sandbox's
-  requests must fail, with an `unreachable` line rather than an `allow`),
-  and a `--detach`/attach cycle (the broker survives the outer, dies with
-  the inner);
-- whether the static `agent-litellm-forward-unix` unit can now be dropped
-  (design decision E6) — dropping it is ONE commit, and it touches
-  `myconfig.ai.dev.litellm-forwarder.nix`, `nix/mysbx.nix` and
-  `nix/config-eval-test.nix`.
+Host kernel not recorded. The build under test is
+`/nix/store/031zjvy1jlc6ydmnr7l6ijxjwg5mhf17-mysbx-0.1.0`.
+
+### §1 doctor — PASS
+
+`mysbx doctor bubblewrap | grep -i egress` reported the whole channel
+through the wrapper's own pins:
+
+```
+OK   egress name lookup: /nix/store/9abasx0d9fi6p95jwglrq49lvvcwmcs4-mysbx-egress-etc (localhost = 127.0.0.1, no DNS)
+OK   egress relay: /nix/store/031zjvy1jlc6ydmnr7l6ijxjwg5mhf17-mysbx-0.1.0/bin/mysbx-egress-relay (listens on 127.0.0.1:4000 in a proxy-only run)
+OK   egress broker: /nix/store/031zjvy1jlc6ydmnr7l6ijxjwg5mhf17-mysbx-0.1.0/bin/mysbx-egress-broker (one process per proxy-only run)
+OK   egress broker confinement: Landlock ABI 7 confines the broker to one TCP port
+OK   egress channel probe: through the per-run broker: GET /v1/models answered (HTTP/1.1 200 OK)
+```
+
+Two things this settles beyond the PASS:
+
+- **The wrapper's pin split is real.** The harness's fail-closed probe
+  depends on `MYSBX_EGRESS_BROKER` being `--set` (immovable) while
+  `MYSBX_EGRESS_SOCKET`/`_PORT` are `--set-default`; that was verified
+  only against `make-binary-wrapper.sh` until now.
+- **The probe reached a live model endpoint** — `HTTP/1.1 200 OK`, not
+  the 404 the sandbox's stand-in servers answer, so the through-the-broker
+  path carried a real request.
+
+### §2 dry run — PASS
+
+```
+## network:        proxy-only (no --share-net; 127.0.0.1:4000 -> /run/mysbx-egress/litellm.sock via the relay from /run/user/1000/mysbx-egress/1670032)
+```
+
+The source is the per-run directory, not the static
+`/run/mysbx-egress` — the distinction the harness's guard exists to
+check, now demonstrated on a real report (verbose lines are `## `-prefixed,
+which is what made an earlier `^network:` anchor vacuous).
+
+A `bubblewrap` warning about `memory`/`cpus` being unenforced appeared in
+the same output; it is a pre-existing backend limitation, unrelated to the
+channel.
+
+### §3 scripted runbook — PASS, 9/9
+
+`nix/egress-broker-live-validation.sh` passed every scripted probe: pins,
+dry run creating nothing, a real run starting the broker and logging to
+the sidecar, the waited run's directory removal (E2/E3),
+`mysbx diagnose egress` reading the log back, the broken-pin refusal
+(exit 70, nothing created, E5), both bwrap-built tiers accepting the
+profile, and the five refusing backends.
+
+### §4 manual probes — PASS (operator)
+
+- one model request each from `pi` and from `opencode` inside the sandbox;
+- the broker killed mid-run: the sandbox's requests fail with no fallback,
+  and the decision log's next line is `unreachable` rather than `allow`;
+- a `--detach` / `mysbx attach` cycle: the broker outlives the outer run
+  and dies with the inner one.
+
+### §5 nono — PASS (operator, dry run)
+
+`mysbx --backend nono --dry-run --verbose` shows `--block-net` plus the one
+`--allow-connect-port` for the relay, as bd myconfig-vpi9.1 specifies.
+
+**Limits of this entry.** §4 and §5 are the operator's report of passing,
+not transcribed command output. The `thing` run above was executed in the
+main checkout rather than a scratch repo, so its sidecar now holds normal
+run state. And §5 is an argv-level check: a real nono run **through the
+broker** is not recorded here, which matters for E6 below.
+
+### Consequence for design decision E6
+
+E6 said the static `agent-litellm-forward-unix` unit can be dropped once
+the broker path passes on the real host. The bubblewrap half is now
+evidenced above. The **nono half is not**: since bd myconfig-vpi9.1 nono
+enforces the profile through the same static unit, dropping it while only
+bubblewrap has the broker would break `proxy-only` on nono. One real nono
+`proxy-only` run (not a dry run) through the broker is the remaining
+precondition before the removal commit.
