@@ -1825,6 +1825,10 @@ the rule is a heuristic on names, not a proof.
 leave through the prompts the agent sends via LiteLLM to the model
 provider. The profile constrains the sandbox's own sockets; it does
 not construe the content the agent chooses to send.
+- The supervisor's own environment was a third one until bd
+myconfig-q8zg; it is closed for the bubblewrap-built tiers and audited
+on the podman tiers in the section below, which also lists what stays
+open there.
 
 Credential injection into the proxy (the egress broker adding the
 LiteLLM master key on approved requests) is later work: bd
@@ -1865,8 +1869,8 @@ reachable depends on the pid namespace the backend gives the sandbox:
 
 The podman client keeps mysbx's environment on purpose — it reads its
 own runtime dir and registries — and that process lives in the host pid
-namespace, invisible to a container with a private one. Documented
-residual risks for the podman tiers:
+namespace, invisible to a container with a private one. **Remaining
+residual risk, both podman tiers:**
 
 - The pid-namespace facts are podman's, `runsc`'s and `crun`'s
   defaults, not lines this repo pins: no `--pid` flag is emitted, so a
@@ -1879,3 +1883,12 @@ residual risks for the podman tiers:
   podman client, whose environment is deliberately not cleared — would
   be readable at `/hostproc/<pid>/environ`. This needs an explicit
   operator or sidecar mount; it is not reachable from the default argv.
+
+**Summary.** Closed on `bubblewrap` and `nono` — the supervisor's
+environment is built, not inherited, in every run mode, and a
+regression test asserts that both the foreground and the detached
+`/proc/1/environ` are free of the invoking shell's names
+(`run_env_never_reaches_the_backend_supervisor`). Not affected on
+`podman-gvisor`, `podman-krun`, `krun`, `microvm-qemu` and
+`microvm-ch`, for the reasons in the table. The two podman bullets
+above are the residual risk that stays documented instead of closed.

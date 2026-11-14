@@ -174,8 +174,9 @@ $XDG_RUNTIME_DIR/mysbx/<fnv1a10(repo root)>/
    the D8 exit code. `--verbose` prints its report (D10) here.
 2. The outer takes the workspace lock (B6), writes the state file with
    `state: "starting"` (B5) and runs
-   `dtach -n <socket> -r winch <self> <args>` with its own cwd and
-   environment. `<args>` are the original arguments without `--detach`,
+   `dtach -n <socket> -r winch <self> <args>` with its own cwd and the
+   built environment of the paragraph below. `<args>` are the original
+   arguments without `--detach`,
    `--detachable` and `--verbose`. `MYSBX_DETACHED=<socket path>` marks
    the child.
 3. **The inner mysbx** (the dtach child, on the dtach pty) runs the
@@ -222,10 +223,18 @@ The argv the inner builds is the interactive one: the payload always
 has a terminal (the dtach pty), whatever the outer's stdin was. For
 podman this means `--interactive --tty` always.
 
-Environment: the detached run sees the environment of the shell that
-started it, like a foreground run. Attaching from another shell does
-not update it (`SSH_AUTH_SOCK`, `TERM`, `WAYLAND_DISPLAY`) — the same
-limitation as tmux.
+Environment: the launch carries a BUILT environment, never the
+outer's (bd myconfig-q8zg). `detach::detached_inner_env` passes
+`PATH`, `HOME`, `XDG_RUNTIME_DIR`, `TMPDIR` and `XDG_CONFIG_HOME`
+plus the `MYSBX_` pin namespace, `MYSBX_DETACHED` added by the
+launch. Everything else the outer carried is dropped before the
+dtach spawn: the backend the inner starts becomes the bwrap
+supervisor PID 1 of the sandbox, and its `/proc/1/environ` is
+readable from the payload. A credential exported in the launching
+shell therefore reaches neither the payload nor the supervisor.
+Attaching from another shell does not update the environment
+(`SSH_AUTH_SOCK`, `TERM`, `WAYLAND_DISPLAY`) — the same limitation as
+tmux — and neither does it widen it.
 
 ### B5: The state file records the run; the socket proves it is alive
 
