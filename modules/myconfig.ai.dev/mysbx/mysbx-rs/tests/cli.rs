@@ -13020,25 +13020,27 @@ fn exec_only_dtach_stub(base: &Path) -> PathBuf {
 /// reads as `/proc/1/environ`. A canary in the invoking shell must not
 /// appear there.
 ///
-/// Still `#[ignore]`d: commit 1 recorded the pre-fix failure, the fix
-/// turned it green, and commit 4 of the bead merges it into the
-/// table-driven regression test CI runs (`run_env_is_never_inherited`).
-/// Kept until then as the minimal two-row record of the measurement.
+/// Table-driven over the run modes, because they reach the spawn by
+/// different routes: the foreground exec, the waited `--result` run, and
+/// the detached inner (which is a second mysbx under `dtach`). The
+/// pre-fix code passed only the first two — the detached row leaked 13
+/// entries, the canary among them.
+///
+/// The canary names are chosen to be unmistakable in a dump, and one of
+/// them is credential-shaped on purpose: `HF_TOKEN` is exactly the kind
+/// of name D28's forwarding rules own, and the point of this test is
+/// that those rules do not govern the supervisor's environment at all.
 #[test]
-#[ignore = "folded into run_env_is_never_inherited (bd myconfig-q8zg)"]
-fn the_backend_environment_never_carries_the_invoking_canary() {
+fn run_env_never_reaches_the_backend_supervisor() {
     if !is_ssh_keygen_available() {
         return; // no usable ssh-keygen (the baseline env's uid-0 quirk)
     }
-    // Pre-fix measurement, this sandbox, 2026-11-14: the FOREGROUND row
-    // was clean (`env_clear` already ran) and the DETACHED row leaked 13
-    // entries including `HF_TOKEN=CANARY_DETACH` — the dtach → inner
-    // mysbx → backend chain never cleared, because `detach::launch_outer`
-    // spawned dtach with `.env("MYSBX_DETACHED", …)` on an inherited
-    // environment and lib.rs skipped `env_clear` for `DetachedInner`.
-    // Post-fix both rows report zero entries.
-    for mode in ["foreground", "detach"] {
-        let (inv, repo, _sidecar) = fixture_with_backend("env-canary", &["run"]);
+    for (mode, args) in [
+        ("foreground", vec!["run", "--", "/bin/true"]),
+        ("result", vec!["run", "--result", "--", "/bin/true"]),
+        ("detach", vec!["--detach"]),
+    ] {
+        let (inv, _repo, _sidecar) = fixture_with_backend("env-canary", &["run"]);
         let (stub, record) = environ_reporting_stub(&inv.home, "bwrap-env-stub");
         let runtime = short_runtime_root("env-canary");
         std::fs::create_dir_all(&runtime).unwrap();
@@ -13049,11 +13051,16 @@ fn the_backend_environment_never_carries_the_invoking_canary() {
                 .env("XDG_RUNTIME_DIR", &runtime);
             c
         } else {
-            spawn_with_args(&inv, &["run", "--", "/bin/true"])
+            spawn_with_args(&inv, &args)
         };
         cmd.env("MYSBX_BWRAP", &stub)
             .env("MYSBX_TOOLS_PATH", "/usr/bin")
-            .env("HF_TOKEN", "CANARY_Q8ZG");
+            // One plain canary, one credential-shaped name, one that a
+            // run would legitimately forward to the PAYLOAD: none of the
+            // three may reach the supervisor.
+            .env("Q8ZG_CANARY", "q8zg-canary-value")
+            .env("HF_TOKEN", "q8zg-hf-token-canary")
+            .env("TERM", "q8zg-term-canary");
         let out = cmd.output().expect("failed to spawn the mysbx binary");
         assert_eq!(
             out.status.code(),
@@ -13063,11 +13070,28 @@ fn the_backend_environment_never_carries_the_invoking_canary() {
         );
         let dump = wait_for_file(&record);
         let names = environ_names(&dump);
-        assert!(
-            !dump.contains("CANARY_Q8ZG"),
-            "{mode}: the backend inherited the invoking environment: {names:?}"
-        );
-        let _ = repo;
+        for canary in [
+            "Q8ZG_CANARY",
+            "HF_TOKEN",
+            "q8zg-canary-value",
+            "q8zg-hf-token-canary",
+        ] {
+            assert!(
+                !dump.contains(canary),
+                "{mode}: the backend supervisor inherited `{canary}`: {names:?}"
+            );
+        }
+        // The FOREGROUND and RESULT rows prove the strong form of the
+        // claim — the supervisor carries NO inherited name at all; the
+        // DETACHED row must still carry the pins the inner re-derives
+        // its run from, so it is checked for the absence of the canaries
+        // above rather than for an empty dump.
+        if mode != "detach" {
+            assert!(
+                names.is_empty(),
+                "{mode}: the supervisor environment must be empty, got {names:?}"
+            );
+        }
     }
 }
 
