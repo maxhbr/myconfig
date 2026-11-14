@@ -4852,16 +4852,20 @@ fn sandbox_pipeline(
     // environment is exactly where the credential names live (config.md
     // D28).
     //
-    // Two exclusions, both because the child is not (yet) the sandbox:
-    // podman's client half reads its own environment, and the inner of a
-    // detached run is a mysbx that re-derives everything from its argv and
-    // needs the ordinary environment to do it.
-    if !backends::find(backend).is_some_and(|row| row.podman())
-        && !matches!(
-            mode,
-            RunMode::Detached | RunMode::Detachable | RunMode::DetachedInner
-        )
-    {
+    // Every mode that reaches the spawn is included, the inner of a
+    // detached run too: it rebuilds its argv from the pins BEFORE this
+    // point and the backend takes its own environment as arguments, so
+    // the inner has no more use for the inherited environment than the
+    // foreground has. The outer modes (Detached/Detachable) never spawn
+    // this command — they hand off to `launch_outer`, whose dtach spawn
+    // builds its own environment — but clearing it unconditionally keeps
+    // the rule one line instead of a mode table.
+    //
+    // The one exclusion is podman's client half, which reads its own
+    // environment (a cleared one loses the runtime dir and the
+    // registries it resolves through `$HOME`); audited as a residual
+    // risk instead of closed (config.md D28).
+    if !backends::find(backend).is_some_and(|row| row.podman()) {
         cmd.env_clear();
     }
     match mode {

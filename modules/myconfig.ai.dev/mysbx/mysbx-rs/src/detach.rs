@@ -1193,6 +1193,53 @@ pub struct Launch<'a> {
     pub multiplexer: &'a str,
 }
 
+/// The environment names the detached inner inherits from the outer
+/// (bd myconfig-q8zg): the ordinary shell context a mysbx process
+/// needs to re-derive its run — a `PATH` for the unpinned fallbacks, the
+/// user's `HOME`/`XDG_CONFIG_HOME` for the config layers, `TMPDIR` for
+/// the scratch files, and `XDG_RUNTIME_DIR` for the registry root.
+///
+/// Everything else the outer carried is dropped before the spawn: the
+/// inner is not the sandbox, but the supervisor it spawns IS the
+/// sandbox's PID 1, and anything the chain carries is what a payload
+/// can read back through `/proc/1/environ`.
+pub const DETACHED_INNER_ENV: &[&str] = &[
+    "PATH",
+    "HOME",
+    "XDG_RUNTIME_DIR",
+    "TMPDIR",
+    "XDG_CONFIG_HOME",
+];
+
+/// The `MYSBX_` pin prefix: the inner mysbx re-reads its backend, tool
+/// and channel pins from the environment (`MYSBX_BWRAP`,
+/// `MYSBX_TOOLS_PATH`, the egress pins, …), so the pin namespace crosses
+/// to it verbatim. These are names mysbx itself sets — the wrapper's
+/// `--set`/`--set-default` block, never an operator's shell export —
+/// and every one of them is also what the outer's own pre-flight argv
+/// was built from, so dropping them would make the inner disagree with
+/// the `--dry-run` the operator audited.
+pub const PIN_PREFIX: &str = "MYSBX_";
+
+/// The environment the detached inner is launched with (bd
+/// myconfig-q8zg): [`DETACHED_INNER_ENV`] plus the [`PIN_PREFIX`]
+/// namespace, read from the current process. Empty for every name that
+/// is unset, so a run without a pin does not manufacture one.
+pub fn detached_inner_env() -> Vec<(std::ffi::OsString, std::ffi::OsString)> {
+    let mut env = Vec::new();
+    for name in DETACHED_INNER_ENV {
+        if let Some(value) = std::env::var_os(name) {
+            env.push((std::ffi::OsString::from(name), value));
+        }
+    }
+    for (name, value) in std::env::vars_os() {
+        if name.to_string_lossy().starts_with(PIN_PREFIX) {
+            env.push((name, value));
+        }
+    }
+    env
+}
+
 /// The original argument tail of the invocation minus `--detach`,
 /// `--detachable` and `--verbose` (detach.md B4 step 2): what the
 /// outer passes to the inner mysbx, so the inner is a plain bare-form
@@ -1739,10 +1786,16 @@ pub fn launch_outer(l: &Launch, attach_after: bool) -> i32 {
             return crate::EXIT_INFRASTRUCTURE;
         }
     };
-    // The launch (B4 step 2): the outer's own cwd and environment,
-    // `MYSBX_DETACHED` marks the child, stdio pointed at
+    // The launch (B4 step 2): the outer's own cwd, stdio pointed at
     // `/dev/null` — the outer must not read stdin (B2), its
-    // diagnostics already went to its own stderr.
+    // diagnostics already went to its own stderr. `MYSBX_DETACHED`
+    // marks the child.
+    //
+    // The environment is BUILT, never inherited (bd myconfig-q8zg):
+    // [`detached_inner_env`] carries the shell context the inner needs
+    // to re-derive the run plus the `MYSBX_` pins, and drops everything
+    // else — a credential in the invoking shell must not reach the
+    // supervisor the payload reads as `/proc/1/environ`.
     let mut cmd = std::process::Command::new(&dtach);
     cmd.arg("-n")
         .arg(&paths.sock)
@@ -1750,6 +1803,8 @@ pub fn launch_outer(l: &Launch, attach_after: bool) -> i32 {
         .arg("winch")
         .arg(&self_exe)
         .args(detach_inner_args())
+        .env_clear()
+        .envs(detached_inner_env())
         .env("MYSBX_DETACHED", &paths.sock)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())

@@ -12879,22 +12879,35 @@ unsafe fn libc_close(fd: i32) {
     close(fd);
 }
 
-/// A stub `bwrap`: records its inherited ignored-signal mask, then
-/// its own argv, sleeps until `$BWRAP_LIVE` appears (the test controls
-/// how long the "backend" runs), then exits with `$BWRAP_EXIT`
-/// (default 0). With `$BWRAP_TREE_FILE` set it ALSO forks a
-/// long-lived grandchild before the wait loop and reports the pid
-/// tree (`$PPID` = the inner mysbx, `$!` = the grandchild) into that
-/// file — the cancel test's window into which processes of the run's
-/// group survive the group kill. Tests that do not set the variable
-/// are unaffected.
+/// A stub `bwrap`: sources `$BWRAP_CFG` — a shell fragment of
+/// `NAME=value` lines a test writes with [`bwrap_knobs`] — records its
+/// inherited ignored-signal mask and its own argv, sleeps until
+/// `$BWRAP_LIVE` appears (the test controls how long the "backend"
+/// runs), then exits with `$BWRAP_EXIT` (default 0). With
+/// `$BWRAP_TREE_FILE` set it ALSO forks a long-lived grandchild before
+/// the wait loop and reports the pid tree (`$PPID` = the inner mysbx,
+/// `$!` = the grandchild) into that file — the cancel test's window into
+/// which processes of the run's group survive the group kill.
+///
+/// The knobs ride a FILE, not the environment (bd myconfig-q8zg): the
+/// backend of a detached run is spawned with a cleared environment by
+/// design, so a stub that needs `$BWRAP_LIVE` cannot get it from the
+/// environment it inherits. The `PATH` is baked into the script for the
+/// same reason — the stub's `grep`/`mv`/`sleep` must resolve without an
+/// inherited `PATH`.
 fn bwrap_stub(base: &Path) -> (PathBuf, PathBuf) {
     let record = base.join("bwrap-record.txt");
     let stub = base.join("bwrap-stub");
+    let cfg = base.join("bwrap-cfg.sh");
+    let path = std::env::var("PATH").unwrap_or_default();
+    // Cleared between stubs so a test cannot inherit the previous
+    // fixture's knobs by accident.
+    let _ = std::fs::remove_file(&cfg);
     std::fs::write(
         &stub,
         format!(
-            "#!/bin/sh\ngrep '^SigIgn:' /proc/self/status > {r}.tmp\n\
+            "#!/bin/sh\nPATH='{path}'\nexport PATH\n[ -f '{cfg}' ] && . '{cfg}'\n\
+             grep '^SigIgn:' /proc/self/status > {r}.tmp\n\
              printf '%s\\n' \"$@\" >> {r}.tmp\n\
              if [ -n \"$BWRAP_TREE_FILE\" ]; then\n\
                sleep 300 &\n\
@@ -12905,6 +12918,8 @@ fn bwrap_stub(base: &Path) -> (PathBuf, PathBuf) {
              while [ ! -e \"$BWRAP_LIVE\" ]; do sleep 0.05; done\n\
              if [ -n \"$BWRAP_SIGNAL\" ]; then kill -\"${{BWRAP_SIGNAL#SIG}}\" $$; fi\n\
              exit \"${{BWRAP_EXIT:-0}}\"\n",
+            path = path.replace('\'', "'\\''"),
+            cfg = cfg.display(),
             r = record.display(),
             rec = record.display()
         ),
@@ -12913,6 +12928,17 @@ fn bwrap_stub(base: &Path) -> (PathBuf, PathBuf) {
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
     (stub, record)
+}
+
+/// Write [`bwrap_stub`]'s knobs (`NAME=value` pairs) to the file it
+/// sources. Values are single-quoted, so a path may carry spaces.
+fn bwrap_knobs(base: &Path, knobs: &[(&str, &str)]) {
+    let cfg = base.join("bwrap-cfg.sh");
+    let text: String = knobs
+        .iter()
+        .map(|(k, v)| format!("{k}='{}'\n", v.replace('\'', "'\\''")))
+        .collect();
+    std::fs::write(&cfg, text).unwrap();
 }
 
 /// A stub backend that dumps the environment IT was started with —
@@ -12994,22 +13020,23 @@ fn exec_only_dtach_stub(base: &Path) -> PathBuf {
 /// reads as `/proc/1/environ`. A canary in the invoking shell must not
 /// appear there.
 ///
-/// Manual at this stage (`#[ignore]`): on the pre-fix code the detached
-/// rows fail — see the comment on the test body for the measured
-/// pre-fix numbers. Commit 2 of the bead turns this green and commit 4
-/// promotes it into the table-driven regression test that CI runs.
+/// Still `#[ignore]`d: commit 1 recorded the pre-fix failure, the fix
+/// turned it green, and commit 4 of the bead merges it into the
+/// table-driven regression test CI runs (`run_env_is_never_inherited`).
+/// Kept until then as the minimal two-row record of the measurement.
 #[test]
-#[ignore = "reproduces the pre-fix detached-inner leak (bd myconfig-q8zg); promoted by the fix commit"]
+#[ignore = "folded into run_env_is_never_inherited (bd myconfig-q8zg)"]
 fn the_backend_environment_never_carries_the_invoking_canary() {
     if !is_ssh_keygen_available() {
         return; // no usable ssh-keygen (the baseline env's uid-0 quirk)
     }
     // Pre-fix measurement, this sandbox, 2026-11-14: the FOREGROUND row
-    // is clean (`env_clear` already runs) and the DETACHED row leaks 13
+    // was clean (`env_clear` already ran) and the DETACHED row leaked 13
     // entries including `HF_TOKEN=CANARY_DETACH` — the dtach → inner
-    // mysbx → backend chain never clears, because `detach::launch_outer`
-    // spawns dtach with `.env("MYSBX_DETACHED", …)` on an inherited
-    // environment and lib.rs skips `env_clear` for `DetachedInner`.
+    // mysbx → backend chain never cleared, because `detach::launch_outer`
+    // spawned dtach with `.env("MYSBX_DETACHED", …)` on an inherited
+    // environment and lib.rs skipped `env_clear` for `DetachedInner`.
+    // Post-fix both rows report zero entries.
     for mode in ["foreground", "detach"] {
         let (inv, repo, _sidecar) = fixture_with_backend("env-canary", &["run"]);
         let (stub, record) = environ_reporting_stub(&inv.home, "bwrap-env-stub");
@@ -13267,6 +13294,10 @@ fn a_detach_of_a_real_run_detaches_and_hands_the_attach_hint() {
     let _ = &sidecar;
     let (dtach, dtach_record) = dtach_stub(&inv.home, true);
     let (bwrap, bwrap_record) = bwrap_stub(&inv.home);
+    bwrap_knobs(
+        &inv.home,
+        &[("BWRAP_LIVE", &inv.home.join("bwrap-live").to_string_lossy())],
+    );
     let runtime = short_runtime_root("happy");
     std::fs::create_dir_all(&runtime).unwrap();
     let paths = detach_paths_live(&runtime, &repo.canonicalize().unwrap());
@@ -13274,8 +13305,7 @@ fn a_detach_of_a_real_run_detaches_and_hands_the_attach_hint() {
     cmd.env("MYSBX_DTACH", &dtach)
         .env("MYSBX_BWRAP", &bwrap)
         .env("MYSBX_TOOLS_PATH", "/usr/bin")
-        .env("XDG_RUNTIME_DIR", &runtime)
-        .env("BWRAP_LIVE", inv.home.join("bwrap-live"));
+        .env("XDG_RUNTIME_DIR", &runtime);
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(
         out.status.code(),
@@ -13365,13 +13395,18 @@ fn a_cancelled_detached_run_leaves_no_surviving_process() {
     std::fs::create_dir_all(&runtime).unwrap();
     let paths = detach_paths_live(&runtime, &repo.canonicalize().unwrap());
     let tree_file = inv.home.join("bwrap-tree.txt");
+    bwrap_knobs(
+        &inv.home,
+        &[
+            ("BWRAP_LIVE", &inv.home.join("bwrap-live").to_string_lossy()),
+            ("BWRAP_TREE_FILE", &tree_file.to_string_lossy()),
+        ],
+    );
     let mut cmd = spawn_with_args(&inv, &["--detach"]);
     cmd.env("MYSBX_DTACH", &dtach)
         .env("MYSBX_BWRAP", &bwrap)
         .env("MYSBX_TOOLS_PATH", "/usr/bin")
-        .env("XDG_RUNTIME_DIR", &runtime)
-        .env("BWRAP_LIVE", inv.home.join("bwrap-live"))
-        .env("BWRAP_TREE_FILE", &tree_file);
+        .env("XDG_RUNTIME_DIR", &runtime);
     // The outer (and with it the inner, through the non-setsid stub
     // dtach) runs in its own group: the group kill must reach the
     // run's processes only, never the harness that spawned it.
@@ -13487,13 +13522,18 @@ fn a_detached_run_whose_backend_exits_nonzero_records_the_exit_code() {
     let runtime = short_runtime_root("exit-code");
     std::fs::create_dir_all(&runtime).unwrap();
     let paths = detach_paths_live(&runtime, &repo.canonicalize().unwrap());
+    bwrap_knobs(
+        &inv.home,
+        &[
+            ("BWRAP_LIVE", &inv.home.join("bwrap-live").to_string_lossy()),
+            ("BWRAP_EXIT", "42"),
+        ],
+    );
     let mut cmd = spawn_with_args(&inv, &["--detach"]);
     cmd.env("MYSBX_DTACH", &dtach)
         .env("MYSBX_BWRAP", &bwrap)
         .env("MYSBX_TOOLS_PATH", "/usr/bin")
-        .env("XDG_RUNTIME_DIR", &runtime)
-        .env("BWRAP_LIVE", inv.home.join("bwrap-live"))
-        .env("BWRAP_EXIT", "42");
+        .env("XDG_RUNTIME_DIR", &runtime);
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(
         out.status.code(),
@@ -13546,13 +13586,18 @@ fn a_detached_run_whose_backend_dies_by_signal_records_the_signal() {
     let runtime = short_runtime_root("signal-death");
     std::fs::create_dir_all(&runtime).unwrap();
     let paths = detach_paths_live(&runtime, &repo.canonicalize().unwrap());
+    bwrap_knobs(
+        &inv.home,
+        &[
+            ("BWRAP_LIVE", &inv.home.join("bwrap-live").to_string_lossy()),
+            ("BWRAP_SIGNAL", "SIGKILL"),
+        ],
+    );
     let mut cmd = spawn_with_args(&inv, &["--detach"]);
     cmd.env("MYSBX_DTACH", &dtach)
         .env("MYSBX_BWRAP", &bwrap)
         .env("MYSBX_TOOLS_PATH", "/usr/bin")
-        .env("XDG_RUNTIME_DIR", &runtime)
-        .env("BWRAP_LIVE", inv.home.join("bwrap-live"))
-        .env("BWRAP_SIGNAL", "SIGKILL");
+        .env("XDG_RUNTIME_DIR", &runtime);
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(
         out.status.code(),
@@ -13637,6 +13682,10 @@ fn a_detached_session_run_uses_the_session_registry_entry() {
     };
     let (dtach, _) = dtach_stub(&inv.home, true);
     let (bwrap, _) = bwrap_stub(&inv.home);
+    bwrap_knobs(
+        &inv.home,
+        &[("BWRAP_LIVE", &inv.home.join("bwrap-live").to_string_lossy())],
+    );
     let runtime = short_runtime_root("session");
     std::fs::create_dir_all(&runtime).unwrap();
     let paths = mysbx::detach::paths(
@@ -13649,8 +13698,7 @@ fn a_detached_session_run_uses_the_session_registry_entry() {
     cmd.env("MYSBX_DTACH", &dtach)
         .env("MYSBX_BWRAP", &bwrap)
         .env("MYSBX_TOOLS_PATH", "/usr/bin")
-        .env("XDG_RUNTIME_DIR", &runtime)
-        .env("BWRAP_LIVE", inv.home.join("bwrap-live"));
+        .env("XDG_RUNTIME_DIR", &runtime);
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(
         out.status.code(),
@@ -13681,14 +13729,17 @@ fn a_detached_run_creates_a_private_registry_directory() {
     let (inv, repo, _) = fixture_with_backend("detach-registry-mode", &["--detach"]);
     let (dtach, _) = dtach_stub(&inv.home, true);
     let (bwrap, _) = bwrap_stub(&inv.home);
+    bwrap_knobs(
+        &inv.home,
+        &[("BWRAP_LIVE", &inv.home.join("bwrap-live").to_string_lossy())],
+    );
     let runtime = short_runtime_root("registry-mode");
     std::fs::create_dir_all(&runtime).unwrap();
     let mut cmd = spawn_with_args(&inv, &["--detach"]);
     cmd.env("MYSBX_DTACH", &dtach)
         .env("MYSBX_BWRAP", &bwrap)
         .env("MYSBX_TOOLS_PATH", "/usr/bin")
-        .env("XDG_RUNTIME_DIR", &runtime)
-        .env("BWRAP_LIVE", inv.home.join("bwrap-live"));
+        .env("XDG_RUNTIME_DIR", &runtime);
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(out.status.code(), Some(0));
     use std::os::unix::fs::PermissionsExt;
@@ -13738,14 +13789,17 @@ fn the_inner_detached_run_spawns_the_backend_with_the_detachable_mark() {
     let (inv, _, _) = fixture_with_backend("detach-detachable-mark", &["--detach"]);
     let (dtach, _) = dtach_stub(&inv.home, true);
     let (bwrap, bwrap_record) = bwrap_stub(&inv.home);
+    bwrap_knobs(
+        &inv.home,
+        &[("BWRAP_LIVE", &inv.home.join("bwrap-live").to_string_lossy())],
+    );
     let runtime = short_runtime_root("mark");
     std::fs::create_dir_all(&runtime).unwrap();
     let mut cmd = spawn_with_args(&inv, &["--detach"]);
     cmd.env("MYSBX_DTACH", &dtach)
         .env("MYSBX_BWRAP", &bwrap)
         .env("MYSBX_TOOLS_PATH", "/usr/bin")
-        .env("XDG_RUNTIME_DIR", &runtime)
-        .env("BWRAP_LIVE", inv.home.join("bwrap-live"));
+        .env("XDG_RUNTIME_DIR", &runtime);
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(out.status.code(), Some(0));
     let recorded = wait_for_file(&bwrap_record);
@@ -13783,14 +13837,17 @@ fn the_backend_of_the_detached_inner_inherits_no_ignored_signals() {
     let (inv, _, _) = fixture_with_backend("detach-no-ignored-signals", &["--detach"]);
     let (dtach, _) = dtach_stub(&inv.home, true);
     let (bwrap, bwrap_record) = bwrap_stub(&inv.home);
+    bwrap_knobs(
+        &inv.home,
+        &[("BWRAP_LIVE", &inv.home.join("bwrap-live").to_string_lossy())],
+    );
     let runtime = short_runtime_root("no-ignored-signals");
     std::fs::create_dir_all(&runtime).unwrap();
     let mut cmd = spawn_with_args(&inv, &["--detach"]);
     cmd.env("MYSBX_DTACH", &dtach)
         .env("MYSBX_BWRAP", &bwrap)
         .env("MYSBX_TOOLS_PATH", "/usr/bin")
-        .env("XDG_RUNTIME_DIR", &runtime)
-        .env("BWRAP_LIVE", inv.home.join("bwrap-live"));
+        .env("XDG_RUNTIME_DIR", &runtime);
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(
         out.status.code(),
@@ -13946,6 +14003,10 @@ fn a_stale_socket_is_replaced_under_the_lock() {
     let (inv, repo, _) = fixture_with_backend("detach-stale-sock", &["--detach"]);
     let (dtach, _) = dtach_stub(&inv.home, true);
     let (bwrap, _) = bwrap_stub(&inv.home);
+    bwrap_knobs(
+        &inv.home,
+        &[("BWRAP_LIVE", &inv.home.join("bwrap-live").to_string_lossy())],
+    );
     let runtime = short_runtime_root("stale-sock");
     std::fs::create_dir_all(&runtime).unwrap();
     let paths = detach_paths_live(&runtime, &repo.canonicalize().unwrap());
@@ -13963,8 +14024,7 @@ fn a_stale_socket_is_replaced_under_the_lock() {
     cmd.env("MYSBX_DTACH", &dtach)
         .env("MYSBX_BWRAP", &bwrap)
         .env("MYSBX_TOOLS_PATH", "/usr/bin")
-        .env("XDG_RUNTIME_DIR", &runtime)
-        .env("BWRAP_LIVE", inv.home.join("bwrap-live"));
+        .env("XDG_RUNTIME_DIR", &runtime);
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(
         out.status.code(),
@@ -14769,6 +14829,10 @@ fn a_detachable_run_starts_detached_and_attaches_under_one_lock() {
     let (inv, repo, _) = fixture_with_backend("detachable-happy", &["--detachable"]);
     let (dtach, _) = dtach_stub(&inv.home, true);
     let (bwrap, _) = bwrap_stub(&inv.home);
+    bwrap_knobs(
+        &inv.home,
+        &[("BWRAP_LIVE", &inv.home.join("bwrap-live").to_string_lossy())],
+    );
     let runtime = short_runtime_root("detachable-happy");
     std::fs::create_dir_all(&runtime).unwrap();
     let paths = detach_paths_live(&runtime, &repo.canonicalize().unwrap());
@@ -14777,7 +14841,6 @@ fn a_detachable_run_starts_detached_and_attaches_under_one_lock() {
         .env("MYSBX_BWRAP", &bwrap)
         .env("MYSBX_TOOLS_PATH", "/usr/bin")
         .env("XDG_RUNTIME_DIR", &runtime)
-        .env("BWRAP_LIVE", inv.home.join("bwrap-live"))
         .stdin(std::process::Stdio::from(slave));
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(
