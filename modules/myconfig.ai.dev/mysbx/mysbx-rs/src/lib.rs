@@ -4843,28 +4843,23 @@ fn sandbox_pipeline(
     // host whose backend is only on PATH.
     let mut cmd = std::process::Command::new(&backend_program);
     cmd.args(&argv);
-    // The backend reads nothing from mysbx's environment (bwrap's argv
-    // clears and re-sets it, and the VM launchers get their own pins as
-    // arguments), but the CHILD inherited it until exec — and the sandbox
-    // that process becomes could read it back through /proc (bd
-    // myconfig-q8zg). Dropping it here is the cheapest place to close that
-    // window, and a proxy-only broker makes it matter more: the host
-    // environment is exactly where the credential names live (config.md
-    // D28).
+    // The backend takes everything it needs from argv, and the CHILD
+    // otherwise inherits mysbx's environment until exec — which the
+    // sandbox it becomes can read back through `/proc/1/environ` (bd
+    // myconfig-q8zg, config.md D28). The wrappers this spawn reaches
+    // re-establish their pins with `--set` regardless, so a cleared
+    // environment does not starve them.
     //
-    // Every mode that reaches the spawn is included, the inner of a
-    // detached run too: it rebuilds its argv from the pins BEFORE this
-    // point and the backend takes its own environment as arguments, so
-    // the inner has no more use for the inherited environment than the
-    // foreground has. The outer modes (Detached/Detachable) never spawn
-    // this command — they hand off to `launch_outer`, whose dtach spawn
-    // builds its own environment — but clearing it unconditionally keeps
-    // the rule one line instead of a mode table.
+    // The inner of a detached run is cleared like any other: it builds
+    // its argv from the pins before this point, and the backend it
+    // spawns gets its environment as arguments. The outer modes
+    // (Detached/Detachable) never reach this spawn at all — they hand
+    // off to `launch_outer`, which builds the dtach child's environment.
     //
-    // The one exclusion is podman's client half, which reads its own
-    // environment (a cleared one loses the runtime dir and the
-    // registries it resolves through `$HOME`); audited as a residual
-    // risk instead of closed (config.md D28).
+    // podman is the one exclusion: its client half reads its own
+    // environment (the runtime dir, the registries through `$HOME`), so
+    // it keeps it. That is the residual risk config.md D28 records
+    // instead of closing.
     if !backends::find(backend).is_some_and(|row| row.podman()) {
         cmd.env_clear();
     }
@@ -4882,6 +4877,7 @@ fn sandbox_pipeline(
                 session: flags.session.as_deref(),
                 backend,
                 multiplexer: merged.multiplexer.name(),
+                host_env: &host_env,
             },
             matches!(mode, RunMode::Detachable),
         ),

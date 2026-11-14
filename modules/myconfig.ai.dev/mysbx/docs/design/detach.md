@@ -224,14 +224,22 @@ has a terminal (the dtach pty), whatever the outer's stdin was. For
 podman this means `--interactive --tty` always.
 
 Environment: the launch carries a BUILT environment, never the
-outer's (bd myconfig-q8zg). `detach::detached_inner_env` passes
-`PATH`, `HOME`, `XDG_RUNTIME_DIR`, `TMPDIR` and `XDG_CONFIG_HOME`
-plus the `MYSBX_` pin namespace, `MYSBX_DETACHED` added by the
-launch. Everything else the outer carried is dropped before the
-dtach spawn: the backend the inner starts becomes the bwrap
-supervisor PID 1 of the sandbox, and its `/proc/1/environ` is
-readable from the payload. A credential exported in the launching
-shell therefore reaches neither the payload nor the supervisor.
+outer's (bd myconfig-q8zg). `detach::detached_inner_env` passes the
+shell context the inner needs to re-derive the run — `PATH`, `HOME`,
+`XDG_RUNTIME_DIR`, `TMPDIR` and `XDG_CONFIG_HOME` — plus the `MYSBX_`
+pin namespace (`MYSBX_DETACHED` excluded; the launch sets its own),
+plus the run's forwarded environment as `collect_host_env` narrowed
+it. Everything else the outer carried is dropped before the dtach
+spawn.
+
+The forwarded values are there for the PAYLOAD, and they stop at the
+backend: the inner mysbx spawns it with a cleared environment, so the
+supervisor — PID 1 of the sandbox, whose `/proc/1/environ` the payload
+can read — carries none of them. A forwarded name therefore reaches
+the payload exactly as it does in a foreground run, and a variable the
+launching shell exported without a `forward-env` entry reaches
+neither the payload nor the supervisor.
+
 Attaching from another shell does not update the environment
 (`SSH_AUTH_SOCK`, `TERM`, `WAYLAND_DISPLAY`) — the same limitation as
 tmux — and neither does it widen it.

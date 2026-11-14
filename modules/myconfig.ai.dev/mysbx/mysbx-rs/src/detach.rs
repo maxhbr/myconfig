@@ -1191,9 +1191,15 @@ pub struct Launch<'a> {
     pub backend: &'a str,
     /// The merged multiplexer of the run.
     pub multiplexer: &'a str,
+    /// The run's forwarded environment, already narrowed to the merged
+    /// policy (`collect_host_env`): the values the inner must hand the
+    /// PAYLOAD. They ride the inner's own environment, which is dropped
+    /// again before the backend spawn — so the supervisor still starts
+    /// with nothing from the invoking shell.
+    pub host_env: &'a crate::bwrap::HostEnv,
 }
 
-/// The environment names the detached inner inherits from the outer
+/// The environment names the detached inner carries from the outer
 /// (bd myconfig-q8zg): the ordinary shell context a mysbx process
 /// needs to re-derive its run — a `PATH` for the unpinned fallbacks, the
 /// user's `HOME`/`XDG_CONFIG_HOME` for the config layers, `TMPDIR` for
@@ -1219,13 +1225,28 @@ pub const DETACHED_INNER_ENV: &[&str] = &[
 /// and every one of them is also what the outer's own pre-flight argv
 /// was built from, so dropping them would make the inner disagree with
 /// the `--dry-run` the operator audited.
+///
+/// Two members of the namespace matter beyond the backend pins:
+/// `MYSBX_FORWARD_ENV` is the wrapper's extension point for forwarded
+/// names, and the inner re-resolves it (a name that only the pin
+/// declares must reach the payload exactly as it does in the
+/// foreground). `MYSBX_DETACHED` is excluded — the launch sets its own
+/// value, and an inherited one must never override the marker.
 pub const PIN_PREFIX: &str = "MYSBX_";
 
 /// The environment the detached inner is launched with (bd
-/// myconfig-q8zg): [`DETACHED_INNER_ENV`] plus the [`PIN_PREFIX`]
-/// namespace, read from the current process. Empty for every name that
-/// is unset, so a run without a pin does not manufacture one.
-pub fn detached_inner_env() -> Vec<(std::ffi::OsString, std::ffi::OsString)> {
+/// myconfig-q8zg): [`DETACHED_INNER_ENV`], the [`PIN_PREFIX`] namespace
+/// and `host_env` — the run's already-narrowed forwarded names.
+///
+/// `host_env` is what makes the payload inside the detached sandbox see
+/// the same forwarded environment a foreground run does. The inner is a
+/// host-side mysbx, not the supervisor, and it spawns the backend with a
+/// cleared environment, so these values reach the payload and stop there.
+/// Empty for every name that is unset, so a run without a pin does not
+/// manufacture one.
+pub fn detached_inner_env(
+    host_env: &crate::bwrap::HostEnv,
+) -> Vec<(std::ffi::OsString, std::ffi::OsString)> {
     let mut env = Vec::new();
     for name in DETACHED_INNER_ENV {
         if let Some(value) = std::env::var_os(name) {
@@ -1233,9 +1254,12 @@ pub fn detached_inner_env() -> Vec<(std::ffi::OsString, std::ffi::OsString)> {
         }
     }
     for (name, value) in std::env::vars_os() {
-        if name.to_string_lossy().starts_with(PIN_PREFIX) {
+        if name.to_string_lossy().starts_with(PIN_PREFIX) && name != "MYSBX_DETACHED" {
             env.push((name, value));
         }
+    }
+    for (name, value) in host_env {
+        env.push((std::ffi::OsString::from(name), value.into()));
     }
     env
 }
@@ -1804,7 +1828,7 @@ pub fn launch_outer(l: &Launch, attach_after: bool) -> i32 {
         .arg(&self_exe)
         .args(detach_inner_args())
         .env_clear()
-        .envs(detached_inner_env())
+        .envs(detached_inner_env(l.host_env))
         .env("MYSBX_DETACHED", &paths.sock)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())

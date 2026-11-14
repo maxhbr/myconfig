@@ -12900,8 +12900,8 @@ fn bwrap_stub(base: &Path) -> (PathBuf, PathBuf) {
     let stub = base.join("bwrap-stub");
     let cfg = base.join("bwrap-cfg.sh");
     let path = std::env::var("PATH").unwrap_or_default();
-    // Cleared between stubs so a test cannot inherit the previous
-    // fixture's knobs by accident.
+    // A stub always starts from an empty knob file: presence of the
+    // file is the contract, not a leftover from another fixture.
     let _ = std::fs::remove_file(&cfg);
     std::fs::write(
         &stub,
@@ -12934,6 +12934,12 @@ fn bwrap_stub(base: &Path) -> (PathBuf, PathBuf) {
 /// sources. Values are single-quoted, so a path may carry spaces.
 fn bwrap_knobs(base: &Path, knobs: &[(&str, &str)]) {
     let cfg = base.join("bwrap-cfg.sh");
+    for (name, _) in knobs {
+        assert!(
+            name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'),
+            "a knob name must be a shell identifier: {name}"
+        );
+    }
     let text: String = knobs
         .iter()
         .map(|(k, v)| format!("{k}='{}'\n", v.replace('\'', "'\\''")))
@@ -12959,10 +12965,10 @@ fn bwrap_knobs(base: &Path, knobs: &[(&str, &str)]) {
 fn environ_reporting_stub(base: &Path, name: &str) -> (PathBuf, PathBuf) {
     let record = base.join(format!("{name}-environ.txt"));
     let stub = base.join(name);
-    // `tr` is not on the cleared PATH (`env_clear` drops it and the
-    // sandbox PATH is MYSBX_TOOLS_PATH), so the record is written with
-    // shell builtins only: read the NUL-separated blob and replace the
-    // separators in the shell itself.
+    // `tr` is not reachable: the backend starts with a cleared
+    // environment, so no PATH resolves it. The loop is shell builtins
+    // only, reading the NUL-separated blob through fd 3 opened in the
+    // shell.
     std::fs::write(
         &stub,
         format!(
@@ -12980,7 +12986,7 @@ fn environ_reporting_stub(base: &Path, name: &str) -> (PathBuf, PathBuf) {
 /// [`environ_reporting_stub`], in file order.
 fn environ_names(dump: &str) -> Vec<String> {
     dump.lines()
-        .map(|l| l.split('=').next().unwrap_or_default().to_owned())
+        .map(|l| l.split_once('=').map(|(n, _)| n).unwrap_or(l).to_owned())
         .collect()
 }
 
@@ -13006,7 +13012,10 @@ fn exec_only_dtach_stub(base: &Path) -> PathBuf {
     let stub = base.join("dtach-exec-stub");
     std::fs::write(
         &stub,
-        "#!/bin/sh\ncase \"$1\" in\n  -n) shift 4; exec \"$@\" ;;\nesac\nexit 1\n",
+        // The four fixed launcher arguments are asserted before they
+        // are dropped, so a change to `launcher_argv`'s shape fails here
+        // instead of silently shifting the wrong tail.
+        "#!/bin/sh\ncase $1 in\n  -n)\n    [ \"$3\" = -r ] && [ \"$4\" = winch ] || exit 1\n    shift 4\n    exec \"$@\"\n    ;;\nesac\nexit 1\n",
     )
     .unwrap();
     use std::os::unix::fs::PermissionsExt;
@@ -13022,14 +13031,12 @@ fn exec_only_dtach_stub(base: &Path) -> PathBuf {
 ///
 /// Table-driven over the run modes, because they reach the spawn by
 /// different routes: the foreground exec, the waited `--result` run, and
-/// the detached inner (which is a second mysbx under `dtach`). The
-/// pre-fix code passed only the first two — the detached row leaked 13
-/// entries, the canary among them.
+/// the detached inner (a second mysbx under `dtach`). Every row must
+/// show an empty dump.
 ///
-/// The canary names are chosen to be unmistakable in a dump, and one of
-/// them is credential-shaped on purpose: `HF_TOKEN` is exactly the kind
-/// of name D28's forwarding rules own, and the point of this test is
-/// that those rules do not govern the supervisor's environment at all.
+/// One canary is credential-shaped on purpose: `HF_TOKEN` is the kind of
+/// name D28's forwarding rules own, and those rules do not govern the
+/// supervisor's environment at all.
 #[test]
 fn run_env_never_reaches_the_backend_supervisor() {
     if !is_ssh_keygen_available() {
@@ -13086,12 +13093,97 @@ fn run_env_never_reaches_the_backend_supervisor() {
         // DETACHED row must still carry the pins the inner re-derives
         // its run from, so it is checked for the absence of the canaries
         // above rather than for an empty dump.
-        if mode != "detach" {
+        // Every row, the detached one included, asserts the STRONG
+        // form: the supervisor carries no inherited name at all. A
+        // detached launch that handed the inner an empty environment
+        // would not fake this — the inner could not find its own pins
+        // and the run above would not have reached the stub.
+        assert!(
+            names.is_empty(),
+            "{mode}: the supervisor environment must be empty, got {names:?}"
+        );
+    }
+}
+
+/// `--detach` forwards the PAYLOAD environment exactly like a foreground
+/// run (bd myconfig-q8zg): the values ride the inner mysbx's own
+/// environment, which the spawn drops again before the backend — so the
+/// same run proves both "the payload gets the forwarded name" and "the
+/// supervisor does not".
+#[test]
+fn a_detached_run_forwards_the_payload_environment_like_the_foreground() {
+    if !is_ssh_keygen_available() {
+        return; // no usable ssh-keygen (the baseline env's uid-0 quirk)
+    }
+    for mode in ["foreground", "detach"] {
+        let (inv, repo, sidecar) = fixture_with_backend("env-forward", &["run"]);
+        std::fs::write(
+            sidecar.join("config.toml"),
+            "backend = \"bubblewrap\"\nforward-env = [\"Q8ZG_TIER_TOKEN\"]\n",
+        )
+        .unwrap();
+        // The stub records its own environment AND its argv: the argv is
+        // where a payload's `--setenv` lands, the environment is where a
+        // supervisor leak would show.
+        let (stub, record) = environ_reporting_stub(&inv.home, "bwrap-env-stub");
+        let argv_record = inv.home.join("bwrap-env-stub-argv.txt");
+        std::fs::write(
+            &stub,
+            format!(
+                "#!/bin/sh\nexec 3< /proc/$$/environ\n\
+                 while IFS= read -r -d '' line <&3; do printf '%s\\n' \"$line\"; done > {}\n\
+                 printf '%s\\n' \"$@\" > {}\n",
+                record.display(),
+                argv_record.display()
+            ),
+        )
+        .unwrap();
+        let runtime = short_runtime_root("env-forward");
+        std::fs::create_dir_all(&runtime).unwrap();
+        let mut cmd = if mode == "detach" {
+            let dtach = exec_only_dtach_stub(&inv.home);
+            let mut c = spawn_with_args(&inv, &["--detach"]);
+            c.env("MYSBX_DTACH", &dtach)
+                .env("XDG_RUNTIME_DIR", &runtime);
+            c
+        } else {
+            spawn_with_args(&inv, &["run", "--", "/bin/true"])
+        };
+        cmd.env("MYSBX_BWRAP", &stub)
+            .env("MYSBX_TOOLS_PATH", "/usr/bin")
+            // One name from the layer's `forward-env`, one that ONLY the
+            // wrapper pin (`MYSBX_FORWARD_ENV`) declares: both must reach
+            // the payload, so the launch has to carry the pin too.
+            .env("Q8ZG_TIER_TOKEN", "q8zg-tier-value")
+            .env("MYSBX_FORWARD_ENV", "Q8ZG_PIN_TOKEN")
+            .env("Q8ZG_PIN_TOKEN", "q8zg-pin-value");
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "{mode}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        // The payload's argv carries both forwarded pairs …
+        let argv = wait_for_file(&argv_record);
+        for (name, value) in [
+            ("Q8ZG_TIER_TOKEN", "q8zg-tier-value"),
+            ("Q8ZG_PIN_TOKEN", "q8zg-pin-value"),
+        ] {
             assert!(
-                names.is_empty(),
-                "{mode}: the supervisor environment must be empty, got {names:?}"
+                argv.lines().any(|l| l == name) && argv.lines().any(|l| l == value),
+                "{mode}: the payload lost the forwarded name `{name}`: {argv}"
             );
         }
+        // … and the supervisor's own environment carries neither value.
+        let dump = wait_for_file(&record);
+        for value in ["q8zg-tier-value", "q8zg-pin-value"] {
+            assert!(
+                !dump.contains(value),
+                "{mode}: the supervisor inherited `{value}`: {dump}"
+            );
+        }
+        let _ = repo;
     }
 }
 

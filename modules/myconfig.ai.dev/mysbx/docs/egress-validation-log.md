@@ -241,12 +241,14 @@ payload reads as `/proc/1/environ`):
 | `network = "none"` | 0 | none |
 | `network = "shared"` | 0 | none |
 
-The same measurement on the pre-fix binary reported the full invoking
-environment (74 entries in a hand-built `bwrap` control run, canary
-included), so the rows above are the fix taking effect, not a fixture
-that never set the canaries.
+Two separate measurements back that up, and they are different things:
 
-A direct `bwrap` control confirms the mechanism the bead described:
+- **mysbx, pre-fix** (the `#[ignore]`d test of commit `346de0cb8f`, plus a
+  hand-run `mysbx --detach` with a stub backend): the supervisor reported
+  the full invoking environment — 13 entries in the cli-suite run, the
+  canaries among them. That is the mysbx measurement, and it is a FAIL.
+- **a bare `bwrap` control**, with no mysbx in the loop, showing the
+  mechanism the bead described:
 
 ```
 HF_TOKEN=CANARY bwrap --clearenv --unshare-all … -- cat /proc/1/environ
@@ -254,6 +256,13 @@ HF_TOKEN=CANARY bwrap --clearenv --unshare-all … -- cat /proc/1/environ
 env -i PATH=/usr/bin bwrap --clearenv --unshare-all … -- cat /proc/1/environ
   -> 1 entry (PATH), the inherited HF_TOKEN gone
 ```
+
+The `0` in the table's `network = "shared"` row needs one caveat: that
+probe ran with `env -i` and set no `TERM`/`LANG`, so the forwarded set
+contributed nothing. It shows the supervisor is empty, not that a
+forwarded name is absent from a run that had one — the crate test
+`a_detached_run_forwards_the_payload_environment_like_the_foreground`
+covers that pair explicitly.
 
 `--clearenv` governs the PAYLOAD; the supervisor keeps whatever the
 spawn handed it. The fix clears the spawn.
