@@ -177,23 +177,48 @@ profile, and the five refusing backends.
 - a `--detach` / `mysbx attach` cycle: the broker outlives the outer run
   and dies with the inner one.
 
-### §5 nono — PASS (operator, dry run)
+### §5 nono — PASS (real brokered run, later the same day)
 
-`mysbx --backend nono --dry-run --verbose` shows `--block-net` plus the one
-`--allow-connect-port` for the relay, as bd myconfig-vpi9.1 specifies.
+`mysbx --backend nono run --result -- true` produced nono's own capability
+banner with `net  outbound blocked`, then started the broker:
 
-**Limits of this entry.** §4 and §5 are the operator's report of passing,
-not transcribed command output. The `thing` run above was executed in the
-main checkout rather than a scratch repo, so its sidecar now holds normal
-run state. And §5 is an argv-level check: a real nono run **through the
-broker** is not recorded here, which matters for E6 below.
+```
+run 1677220  (/home/mhuber/myconfig/myconfig.mysbx/egress/1677220/decisions.jsonl)
+  channel:      /run/user/1000/mysbx-egress/1677220/litellm.sock -> 127.0.0.1:4000, confined by Landlock to that one port
+  decisions:    1 (0 admissions, 0 unreachable, 0 io, 0 fatal)
+```
+
+The `listen` line with `decisions: 1` is the evidence: nono's run created
+a per-run channel, started a broker on it, and the broker bound its
+socket. The channel source is the per-run directory, and nono's own deny
+(`--block-net`) is visible in its banner.
+
+The `0 admissions` is expected, not a gap: `run -- true` never opens a
+connection, so nothing crossed the channel. The cross-the-channel half is
+§4's model requests and §1's `HTTP/1.1 200 OK`.
+
+**Limits of this entry.** §4 and §5's model-request probes are the
+operator's report of passing, not transcribed command output. The runs
+above executed in the main checkout rather than a scratch repo, so its
+sidecar holds normal run state.
 
 ### Consequence for design decision E6
 
-E6 said the static `agent-litellm-forward-unix` unit can be dropped once
-the broker path passes on the real host. The bubblewrap half is now
-evidenced above. The **nono half is not**: since bd myconfig-vpi9.1 nono
-enforces the profile through the same static unit, dropping it while only
-bubblewrap has the broker would break `proxy-only` on nono. One real nono
-`proxy-only` run (not a dry run) through the broker is the remaining
-precondition before the removal commit.
+Both bwrap-built tiers are now evidenced through the broker on real
+hardware: bubblewrap (§1–§4) and nono (§5). That closes E6's stated
+precondition.
+
+The static unit is nonetheless still **load-bearing**, and E6 as originally
+written overstated the risk. What the code actually does with a broker
+pinned (`lib.rs`): the bind source is the per-run directory, and the
+static directory is neither bound nor even stat'ed — so a brokered run
+does not touch it. But the static socket path stays the NAME source for
+every run (`MYSBX_EGRESS_SOCKET` is parsed for its file-name component and
+its exact-shape rule), and a build WITHOUT the broker pin serves the whole
+channel from the static unit, which remains the documented fallback state
+(`egress.md` E6 step 1).
+
+So the removal is a smaller, narrower decision than "both tiers must pass":
+it needs a host that always pins the broker (the Nix module already
+defaults `egressBroker ? true`), plus the name-source rewrite. It is not
+blocked on any further live evidence.

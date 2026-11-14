@@ -317,19 +317,23 @@ checked against it:
   `egressPinGate` in `nix/config-eval-test.nix`;
 - the root-owned-directory rule of D20 (already replaced by E3).
 
-**The removal is gated on the broker serving BOTH bwrap-built tiers.**
-Since bd myconfig-vpi9.1 the layered `nono` backend enforces the profile
-through the same bwrap channel, so it is a SECOND consumer of the static
-unit: dropping the unit while only bubblewrap has the broker would break
-`proxy-only` on nono. The broker path is backend-agnostic (it is chosen by
-the wrapper pins, not the backend name), so the live check in step 2 must
-cover a nono run as well as a bubblewrap one before step 3 executes.
+**The live evidence covers both bwrap-built tiers.** Since bd
+myconfig-vpi9.1 the layered `nono` backend enforces the profile through the
+same bwrap channel, so nono is a second consumer of the broker path. Both
+passed on real hardware on host 'thing', 2026-11-14: bubblewrap (§1–§4)
+and a real brokered nono run (§5) in the
+[validation log](../egress-validation-log.md). Step 2's precondition is
+therefore met.
 
-Status of that gate: the bubblewrap half passed on host 'thing' on
-2026-11-14 ([validation log](../egress-validation-log.md) §1–§4). The nono
-half is still OUTSTANDING — nono's argv was only inspected (`--block-net`
-plus the one `--allow-connect-port`), not exercised as a real brokered
-run. Step 3 stays blocked until that run is recorded.
+**What still holds the unit in place is narrower than "a fallback".** With
+a broker pinned, a run binds the per-run directory and never binds — or
+even stats — the static directory (`lib.rs`: the bind source comes from
+`broker_dir`, and the static-directory checks are gated on
+`broker_bin.is_none()`). What remains is the NAME: `MYSBX_EGRESS_SOCKET`
+is parsed for its file-name component and its exact-shape rule on every
+run, so the pin outlives the unit as a spelling. Step 3 therefore has to
+rewrite the name source, not merely delete a unit — and a build that pins
+no broker still serves the channel from the unit (step 1).
 
 The TCP half of the forwarder is NOT part of this: it serves the podman
 backends (bd myconfig-jq2) and is hardened separately in n8kv.1.5.
