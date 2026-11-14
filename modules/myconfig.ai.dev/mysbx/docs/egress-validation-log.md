@@ -222,3 +222,57 @@ So the removal is a smaller, narrower decision than "both tiers must pass":
 it needs a host that always pins the broker (the Nix module already
 defaults `egressBroker ? true`), plus the name-source rewrite. It is not
 blocked on any further live evidence.
+
+## 2026-11-14, nested sandbox — supervisor environment (bd myconfig-q8zg)
+
+Provenance: executed in the dev sandbox that authored the fix, NOT on a
+host with the LiteLLM forwarder. This entry records what that environment
+could and could not prove, and is explicit about the gap.
+
+### What was measured
+
+`network = "none"` and `network = "shared"` on `bubblewrap`, driven
+through the real binary with a stub backend that dumps
+`/proc/$$/environ` (the supervisor's own environment — the thing a
+payload reads as `/proc/1/environ`):
+
+| run | supervisor env entries | canaries present (`HF_TOKEN`, `OPENAI_API_KEY`, `DISPLAY`, `SSH_AUTH_SOCK`) |
+| --- | --- | --- |
+| `network = "none"` | 0 | none |
+| `network = "shared"` | 0 | none |
+
+The same measurement on the pre-fix binary reported the full invoking
+environment (74 entries in a hand-built `bwrap` control run, canary
+included), so the rows above are the fix taking effect, not a fixture
+that never set the canaries.
+
+A direct `bwrap` control confirms the mechanism the bead described:
+
+```
+HF_TOKEN=CANARY bwrap --clearenv --unshare-all … -- cat /proc/1/environ
+  -> 74 entries, HF_TOKEN=CANARY present
+env -i PATH=/usr/bin bwrap --clearenv --unshare-all … -- cat /proc/1/environ
+  -> 1 entry (PATH), the inherited HF_TOKEN gone
+```
+
+`--clearenv` governs the PAYLOAD; the supervisor keeps whatever the
+spawn handed it. The fix clears the spawn.
+
+### The gap: `proxy-only` was not re-run live here
+
+The egress channel is pinned to `/run/mysbx-egress/litellm.sock` by
+design (D20), and this nested sandbox has no `/run` at all, so a real
+`proxy-only` run refuses with the documented exit `70` naming the
+forwarder (`MYSBX_EGRESS_SOCKET = /run/mysbx-egress/litellm.sock`). That
+refusal is the same one an operator sees on a host without the
+forwarder, not a defect of this change.
+
+The supervisor-environment property does not depend on the network
+profile: the environment is cleared at the spawn, before any channel
+exists, which is why the `none` and `shared` rows above are valid
+evidence for it. What remains un-executed is the combination
+"`proxy-only` AND `/proc/1/environ clean AND relay reachable" in one
+run — the AC's "re-validated live" item. It needs a host carrying the
+LiteLLM forwarder; the scripted probe in this file's header already
+covers the channel half, and the supervisor half is now asserted by the
+crate's `run_env_never_reaches_the_backend_supervisor` test.
