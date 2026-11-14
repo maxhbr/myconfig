@@ -113,22 +113,112 @@ closing record names the sections as passed, not their raw output. A later
 re-run should fill those in rather than treat this block as a template for
 them.
 
-## 2026-11-13+, host 'f13' — the per-run egress broker (bd myconfig-n8kv.1.6)
+## 2026-11-14, host 'thing' — the per-run egress broker (bd myconfig-n8kv.1.6)
 
-**Not yet run.** Phase B's code is in place (design record in
-[`design/egress.md`](./design/egress.md)) and the scripted runbook above
-is ready; this block is the placeholder an f13 session fills in. When it
-is done, record:
+Run after PR #108 merged to `main` and the host was rebuilt, so this is
+the first evidence from a real wrapped `mysbx` on a real kernel — the
+earlier rounds could only exercise the code against a hand-built shim.
 
-- host, date, kernel;
-- the `nix/egress-broker-live-validation.sh` output verbatim (PASS lines
-  per probe);
-- the three manual probes: one model request each from `pi` and
-  `opencode` inside the sandbox, the broker killed mid-run (the sandbox's
-  requests must fail, with an `unreachable` line rather than an `allow`),
-  and a `--detach`/attach cycle (the broker survives the outer, dies with
-  the inner);
-- whether the static `agent-litellm-forward-unix` unit can now be dropped
-  (design decision E6) — dropping it is ONE commit, and it touches
-  `myconfig.ai.dev.litellm-forwarder.nix`, `nix/mysbx.nix` and
-  `nix/config-eval-test.nix`.
+Host kernel not recorded. The build under test is
+`/nix/store/031zjvy1jlc6ydmnr7l6ijxjwg5mhf17-mysbx-0.1.0`.
+
+### §1 doctor — PASS
+
+`mysbx doctor bubblewrap | grep -i egress` reported the whole channel
+through the wrapper's own pins:
+
+```
+OK   egress name lookup: /nix/store/9abasx0d9fi6p95jwglrq49lvvcwmcs4-mysbx-egress-etc (localhost = 127.0.0.1, no DNS)
+OK   egress relay: /nix/store/031zjvy1jlc6ydmnr7l6ijxjwg5mhf17-mysbx-0.1.0/bin/mysbx-egress-relay (listens on 127.0.0.1:4000 in a proxy-only run)
+OK   egress broker: /nix/store/031zjvy1jlc6ydmnr7l6ijxjwg5mhf17-mysbx-0.1.0/bin/mysbx-egress-broker (one process per proxy-only run)
+OK   egress broker confinement: Landlock ABI 7 confines the broker to one TCP port
+OK   egress channel probe: through the per-run broker: GET /v1/models answered (HTTP/1.1 200 OK)
+```
+
+Two things this settles beyond the PASS:
+
+- **The wrapper's pin split is real.** The harness's fail-closed probe
+  depends on `MYSBX_EGRESS_BROKER` being `--set` (immovable) while
+  `MYSBX_EGRESS_SOCKET`/`_PORT` are `--set-default`; that was verified
+  only against `make-binary-wrapper.sh` until now.
+- **The probe reached a live model endpoint** — `HTTP/1.1 200 OK`, not
+  the 404 the sandbox's stand-in servers answer, so the through-the-broker
+  path carried a real request.
+
+### §2 dry run — PASS
+
+```
+## network:        proxy-only (no --share-net; 127.0.0.1:4000 -> /run/mysbx-egress/litellm.sock via the relay from /run/user/1000/mysbx-egress/1670032)
+```
+
+The source is the per-run directory, not the static
+`/run/mysbx-egress` — the distinction the harness's guard exists to
+check, now demonstrated on a real report (verbose lines are `## `-prefixed,
+which is what made an earlier `^network:` anchor vacuous).
+
+A `bubblewrap` warning about `memory`/`cpus` being unenforced appeared in
+the same output; it is a pre-existing backend limitation, unrelated to the
+channel.
+
+### §3 scripted runbook — PASS, 9/9
+
+`nix/egress-broker-live-validation.sh` passed every scripted probe: pins,
+dry run creating nothing, a real run starting the broker and logging to
+the sidecar, the waited run's directory removal (E2/E3),
+`mysbx diagnose egress` reading the log back, the broken-pin refusal
+(exit 70, nothing created, E5), both bwrap-built tiers accepting the
+profile, and the five refusing backends.
+
+### §4 manual probes — PASS (operator)
+
+- one model request each from `pi` and from `opencode` inside the sandbox;
+- the broker killed mid-run: the sandbox's requests fail with no fallback,
+  and the decision log's next line is `unreachable` rather than `allow`;
+- a `--detach` / `mysbx attach` cycle: the broker outlives the outer run
+  and dies with the inner one.
+
+### §5 nono — PASS (real brokered run, later the same day)
+
+`mysbx --backend nono run --result -- true` produced nono's own capability
+banner with `net  outbound blocked`, then started the broker:
+
+```
+run 1677220  (/home/mhuber/myconfig/myconfig.mysbx/egress/1677220/decisions.jsonl)
+  channel:      /run/user/1000/mysbx-egress/1677220/litellm.sock -> 127.0.0.1:4000, confined by Landlock to that one port
+  decisions:    1 (0 admissions, 0 unreachable, 0 io, 0 fatal)
+```
+
+The `listen` line with `decisions: 1` is the evidence: nono's run created
+a per-run channel, started a broker on it, and the broker bound its
+socket. The channel source is the per-run directory, and nono's own deny
+(`--block-net`) is visible in its banner.
+
+The `0 admissions` is expected, not a gap: `run -- true` never opens a
+connection, so nothing crossed the channel. The cross-the-channel half is
+§4's model requests and §1's `HTTP/1.1 200 OK`.
+
+**Limits of this entry.** §4 and §5's model-request probes are the
+operator's report of passing, not transcribed command output. The runs
+above executed in the main checkout rather than a scratch repo, so its
+sidecar holds normal run state.
+
+### Consequence for design decision E6
+
+Both bwrap-built tiers are now evidenced through the broker on real
+hardware: bubblewrap (§1–§4) and nono (§5). That closes E6's stated
+precondition.
+
+The static unit is nonetheless still **load-bearing**, and E6 as originally
+written overstated the risk. What the code actually does with a broker
+pinned (`lib.rs`): the bind source is the per-run directory, and the
+static directory is neither bound nor even stat'ed — so a brokered run
+does not touch it. But the static socket path stays the NAME source for
+every run (`MYSBX_EGRESS_SOCKET` is parsed for its file-name component and
+its exact-shape rule), and a build WITHOUT the broker pin serves the whole
+channel from the static unit, which remains the documented fallback state
+(`egress.md` E6 step 1).
+
+So the removal is a smaller, narrower decision than "both tiers must pass":
+it needs a host that always pins the broker (the Nix module already
+defaults `egressBroker ? true`), plus the name-source rewrite. It is not
+blocked on any further live evidence.
