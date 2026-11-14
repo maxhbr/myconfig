@@ -83,23 +83,32 @@ _Avoid_: state directory mount, persistent volume, cache dir
 **Proxy-only profile**:
 The `network = "proxy-only"` setting (config.md D20): the sandbox reaches
 only the host's LiteLLM endpoint and holds no model credential. Stricter
-than `"shared"`, weaker than `"none"`; enforced on bubblewrap and
-refused on every other backend in phase A. The credential rules it
-implies are config.md D28.
+than `"shared"`, weaker than `"none"`; enforced on the bwrap-built
+tiers (bubblewrap and nono) and refused on every other backend. The
+credential rules it implies are config.md D28.
 _Avoid_: egress mode, proxy mode, restricted network
 
 **Egress forwarder**:
 The host-side, port-scoped `systemd-socket-proxyd` listener
 (`myconfig.ai.dev.litellm-forwarder`) that makes the loopback-only LiteLLM
 proxy reachable from a sandbox. It is a static, socket-activated unit;
-under `proxy-only` its Unix socket is the one channel the bubblewrap
+under `proxy-only` its Unix socket is the one channel the
 sandbox has.
 _Avoid_: proxy bridge, port forward, tunnel
 
 **Egress relay**:
 The in-sandbox process (`mysbx-egress-relay`) that accepts loopback TCP
 clients and forwards to the host egress forwarder's socket. It makes
-proxy-aware clients work without giving them a route. A later
-host-side *egress broker* (bd myconfig-vpi9) may replace it; the relay
+proxy-aware clients work without giving them a route. The relay
 makes no allow/deny decisions of its own.
 _Avoid_: proxy server, sidecar, gateway
+
+**Egress broker**:
+The host process mysbx is DESIGNED to spawn once per run (bd
+myconfig-n8kv.1, not shipped yet) to own the sandbox's single network
+channel: it listens on a socket in a user-owned per-run directory, dials
+the host LiteLLM endpoint itself, and writes a JSONL decision log the
+payload cannot reach ([`docs/design/egress.md`](./docs/design/egress.md)).
+Where it replaces the static egress forwarder's Unix socket for
+`proxy-only` runs.
+_Avoid_: egress daemon, proxy service, gateway

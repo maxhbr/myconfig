@@ -307,10 +307,10 @@ pub enum Network {
     /// none` on the podman backends, no net device on the VM
     /// backends. The `network = false` alias.
     None,
-    /// Only the host's LiteLLM endpoint (config.md D20): bubblewrap
-    /// enforces it (an empty netns, the forwarder's Unix socket and the
-    /// in-sandbox relay, bd myconfig-mo3.2.6); every other backend
-    /// refuses it rather than weaken the profile. The
+    /// Only the host's LiteLLM endpoint (config.md D20): the bwrap-built
+    /// tiers enforce it (an empty netns, the forwarder's Unix socket and
+    /// the in-sandbox relay, bd myconfig-mo3.2.6, myconfig-vpi9.1); every
+    /// other backend refuses it rather than weaken the profile. The
     /// no-model-credential path (D28).
     ProxyOnly,
     /// The whole network the backend's transport gives (D21's

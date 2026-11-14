@@ -75,6 +75,35 @@ let
   # (docs/design/config.md D20, bd myconfig-mo3.2.6); only the file name
   # is configurable.
   socketPath = "/run/mysbx-egress/${cfg.unixSocket.name}";
+
+  # The confinement both forwarder halves share: no privileges, no home, no
+  # writable system tree, and — the point of the whole block — a DESTINATION
+  # fence, so even a compromised forwarder cannot reach the LAN, the VPN or
+  # a cloud-metadata endpoint. `RestrictAddressFamilies` keeps AF_UNIX for
+  # socket activation and `sd_notify`, and AF_INET for the loopback target.
+  #
+  # The IP filter is bidirectional (it also screens INBOUND sources), which
+  # is harmless for the Unix half (AF_UNIX is never IP-filtered) and
+  # intended for none of them: the TCP half's INGRESS arrives through the
+  # socket unit's cgroup (Accept=no means PID1 owns the listening socket),
+  # so a non-loopback client — pasta re-originates the sandbox connection
+  # from the host's global address — is not screened here. What this fence
+  # bounds is what the forwarder may CONNECT TO. bd myconfig-jq2 verifies
+  # that the podman-gvisor endpoint still works with it on.
+  forwarderHardening = {
+    DynamicUser = true;
+    NoNewPrivileges = true;
+    ProtectSystem = "strict";
+    ProtectHome = true;
+    PrivateTmp = true;
+    PrivateDevices = true;
+    IPAddressAllow = "localhost";
+    IPAddressDeny = "any";
+    RestrictAddressFamilies = [
+      "AF_UNIX"
+      "AF_INET"
+    ];
+  };
 in
 {
   options.myconfig.ai.dev.litellm-forwarder = with lib; {
@@ -234,13 +263,11 @@ in
           "agent-litellm-forward.socket"
           "litellm.service"
         ];
-        serviceConfig = {
+        serviceConfig = forwarderHardening // {
           Type = "notify";
           ExecStart = "${pkgs.systemd}/lib/systemd/systemd-socket-proxyd --exit-idle-time=5min 127.0.0.1:${port}";
-          ProtectSystem = "strict";
-          PrivateTmp = true;
-          PrivateDevices = true;
-          # Needs the host network namespace to reach the loopback-only proxy.
+          # Needs the host network namespace to reach the loopback-only
+          # proxy; the shared fence's destination rule is what bounds it.
           PrivateNetwork = false;
         };
       };
@@ -319,27 +346,11 @@ in
           "agent-litellm-forward-unix.socket"
           "litellm.service"
         ];
-        serviceConfig = {
+        serviceConfig = forwarderHardening // {
           # --exit-idle-time mirrors the TCP forwarder: the unit exits
           # after an idle period, so an enabled-but-unused forwarder
           # really runs nothing once its first connection is done.
           ExecStart = "${pkgs.systemd}/lib/systemd/systemd-socket-proxyd --exit-idle-time=5min 127.0.0.1:${port}";
-          DynamicUser = true;
-          NoNewPrivileges = true;
-          PrivateTmp = true;
-          PrivateDevices = true;
-          ProtectSystem = "strict";
-          ProtectHome = true;
-          # HOST-TCP-ONLY, enforced on the FORWARDER: it may talk only to
-          # the host loopback, so even a compromised forwarder cannot
-          # reach the LAN, the VPN or the metadata service. AF_UNIX is
-          # the socket it is activated on, AF_INET the loopback target.
-          IPAddressAllow = "localhost";
-          IPAddressDeny = "any";
-          RestrictAddressFamilies = [
-            "AF_UNIX"
-            "AF_INET"
-          ];
         };
       };
     })

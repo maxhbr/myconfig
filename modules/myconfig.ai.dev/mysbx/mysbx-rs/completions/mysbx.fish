@@ -121,6 +121,12 @@ function __mysbx_in_doctor
     contains -- doctor (__mysbx_tokens)
 end
 
+function __mysbx_in_diagnose
+    __mysbx_past_dd
+    and return 1
+    contains -- diagnose (__mysbx_tokens)
+end
+
 function __mysbx_in_podman_load_image
     __mysbx_past_dd
     and return 1
@@ -329,6 +335,7 @@ complete -c mysbx -f -n '__mysbx_no_verb' -a worktree -d 'The worktree group: li
 complete -c mysbx -f -n '__mysbx_no_verb' -a status -d 'The one-command overview: init state, effective config, sessions, worktrees'
 complete -c mysbx -f -n '__mysbx_no_verb' -a attach -d 'Connect this terminal to the detached run of the live repo (or of --session NAME)'
 complete -c mysbx -f -n '__mysbx_no_verb' -a doctor -d 'Host health check of the configured backend (or the named ones)'
+complete -c mysbx -f -n '__mysbx_no_verb' -a diagnose -d 'The diagnose group: read the egress broker\'s decision log (egress)'
 complete -c mysbx -f -n '__mysbx_no_verb' -a ssh-pubkey -d 'Print the sandbox ssh keypair\'s public key (GitHub deploy key / gitolite keydir value)'
 complete -c mysbx -f -n '__mysbx_no_verb' -a podman-load-image -d 'Load the agent container image into Podman (--force, --test, --image <ref>)'
 
@@ -424,6 +431,11 @@ complete -c mysbx -n '__mysbx_in_podman_load_image' -l image -x -d 'Image refere
 # `doctor [BACKEND...]`: the backends to check instead of the
 # configured one.
 complete -c mysbx -f -n '__mysbx_in_doctor' -a 'bubblewrap podman-gvisor nono podman-krun' -d 'Backend to check'
+
+# `diagnose`: one sub-verb today, `egress`, with its two flags.
+complete -c mysbx -f -n '__mysbx_in_diagnose' -a egress -d 'Read the proxy-only broker\'s decision log back'
+complete -c mysbx -f -n '__mysbx_in_diagnose; and contains -- egress (__mysbx_tokens)' -l run -r -d 'Narrow to one run pid'
+complete -c mysbx -f -n '__mysbx_in_diagnose; and contains -- egress (__mysbx_tokens)' -l json -d 'Print one JSON object per run'
 
 # The NAME position of the handoff verbs and of `session destroy` /
 # `session hunk`: the existing sessions of the registry (a new NAME is

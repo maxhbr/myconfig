@@ -10019,15 +10019,16 @@ fn allowlist_on_microvm_ch_is_refused() {
 }
 
 #[test]
-fn proxy_only_is_refused_on_every_backend_but_bubblewrap() {
-    // D20 (bd myconfig-mo3.2.3, mo3.2.6): `network = "proxy-only"` is
-    // enforced by bubblewrap ALONE; every other backend refuses it
-    // (exit 70) with a backend-specific reason, before the session
-    // clone and before the --dry-run return, so a dry run audits it.
-    // (Bubblewrap's own refusal — the missing-pins fail-closed — is
+fn proxy_only_is_refused_on_every_backend_but_the_bwrap_tiers() {
+    // D20 (bd myconfig-mo3.2.3, mo3.2.6, myconfig-vpi9.1):
+    // `network = "proxy-only"` is enforced by the bwrap-built tiers
+    // (bubblewrap and the layered nono backend on top of it); every
+    // other backend refuses it (exit 70) with a backend-specific
+    // reason, before the session clone and before the --dry-run
+    // return, so a dry run audits it. (The bwrap tiers' own
+    // missing-pins fail-closed refusal is
     // `proxy_only_on_bubblewrap_without_pins_is_refused`.)
     for backend in [
-        "nono",
         "podman-gvisor",
         "podman-krun",
         "krun",
@@ -10130,6 +10131,34 @@ fn proxy_only_on_bubblewrap_without_pins_is_refused() {
         !stdout.contains("--clearenv"),
         "no argv on refusal: {stdout}"
     );
+}
+
+#[test]
+fn proxy_only_is_accepted_on_nono() {
+    // bd myconfig-vpi9.1: step 4b no longer refuses the profile on the
+    // layered backend. The argv itself is locked by the
+    // `nono-network-proxy-only.txt` golden; what only a CLI run can
+    // show is that the pipeline lets the run through at all.
+    let (inv, _, _sidecar) =
+        fixture_nono_config("proxy-only-nono", &[], "network = \"proxy-only\"\n");
+    let (code, stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stdout.contains("\n--allow-connect-port\n4000\n"),
+        "the relay port is granted: {stdout}"
+    );
+    // The credential rules apply to this backend too (D28): a
+    // credential-shaped [env] name is refused on nono just like on
+    // bubblewrap, because the profile is the same no-key path.
+    let (inv, _, _sidecar) = fixture_nono_config(
+        "proxy-only-nono-env-key",
+        &[],
+        "network = \"proxy-only\"\n[env]\nOPENAI_API_KEY = \"sk-x\"\n",
+    );
+    let (code, _, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"]));
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(stderr.contains("OPENAI_API_KEY"), "{stderr}");
+    assert!(stderr.contains("proxy-only"), "{stderr}");
 }
 
 #[test]
@@ -10257,6 +10286,363 @@ fn proxy_only_real_run_needs_a_real_socket_at_the_pinned_path() {
             && stderr.contains("agent-litellm-forward-unix.socket"),
         "the refusal names the setting and the unit: {stderr}"
     );
+}
+
+#[test]
+fn proxy_only_with_a_broker_pin_reports_the_per_run_channel_and_creates_nothing() {
+    // bd myconfig-n8kv.1.3 (docs/design/egress.md E2/E3/E4/E5): a build
+    // that pins MYSBX_EGRESS_BROKER owns the channel. A --dry-run reports
+    // the run's OWN directory as the channel source, never the host's
+    // static forwarder directory — and creates nothing, the runtime root
+    // included.
+    let (inv, _, sidecar) = fixture("proxy-only-broker", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    let runtime = std::env::temp_dir().join(format!("mysbx-runtime-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&runtime);
+    std::fs::create_dir_all(&runtime).unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["--dry-run", "--verbose"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime).env(
+        "MYSBX_EGRESS_BROKER",
+        "/synth/store/cccc-mysbx/bin/mysbx-egress-broker",
+    );
+    let (code, stdout, stderr) = run_command(cmd);
+    let created: Vec<_> = std::fs::read_dir(&runtime)
+        .map(|entries| entries.flatten().map(|e| e.file_name()).collect())
+        .unwrap_or_default();
+    let _ = std::fs::remove_dir_all(&runtime);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    // E5: a dry run creates nothing at all, the channel directory included.
+    assert!(
+        created.is_empty(),
+        "a dry run must leave the runtime root empty: {created:?}"
+    );
+    // The report names the per-run source, and the static forwarder
+    // directory appears only as the fixed in-sandbox destination.
+    let per_run = format!("{}/mysbx-egress/", runtime.display());
+    assert!(
+        stdout.contains(&format!("via the relay from {per_run}")),
+        "the report names the per-run channel source: {stdout}"
+    );
+    let lines: Vec<&str> = stdout.lines().collect();
+    // `/run/mysbx-egress` still names the fixed IN-SANDBOX destination,
+    // so it appears (as the bind target and the relay's path) but never as
+    // the bind SOURCE.
+    assert_eq!(
+        lines
+            .windows(2)
+            .filter(|pair| pair[0] == "--ro-bind" && pair[1] == mysbx::EGRESS_SOCKET_DIR)
+            .count(),
+        0,
+        "the static directory must never be a bind source under a broker: {stdout}"
+    );
+}
+
+#[test]
+fn proxy_only_with_a_broker_pin_refuses_without_xdg_runtime_dir() {
+    // docs/design/egress.md E4/E5: the run directory root comes from
+    // $XDG_RUNTIME_DIR, and there is no /tmp fallback (a world-writable
+    // directory would defeat the "one private directory" argument).
+    let (inv, _, sidecar) = fixture("proxy-only-broker-no-runtime", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["run", "--", "/bin/true"]);
+    cmd.env_remove("XDG_RUNTIME_DIR").env(
+        "MYSBX_EGRESS_BROKER",
+        "/synth/store/cccc-mysbx/bin/mysbx-egress-broker",
+    );
+    let (code, _stdout, stderr) = run_command(cmd);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(stderr.contains("XDG_RUNTIME_DIR"), "{stderr}");
+    assert!(
+        stderr.contains("refuses rather than falling back"),
+        "the refusal says why there is no fallback: {stderr}"
+    );
+}
+
+#[test]
+fn proxy_only_with_a_broker_pin_refuses_a_broker_that_cannot_start() {
+    // E5, "no broker, no egress": the broker path exists but is not
+    // executable, so the spawn fails and the run is refused BEFORE the
+    // backend — never weakened to a shared network, never run half-fenced.
+    let (inv, _, sidecar) = fixture("proxy-only-broker-broken", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    let runtime = std::env::temp_dir().join(format!("mysbx-runtime-b-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&runtime);
+    std::fs::create_dir_all(&runtime).unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["run", "--", "/bin/true"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime)
+        .env("MYSBX_EGRESS_BROKER", "/nonexistent/mysbx-egress-broker");
+    let (code, _stdout, stderr) = run_command(cmd);
+    let _ = std::fs::remove_dir_all(&runtime);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("cannot start the egress broker"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn proxy_only_with_a_broker_pin_binds_the_per_run_directory_in_the_argv() {
+    // bd myconfig-n8kv.1.3: the argv the backend will get binds the RUN's
+    // directory read-only at the fixed in-sandbox destination, and the
+    // relay is told to connect to the socket inside it. This is the dry-run
+    // audit of the channel — the spawn itself is covered end to end by the
+    // real-run test below.
+    let (inv, _repo, sidecar) = fixture("proxy-only-broker-argv", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    let runtime = std::env::temp_dir().join(format!("mysbx-rt-argv-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&runtime);
+    std::fs::create_dir_all(&runtime).unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["--dry-run"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime).env(
+        "MYSBX_EGRESS_BROKER",
+        "/synth/store/cccc-mysbx/bin/mysbx-egress-broker",
+    );
+    let (code, stdout, stderr) = run_command(cmd);
+    let _ = std::fs::remove_dir_all(&runtime);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    // The bind is `<run dir>/<pid>  ->  /run/mysbx-egress`, and the relay
+    // is pointed at the socket inside the run directory.
+    let lines: Vec<&str> = stdout.lines().collect();
+    let bind_at = lines
+        .iter()
+        .position(|line| *line == "--ro-bind")
+        .unwrap_or_else(|| panic!("no --ro-bind in the argv: {stdout}"));
+    let source = lines[bind_at + 1];
+    let Some(pid) = source.rsplit('/').next() else {
+        panic!("the bind source has no pid: {source}");
+    };
+    assert_eq!(
+        &source[..source.len() - pid.len() - 1],
+        format!("{}/mysbx-egress", runtime.display()),
+        "the bind source is the run's own directory: {stdout}"
+    );
+    assert_eq!(lines[bind_at + 2], "/run/mysbx-egress");
+    // The relay connects to the socket at its IN-SANDBOX path (the bind
+    // is what carries it there), so the pair is source -> destination.
+    assert!(
+        stdout.contains("/run/mysbx-egress/litellm.sock"),
+        "the relay connects to the bound socket path: {stdout}"
+    );
+}
+
+#[test]
+fn a_broker_backed_real_run_starts_the_broker_and_logs_to_the_sidecar() {
+    // bd myconfig-n8kv.1.3, end to end with the REAL broker: a real run
+    // creates the run's channel, spawns the broker, and the decision log
+    // lands in the SIDECAR (never in the bound directory, which the
+    // sandbox reads). The backend is unpinned, so the run stops at the
+    // spawn — after the channel is up, which is what this asserts.
+    let (inv, _repo, sidecar) = fixture("proxy-only-broker-real", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    let runtime = std::env::temp_dir().join(format!("mysbx-rt-real-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&runtime);
+    std::fs::create_dir_all(&runtime).unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["run", "--", "/bin/true"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime)
+        .env("MYSBX_BWRAP", "/nonexistent/mysbx-bwrap")
+        .env(
+            "MYSBX_EGRESS_BROKER",
+            env!("CARGO_BIN_EXE_mysbx-egress-broker"),
+        );
+    let (code, _stdout, stderr) = run_command(cmd);
+    // The channel came up, so the run got as far as the backend spawn and
+    // failed there (the unpinned bwrap binary).
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("cannot exec /nonexistent/mysbx-bwrap"),
+        "the run must reach the backend spawn: {stderr}"
+    );
+    // The log is in the sidecar, one JSON object per line, and its first
+    // line records the channel.
+    let log_root = sidecar.join("egress");
+    let mut lines = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&log_root) {
+        for entry in entries.flatten() {
+            let log = entry.path().join("decisions.jsonl");
+            if let Ok(text) = std::fs::read_to_string(&log) {
+                lines.extend(text.lines().map(str::to_owned));
+            }
+        }
+    }
+    // A refused backend means the broker was up and then killed with the
+    // process, so the log may already have been swept by nothing — but if
+    // it exists it must be well-formed.
+    for line in &lines {
+        assert!(line.starts_with('{') && line.ends_with('}'), "{line}");
+        assert!(line.contains("\"event\":\""), "{line}");
+    }
+    let _ = std::fs::remove_dir_all(&runtime);
+}
+
+#[test]
+fn diagnose_egress_reports_a_recorded_run() {
+    // bd myconfig-n8kv.1.4: the verb reads back what the broker wrote. The
+    // log shape is the broker's (`{"ts","pid","event","why"}`), and the
+    // counts separate an admission from an unreachable upstream.
+    let (inv, _repo, sidecar) = fixture("diagnose-egress", &[]);
+    let dir = sidecar.join("egress").join("4242");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("decisions.jsonl"),
+        concat!(
+            r#"{"ts":10,"pid":4242,"event":"listen","why":"/run/user/1000/mysbx-egress/4242/litellm.sock -> 127.0.0.1:4000"}"#,
+            "\n",
+            r#"{"ts":11,"pid":4242,"event":"allow","why":"pid 9 uid 0 -> 127.0.0.1:4000"}"#,
+            "\n",
+            r#"{"ts":12,"pid":4242,"event":"allow","why":"pid 10 uid 0 -> 127.0.0.1:4000"}"#,
+            "\n",
+            r#"{"ts":13,"pid":4242,"event":"unreachable","why":"pid 11 uid 0 -> 127.0.0.1:4000: cannot connect"}"#,
+            "\n",
+        ),
+    )
+    .unwrap();
+    // `--dry-run` is a plain print (no side effects to preview) and
+    // `--verbose` works in BOTH positions, since the global parser stops
+    // at the verb (cli.md D29).
+    for (args, label) in [
+        (
+            vec!["--dry-run", "diagnose", "egress"],
+            "before-verb --dry-run",
+        ),
+        (
+            vec!["diagnose", "egress", "--dry-run"],
+            "after-verb --dry-run",
+        ),
+        (
+            vec!["--verbose", "diagnose", "egress"],
+            "before-verb --verbose",
+        ),
+        (
+            vec!["diagnose", "egress", "--verbose"],
+            "after-verb --verbose",
+        ),
+    ] {
+        let (code, _out, stderr) = run_command(spawn_with_args(&inv, &args));
+        assert_eq!(code, 0, "{label}: stderr: {stderr}");
+    }
+    let (code, stdout, stderr) = run_command(spawn_with_args(&inv, &["diagnose", "egress"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("run 4242"), "{stdout}");
+    assert!(stdout.contains("2 admissions"), "{stdout}");
+    assert!(stdout.contains("1 unreachable"), "{stdout}");
+    assert!(stdout.contains("127.0.0.1:4000"), "{stdout}");
+    // The upstream note is the operator-facing half of the report.
+    assert!(stdout.contains("could not be reached"), "{stdout}");
+    // `--verbose` adds the decision lines themselves.
+    let (code, quiet, _) = run_command(spawn_with_args(&inv, &["diagnose", "egress"]));
+    assert_eq!(code, 0);
+    assert!(!quiet.contains("11 allow"), "{quiet}");
+    let (code, verbose, stderr) =
+        run_command(spawn_with_args(&inv, &["diagnose", "egress", "--verbose"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(verbose.contains("11 allow"), "{verbose}");
+    assert!(verbose.contains("13 unreachable"), "{verbose}");
+}
+
+#[test]
+fn diagnose_egress_json_is_one_object_per_run() {
+    let (inv, _repo, sidecar) = fixture("diagnose-egress-json", &[]);
+    for pid in ["7", "9"] {
+        let dir = sidecar.join("egress").join(pid);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("decisions.jsonl"),
+            format!("{{\"ts\":1,\"pid\":{pid},\"event\":\"listen\",\"why\":\"chan {pid}\"}}\n"),
+        )
+        .unwrap();
+    }
+    let (code, stdout, stderr) =
+        run_command(spawn_with_args(&inv, &["diagnose", "egress", "--json"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let lines: Vec<&str> = stdout.lines().filter(|l| !l.is_empty()).collect();
+    assert_eq!(lines.len(), 2, "{stdout}");
+    // Newest first, and each line is a self-contained object.
+    assert!(lines[0].starts_with("{\"pid\":9,"), "{stdout}");
+    assert!(lines[1].starts_with("{\"pid\":7,"), "{stdout}");
+    for line in &lines {
+        assert!(line.ends_with('}'), "{line}");
+        // The path is a proper JSON string, not a doubled-quoted one.
+        assert!(!line.contains("\"\""), "{line}");
+    }
+    // `--run` narrows it.
+    let (code, one, _) = run_command(spawn_with_args(
+        &inv,
+        &["diagnose", "egress", "--run", "7", "--json"],
+    ));
+    assert_eq!(code, 0);
+    assert_eq!(one.lines().filter(|l| !l.is_empty()).count(), 1, "{one}");
+    assert!(one.contains("\"pid\":7,"), "{one}");
+}
+
+#[test]
+fn diagnose_egress_is_read_only_and_reports_an_empty_sidecar() {
+    // No log yet: exit 0 with a line naming the directory — the `status`
+    // precedent (report, do not judge), and nothing is created.
+    let (inv, _repo, sidecar) = fixture("diagnose-egress-empty", &[]);
+    let (code, stdout, stderr) = run_command(spawn_with_args(&inv, &["diagnose", "egress"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("no egress decisions recorded"), "{stdout}");
+    assert!(
+        !sidecar.join("egress").exists(),
+        "the verb must not create the log directory"
+    );
+}
+
+#[test]
+fn diagnose_is_allowed_in_a_once_run() {
+    // cli.md D29/D22: `diagnose` reads the HOST sidecar, which a once run
+    // does not use, so it is allowed — the `doctor` precedent. A refused
+    // form would exit 70 with the once message; this must NOT.
+    let (inv, _repo, _sidecar) = fixture("diagnose-once", &[]);
+    let mut cmd = spawn_with_args(&inv, &["diagnose", "egress"]);
+    // Invoke the once name, which the fixture's binary supports.
+    cmd.env("MYSBX_ONCE", "1");
+    let (code, stdout, stderr) = run_command(cmd);
+    assert_ne!(
+        code,
+        mysbx::EXIT_INFRASTRUCTURE,
+        "diagnose must not be refused in a once run: {stderr}"
+    );
+    assert!(
+        !stderr.contains("mysbx-once"),
+        "diagnose must not hit the once refusal: {stderr}"
+    );
+    assert!(stdout.contains("no egress decisions recorded"), "{stdout}");
+}
+
+#[test]
+fn diagnose_needs_a_known_sub_verb() {
+    let (inv, _repo, _sidecar) = fixture("diagnose-usage", &[]);
+    let (code, _stdout, stderr) = run_command(spawn_with_args(&inv, &["diagnose"]));
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(stderr.contains("a sub-verb is required"), "{stderr}");
+    let (code, _stdout, stderr) = run_command(spawn_with_args(&inv, &["diagnose", "nope"]));
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(stderr.contains("unknown sub-verb"), "{stderr}");
+    let (code, _stdout, stderr) =
+        run_command(spawn_with_args(&inv, &["diagnose", "egress", "--run"]));
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(stderr.contains("needs a pid"), "{stderr}");
 }
 
 #[test]

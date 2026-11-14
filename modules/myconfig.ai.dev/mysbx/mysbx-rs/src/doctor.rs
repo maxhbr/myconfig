@@ -553,11 +553,42 @@ pub fn nested_virt_check(intel: Option<&str>, amd: Option<&str>) -> Check {
     )
 }
 
-/// The Landlock check of the nono backend; `abi` is the kernel's
-/// Landlock ABI version, `None` when Landlock is unavailable.
-pub fn landlock_check(abi: Option<i64>) -> Check {
+/// Whether a nono run of `merged` emits a TCP PORT rule — the only thing
+/// that needs the Landlock V4 ABI. Mirrors `nono::network_flags`: the
+/// profile grants the relay's port, and a shared network with an allowlist
+/// grants its connect-ports. A shared network WITHOUT an allowlist emits
+/// no nono network flag at all (nono allows egress by default; the fence
+/// there is bwrap's namespace), so such a host needs no V4.
+pub fn nono_needs_port_rules(merged: &merge::Merged) -> bool {
+    nono_grants_a_port(merged.network, !merged.connect_ports.is_empty())
+}
+
+/// The pure half of [`nono_needs_port_rules`].
+pub fn nono_grants_a_port(network: crate::config::Network, has_connect_ports: bool) -> bool {
+    if network == crate::config::Network::ProxyOnly {
+        return true;
+    }
+    network.is_shared() && has_connect_ports
+}
+
+/// The Landlock check of the nono backend; `abi` is the kernel's Landlock
+/// ABI version, `None` when Landlock is unavailable, and `needs_port_rules`
+/// says whether this configuration asks nono for a TCP PORT grant.
+///
+/// Landlock itself is required either way (nono's filesystem layer is
+/// Landlock). ABI < 4 is only a failure when port rules are needed: the
+/// V4 rules are what carry `--allow-connect-port`, so a config that emits
+/// none runs fine on an older kernel.
+pub fn landlock_check(abi: Option<i64>, needs_port_rules: bool) -> Check {
     match abi {
-        Some(v) => Check::ok("Landlock", format!("ABI v{v}")),
+        Some(v) if v >= 4 || !needs_port_rules => Check::ok("Landlock", format!("ABI v{v}")),
+        Some(v) => Check::fail(
+            "Landlock",
+            format!("ABI v{v} predates TCP port rules"),
+            "this run asks nono for a port grant (`--allow-connect-port`, from \
+             network = \"proxy-only\" or an allowlist's connect-ports), which needs \
+             Landlock V4+; boot a newer kernel, or use the bubblewrap backend",
+        ),
         None => Check::fail(
             "Landlock",
             "not available in this kernel",
@@ -1036,7 +1067,7 @@ fn bwrap_checks(checks: &mut Vec<Check>, share_net: bool) {
 }
 
 /// nono binary, profile and Landlock.
-fn nono_checks(checks: &mut Vec<Check>) {
+fn nono_checks(checks: &mut Vec<Check>, merged: &merge::Merged) {
     binary_check(
         checks,
         "nono binary",
@@ -1061,7 +1092,10 @@ fn nono_checks(checks: &mut Vec<Check>) {
             format!("`{profile}` (a profile name, resolved by nono)"),
         ));
     }
-    checks.push(landlock_check(landlock_abi()));
+    checks.push(landlock_check(
+        landlock_abi(),
+        nono_needs_port_rules(merged),
+    ));
 }
 
 /// The model endpoint of the bwrap-based backends: they share the
@@ -1177,8 +1211,86 @@ fn egress_check(checks: &mut Vec<Check>) {
             "rebuild mysbx from a store that carries mysbx-egress-relay",
         )
     });
-    // The socket → LiteLLM channel: a `GET /v1/models` over it is the
-    // same request a sandboxed agent makes.
+    // The per-run broker (docs/design/egress.md E1/E5, bd
+    // myconfig-n8kv.1.4): a build that pins it needs the binary, a kernel
+    // whose Landlock ABI can confine it, and a probe THROUGH it. Each is
+    // its own line so a host with a broken broker says which part is
+    // wrong, and the probe is SKIPped when a dependency already failed
+    // (the `Check::skip` contract).
+    // The per-run broker (docs/design/egress.md E1/E5, bd
+    // myconfig-n8kv.1.4). It is OPTIONAL: a build without the pin serves
+    // the channel from the static forwarder, which needs no Landlock at
+    // all (the fence is the empty netns plus the bound socket), so every
+    // broker-specific verdict below hangs off the pin. A host on an old
+    // kernel is a healthy STATIC-forwarder host, not a broken one.
+    let broker = crate::env_opt("MYSBX_EGRESS_BROKER");
+    let mut broker_ok = true;
+    match broker.as_deref() {
+        Some(broker) if is_executable(Path::new(broker)) => checks.push(Check::ok(
+            "egress broker",
+            format!("{broker} (one process per proxy-only run)"),
+        )),
+        Some(broker) => {
+            broker_ok = false;
+            checks.push(Check::fail(
+                "egress broker",
+                format!("{broker} is not an executable file"),
+                "rebuild mysbx from a store that carries mysbx-egress-broker",
+            ));
+        }
+        None => checks.push(Check::ok(
+            "egress broker",
+            "not pinned; the channel comes from the static forwarder socket \
+             (no Landlock needed)",
+        )),
+    }
+    // The broker confines ITSELF with Landlock TCP port rules, so the ABI
+    // floor is a broker requirement only.
+    if broker.is_some() {
+        match landlock_abi() {
+            Some(abi) if abi >= crate::landlock::ABI_NET_PORTS => checks.push(Check::ok(
+                "egress broker confinement",
+                format!("Landlock ABI {abi} confines the broker to one TCP port"),
+            )),
+            Some(abi) => {
+                broker_ok = false;
+                checks.push(Check::fail(
+                    "egress broker confinement",
+                    format!(
+                        "Landlock ABI {abi} has no TCP port rules (ABI {} = Linux 6.7 or newer)",
+                        crate::landlock::ABI_NET_PORTS
+                    ),
+                    "a proxy-only run with the broker is refused on this kernel; \
+                     use network = \"shared\" or a newer kernel",
+                ));
+            }
+            None => {
+                broker_ok = false;
+                checks.push(Check::fail(
+                    "egress broker confinement",
+                    "Landlock is unavailable on this kernel",
+                    "a proxy-only run with the broker is refused without Landlock",
+                ));
+            }
+        }
+    }
+    if !broker_ok {
+        checks.push(Check::skip(
+            "egress channel probe",
+            &["the egress broker or its confinement"],
+        ));
+        return;
+    }
+    // With a broker, probe THROUGH it: start one short-lived instance on a
+    // throwaway socket, make the same `GET /v1/models` a sandboxed agent
+    // makes, and stop it. That exercises the whole path the run will use —
+    // the binary, its confinement, its upstream — instead of just asking
+    // whether the host's static socket answers (docs/design/egress.md E5).
+    if let Some(broker) = broker {
+        checks.push(probe_through_broker(&broker, &port));
+        return;
+    }
+    // The static channel: the socket → LiteLLM path, the same request.
     checks.push(match uds_http_get(&socket, "/v1/models") {
         Ok(answer) => Check::ok(
             "egress socket",
@@ -1191,6 +1303,132 @@ fn egress_check(checks: &mut Vec<Check>) {
              .socket) and make sure litellm.service is up",
         ),
     });
+}
+
+/// Start the per-run broker on a throwaway directory under
+/// `$XDG_RUNTIME_DIR`, make one `GET /v1/models` through its socket and
+/// stop it (docs/design/egress.md E5). The verdict names what failed:
+/// the broker never came up, the request failed, or it answered.
+fn probe_through_broker(broker: &str, port: &str) -> Check {
+    let Some(runtime) = std::env::var_os("XDG_RUNTIME_DIR") else {
+        return Check::skip("egress channel probe", &["$XDG_RUNTIME_DIR"]);
+    };
+    let runtime = Path::new(&runtime);
+    if !runtime.is_absolute() {
+        return Check::skip("egress channel probe", &["an absolute $XDG_RUNTIME_DIR"]);
+    }
+    let port = match port.parse::<u16>() {
+        Ok(port) if port != 0 => port,
+        _ => return Check::skip("egress channel probe", &["a pinned MYSBX_EGRESS_PORT"]),
+    };
+    let Some(dir) = crate::egress_run_dir_under(runtime, std::process::id()) else {
+        return Check::skip("egress channel probe", &["an absolute $XDG_RUNTIME_DIR"]);
+    };
+    // A directory of its own: doctor must not disturb a live run's.
+    let dir = dir.with_file_name(format!("doctor-{}", std::process::id()));
+    if std::fs::create_dir_all(&dir).is_err() {
+        return Check::skip("egress channel probe", &["a writable $XDG_RUNTIME_DIR"]);
+    }
+    let _ = std::fs::set_permissions(
+        &dir,
+        <std::fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o700),
+    );
+    let socket = dir.join("probe.sock");
+    let log = dir.join("probe.jsonl");
+    // A named pipe would be more code than it is worth here; the broker
+    // writes ONE line to stderr on a refusal, so a file it appends to is
+    // enough to quote it back.
+    let stderr_path = dir.join("probe.stderr");
+    let stderr_file = match std::fs::File::create(&stderr_path) {
+        Ok(file) => file,
+        Err(_) => {
+            let _ = std::fs::remove_dir_all(&dir);
+            return Check::skip("egress channel probe", &["a writable probe directory"]);
+        }
+    };
+    let child = std::process::Command::new(broker)
+        .arg("--listen")
+        .arg(&socket)
+        .arg("--upstream")
+        .arg(format!("127.0.0.1:{port}"))
+        .arg("--decision-log")
+        .arg(&log)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::from(stderr_file))
+        .spawn();
+    let mut child = match child {
+        Ok(child) => child,
+        Err(e) => {
+            let _ = std::fs::remove_dir_all(&dir);
+            return Check::fail(
+                "egress channel probe",
+                format!("cannot start {broker}: {e}"),
+                "rebuild mysbx from a store that carries mysbx-egress-broker",
+            );
+        }
+    };
+    // The broker writes its `listen` line after `bind(2)`, so the log is
+    // the readiness signal (a stale socket cannot fool it).
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    let mut bound = false;
+    while std::time::Instant::now() < deadline {
+        if std::fs::read_to_string(&log)
+            .map(|text| text.contains("\"event\":\"listen\""))
+            .unwrap_or(false)
+        {
+            bound = true;
+            break;
+        }
+        if let Ok(Some(_)) = child.try_wait() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    // A broker that never bound is a FAIL with ITS OWN diagnosis: it
+    // refused, and its one stderr line says why (a Landlock ABI, the run
+    // directory, the socket path) — "start the model proxy" would be the
+    // wrong advice for it.
+    if !bound {
+        let _ = child.kill();
+        let _ = child.wait();
+        let why = std::fs::read_to_string(&stderr_path).unwrap_or_default();
+        let _ = std::fs::remove_dir_all(&dir);
+        return Check::fail(
+            "egress channel probe",
+            format!(
+                "the broker never opened its socket: {}",
+                if why.trim().is_empty() {
+                    "(no diagnosis on stderr)"
+                } else {
+                    why.trim()
+                }
+            ),
+            "a network = \"proxy-only\" run with this broker is refused; \
+             fix the broker's diagnosis or use network = \"shared\"",
+        );
+    }
+    let answer = uds_http_get(&socket.to_string_lossy(), "/v1/models");
+    let _ = child.kill();
+    let _ = child.wait();
+    let _ = std::fs::remove_dir_all(&dir);
+    match answer {
+        Ok(answer) => Check::ok(
+            "egress channel probe",
+            format!(
+                "through the per-run broker: GET /v1/models answered ({})",
+                answer.trim()
+            ),
+        ),
+        // The broker RAN and was confined; only the upstream failed, so
+        // this is the proxy, not the channel.
+        Err(e) => Check::warn(
+            "egress channel probe",
+            format!("through the per-run broker: {e}"),
+            "start the model proxy (systemctl status litellm.service); the broker \
+             started and confined itself",
+        ),
+    }
 }
 
 /// A minimal `GET <path>` over a Unix socket, `Host: localhost`. The
@@ -1986,7 +2224,14 @@ pub fn run(args: &[String]) -> i32 {
             }
             "nono" => {
                 bwrap_checks(&mut checks, merged.network.is_shared());
-                nono_checks(&mut checks);
+                nono_checks(&mut checks, &merged);
+                // The proxy-only channel (D20, bd myconfig-vpi9.1):
+                // the layered nono backend binds the same forwarder
+                // socket and wraps the same relay, so the probe is
+                // the bubblewrap one.
+                if merged.network == crate::config::Network::ProxyOnly {
+                    egress_check(&mut checks);
+                }
                 host_endpoint_check(&mut checks, &merged, &forwarded);
             }
             "krun" => krun_checks(&mut checks),
@@ -2491,9 +2736,119 @@ mod tests {
     }
 
     #[test]
+    fn the_landlock_port_rule_floor_only_applies_when_a_port_is_granted() {
+        // bd myconfig-1012: nono emits `--allow-connect-port` only for the
+        // proxy-only profile and for a shared network WITH connect-ports.
+        // A shared network without an allowlist emits no nono network flag
+        // at all (the fence is bwrap's namespace), so ABI 3 must not be
+        // reported as a failure there.
+        assert_eq!(landlock_check(Some(3), false).level, Level::Ok);
+        assert_eq!(landlock_check(Some(3), true).level, Level::Fail);
+        assert_eq!(landlock_check(Some(4), true).level, Level::Ok);
+
+        // The predicate mirrors nono::network_flags.
+        use crate::config::Network;
+        // shared, no allowlist: no port rule.
+        assert!(!nono_grants_a_port(Network::Shared, false));
+        // shared WITH connect-ports: a port rule.
+        assert!(nono_grants_a_port(Network::Shared, true));
+        // proxy-only: always one (the relay port).
+        assert!(nono_grants_a_port(Network::ProxyOnly, false));
+        // denied: no grant at all, only --block-net.
+        assert!(!nono_grants_a_port(Network::None, false));
+    }
+
+    #[test]
+    fn the_broker_confinement_verdict_hangs_off_the_pin() {
+        // bd myconfig-1012: the broker's Landlock self-fence is a BROKER
+        // requirement. A build without the pin serves the channel from the
+        // static forwarder, which needs none, so an old kernel must not
+        // turn into a FAIL (and a SKIPped probe) on such a host.
+        //
+        // The pin is read from the process environment, so this test owns
+        // the variables for its duration and restores them. No other test
+        // in the crate reads or writes a `MYSBX_EGRESS_*` name, so the
+        // ownership cannot race (`cargo test` runs these in parallel).
+        let key = "MYSBX_EGRESS_BROKER";
+        let saved = std::env::var_os(key);
+        let mut run = |value: Option<std::ffi::OsString>| {
+            match &value {
+                Some(v) => unsafe { std::env::set_var(key, v) },
+                None => unsafe { std::env::remove_var(key) },
+            }
+            // A fixed set of pins, so the only variable is the broker one.
+            for (name, val) in [
+                ("MYSBX_EGRESS_SOCKET", "/run/mysbx-egress/litellm.sock"),
+                ("MYSBX_EGRESS_PORT", "4000"),
+                (
+                    "MYSBX_EGRESS_RELAY",
+                    "/nonexistent/mysbx-egress-relay-q1012",
+                ),
+                ("MYSBX_EGRESS_ETC", "/nonexistent/mysbx-egress-etc-q1012"),
+            ] {
+                unsafe { std::env::set_var(name, val) };
+            }
+            let mut checks = Vec::new();
+            egress_check(&mut checks);
+            for name in [
+                "MYSBX_EGRESS_SOCKET",
+                "MYSBX_EGRESS_PORT",
+                "MYSBX_EGRESS_RELAY",
+                "MYSBX_EGRESS_ETC",
+            ] {
+                unsafe { std::env::remove_var(name) };
+            }
+            checks
+        };
+
+        // No pin: no broker verdicts at all, and no SKIP on the probe.
+        let static_only = run(None);
+        assert!(
+            !static_only
+                .iter()
+                .any(|c| c.name == "egress broker confinement"),
+            "a static-forwarder build must not be judged by the broker's Landlock: {static_only:?}"
+        );
+        assert!(
+            !static_only.iter().any(|c| c.name == "egress channel probe"),
+            "the static path probes the socket directly: {static_only:?}"
+        );
+
+        // A pinned broker is judged (the binary is missing here, so the pin
+        // check fails and the probe is SKIPped — which is the contract).
+        let pinned = run(Some("/nonexistent/mysbx-egress-broker".into()));
+        assert!(
+            pinned
+                .iter()
+                .any(|c| c.name == "egress broker" && c.level == Level::Fail),
+            "{pinned:?}"
+        );
+        assert!(
+            pinned.iter().any(|c| c.name == "egress broker confinement"),
+            "a pinned broker must still be judged by Landlock: {pinned:?}"
+        );
+        assert!(
+            pinned
+                .iter()
+                .any(|c| c.name == "egress channel probe" && c.level == Level::Skip),
+            "{pinned:?}"
+        );
+
+        match saved {
+            Some(v) => unsafe { std::env::set_var(key, v) },
+            None => unsafe { std::env::remove_var(key) },
+        }
+    }
+
+    #[test]
     fn landlock_and_userns_checks() {
-        assert_eq!(landlock_check(Some(4)).line(), "OK   Landlock: ABI v4");
-        assert_eq!(landlock_check(None).level, Level::Fail);
+        assert_eq!(
+            landlock_check(Some(4), true).line(),
+            "OK   Landlock: ABI v4"
+        );
+        // Landlock itself is always needed (nono's filesystem layer).
+        assert_eq!(landlock_check(None, false).level, Level::Fail);
+        assert_eq!(landlock_check(None, true).level, Level::Fail);
         assert_eq!(userns_check(None), None);
         assert_eq!(userns_check(Some("63432\n")).unwrap().level, Level::Ok);
         assert_eq!(userns_check(Some("0\n")).unwrap().level, Level::Warn);

@@ -10,11 +10,12 @@ Usage:
   mysbx status
   mysbx attach [--session <name>]
   mysbx doctor [BACKEND...]
+  mysbx diagnose egress [--run <pid>] [--json] [--verbose]
   mysbx ssh-pubkey
   mysbx [COMMAND]
 
 The same binary, second name:
-  mysbx-once [run -- CMD | gui | doctor | version | help | the bare form] \
+  mysbx-once [run -- CMD | gui | doctor | diagnose egress | version | help | the bare form] \
              [--dry-run] [--verbose] [--backend <name>] [--multiplexer <mux>] [--ro <path>]... [--rw <path>]...
                 one sandbox run for any checkout, with NO persistent
                 setup: the sidecar and the __worktrees sibling live in a
@@ -215,6 +216,22 @@ Commands:
                 it (a stale image, an unreachable endpoint). Exits 1
                 when any check fails, 70 when the configuration
                 cannot be loaded. Global flags are refused
+  diagnose egress [--run <pid>] [--json] [--verbose] [--dry-run]
+                read the `network = "proxy-only"` broker's decision log
+                back (docs/design/egress.md E4). The broker writes one
+                JSON object per decision to
+                `<repo>.mysbx/egress/<pid>/decisions.jsonl` — outside the
+                directory the sandbox binds, so the payload cannot read
+                it — and this verb is how an operator does: per run, the
+                channel it opened, how many connections were admitted,
+                and how many hit an unreachable upstream or an I/O
+                failure; with --verbose, the trailing decision lines.
+                `--run <pid>` narrows it to one run, `--json` prints one
+                object per run for a script. Read-only: no sandbox
+                starts, nothing is written, and it works on a host whose
+                forwarder is stopped. Exit 0 with a "nothing recorded"
+                line when there is no log — it reports, it does not
+                judge (the `status` precedent)
   ssh-pubkey   print the PUBLIC half of this repo's sandbox ssh
                 keypair (<repo>.mysbx/state/.ssh/id_ed25519.pub) —
                 the value to register as a GitHub deploy key or a

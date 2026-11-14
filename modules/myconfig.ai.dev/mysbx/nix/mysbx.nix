@@ -328,6 +328,12 @@
   # socket, so an agent keeps its baked `127.0.0.1:<litellm port>`
   # URLs. `null` pins nothing.
   egressPort ? null,
+  # Whether this build carries the per-run egress broker
+  # (`MYSBX_EGRESS_BROKER`, docs/design/egress.md E1, bd
+  # myconfig-n8kv.1.2). A closure path, so `--set`, not `--set-default`:
+  # it must match this build. `false` pins nothing, which is the phase-A
+  # state (the static `agent-litellm-forward-unix` unit is the channel).
+  egressBroker ? true,
   # Backend-specific environment pins of the podman-gvisor backend
   # (`MYSBX_PODMAN_ENV`): an attrset rendered as a space-separated
   # `KEY=VALUE` list. The container gets them as `--env` after the
@@ -959,6 +965,9 @@ let
     # The in-sandbox relay binary (bd myconfig-mo3.2.5): a closure path,
     # so `--set`, not `--set-default` — it must match this build.
     + "--set MYSBX_EGRESS_RELAY '${crate}/bin/mysbx-egress-relay' "
+    # The host-side broker (docs/design/egress.md E1, bd
+    # myconfig-n8kv.1.2): a closure path, so `--set`.
+    + lib.optionalString (egressBroker) "--set MYSBX_EGRESS_BROKER '${crate}/bin/mysbx-egress-broker' "
     + "--set MYSBX_EGRESS_ETC '${egressEtc}'";
   # The nono backend pins of the layered backend (bd
   # myconfig-6di.4.3): the binary (`--set`, an absolute store path
@@ -1150,6 +1159,9 @@ symlinkJoin {
     # The in-sandbox relay binary the wrapper pins (bd myconfig-mo3.2.5),
     # for the checks.nix gate that runs it live.
     egressRelay = "${crate}/bin/mysbx-egress-relay";
+    # The host-side broker the wrapper pins (docs/design/egress.md E1, bd
+    # myconfig-n8kv.1.2), for the gates that drive it directly.
+    egressBroker = "${crate}/bin/mysbx-egress-broker";
     # The proxy-only sandbox's `hosts` and `nsswitch.conf`.
     egressEtc = "${egressEtc}";
     # The disk's closure roots as store paths, for the same gate:

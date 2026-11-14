@@ -168,11 +168,16 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         }
         crate::config::Network::ProxyOnly => {
             match &r.params.egress {
+                // The SOURCE names where the channel comes from: the
+                // run's own directory under a broker (docs/design/egress.md
+                // E3/E4), the host's static forwarder directory without
+                // one. The in-sandbox destination is fixed either way.
                 Some(e) => p(format!(
-                    "network:        proxy-only (no --share-net; 127.0.0.1:{} -> {}/{} via the relay)",
+                    "network:        proxy-only (no --share-net; 127.0.0.1:{} -> {}/{} via the relay from {})",
                     e.port,
                     crate::bwrap::EGRESS_DIR,
                     e.socket,
+                    e.socket_dir,
                 )),
                 // Unreachable for a runnable run (the builder refuses a
                 // channel-less profile); said out loud rather than

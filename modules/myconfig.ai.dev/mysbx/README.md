@@ -24,6 +24,8 @@ overview; design decisions and any other long text belong in `docs/`:
     model: the live repo default and the opt-in clone sessions
   - [`docs/design/backends.md`](./docs/design/backends.md) - how a backend
     confines the payload (the layered `nono` backend)
+  - [`docs/design/egress.md`](./docs/design/egress.md) - the per-run egress
+    broker that replaces the static `proxy-only` forwarder socket
 
 ## How to use:
 
@@ -576,7 +578,16 @@ namespace, where the baked URLs are already right.
    (`myconfig.ai.dev.litellm-forwarder`):
    `0.0.0.0:<forwardPort>` → `127.0.0.1:<port>`, socket-activated, and
    dropped by the firewall on every interface but `lo`. mysbx turns it
-   on wherever `podman.image` is set and the host runs LiteLLM.
+   on wherever `podman.image` is set and the host runs LiteLLM. The unit
+   carries the same confinement block as the Unix-socket half: a
+   destination fence of `localhost` only (`IPAddressAllow`/`IPAddressDeny`),
+   the `AF_UNIX`/`AF_INET` families, and a `DynamicUser` with no
+   privileges and no home — so a compromised forwarder cannot CONNECT to
+   the LAN, the VPN or a cloud-metadata endpoint. Inbound is a different
+   path: with `Accept=no` the listening socket belongs to systemd, and the
+   forwarder's job for those connections is to relay them to
+   `127.0.0.1` — the loopback-only proxy — so the fence bounds what it
+   reaches, not who may reach it.
 2. The wrapper pins `MYSBX_PODMAN_PASTA_SPEC` as
    `pasta:--map-guest-addr,<address>`
    (`myconfig.ai.dev.mysbx.podman.pastaSpec`), so the container's
@@ -615,12 +626,17 @@ while the only reachable endpoint is the host proxy.
 
 The module turns the socket half on wherever `services.litellm` runs
 and pins `MYSBX_EGRESS_SOCKET` / `MYSBX_EGRESS_PORT` /
-`MYSBX_EGRESS_RELAY`. A `proxy-only` run with a missing pin, or on any
-backend but bubblewrap, is refused (exit 70) — never weakened to a
-shared network. `mysbx doctor` probes the socket with a `GET
-/v1/models`. The credential rules (forward-env narrowing, the
-credential-name refusal, the placeholder) are in the "Environment"
-section above and in `config.md` D28.
+`MYSBX_EGRESS_RELAY`. A `proxy-only` run with a missing pin, or on a
+backend that does not enforce the profile, is refused (exit 70) —
+never weakened to a shared network. `mysbx doctor` probes the channel
+with a `GET /v1/models` — through the per-run broker when the build pins
+one — and `mysbx diagnose egress` reads the broker's decision log back:
+per run, the channel it opened, the admissions, and the connections whose
+upstream was unreachable. It is read-only, so it works after the run
+ended and on a host whose forwarder is stopped. The credential rules
+(forward-env narrowing, the credential-name refusal, the placeholder) are
+in the "Environment" section above and in `config.md` D28. The f13 live
+run is in [`docs/egress-validation-log.md`](./docs/egress-validation-log.md).
 
 ## Browser automation
 

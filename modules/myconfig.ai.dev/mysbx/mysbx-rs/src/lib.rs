@@ -27,9 +27,11 @@ pub mod backends;
 pub mod bwrap;
 pub mod config;
 pub mod detach;
+pub mod diagnose;
 pub mod doctor;
 pub mod handoff;
 pub mod krun;
+pub mod landlock;
 pub mod loadimage;
 pub mod merge;
 pub mod microvm_ch;
@@ -345,6 +347,32 @@ pub fn run(args: Vec<String>) -> i32 {
         // precedent).
         Some("status") if flags.verbose => reject_verbose("status"),
         Some("status") => status::run(&rest[1..], flags.dry_run),
+        // `diagnose egress` (docs/design/egress.md E4, bd
+        // myconfig-n8kv.1.4) reads the broker's decision log back. It only
+        // READS — no sandbox, no sidecar writes, no pins — so `--verbose`
+        // widens the report instead of being refused, and `--dry-run` is a
+        // plain print (the `status` precedent). Both arms sit BEFORE the
+        // generic run-scoped refusal below, which is what makes the
+        // before-the-verb spellings reach the verb at all.
+        Some("diagnose") => {
+            match rest.get(1).map(String::as_str) {
+                Some("egress") => diagnose::run(&rest[2..], flags.verbose),
+                // The group is open (cli.md D29): a later diagnosis joins
+                // here without growing the top-level verb list, so an
+                // unknown member names the one that exists rather than
+                // pretending a closed set.
+                Some(other) => {
+                    eprintln!("mysbx diagnose: unknown sub-verb: {other}");
+                    eprintln!("try `mysbx diagnose egress`");
+                    2
+                }
+                None => {
+                    eprintln!("mysbx diagnose: a sub-verb is required: egress");
+                    eprintln!("{usage}", usage = diagnose::USAGE);
+                    2
+                }
+            }
+        }
         // `ssh-pubkey` (docs/design/config.md D22): host-side like the
         // handoff verbs — print the sandbox keypair's PUBLIC key so
         // the operator can register it (GitHub deploy key, gitolite
@@ -2693,8 +2721,9 @@ fn sandbox_pipeline(
     // The proxy-only profile (docs/design/config.md D20, bd
     // myconfig-mo3.2.3): `network = "proxy-only"` grants only the host
     // model endpoint. It is enforced by the backends whose registry
-    // row says so — bubblewrap alone until the other transports land —
-    // and REFUSED by every other backend with a backend-specific
+    // row says so
+    // ([`backends::Backend::network_proxy_only`]) and REFUSED by every
+    // other backend with a backend-specific
     // reason, before the session clone and before the `--dry-run`
     // return (a dry run audits the refusal too). The cross-layer
     // allowlist contradiction is refused here as well; the SAME-file
@@ -2725,16 +2754,13 @@ fn sandbox_pipeline(
                 "microvm-ch" => {
                     "passt's vhost-user net device always has a gateway route"
                 }
-                "nono" => {
-                    "its Landlock/seccomp layer is no default-deny network fence yet (bd myconfig-vpi9.1)"
-                }
                 _ => "the backend cannot express a default-deny network",
             };
             eprintln!(
                 "mysbx: network = \"proxy-only\" is not enforced on the `{backend}` backend — {reason} (docs/design/config.md D20); the run is refused, never weakened to a shared network"
             );
             eprintln!(
-                "  switch the backend to `bubblewrap` for the profile, or drop `network = \"proxy-only\"`"
+                "  switch the backend to `bubblewrap` (or `nono`) for the profile, or drop `network = \"proxy-only\"`"
             );
             return EXIT_INFRASTRUCTURE;
         }
@@ -3348,19 +3374,32 @@ fn sandbox_pipeline(
     };
     let report_waypipe: Option<bwrap::Waypipe<'_>> = waypipe_params.clone();
     // The `network = "proxy-only"` channel (docs/design/config.md D20,
-    // bd myconfig-mo3.2.6): the bubblewrap backend is the ONLY enforcing
-    // row (step 4b refuses the profile elsewhere). Step 4b already
-    // validated the pins, so the channel is built from those values — a
-    // `proxy-only` bubblewrap run always has them; the `map` keeps the
+    // bd myconfig-mo3.2.6): step 4b already validated the pins and
+    // refused every backend that does not enforce the profile, so the
+    // channel is built from those values — the `map` keeps the
     // conversion total without an `expect`.
+    // With a broker the run binds ITS OWN per-run directory
+    // (docs/design/egress.md E3/E4), created a few steps below; without one
+    // it binds the host's static forwarder directory (E6).
+    let egress_bind_dir: Option<String> = match egress.as_ref() {
+        Some(pinned) if pinned.broker_bin.is_some() => pinned
+            .broker_dir
+            .as_ref()
+            .map(|dir| dir.to_string_lossy().into_owned()),
+        Some(pinned) => Some(pinned.socket_dir.clone()),
+        None => None,
+    };
     let egress_params: Option<bwrap::EgressChannel<'_>> =
-        egress.as_ref().map(|pinned| bwrap::EgressChannel {
-            socket_dir: &pinned.socket_dir,
-            socket: &pinned.socket,
-            port: pinned.port,
-            relay_bin: &pinned.relay_bin,
-            etc_dir: &pinned.etc_dir,
-        });
+        match (egress.as_ref(), egress_bind_dir.as_deref()) {
+            (Some(pinned), Some(socket_dir)) => Some(bwrap::EgressChannel {
+                socket_dir,
+                socket: &pinned.socket,
+                port: pinned.port,
+                relay_bin: &pinned.relay_bin,
+                etc_dir: &pinned.etc_dir,
+            }),
+            _ => None,
+        };
     let (report_shell, report_tools_path, report_mux_entry) =
         if backends::find(backend).is_some_and(|row| row.podman()) {
             (
@@ -4507,6 +4546,13 @@ fn sandbox_pipeline(
                 // binds — one computed value, threaded like the
                 // bwrap::Params.waypipe above.
                 waypipe_socket_dir: waypipe_params.as_ref().map(|w| w.socket_dir),
+                // `network = "proxy-only"` (docs/design/config.md D20,
+                // bd myconfig-vpi9.1): the layered nono run binds the
+                // same bwrap channel as the bubblewrap backend and
+                // grants nono exactly the relay's loopback port. Only
+                // the port crosses: the relay and the socket stay
+                // outside nono's layer.
+                egress_port: egress_params.as_ref().map(|e| e.port),
             };
             // The grant argv of the `nono run` INSIDE the sandbox —
             // `run --profile <path> <grants> <network flags>`, derived
@@ -4539,9 +4585,11 @@ fn sandbox_pipeline(
                     argv: &inner_argv,
                     env_bin: &env_bin,
                 }),
-                // The layered nono path is never reached with the
-                // profile (step 4b refuses proxy-only on nono), so it
-                // carries no channel.
+                // The layered nono path binds the same proxy-only
+                // channel as the bubblewrap backend (bd
+                // myconfig-vpi9.1): the socket directory, the name
+                // lookup files and the relay wrap are bwrap's, and
+                // nono's own argv grants the one loopback port.
                 egress: egress_params.clone(),
             };
             let argv = match bwrap::bwrap_argv(&merged, &repo, &payload, &host_env, &params) {
@@ -4590,6 +4638,14 @@ fn sandbox_pipeline(
             println!("{line}");
         }
     }
+
+    // Resolved BEFORE the environment is cleared and before the audit
+    // lines print it, so `--dry-run`/`--verbose` name the exact program
+    // the run execs. An unpinned build's backend is a BARE name
+    // (`bwrap`, `nono` — the wrapper pins absolute store paths, a source
+    // build does not), and the `env_clear` below leaves `PATH` nothing to
+    // search.
+    let backend_program = resolve_program(&backend_bin);
 
     // 7. print the argv, or exec it.
     if dry_run {
@@ -4640,7 +4696,7 @@ fn sandbox_pipeline(
                 println!("{arg}");
             }
             println!();
-            println!("{backend_bin}");
+            println!("{backend_program}");
             for arg in &argv {
                 println!("{arg}");
             }
@@ -4654,7 +4710,7 @@ fn sandbox_pipeline(
         // `MYSBX_BWRAP` was read only after the early return). Golden
         // tests compare bytes and `mysbx run --dry-run -- ls | wc -l`
         // stays meaningful — one line more.
-        println!("{backend_bin}");
+        println!("{backend_program}");
         for arg in &argv {
             println!("{arg}");
         }
@@ -4672,7 +4728,7 @@ fn sandbox_pipeline(
     // `## exec` block for it — the inner under dtach reports its own
     // argv when it runs verbose.
     if flags.verbose && !matches!(mode, RunMode::Detached | RunMode::Detachable) {
-        println!("## exec: {backend_bin}");
+        println!("## exec: {backend_program}");
         for arg in &argv {
             println!("## arg:  {arg}");
         }
@@ -4746,8 +4802,68 @@ fn sandbox_pipeline(
         }
     }
 
-    let mut cmd = std::process::Command::new(&backend_bin);
+    // The per-run egress broker (docs/design/egress.md E1/E2, bd
+    // myconfig-n8kv.1.3): spawned HERE — after every argv/refusal check
+    // above, before the backend — so a broken channel refuses the run and
+    // a dry run never reaches this point. The detach OUTER is excluded on
+    // purpose: its contract is that a pre-flight creates nothing.
+    let mut egress_child: Option<std::process::Child> = None;
+    let egress_run_dir_path: Option<std::path::PathBuf> =
+        egress.as_ref().and_then(|pinned| pinned.broker_dir.clone());
+    if let Some(pinned) = egress.as_ref() {
+        // The outer of a detached run spawns nothing (detach.md B4): its
+        // pre-flight must stay free of side effects.
+        if let Some(dir) = pinned.broker_dir.as_deref() {
+            if !matches!(mode, RunMode::Detached | RunMode::Detachable) {
+                match start_egress_broker(pinned, dir, &repo, &mut egress_child) {
+                    Ok(()) => {}
+                    Err(msg) => {
+                        eprintln!("mysbx: {msg}");
+                        if matches!(mode, RunMode::DetachedInner) {
+                            detach::record_inner_refusal(
+                                &repo,
+                                flags.session.as_deref(),
+                                backend,
+                                merged.multiplexer.name(),
+                                &format!("mysbx: {msg}"),
+                            );
+                        }
+                        return EXIT_INFRASTRUCTURE;
+                    }
+                }
+            }
+        }
+    }
+
+    // `env_clear` below drops PATH, and an unpinned backend is a BARE
+    // program name (`bwrap`, `nono` — the wrapper pins absolute store
+    // paths, a source build does not). `Command::new` resolves the name
+    // against the environment the way it is at spawn time, so the lookup
+    // has to happen BEFORE the clear or the run dies with ENOENT on a
+    // host whose backend is only on PATH.
+    let mut cmd = std::process::Command::new(&backend_program);
     cmd.args(&argv);
+    // The backend reads nothing from mysbx's environment (bwrap's argv
+    // clears and re-sets it, and the VM launchers get their own pins as
+    // arguments), but the CHILD inherited it until exec — and the sandbox
+    // that process becomes could read it back through /proc (bd
+    // myconfig-q8zg). Dropping it here is the cheapest place to close that
+    // window, and a proxy-only broker makes it matter more: the host
+    // environment is exactly where the credential names live (config.md
+    // D28).
+    //
+    // Two exclusions, both because the child is not (yet) the sandbox:
+    // podman's client half reads its own environment, and the inner of a
+    // detached run is a mysbx that re-derives everything from its argv and
+    // needs the ordinary environment to do it.
+    if !backends::find(backend).is_some_and(|row| row.podman())
+        && !matches!(
+            mode,
+            RunMode::Detached | RunMode::Detachable | RunMode::DetachedInner
+        )
+    {
+        cmd.env_clear();
+    }
     match mode {
         // The outer's handoff (detach.md B4 step 2): registry, lock,
         // state file and the dtach spawn — everything above was the
@@ -4787,6 +4903,8 @@ fn sandbox_pipeline(
                 krun_stage_dir.as_deref(),
                 krun_gcroot_dir.as_deref(),
                 krun_scratch_file.as_deref(),
+                egress_child,
+                egress_run_dir_path.as_deref(),
             );
             exit
         }
@@ -4807,6 +4925,13 @@ fn sandbox_pipeline(
             if let Some(mut child) = waypipe_child {
                 let _ = child.kill();
                 let _ = child.wait();
+            }
+            if let Some(mut child) = egress_child {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+            if let Some(dir) = egress_run_dir_path.as_deref() {
+                let _ = std::fs::remove_dir_all(dir);
             }
             eprintln!("mysbx: cannot exec {backend_bin}: {e}");
             if let Some(f) = &git_trust_file {
@@ -4845,6 +4970,8 @@ fn sandbox_pipeline(
                 krun_stage_dir.as_deref(),
                 krun_gcroot_dir.as_deref(),
                 krun_scratch_file.as_deref(),
+                egress_child,
+                egress_run_dir_path.as_deref(),
             );
             if let Some(temp) = &once {
                 *once_kept = once::teardown(temp, &repo);
@@ -4873,6 +5000,8 @@ fn sandbox_pipeline(
                 krun_stage_dir.as_deref(),
                 krun_gcroot_dir.as_deref(),
                 krun_scratch_file.as_deref(),
+                egress_child,
+                egress_run_dir_path.as_deref(),
             );
             exit
         }
@@ -4896,7 +5025,20 @@ fn cleanup_per_run_state(
     krun_stage_dir: Option<&std::path::Path>,
     krun_gcroot_dir: Option<&std::path::Path>,
     krun_scratch_file: Option<&std::path::Path>,
+    egress_child: Option<std::process::Child>,
+    egress_run_dir: Option<&std::path::Path>,
 ) {
+    // The egress broker of a waited run (docs/design/egress.md E2): the
+    // process that spawned it is still here, so it is killed, reaped and
+    // its bind directory removed — an exec-mode run relies on
+    // PR_SET_PDEATHSIG and the next run's sweep instead.
+    if let Some(mut child) = egress_child {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    if let Some(dir) = egress_run_dir {
+        let _ = std::fs::remove_dir_all(dir);
+    }
     // The waypipe client of a waited run is cleaned up here
     // (D18): a multi client never exits on its own when the
     // guest server goes away — kill it, reap it, and remove
@@ -5894,6 +6036,16 @@ pub struct EgressPins {
     /// The store directory with the sandbox's `hosts` and
     /// `nsswitch.conf`.
     pub etc_dir: String,
+    /// The per-run broker binary (`MYSBX_EGRESS_BROKER`), when this build
+    /// carries one: the run then creates its own channel instead of
+    /// binding the host's static forwarder directory (docs/design/egress.md
+    /// E3, bd myconfig-n8kv.1.3).
+    pub broker_bin: Option<String>,
+    /// The directory a broker-backed run binds: `$XDG_RUNTIME_DIR/mysbx-egress/<pid>`,
+    /// resolved and length-checked in step 4b so a missing
+    /// `$XDG_RUNTIME_DIR` refuses the run BEFORE anything is created
+    /// (docs/design/egress.md E4/E5). `None` for a static-forwarder build.
+    pub broker_dir: Option<std::path::PathBuf>,
 }
 
 /// Resolve and validate the `proxy-only` egress channel from
@@ -5913,14 +6065,19 @@ pub struct EgressPins {
 ///   ([`check_egress_socket_dir`]), and a socket that does not exist or
 ///   is not a Unix socket.
 ///
-/// `Ok(None)` when the profile is not selected (or the backend is not
-/// bubblewrap).
+/// `Ok(None)` when the profile is not selected (or the backend does not
+/// enforce it, [`crate::backends::Backend::network_proxy_only`]).
 pub fn resolve_egress(
     network: config::Network,
     backend: &str,
     dry_run: bool,
 ) -> Result<Option<EgressPins>, ()> {
-    if network != config::Network::ProxyOnly || backend != "bubblewrap" {
+    // Asked of the registry, never matched by name here
+    // (backends.rs: every name-matching call site funnels through
+    // `find`): both bwrap-built tiers bind the same socket directory
+    // and wrap the same relay (bd myconfig-vpi9.1).
+    let enforces = backends::find(backend).is_some_and(|row| row.network_proxy_only);
+    if network != config::Network::ProxyOnly || !enforces {
         return Ok(None);
     }
     let complain = |message: &str| {
@@ -5936,6 +6093,7 @@ pub fn resolve_egress(
     let port_raw = env_opt("MYSBX_EGRESS_PORT");
     let relay = env_opt("MYSBX_EGRESS_RELAY");
     let etc_dir = env_opt("MYSBX_EGRESS_ETC");
+    let broker_bin = env_opt("MYSBX_EGRESS_BROKER");
 
     let mut missing = Vec::new();
     if socket_path.is_none() {
@@ -5981,7 +6139,50 @@ pub fn resolve_egress(
         Ok(port) => port,
     };
 
-    if !dry_run {
+    // A broker-backed run owns its channel in a per-run directory whose
+    // root is $XDG_RUNTIME_DIR (docs/design/egress.md E4). Resolving it HERE
+    // keeps every refusal in step 4b, ahead of the state dirs, the SSH key
+    // and the clone: an unset or relative root, or a path over SUN_LEN, is
+    // refused with a dry run still auditing it.
+    let broker_dir = if broker_bin.is_some() {
+        let dir = match egress_run_dir(std::process::id()) {
+            Some(dir) => dir,
+            None => {
+                return complain(
+                    "network = \"proxy-only\" needs $XDG_RUNTIME_DIR for the egress \
+                     broker's socket directory, and it is unset or relative; the profile \
+                     refuses rather than falling back to a world-writable directory \
+                     (docs/design/egress.md E4/E5)",
+                )
+            }
+        };
+        let socket = dir.join(&socket);
+        // `sun_path` is BYTES: measure the raw path, not a lossy string.
+        let socket_len = {
+            use std::os::unix::ffi::OsStrExt;
+            socket.as_os_str().as_bytes().len()
+        };
+        if socket_len > detach::SUN_PATH_LIMIT {
+            return complain(&format!(
+                "the egress socket path `{}` is {socket_len} bytes, but a Unix socket \
+                 path is limited to {} bytes; shorten $XDG_RUNTIME_DIR \
+                 (docs/design/egress.md E4)",
+                socket.display(),
+                detach::SUN_PATH_LIMIT
+            ));
+        }
+        Some(dir)
+    } else {
+        None
+    };
+
+    // Two channel shapes share these pins (docs/design/egress.md E3/E6):
+    // a build WITHOUT the broker binds the host's static forwarder
+    // directory and needs it to exist, root-owned; a build WITH the broker
+    // creates a per-run directory, so nothing of the host's is checked or
+    // bound. The pin decides which, and a broker that cannot be started
+    // refuses the run later (E5: no broker, no egress).
+    if broker_bin.is_none() && !dry_run {
         let dir = std::path::Path::new(EGRESS_SOCKET_DIR);
         if let Err(message) = check_egress_socket_dir(dir) {
             return complain(&format!("{message} (MYSBX_EGRESS_SOCKET = `{path}`)"));
@@ -5998,6 +6199,8 @@ pub fn resolve_egress(
         path,
         relay_bin: relay,
         etc_dir,
+        broker_bin,
+        broker_dir,
     }))
 }
 
@@ -6139,6 +6342,52 @@ pub(crate) fn refuse_renamed_podman_pins(prefix: &str) -> bool {
 
 fn env_opt(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|v| !v.is_empty())
+}
+
+/// Resolve the backend program to what `Command::new` would exec: a name
+/// with a `/` is already a path, a bare name is looked up in `PATH` and
+/// the first executable regular file wins. An unresolved name comes back
+/// VERBATIM, so the spawn's own error names what the operator typed.
+///
+/// Resolved before the spawn because a run clears the child's environment
+/// (bd myconfig-q8zg): afterwards there is no `PATH` for a bare name like
+/// the `bwrap`/`nono` fallbacks to be found in.
+fn resolve_program(name: &str) -> String {
+    resolve_program_in(name, std::env::var_os("PATH").as_deref())
+}
+
+/// The pure half of [`resolve_program`], against an explicit `path`, so
+/// the rules are testable without touching the process environment.
+fn resolve_program_in(name: &str, path: Option<&std::ffi::OsStr>) -> String {
+    use std::os::unix::fs::PermissionsExt;
+    if name.contains('/') || name.is_empty() {
+        return name.to_owned();
+    }
+    let Some(path) = path else {
+        return name.to_owned();
+    };
+    for dir in std::env::split_paths(path) {
+        // `execvp` would treat an empty element as the cwd; this
+        // deliberately does not, so a relative hit can never pick up a
+        // file from whatever directory mysbx happens to run in.
+        if dir.as_os_str().is_empty() {
+            continue;
+        }
+        let candidate = dir.join(name);
+        if is_executable_file(&candidate) {
+            return candidate.to_string_lossy().into_owned();
+        }
+    }
+    name.to_owned()
+}
+
+/// Whether `path` is an executable regular file — the predicate
+/// [`resolve_program_in`] searches with.
+fn is_executable_file(path: &std::path::Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::metadata(path)
+        .map(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
+        .unwrap_or(false)
 }
 
 /// `std::env::var` with the empty-means-unset rule: an empty value falls
@@ -6647,6 +6896,245 @@ fn ensure_ssh_key(
         println!("## ssh public key: {}", key.trim_end());
     }
     Ok(SshKeyOutcome::Created)
+}
+
+/// The per-run egress broker directory: `$XDG_RUNTIME_DIR/mysbx-egress/<pid>`
+/// (docs/design/egress.md E3/E4). A SIBLING of `$XDG_RUNTIME_DIR/mysbx`,
+/// never below it: detach.md B8 refuses a bind source that IS, lies below
+/// or contains the detached-run registry, and this directory is a bind
+/// source.
+fn egress_run_dir(pid: u32) -> Option<std::path::PathBuf> {
+    let runtime = std::env::var_os("XDG_RUNTIME_DIR")?;
+    egress_run_dir_under(std::path::Path::new(&runtime), pid)
+}
+
+/// The pure half of [`egress_run_dir`]: an absolute `runtime` root gives
+/// `<runtime>/mysbx-egress/<pid>`, anything else gives `None`. Free so the
+/// rule is testable without touching the process environment.
+fn egress_run_dir_under(runtime: &std::path::Path, pid: u32) -> Option<std::path::PathBuf> {
+    if !runtime.is_absolute() {
+        return None;
+    }
+    Some(runtime.join("mysbx-egress").join(pid.to_string()))
+}
+
+/// Create the run's egress directory (mode 0700, symlink-free) and sweep
+/// the leftovers of runs that are gone.
+///
+/// The exec-mode lifecycle leaves the directory behind on purpose — the
+/// process that would remove it is replaced by the backend — so the NEXT
+/// run sweeps the siblings whose pid is gone. A shell-level `rm` is not
+/// attempted on a name we do not own: a pid-named entry of the run user
+/// IS ours (the same rule `ensure_waypipe_token_dir` applies).
+fn ensure_egress_run_dir(dir: &std::path::Path) -> Result<(), String> {
+    let root = dir
+        .parent()
+        .ok_or_else(|| format!("{} has no parent directory", dir.display()))?;
+    // One refusal for both levels, in this channel's own words: a
+    // symlink or a plain file where the run directory (or its root) must
+    // be is a broken channel, not a state directory (D15's message would
+    // name the wrong subsystem).
+    for path in [root, dir] {
+        match std::fs::symlink_metadata(path) {
+            Ok(meta) if meta.file_type().is_symlink() || !meta.is_dir() => {
+                return Err(format!(
+                    "{} exists and is not a real directory; the egress run directory \
+                     is a bind source and must not be redirected \
+                     (docs/design/egress.md E3)",
+                    path.display()
+                ))
+            }
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                std::fs::create_dir(path)
+                    .map_err(|e| format!("cannot create {}: {e}", path.display()))?;
+            }
+            Err(e) => return Err(format!("cannot inspect {}: {e}", path.display())),
+        }
+    }
+    std::fs::set_permissions(
+        dir,
+        <std::fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o700),
+    )
+    .map_err(|e| format!("cannot chmod {} to 0700: {e}", dir.display()))?;
+    // The directory is a bind source, so its metadata is part of the
+    // fence: a real directory, ours, no group/other bits (E3).
+    use std::os::unix::fs::MetadataExt;
+    let meta = std::fs::symlink_metadata(dir)
+        .map_err(|e| format!("cannot inspect {}: {e}", dir.display()))?;
+    if !meta.is_dir() {
+        return Err(format!(
+            "{} is not a real directory (a symlink or a plain file); the sandbox \
+             binds it read-only, so it must not be redirected (docs/design/egress.md E3)",
+            dir.display()
+        ));
+    }
+    let euid = unsafe { libc_geteuid() };
+    if meta.uid() != euid {
+        return Err(format!(
+            "{} is owned by uid {}, not by this run (uid {euid}) \
+             (docs/design/egress.md E3)",
+            dir.display(),
+            meta.uid()
+        ));
+    }
+    if meta.mode() & 0o077 != 0 {
+        return Err(format!(
+            "{} is mode {:04o}, so group or other can reach it; it must be 0700 \
+             (docs/design/egress.md E3)",
+            dir.display(),
+            meta.mode() & 0o7777
+        ));
+    }
+    sweep_pid_dirs(root);
+    Ok(())
+}
+
+/// Remove the pid-named entries of `root` whose owner is gone — the
+/// debris an exec-mode run leaves behind (nothing of the host outlives the
+/// exec to clean it). A name that does not parse as a pid is not ours and
+/// stays untouched, and this run's own entry is never swept.
+fn sweep_pid_dirs(root: &std::path::Path) {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let Ok(stale_pid) = name.parse::<u32>() else {
+            continue;
+        };
+        if stale_pid != std::process::id() && pid_gone(stale_pid) {
+            let _ = std::fs::remove_dir_all(entry.path());
+        }
+    }
+}
+
+/// Start the per-run egress broker (docs/design/egress.md E1/E2): create
+/// the run directory, spawn `mysbx-egress-broker` on the run's socket with
+/// the decision log in the sidecar, and wait for the socket to appear —
+/// the backend must not start before the channel is up (E5: no broker, no
+/// egress).
+///
+/// The broker is pinned to its parent with `prctl(PR_SET_PDEATHSIG,
+/// SIGKILL)` through [`die_with_parent`], so an exec-mode run needs no
+/// cleanup at all: when the backend exits, the kernel kills the broker and
+/// the next run's sweep removes the directory. A waited run kills it
+/// explicitly in [`cleanup_per_run_state`], like the waypipe client.
+fn start_egress_broker(
+    pinned: &EgressPins,
+    dir: &std::path::Path,
+    repo: &repo::Repo,
+    child_out: &mut Option<std::process::Child>,
+) -> Result<(), String> {
+    let pid = std::process::id();
+    ensure_egress_run_dir(dir)?;
+    let socket = dir.join(&pinned.socket);
+    let socket_str = socket
+        .to_str()
+        .ok_or_else(|| format!("the socket path {} is not valid UTF-8", socket.display()))?;
+    // The decision log lives in the sidecar, NOT the run directory: the
+    // sandbox binds the run directory read-only, so the payload would read
+    // it (docs/design/egress.md E4).
+    let log_root = repo.sidecar.join("egress");
+    let log_dir = log_root.join(pid.to_string());
+    ensure_plain_dir(&log_root)?;
+    ensure_plain_dir(&log_dir)?;
+    std::fs::set_permissions(
+        &log_dir,
+        <std::fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o700),
+    )
+    .map_err(|e| format!("cannot chmod {} to 0700: {e}", log_dir.display()))?;
+    // The log outlives its run for `mysbx diagnose egress` to read, so the
+    // directories of gone pids are the sidecar debris the next run sweeps
+    // (the waypipe token-directory rule, config.md D18).
+    sweep_pid_dirs(&log_root);
+    let log_path = log_dir.join("decisions.jsonl");
+    let log_str = log_path
+        .to_str()
+        .ok_or_else(|| format!("the log path {} is not valid UTF-8", log_path.display()))?;
+
+    let broker_bin = pinned.broker_bin.clone().ok_or_else(|| {
+        "network = \"proxy-only\" needs the per-run egress broker, but this \
+         build pinned no MYSBX_EGRESS_BROKER (docs/design/egress.md E5)"
+            .to_owned()
+    })?;
+    let upstream = format!("127.0.0.1:{}", pinned.port);
+    let mut cmd = std::process::Command::new(&broker_bin);
+    cmd.arg("--listen")
+        .arg(socket_str)
+        .arg("--upstream")
+        .arg(&upstream)
+        .arg("--decision-log")
+        .arg(log_str)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null());
+    // Die with mysbx's process: in exec mode mysbx IS the backend after the
+    // exec, so the kernel kills the broker when the run ends. Captured
+    // BEFORE the fork, where it would be the child's own pid.
+    use std::os::unix::process::CommandExt;
+    let parent_at_fork = std::process::id();
+    unsafe {
+        cmd.pre_exec(move || die_with_parent(parent_at_fork));
+    }
+    // Unlink a socket left by an EARLIER run before spawning, the
+    // waypipe rule: the directory is named after this pid and this run
+    // owns it, so whatever sits there belongs to a run that is gone. The
+    // wait below polls for the socket's EXISTENCE, which a leftover would
+    // satisfy before the new broker had bound anything — the payload would
+    // then start on a channel that had already failed (exec-mode runs
+    // leave their directory behind, and a reused pid lands here).
+    let _ = std::fs::remove_file(&socket);
+    let mut spawned = cmd
+        .spawn()
+        .map_err(|e| format!("cannot start the egress broker {broker_bin}: {e}"))?;
+    let outcome = wait_for_egress_socket(&socket, &mut spawned, std::time::Duration::from_secs(5));
+    if outcome.is_err() {
+        let _ = spawned.kill();
+        let _ = spawned.wait();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+    outcome.map(|()| {
+        *child_out = Some(spawned);
+    })
+}
+
+/// Wait (polling at 50ms) for the broker's socket, bounded by `budget`,
+/// while watching the child: a broker that exits before binding ends the
+/// wait immediately. The socket-poll half of [`start_egress_broker`], free
+/// so the unit tests can drive it with a fake child.
+fn wait_for_egress_socket(
+    socket: &std::path::Path,
+    child: &mut std::process::Child,
+    budget: std::time::Duration,
+) -> Result<(), String> {
+    let deadline = std::time::Instant::now() + budget;
+    loop {
+        if socket.exists() {
+            return Ok(());
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                return Err(format!(
+                    "the egress broker exited ({status}) before creating {} — a \
+                     network = \"proxy-only\" run gets no channel and is refused \
+                     (docs/design/egress.md E5)",
+                    socket.display()
+                ));
+            }
+            Ok(None) => {}
+            Err(e) => return Err(format!("cannot watch the egress broker: {e}")),
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err(format!(
+                "the egress broker did not create {} within {:?} — a \
+                 network = \"proxy-only\" run gets no channel and is refused \
+                 (docs/design/egress.md E5)",
+                socket.display(),
+                budget
+            ));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
 }
 
 /// The per-run waypipe token directory (config.md D18):
@@ -7531,6 +8019,32 @@ mod tests {
         let e = check_egress_socket_dir(&missing).expect_err("a missing dir must be refused");
         assert!(e.contains("agent-litellm-forward-unix.socket"), "{e}");
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn the_egress_run_dir_is_a_sibling_of_the_detach_registry() {
+        // detach.md B8 refuses a bind source that IS, lies below or
+        // contains $XDG_RUNTIME_DIR/mysbx; the egress run directory is a
+        // bind source, so it must stay a SIBLING (docs/design/egress.md E4).
+        let runtime = std::path::Path::new("/run/user/1000");
+        let dir = egress_run_dir_under(runtime, 4242).expect("an absolute root resolves");
+        assert_eq!(
+            dir,
+            std::path::Path::new("/run/user/1000/mysbx-egress/4242")
+        );
+        let registry = runtime.join("mysbx");
+        assert!(
+            !dir.starts_with(&registry) && !registry.starts_with(&dir),
+            "the egress dir must not nest with the detach registry: {dir:?}"
+        );
+    }
+
+    #[test]
+    fn a_relative_runtime_dir_is_not_a_root() {
+        // A relative root would put the channel below the CWD, which the
+        // run's own directory resolution must never do.
+        assert!(egress_run_dir_under(std::path::Path::new("relative/root"), 4242).is_none());
+        assert!(egress_run_dir_under(std::path::Path::new(""), 4242).is_none());
     }
 
     #[test]
@@ -8830,6 +9344,168 @@ mod tests {
     }
 
     #[test]
+    fn a_stale_socket_does_not_read_as_broker_readiness() {
+        // The regression (bd myconfig-1012): the wait polls for the
+        // socket's EXISTENCE, and an exec-mode run leaves its directory
+        // (and socket) behind, so a later run on the SAME pid would see
+        // the leftover and call the channel ready before the new broker
+        // had bound anything. `start_egress_broker` therefore unlinks the
+        // stale socket first; this drives the two halves directly: the
+        // stale socket satisfies a bare existence check, and removing it
+        // the way the spawn does makes the wait fail honestly.
+        let dir = std::env::temp_dir().join(format!("mysbx-stale-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("create the dir");
+        let socket = dir.join("litellm.sock");
+        // A socket file left by "the previous run".
+        let stale = std::os::unix::net::UnixListener::bind(&socket).expect("bind the stale socket");
+        drop(stale);
+        assert!(socket.exists(), "the fixture must leave a socket behind");
+
+        // A broker child that never binds anything.
+        let mut child = std::process::Command::new("/bin/sh")
+            .args(["-c", "sleep 5"])
+            .spawn()
+            .expect("spawn a sleeping child");
+        // WITH the leftover in place, the wait returns Ok immediately,
+        // without the child ever having bound — the bug's exact mechanism.
+        let bogus = wait_for_egress_socket(&socket, &mut child, std::time::Duration::from_secs(1));
+        assert!(
+            bogus.is_ok(),
+            "documents the hazard: a leftover socket reads as ready"
+        );
+
+        // With the stale socket removed as the spawn now does, the same
+        // wait cannot be fooled, and a dead broker is refused.
+        let _ = std::fs::remove_file(&socket);
+        let outcome =
+            wait_for_egress_socket(&socket, &mut child, std::time::Duration::from_millis(200));
+        assert!(
+            outcome.is_err(),
+            "without the stale socket the wait must not claim readiness"
+        );
+        let _ = child.kill();
+        let _ = child.wait();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn wait_for_egress_socket_reports_a_dead_broker() {
+        // The wait watches the child while it polls, so a broker that
+        // exits before binding ends the wait AT ONCE with its status
+        // rather than burning the whole budget (docs/design/egress.md E5).
+        let dir = std::env::temp_dir().join(format!("mysbx-wait-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("create the dir");
+        let socket = dir.join("litellm.sock");
+        let mut child = std::process::Command::new("/bin/sh")
+            .args(["-c", "exit 3"])
+            .spawn()
+            .expect("spawn a child that exits");
+        // Let it exit, so `try_wait` reports the status on the first poll.
+        let _ = child.wait();
+        let started = std::time::Instant::now();
+        let outcome =
+            wait_for_egress_socket(&socket, &mut child, std::time::Duration::from_secs(30));
+        let elapsed = started.elapsed();
+        let _ = std::fs::remove_dir_all(&dir);
+        let err = outcome.expect_err("a dead broker must not read as ready");
+        assert!(err.contains("exited"), "the refusal names the exit: {err}");
+        assert!(
+            elapsed < std::time::Duration::from_secs(5),
+            "the wait must end on the child's exit, not the budget ({elapsed:?})"
+        );
+    }
+
+    fn resolve_program_matches_execvp_rules() {
+        // Owned so the OsStr borrows below stay alive for the calls.
+        let bin = std::path::Path::new("/bin").as_os_str().to_owned();
+        let no_then_bin = std::ffi::OsString::from("/nope:/bin");
+        let crate_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .as_os_str()
+            .to_owned();
+        // A `/` makes it a path: no lookup, no rewrite — even when it does
+        // not exist, so the spawn's error keeps the operator's spelling.
+        assert_eq!(resolve_program_in("/bin/sh", None), "/bin/sh");
+        assert_eq!(resolve_program_in("./relative", None), "./relative");
+        assert_eq!(resolve_program_in("/nope/q1012", None), "/nope/q1012");
+        // Without a PATH there is nothing to search.
+        assert_eq!(resolve_program_in("bwrap", None), "bwrap");
+        assert_eq!(resolve_program_in("", Some(&bin)), "");
+
+        // A bare name resolves to the absolute executable.
+        assert_eq!(
+            resolve_program_in("sh", Some(&bin)),
+            std::path::Path::new("/bin").join("sh").to_string_lossy()
+        );
+        // Search order: the FIRST hit wins.
+        assert_eq!(
+            resolve_program_in("sh", Some(&no_then_bin)),
+            std::path::Path::new("/bin").join("sh").to_string_lossy()
+        );
+        // A non-executable file is skipped: the crate's Cargo.toml is not a
+        // program, and a PATH entry pointing at a directory is no hit
+        // either, so both fall through to the verbatim name.
+        assert_eq!(
+            resolve_program_in("Cargo.toml", Some(&crate_root)),
+            "Cargo.toml"
+        );
+        assert_eq!(resolve_program_in("src", Some(&crate_root)), "src");
+        // An unresolved name comes back VERBATIM.
+        let missing = "mysbx-no-such-program-q1012";
+        assert_eq!(resolve_program_in(missing, Some(&bin)), missing);
+        // An empty element means the cwd; this deliberately does not search
+        // it, so a file in the cwd is not found through it.
+        let with_empty = std::env::join_paths([std::path::PathBuf::new()]).expect("valid PATH");
+        assert_eq!(
+            resolve_program_in("Cargo.toml", Some(with_empty.as_os_str())),
+            "Cargo.toml"
+        );
+    }
+
+    #[test]
+    fn a_resolved_program_survives_the_cleared_environment() {
+        // The regression this fix exists for (bd myconfig-q1012): a run
+        // spawns its backend with `env_clear`, so a backend reachable only
+        // through a PATH entry fails with ENOENT while the pre-resolved
+        // path runs. glibc's `execvp` falls back to `/bin:/usr/bin` when
+        // PATH is unset, which is why the fixture lives in a throwaway
+        // directory: exactly the NixOS shape where a wrapper-only binary
+        // sits in a profile directory outside that fallback.
+        let dir = std::env::temp_dir().join(format!("mysbx-resolve-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("create the fixture dir");
+        let program = dir.join("mysbx-q1012-fixture");
+        std::fs::write(&program, "#!/bin/sh\nexit 0\n").expect("write the fixture");
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755))
+                .expect("chmod the fixture");
+        }
+
+        // (a) Baseline: the name is NOT reachable from the default
+        // fallback, so a bare name under `env_clear` fails. Asserting
+        // this keeps the rest of the test from passing vacuously.
+        let bare = std::process::Command::new("mysbx-q1012-fixture")
+            .env_clear()
+            .status();
+        assert!(
+            bare.is_err(),
+            "the fixture must be unreachable by bare name without PATH: {bare:?}"
+        );
+
+        // (b) Resolved against a PATH that holds it, the same spawn works
+        // under the same cleared environment.
+        let resolved = resolve_program_in("mysbx-q1012-fixture", Some(dir.as_os_str()));
+        assert_eq!(resolved, program.to_string_lossy());
+        let ran = std::process::Command::new(&resolved).env_clear().status();
+        assert!(
+            ran.as_ref().is_ok_and(std::process::ExitStatus::success),
+            "the resolved program must run under env_clear: {ran:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     fn editor_command_splits_arguments_and_refuses_a_blank_value() {
         // The env is process-global: this test owns both variables for
         // its duration and restores nothing else.
