@@ -12915,6 +12915,49 @@ fn bwrap_stub(base: &Path) -> (PathBuf, PathBuf) {
     (stub, record)
 }
 
+/// A stub backend that dumps the environment IT was started with —
+/// not the payload's, not `--clearenv`'s: `/proc/<its own pid>/environ`
+/// is exactly what a sandbox payload reads as `/proc/1/environ`, because
+/// the backend process IS the bwrap supervisor PID 1 of the namespace it
+/// builds (bd myconfig-q8zg).
+///
+/// The read goes through `/proc/$$/environ` rather than
+/// `/proc/self/environ`: the latter is opened by `tr`/`cat`, whose own
+/// environ is a different (already-cleared) process, so it cannot see
+/// the shell's inherited environment. `exec 3<` opens the file in the
+/// SHELL, before any child exists.
+///
+/// The record path is baked into the script text, the `bwrap_stub`
+/// idiom: the child's environment is what is under test, so no env
+/// variable may name the record file.
+fn environ_reporting_stub(base: &Path, name: &str) -> (PathBuf, PathBuf) {
+    let record = base.join(format!("{name}-environ.txt"));
+    let stub = base.join(name);
+    // `tr` is not on the cleared PATH (`env_clear` drops it and the
+    // sandbox PATH is MYSBX_TOOLS_PATH), so the record is written with
+    // shell builtins only: read the NUL-separated blob and replace the
+    // separators in the shell itself.
+    std::fs::write(
+        &stub,
+        format!(
+            "#!/bin/sh\nexec 3< /proc/$$/environ\nwhile IFS= read -r -d '' line <&3; do printf '%s\\n' \"$line\"; done > {}\n",
+            record.display()
+        ),
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+    (stub, record)
+}
+
+/// The `NAME=` names of an environ dump written by
+/// [`environ_reporting_stub`], in file order.
+fn environ_names(dump: &str) -> Vec<String> {
+    dump.lines()
+        .map(|l| l.split('=').next().unwrap_or_default().to_owned())
+        .collect()
+}
+
 /// A SHORT runtime root for a detached-run test: the socket paths a
 /// run computes are capped by the kernel's sun_path, and the sandbox
 /// a `nix build` runs in has a deep $TMPDIR — the fixture's tmpdir
@@ -12925,6 +12968,80 @@ fn short_runtime_root(name: &str) -> PathBuf {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
+}
+
+/// The `MYSBX_DTACH` stub of the environment-leak harness (bd
+/// myconfig-q8zg): `-n` drops the four fixed dtach arguments and execs
+/// the inner mysbx, so the real `--detach` path runs; nothing else is
+/// implemented. Separate from [`dtach_stub`] because that one also
+/// records its argv, and its record file would be confused with the
+/// environ dump this harness compares.
+fn exec_only_dtach_stub(base: &Path) -> PathBuf {
+    let stub = base.join("dtach-exec-stub");
+    std::fs::write(
+        &stub,
+        "#!/bin/sh\ncase \"$1\" in\n  -n) shift 4; exec \"$@\" ;;\nesac\nexit 1\n",
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+    stub
+}
+
+/// The environment a backend is started with, per run mode (bd
+/// myconfig-q8zg): the backend process becomes the bwrap supervisor PID
+/// 1 of the sandbox, so its OWN `/proc/<pid>/environ` is what a payload
+/// reads as `/proc/1/environ`. A canary in the invoking shell must not
+/// appear there.
+///
+/// Manual at this stage (`#[ignore]`): on the pre-fix code the detached
+/// rows fail — see the comment on the test body for the measured
+/// pre-fix numbers. Commit 2 of the bead turns this green and commit 4
+/// promotes it into the table-driven regression test that CI runs.
+#[test]
+#[ignore = "reproduces the pre-fix detached-inner leak (bd myconfig-q8zg); promoted by the fix commit"]
+fn the_backend_environment_never_carries_the_invoking_canary() {
+    if !is_ssh_keygen_available() {
+        return; // no usable ssh-keygen (the baseline env's uid-0 quirk)
+    }
+    // Pre-fix measurement, this sandbox, 2026-11-14: the FOREGROUND row
+    // is clean (`env_clear` already runs) and the DETACHED row leaks 13
+    // entries including `HF_TOKEN=CANARY_DETACH` — the dtach → inner
+    // mysbx → backend chain never clears, because `detach::launch_outer`
+    // spawns dtach with `.env("MYSBX_DETACHED", …)` on an inherited
+    // environment and lib.rs skips `env_clear` for `DetachedInner`.
+    for mode in ["foreground", "detach"] {
+        let (inv, repo, _sidecar) = fixture_with_backend("env-canary", &["run"]);
+        let (stub, record) = environ_reporting_stub(&inv.home, "bwrap-env-stub");
+        let runtime = short_runtime_root("env-canary");
+        std::fs::create_dir_all(&runtime).unwrap();
+        let mut cmd = if mode == "detach" {
+            let dtach = exec_only_dtach_stub(&inv.home);
+            let mut c = spawn_with_args(&inv, &["--detach"]);
+            c.env("MYSBX_DTACH", &dtach)
+                .env("XDG_RUNTIME_DIR", &runtime);
+            c
+        } else {
+            spawn_with_args(&inv, &["run", "--", "/bin/true"])
+        };
+        cmd.env("MYSBX_BWRAP", &stub)
+            .env("MYSBX_TOOLS_PATH", "/usr/bin")
+            .env("HF_TOKEN", "CANARY_Q8ZG");
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "{mode}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let dump = wait_for_file(&record);
+        let names = environ_names(&dump);
+        assert!(
+            !dump.contains("CANARY_Q8ZG"),
+            "{mode}: the backend inherited the invoking environment: {names:?}"
+        );
+        let _ = repo;
+    }
 }
 
 /// The registry paths of a live-workspace detached run for `repo`
