@@ -173,7 +173,11 @@ profile, and the five refusing backends.
 
 - one model request each from `pi` and from `opencode` inside the sandbox;
 - the broker killed mid-run: the sandbox's requests fail with no fallback,
-  and the decision log's next line is `unreachable` rather than `allow`;
+  and the decision log gains no new entries — a dead broker appends
+  nothing (the `unreachable` event is a LIVING broker's connect failure
+  to the upstream, logged after its `allow`; broker death and upstream
+  failure are two different failures, and only the second is visible
+  in the log);
 - a `--detach` / `mysbx attach` cycle: the broker outlives the outer run
   and dies with the inner one.
 

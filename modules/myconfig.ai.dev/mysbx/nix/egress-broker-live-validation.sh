@@ -214,8 +214,9 @@ cat <<'EOF'
     * then `mysbx diagnose egress` shows the admissions, and
       `mysbx diagnose egress --verbose` the peer pids
     * kill the broker (`pkill -f mysbx-egress-broker`) and confirm the
-      sandbox's requests now fail (no fallback) and the log's next line is
-      an `unreachable` rather than an `allow`
+      sandbox's requests now fail (no fallback) and the decision log
+      gains no new entries — a dead broker appends nothing (`unreachable`
+      is a LIVING broker's connect failure, logged after its `allow`)
     * `mysbx --detach`, then `mysbx attach`: the broker must outlive the
       outer run and die with the inner one
   Record the results as a dated block in docs/egress-validation-log.md.
