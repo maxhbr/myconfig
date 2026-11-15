@@ -3150,6 +3150,22 @@ fn failing_payload_propagates_exit_code() {
 
 // ---- the sandbox's own $HOME (config.md D14) --------------------------------
 
+/// A `bash` from the test runner's own `PATH`, as an absolute path —
+/// [`sandbox_bash`] without its sandbox-reachability filter: the
+/// environ-reporting stubs run as the BACKEND on the host, so any
+/// bash the runner can resolve serves. `None` when `PATH` holds
+/// none, which the environ harnesses take as their skip.
+fn which_bash() -> Option<PathBuf> {
+    let path = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&path) {
+        let candidate = dir.join("bash");
+        if candidate.is_file() {
+            return std::fs::canonicalize(&candidate).ok();
+        }
+    }
+    None
+}
+
 /// A `bash` that is reachable *inside* the sandbox, i.e. one whose real
 /// path lies under a base-bound directory (`/nix/store`, `/usr/bin`).
 /// `/run/current-system/sw/bin/bash` qualifies after canonicalization —
@@ -12879,22 +12895,35 @@ unsafe fn libc_close(fd: i32) {
     close(fd);
 }
 
-/// A stub `bwrap`: records its inherited ignored-signal mask, then
-/// its own argv, sleeps until `$BWRAP_LIVE` appears (the test controls
-/// how long the "backend" runs), then exits with `$BWRAP_EXIT`
-/// (default 0). With `$BWRAP_TREE_FILE` set it ALSO forks a
-/// long-lived grandchild before the wait loop and reports the pid
-/// tree (`$PPID` = the inner mysbx, `$!` = the grandchild) into that
-/// file — the cancel test's window into which processes of the run's
-/// group survive the group kill. Tests that do not set the variable
-/// are unaffected.
+/// A stub `bwrap`: sources `$BWRAP_CFG` — a shell fragment of
+/// `NAME=value` lines a test writes with [`bwrap_knobs`] — records its
+/// inherited ignored-signal mask and its own argv, sleeps until
+/// `$BWRAP_LIVE` appears (the test controls how long the "backend"
+/// runs), then exits with `$BWRAP_EXIT` (default 0). With
+/// `$BWRAP_TREE_FILE` set it ALSO forks a long-lived grandchild before
+/// the wait loop and reports the pid tree (`$PPID` = the inner mysbx,
+/// `$!` = the grandchild) into that file — the cancel test's window into
+/// which processes of the run's group survive the group kill.
+///
+/// The knobs ride a FILE, not the environment (bd myconfig-q8zg): the
+/// backend of a detached run is spawned with a cleared environment by
+/// design, so a stub that needs `$BWRAP_LIVE` cannot get it from the
+/// environment it inherits. The `PATH` is baked into the script for the
+/// same reason — the stub's `grep`/`mv`/`sleep` must resolve without an
+/// inherited `PATH`.
 fn bwrap_stub(base: &Path) -> (PathBuf, PathBuf) {
     let record = base.join("bwrap-record.txt");
     let stub = base.join("bwrap-stub");
+    let cfg = base.join("bwrap-cfg.sh");
+    let path = std::env::var("PATH").unwrap_or_default();
+    // A stub always starts from an empty knob file: presence of the
+    // file is the contract, not a leftover from another fixture.
+    let _ = std::fs::remove_file(&cfg);
     std::fs::write(
         &stub,
         format!(
-            "#!/bin/sh\ngrep '^SigIgn:' /proc/self/status > {r}.tmp\n\
+            "#!/bin/sh\nPATH='{path}'\nexport PATH\n[ -f '{cfg}' ] && . '{cfg}'\n\
+             grep '^SigIgn:' /proc/self/status > {r}.tmp\n\
              printf '%s\\n' \"$@\" >> {r}.tmp\n\
              if [ -n \"$BWRAP_TREE_FILE\" ]; then\n\
                sleep 300 &\n\
@@ -12905,6 +12934,8 @@ fn bwrap_stub(base: &Path) -> (PathBuf, PathBuf) {
              while [ ! -e \"$BWRAP_LIVE\" ]; do sleep 0.05; done\n\
              if [ -n \"$BWRAP_SIGNAL\" ]; then kill -\"${{BWRAP_SIGNAL#SIG}}\" $$; fi\n\
              exit \"${{BWRAP_EXIT:-0}}\"\n",
+            path = path.replace('\'', "'\\''"),
+            cfg = cfg.display(),
             r = record.display(),
             rec = record.display()
         ),
@@ -12913,6 +12944,101 @@ fn bwrap_stub(base: &Path) -> (PathBuf, PathBuf) {
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
     (stub, record)
+}
+
+/// Write [`bwrap_stub`]'s knobs (`NAME=value` pairs) to the file it
+/// sources. Values are single-quoted, so a path may carry spaces.
+fn bwrap_knobs(base: &Path, knobs: &[(&str, &str)]) {
+    let cfg = base.join("bwrap-cfg.sh");
+    for (name, _) in knobs {
+        assert!(
+            name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'),
+            "a knob name must be a shell identifier: {name}"
+        );
+    }
+    let text: String = knobs
+        .iter()
+        .map(|(k, v)| format!("{k}='{}'\n", v.replace('\'', "'\\''")))
+        .collect();
+    std::fs::write(&cfg, text).unwrap();
+}
+
+/// A stub backend that dumps the environment IT was started with —
+/// not the payload's, not `--clearenv`'s: `/proc/<its own pid>/environ`
+/// is exactly what a sandbox payload reads as `/proc/1/environ`, because
+/// the backend process IS the bwrap supervisor PID 1 of the namespace it
+/// builds (bd myconfig-q8zg).
+///
+/// The read goes through `/proc/$$/environ` rather than
+/// `/proc/self/environ`: the latter is opened by `tr`/`cat`, whose own
+/// environ is a different (already-cleared) process, so it cannot see
+/// the shell's inherited environment. `exec 3<` opens the file in the
+/// SHELL, before any child exists.
+///
+/// The reader needs `read -d ''` — a BASH-ism, and the harness must
+/// not pass vacuously (the review of this harness found it doing
+/// exactly that): the stub's `#!/bin/sh` is the HOST's `/bin/sh`, and
+/// a host where that is dash rejects `-d` (`read: Illegal option -d`),
+/// writes an EMPTY dump and still exits zero — so every leak
+/// assertion on the dump would hold without the dump proving
+/// anything. The shebang is therefore the test runner's own bash,
+/// resolved from ITS `PATH` and baked in as an absolute path: the
+/// stub runs under `env_clear`, where no `PATH` could resolve it.
+/// No bash on `PATH` is an honest skip — the harness cannot observe
+/// a supervisor leak on such a host at all.
+///
+/// The record path is baked into the script text, the `bwrap_stub`
+/// idiom: the child's environment is what is under test, so no env
+/// variable may name the record file.
+fn environ_reporting_stub(base: &Path, name: &str) -> Option<(PathBuf, PathBuf)> {
+    environ_reporting_stub_with_argv(base, name, None)
+}
+
+/// [`environ_reporting_stub`] with a second record file: when
+/// `argv_record` is `Some`, the stub also writes its `$@` there, one
+/// argument per line — the forwarding test's shape, where the argv is
+/// where a payload's `--setenv` lands and the environ dump is where a
+/// supervisor leak would show.
+fn environ_reporting_stub_with_argv(
+    base: &Path,
+    name: &str,
+    argv_record: Option<&Path>,
+) -> Option<(PathBuf, PathBuf)> {
+    // A bash from the TEST RUNNER's PATH — `sandbox_bash`'s
+    // resolution without its sandbox-reachability filter, which
+    // nothing here needs: the stub runs as the BACKEND on the host,
+    // not inside the sandbox. `Command::new` resolves the same way
+    // `env_or("MYSBX_BWRAP", "bwrap")` would at spawn time.
+    let bash = which_bash()?;
+    let record = base.join(format!("{name}-environ.txt"));
+    let stub = base.join(name);
+    // `tr` is not reachable: the backend starts with a cleared
+    // environment, so no PATH resolves it. The loop is shell builtins
+    // only, reading the NUL-separated blob through fd 3 opened in the
+    // shell.
+    let argv_dump = argv_record
+        .map(|p| format!("printf '%s\\n' \"$@\" > {}\n", p.display()))
+        .unwrap_or_default();
+    std::fs::write(
+        &stub,
+        format!(
+            "#!{}\nexec 3< /proc/$$/environ\nwhile IFS= read -r -d '' line <&3; do printf '%s\\n' \"$line\"; done > {}\n{argv_dump}",
+            bash.display(),
+            record.display()
+        ),
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+    Some((stub, record))
+}
+
+/// The `NAME=` names of an environ dump written by
+/// [`environ_reporting_stub`], in file order.
+fn environ_names(dump: &str) -> Vec<String> {
+    dump.lines()
+        .map(|l| l.split_once('=').map(|(n, _)| n).unwrap_or(l).to_owned())
+        .collect()
 }
 
 /// A SHORT runtime root for a detached-run test: the socket paths a
@@ -12925,6 +13051,241 @@ fn short_runtime_root(name: &str) -> PathBuf {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
+}
+
+/// The `MYSBX_DTACH` stub of the environment-leak harness (bd
+/// myconfig-q8zg): `-n` drops the four fixed dtach arguments and execs
+/// the inner mysbx, so the real `--detach` path runs; nothing else is
+/// implemented. Separate from [`dtach_stub`] because that one also
+/// records its argv, and its record file would be confused with the
+/// environ dump this harness compares.
+fn exec_only_dtach_stub(base: &Path) -> PathBuf {
+    let stub = base.join("dtach-exec-stub");
+    std::fs::write(
+        &stub,
+        // The four fixed launcher arguments are asserted before they
+        // are dropped, so a change to `launcher_argv`'s shape fails here
+        // instead of silently shifting the wrong tail.
+        "#!/bin/sh\ncase $1 in\n  -n)\n    [ \"$3\" = -r ] && [ \"$4\" = winch ] || exit 1\n    shift 4\n    exec \"$@\"\n    ;;\nesac\nexit 1\n",
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+    stub
+}
+
+/// The environment a backend is started with, per run mode (bd
+/// myconfig-q8zg): the backend process becomes the bwrap supervisor PID
+/// 1 of the sandbox, so its OWN `/proc/<pid>/environ` is what a payload
+/// reads as `/proc/1/environ`. A canary in the invoking shell must not
+/// appear there.
+///
+/// Table-driven over the run modes, because they reach the spawn by
+/// different routes: the foreground exec, the waited `--result` run, and
+/// the detached inner (a second mysbx under `dtach`). Every row must
+/// show an empty dump.
+///
+/// One canary is credential-shaped on purpose: `HF_TOKEN` is the kind of
+/// name D28's forwarding rules own, and those rules do not govern the
+/// supervisor's environment at all.
+#[test]
+fn run_env_never_reaches_the_backend_supervisor() {
+    if !is_ssh_keygen_available() {
+        return; // no usable ssh-keygen (the baseline env's uid-0 quirk)
+    }
+    let Some(_bash) = which_bash() else {
+        eprintln!("skipping: no bash on PATH for the environ-reporting stub");
+        return;
+    };
+    for (mode, args) in [
+        ("foreground", vec!["run", "--", "/bin/true"]),
+        ("result", vec!["run", "--result", "--", "/bin/true"]),
+        ("detach", vec!["--detach"]),
+    ] {
+        let (inv, _repo, _sidecar) = fixture_with_backend("env-canary", &["run"]);
+        let (stub, record) =
+            environ_reporting_stub(&inv.home, "bwrap-env-stub").expect("checked which_bash");
+        let runtime = short_runtime_root("env-canary");
+        std::fs::create_dir_all(&runtime).unwrap();
+        let mut cmd = if mode == "detach" {
+            let dtach = exec_only_dtach_stub(&inv.home);
+            let mut c = spawn_with_args(&inv, &["--detach"]);
+            c.env("MYSBX_DTACH", &dtach)
+                .env("XDG_RUNTIME_DIR", &runtime);
+            c
+        } else {
+            spawn_with_args(&inv, &args)
+        };
+        cmd.env("MYSBX_BWRAP", &stub)
+            .env("MYSBX_TOOLS_PATH", "/usr/bin")
+            // One plain canary, one credential-shaped name, one that a
+            // run would legitimately forward to the PAYLOAD: none of the
+            // three may reach the supervisor.
+            .env("Q8ZG_CANARY", "q8zg-canary-value")
+            .env("HF_TOKEN", "q8zg-hf-token-canary")
+            .env("TERM", "q8zg-term-canary");
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "{mode}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let dump = wait_for_file(&record);
+        let names = environ_names(&dump);
+        // The POSITIVE CONTROL (the review's finding): an empty dump
+        // is only evidence when the stub demonstrably records an
+        // INHERITED value, so the probe itself is proven live before
+        // it is trusted to prove absence.
+        assert!(
+            probe_detects_an_inherited_value(&inv.home),
+            "{mode}: the environ stub recorded nothing at all — its reader is broken"
+        );
+        for canary in [
+            "Q8ZG_CANARY",
+            "HF_TOKEN",
+            "q8zg-canary-value",
+            "q8zg-hf-token-canary",
+        ] {
+            assert!(
+                !dump.contains(canary),
+                "{mode}: the backend supervisor inherited `{canary}`: {names:?}"
+            );
+        }
+        // The FOREGROUND and RESULT rows prove the strong form of the
+        // claim — the supervisor carries NO inherited name at all; the
+        // DETACHED row must still carry the pins the inner re-derives
+        // its run from, so it is checked for the absence of the canaries
+        // above rather than for an empty dump.
+        // Every row, the detached one included, asserts the STRONG
+        // form: the supervisor carries no inherited name at all. A
+        // detached launch that handed the inner an empty environment
+        // would not fake this — the inner could not find its own pins
+        // and the run above would not have reached the stub.
+        assert!(
+            names.is_empty(),
+            "{mode}: the supervisor environment must be empty, got {names:?}"
+        );
+    }
+}
+
+/// `--detach` forwards the PAYLOAD environment exactly like a foreground
+/// run (bd myconfig-q8zg): the values ride the inner mysbx's own
+/// environment, which the spawn drops again before the backend — so the
+/// same run proves both "the payload gets the forwarded name" and "the
+/// supervisor does not".
+#[test]
+fn a_detached_run_forwards_the_payload_environment_like_the_foreground() {
+    if !is_ssh_keygen_available() {
+        return; // no usable ssh-keygen (the baseline env's uid-0 quirk)
+    }
+    let Some(_bash) = which_bash() else {
+        eprintln!("skipping: no bash on PATH for the environ-reporting stub");
+        return;
+    };
+    for mode in ["foreground", "detach"] {
+        let (inv, repo, sidecar) = fixture_with_backend("env-forward", &["run"]);
+        std::fs::write(
+            sidecar.join("config.toml"),
+            "backend = \"bubblewrap\"\nforward-env = [\"Q8ZG_TIER_TOKEN\"]\n",
+        )
+        .unwrap();
+        // The stub records its own environment AND its argv: the argv is
+        // where a payload's `--setenv` lands, the environment is where a
+        // supervisor leak would show.
+        let argv_record = inv.home.join("bwrap-env-stub-argv.txt");
+        let (stub, record) =
+            environ_reporting_stub_with_argv(&inv.home, "bwrap-env-stub", Some(&argv_record))
+                .expect("checked which_bash");
+        let runtime = short_runtime_root("env-forward");
+        std::fs::create_dir_all(&runtime).unwrap();
+        let mut cmd = if mode == "detach" {
+            let dtach = exec_only_dtach_stub(&inv.home);
+            let mut c = spawn_with_args(&inv, &["--detach"]);
+            c.env("MYSBX_DTACH", &dtach)
+                .env("XDG_RUNTIME_DIR", &runtime);
+            c
+        } else {
+            spawn_with_args(&inv, &["run", "--", "/bin/true"])
+        };
+        cmd.env("MYSBX_BWRAP", &stub)
+            .env("MYSBX_TOOLS_PATH", "/usr/bin")
+            // One name from the layer's `forward-env`, one that ONLY the
+            // wrapper pin (`MYSBX_FORWARD_ENV`) declares: both must reach
+            // the payload, so the launch has to carry the pin too.
+            .env("Q8ZG_TIER_TOKEN", "q8zg-tier-value")
+            .env("MYSBX_FORWARD_ENV", "Q8ZG_PIN_TOKEN")
+            .env("Q8ZG_PIN_TOKEN", "q8zg-pin-value");
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "{mode}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        // The payload's argv carries both forwarded pairs …
+        let argv = wait_for_file(&argv_record);
+        for (name, value) in [
+            ("Q8ZG_TIER_TOKEN", "q8zg-tier-value"),
+            ("Q8ZG_PIN_TOKEN", "q8zg-pin-value"),
+        ] {
+            assert!(
+                argv.lines().any(|l| l == name) && argv.lines().any(|l| l == value),
+                "{mode}: the payload lost the forwarded name `{name}`: {argv}"
+            );
+        }
+        // … and the supervisor's own environment carries neither value.
+        let dump = wait_for_file(&record);
+        for value in ["q8zg-tier-value", "q8zg-pin-value"] {
+            assert!(
+                !dump.contains(value),
+                "{mode}: the supervisor inherited `{value}`: {dump}"
+            );
+        }
+        let _ = repo;
+    }
+}
+
+/// The positive control of the environ-reporting stubs (the review's
+/// finding): run a stub from [`environ_reporting_stub`] itself — the
+/// very script text the leak harnesses rely on — with a KNOWN
+/// inherited value, and assert its dump records that value. A
+/// reader that silently wrote an empty dump (dash rejecting bash's
+/// `read -d`, a renamed `/proc` mount, …) would otherwise make every
+/// absence assertion pass vacuously; this probe pins that it does
+/// not. `false` also covers "no bash on PATH", the harnesses' skip.
+fn probe_detects_an_inherited_value(base: &Path) -> bool {
+    let Some((stub, record)) = environ_reporting_stub(base, "probe-control-stub") else {
+        return false; // no bash on PATH — the harnesses' own skip
+    };
+    let out = std::process::Command::new(&stub)
+        .env("Q8ZG_PROBE_CONTROL", "probe-control-value")
+        .output()
+        .expect("failed to spawn the probe-control stub");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "the probe-control stub failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let dump = std::fs::read_to_string(&record).unwrap_or_default();
+    dump.contains("Q8ZG_PROBE_CONTROL=probe-control-value")
+}
+
+#[test]
+fn the_environ_probe_detects_an_inherited_value() {
+    // Same skip as the leak harnesses: bash is the stub's interpreter,
+    // and no bash on PATH means the harness cannot observe anything on
+    // such a host — a missing optional prerequisite, not a failure.
+    if which_bash().is_none() {
+        eprintln!("skipping: no bash on PATH for the environ-reporting stub");
+        return;
+    }
+    let base = tmpdir("environ-probe-control");
+    assert!(
+        probe_detects_an_inherited_value(&base),
+        "the environ-reporting stub recorded nothing at all — its reader is broken"
+    );
 }
 
 /// The registry paths of a live-workspace detached run for `repo`
@@ -13150,6 +13511,10 @@ fn a_detach_of_a_real_run_detaches_and_hands_the_attach_hint() {
     let _ = &sidecar;
     let (dtach, dtach_record) = dtach_stub(&inv.home, true);
     let (bwrap, bwrap_record) = bwrap_stub(&inv.home);
+    bwrap_knobs(
+        &inv.home,
+        &[("BWRAP_LIVE", &inv.home.join("bwrap-live").to_string_lossy())],
+    );
     let runtime = short_runtime_root("happy");
     std::fs::create_dir_all(&runtime).unwrap();
     let paths = detach_paths_live(&runtime, &repo.canonicalize().unwrap());
@@ -13157,8 +13522,7 @@ fn a_detach_of_a_real_run_detaches_and_hands_the_attach_hint() {
     cmd.env("MYSBX_DTACH", &dtach)
         .env("MYSBX_BWRAP", &bwrap)
         .env("MYSBX_TOOLS_PATH", "/usr/bin")
-        .env("XDG_RUNTIME_DIR", &runtime)
-        .env("BWRAP_LIVE", inv.home.join("bwrap-live"));
+        .env("XDG_RUNTIME_DIR", &runtime);
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(
         out.status.code(),
@@ -13248,13 +13612,18 @@ fn a_cancelled_detached_run_leaves_no_surviving_process() {
     std::fs::create_dir_all(&runtime).unwrap();
     let paths = detach_paths_live(&runtime, &repo.canonicalize().unwrap());
     let tree_file = inv.home.join("bwrap-tree.txt");
+    bwrap_knobs(
+        &inv.home,
+        &[
+            ("BWRAP_LIVE", &inv.home.join("bwrap-live").to_string_lossy()),
+            ("BWRAP_TREE_FILE", &tree_file.to_string_lossy()),
+        ],
+    );
     let mut cmd = spawn_with_args(&inv, &["--detach"]);
     cmd.env("MYSBX_DTACH", &dtach)
         .env("MYSBX_BWRAP", &bwrap)
         .env("MYSBX_TOOLS_PATH", "/usr/bin")
-        .env("XDG_RUNTIME_DIR", &runtime)
-        .env("BWRAP_LIVE", inv.home.join("bwrap-live"))
-        .env("BWRAP_TREE_FILE", &tree_file);
+        .env("XDG_RUNTIME_DIR", &runtime);
     // The outer (and with it the inner, through the non-setsid stub
     // dtach) runs in its own group: the group kill must reach the
     // run's processes only, never the harness that spawned it.
@@ -13370,13 +13739,18 @@ fn a_detached_run_whose_backend_exits_nonzero_records_the_exit_code() {
     let runtime = short_runtime_root("exit-code");
     std::fs::create_dir_all(&runtime).unwrap();
     let paths = detach_paths_live(&runtime, &repo.canonicalize().unwrap());
+    bwrap_knobs(
+        &inv.home,
+        &[
+            ("BWRAP_LIVE", &inv.home.join("bwrap-live").to_string_lossy()),
+            ("BWRAP_EXIT", "42"),
+        ],
+    );
     let mut cmd = spawn_with_args(&inv, &["--detach"]);
     cmd.env("MYSBX_DTACH", &dtach)
         .env("MYSBX_BWRAP", &bwrap)
         .env("MYSBX_TOOLS_PATH", "/usr/bin")
-        .env("XDG_RUNTIME_DIR", &runtime)
-        .env("BWRAP_LIVE", inv.home.join("bwrap-live"))
-        .env("BWRAP_EXIT", "42");
+        .env("XDG_RUNTIME_DIR", &runtime);
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(
         out.status.code(),
@@ -13429,13 +13803,18 @@ fn a_detached_run_whose_backend_dies_by_signal_records_the_signal() {
     let runtime = short_runtime_root("signal-death");
     std::fs::create_dir_all(&runtime).unwrap();
     let paths = detach_paths_live(&runtime, &repo.canonicalize().unwrap());
+    bwrap_knobs(
+        &inv.home,
+        &[
+            ("BWRAP_LIVE", &inv.home.join("bwrap-live").to_string_lossy()),
+            ("BWRAP_SIGNAL", "SIGKILL"),
+        ],
+    );
     let mut cmd = spawn_with_args(&inv, &["--detach"]);
     cmd.env("MYSBX_DTACH", &dtach)
         .env("MYSBX_BWRAP", &bwrap)
         .env("MYSBX_TOOLS_PATH", "/usr/bin")
-        .env("XDG_RUNTIME_DIR", &runtime)
-        .env("BWRAP_LIVE", inv.home.join("bwrap-live"))
-        .env("BWRAP_SIGNAL", "SIGKILL");
+        .env("XDG_RUNTIME_DIR", &runtime);
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(
         out.status.code(),
@@ -13520,6 +13899,10 @@ fn a_detached_session_run_uses_the_session_registry_entry() {
     };
     let (dtach, _) = dtach_stub(&inv.home, true);
     let (bwrap, _) = bwrap_stub(&inv.home);
+    bwrap_knobs(
+        &inv.home,
+        &[("BWRAP_LIVE", &inv.home.join("bwrap-live").to_string_lossy())],
+    );
     let runtime = short_runtime_root("session");
     std::fs::create_dir_all(&runtime).unwrap();
     let paths = mysbx::detach::paths(
@@ -13532,8 +13915,7 @@ fn a_detached_session_run_uses_the_session_registry_entry() {
     cmd.env("MYSBX_DTACH", &dtach)
         .env("MYSBX_BWRAP", &bwrap)
         .env("MYSBX_TOOLS_PATH", "/usr/bin")
-        .env("XDG_RUNTIME_DIR", &runtime)
-        .env("BWRAP_LIVE", inv.home.join("bwrap-live"));
+        .env("XDG_RUNTIME_DIR", &runtime);
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(
         out.status.code(),
@@ -13564,14 +13946,17 @@ fn a_detached_run_creates_a_private_registry_directory() {
     let (inv, repo, _) = fixture_with_backend("detach-registry-mode", &["--detach"]);
     let (dtach, _) = dtach_stub(&inv.home, true);
     let (bwrap, _) = bwrap_stub(&inv.home);
+    bwrap_knobs(
+        &inv.home,
+        &[("BWRAP_LIVE", &inv.home.join("bwrap-live").to_string_lossy())],
+    );
     let runtime = short_runtime_root("registry-mode");
     std::fs::create_dir_all(&runtime).unwrap();
     let mut cmd = spawn_with_args(&inv, &["--detach"]);
     cmd.env("MYSBX_DTACH", &dtach)
         .env("MYSBX_BWRAP", &bwrap)
         .env("MYSBX_TOOLS_PATH", "/usr/bin")
-        .env("XDG_RUNTIME_DIR", &runtime)
-        .env("BWRAP_LIVE", inv.home.join("bwrap-live"));
+        .env("XDG_RUNTIME_DIR", &runtime);
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(out.status.code(), Some(0));
     use std::os::unix::fs::PermissionsExt;
@@ -13621,14 +14006,17 @@ fn the_inner_detached_run_spawns_the_backend_with_the_detachable_mark() {
     let (inv, _, _) = fixture_with_backend("detach-detachable-mark", &["--detach"]);
     let (dtach, _) = dtach_stub(&inv.home, true);
     let (bwrap, bwrap_record) = bwrap_stub(&inv.home);
+    bwrap_knobs(
+        &inv.home,
+        &[("BWRAP_LIVE", &inv.home.join("bwrap-live").to_string_lossy())],
+    );
     let runtime = short_runtime_root("mark");
     std::fs::create_dir_all(&runtime).unwrap();
     let mut cmd = spawn_with_args(&inv, &["--detach"]);
     cmd.env("MYSBX_DTACH", &dtach)
         .env("MYSBX_BWRAP", &bwrap)
         .env("MYSBX_TOOLS_PATH", "/usr/bin")
-        .env("XDG_RUNTIME_DIR", &runtime)
-        .env("BWRAP_LIVE", inv.home.join("bwrap-live"));
+        .env("XDG_RUNTIME_DIR", &runtime);
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(out.status.code(), Some(0));
     let recorded = wait_for_file(&bwrap_record);
@@ -13666,14 +14054,17 @@ fn the_backend_of_the_detached_inner_inherits_no_ignored_signals() {
     let (inv, _, _) = fixture_with_backend("detach-no-ignored-signals", &["--detach"]);
     let (dtach, _) = dtach_stub(&inv.home, true);
     let (bwrap, bwrap_record) = bwrap_stub(&inv.home);
+    bwrap_knobs(
+        &inv.home,
+        &[("BWRAP_LIVE", &inv.home.join("bwrap-live").to_string_lossy())],
+    );
     let runtime = short_runtime_root("no-ignored-signals");
     std::fs::create_dir_all(&runtime).unwrap();
     let mut cmd = spawn_with_args(&inv, &["--detach"]);
     cmd.env("MYSBX_DTACH", &dtach)
         .env("MYSBX_BWRAP", &bwrap)
         .env("MYSBX_TOOLS_PATH", "/usr/bin")
-        .env("XDG_RUNTIME_DIR", &runtime)
-        .env("BWRAP_LIVE", inv.home.join("bwrap-live"));
+        .env("XDG_RUNTIME_DIR", &runtime);
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(
         out.status.code(),
@@ -13829,6 +14220,10 @@ fn a_stale_socket_is_replaced_under_the_lock() {
     let (inv, repo, _) = fixture_with_backend("detach-stale-sock", &["--detach"]);
     let (dtach, _) = dtach_stub(&inv.home, true);
     let (bwrap, _) = bwrap_stub(&inv.home);
+    bwrap_knobs(
+        &inv.home,
+        &[("BWRAP_LIVE", &inv.home.join("bwrap-live").to_string_lossy())],
+    );
     let runtime = short_runtime_root("stale-sock");
     std::fs::create_dir_all(&runtime).unwrap();
     let paths = detach_paths_live(&runtime, &repo.canonicalize().unwrap());
@@ -13846,8 +14241,7 @@ fn a_stale_socket_is_replaced_under_the_lock() {
     cmd.env("MYSBX_DTACH", &dtach)
         .env("MYSBX_BWRAP", &bwrap)
         .env("MYSBX_TOOLS_PATH", "/usr/bin")
-        .env("XDG_RUNTIME_DIR", &runtime)
-        .env("BWRAP_LIVE", inv.home.join("bwrap-live"));
+        .env("XDG_RUNTIME_DIR", &runtime);
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(
         out.status.code(),
@@ -14652,6 +15046,10 @@ fn a_detachable_run_starts_detached_and_attaches_under_one_lock() {
     let (inv, repo, _) = fixture_with_backend("detachable-happy", &["--detachable"]);
     let (dtach, _) = dtach_stub(&inv.home, true);
     let (bwrap, _) = bwrap_stub(&inv.home);
+    bwrap_knobs(
+        &inv.home,
+        &[("BWRAP_LIVE", &inv.home.join("bwrap-live").to_string_lossy())],
+    );
     let runtime = short_runtime_root("detachable-happy");
     std::fs::create_dir_all(&runtime).unwrap();
     let paths = detach_paths_live(&runtime, &repo.canonicalize().unwrap());
@@ -14660,7 +15058,6 @@ fn a_detachable_run_starts_detached_and_attaches_under_one_lock() {
         .env("MYSBX_BWRAP", &bwrap)
         .env("MYSBX_TOOLS_PATH", "/usr/bin")
         .env("XDG_RUNTIME_DIR", &runtime)
-        .env("BWRAP_LIVE", inv.home.join("bwrap-live"))
         .stdin(std::process::Stdio::from(slave));
     let out = cmd.output().expect("failed to spawn the mysbx binary");
     assert_eq!(

@@ -1825,7 +1825,92 @@ the rule is a heuristic on names, not a proof.
 leave through the prompts the agent sends via LiteLLM to the model
 provider. The profile constrains the sandbox's own sockets; it does
 not construe the content the agent chooses to send.
+- The supervisor's own environment is a third one; it is closed for
+the bubblewrap-built tiers and audited on the podman tiers in the
+section below, which also lists what stays open there.
 
 Credential injection into the proxy (the egress broker adding the
 LiteLLM master key on approved requests) is later work: bd
 myconfig-n8kv.3 and `doc/TODOs/litellm-master-key-hardening.md`.
+
+**The supervisor's own environment (bd myconfig-q8zg).** The forwarding
+rules above govern the PAYLOAD's environment (`--clearenv` plus
+`--setenv`). They say nothing about the environment of the process that
+becomes the sandbox supervisor — and under `bubblewrap` that process is
+PID 1 of the payload's pid namespace, so its `/proc/1/environ` is
+readable from inside. Until bd myconfig-q8zg, the backend inherited the
+invoking shell's whole environment: a credential the operator had
+exported was readable from the sandbox with one `read()`, whatever
+`forward-env` and `[env]` said.
+
+The supervisor environment is now BUILT, never inherited, in both the
+foreground and the detached path:
+
+- `bubblewrap`, `nono` and the VM backends spawn the backend with a
+cleared environment (`env_clear` in `lib.rs`). Nothing is re-added: the
+backends are argv-driven, and the executable is resolved before the
+clear so a bare `bwrap`/`nono` fallback still spawns.
+- The detached inner (`detach.rs`) is launched with
+`DETACHED_INNER_ENV` — `PATH`, `HOME`, `XDG_RUNTIME_DIR`, `TMPDIR`,
+`XDG_CONFIG_HOME`, `WAYLAND_DISPLAY` — plus the `MYSBX_` pin namespace and the run's
+narrowed forwarded environment (`collect_host_env`). Each of these is
+a value the run itself computed — `WAYLAND_DISPLAY` included: the
+inner's `display = "waypipe"` runs spawn the host-side waypipe client,
+which needs the host compositor's name, and it is dropped again before
+the backend. Nothing is inherited from the
+launching shell. The forwarded names are for the PAYLOAD and stop at
+the backend: the inner spawns it with a cleared environment (the rule
+above), so the supervisor stays empty.
+
+**Per-backend audit.** Whether the supervisor's environment is even
+reachable depends on the pid namespace the backend gives the sandbox:
+
+| backend | pid namespace | `/proc/1/environ` inside the sandbox | verdict |
+| --- | --- | --- | --- |
+| `bubblewrap`, `nono` | `--unshare-all` (own pid ns) | the bwrap supervisor — the process whose environment is cleared above | **closed** |
+| `podman-gvisor` | podman default (private): the argv carries no `--pid`, no host `/proc` bind, and `/proc` is a protected mount DEST | the container's own init under `runsc`; the container env is the `--env` list (no `--env-host`) — except the proxy names podman forwards implicitly (bullet below) | **residual: proxy names** |
+| `podman-krun` | podman default on the host side; the payload runs in a libkrun guest kernel | the guest's own init; `Env`/`args`/`WorkingDir` cross into the guest — `Env` again includes the proxy names podman forwards implicitly | **residual: proxy names** |
+| `krun`, `microvm-qemu`, `microvm-ch` | a real guest kernel | the guest's baked init | **not affected** |
+
+The `--unshare-all` pid namespace is not bubblewrap-only usage: the
+doctor's probe argv and the krun wrap emit it too, so the same
+supervisor shape and the same clearing cover those runs as well.
+
+The podman client keeps mysbx's environment on purpose — it reads its
+own runtime dir and registries — and that process lives in the host pid
+namespace, invisible to a container with a private one. **Remaining
+residual risk, both podman tiers:**
+
+- Podman forwards the host's proxy variables implicitly: `--http-proxy`
+  defaults to TRUE (`podman run --help`: "Set proxy environment variables
+  in the container based on the host proxy vars (default true)"), and
+  the argv mysbx emits does not disable it. The podman client inherits
+  mysbx's own environment (the exclusion above), so a host shell's
+  `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` — including an authenticated
+  `http://user:password@proxy:port` value — enter the container and
+  its `/proc/1/environ` without any `--env` entry and without a
+  `forward-env` name. This predates the built supervisor environment
+  and stays outside it; closing it means emitting
+  `--http-proxy=false` (which would also break the very proxy setups
+  the default exists for) or validating the three names at the
+  wrapper — both a deliberate operator decision, not taken here.
+- The pid-namespace facts are podman's, `runsc`'s and `crun`'s
+  defaults, not lines this repo pins: no `--pid` flag is emitted, so a
+  host-wide `[containers] default_pid_ns = "host"` (or a runtime flag
+  doing the same) would put the container in the host pid namespace. No
+  live probe of `/proc/1/environ` under `runsc` is recorded yet.
+- mysbx validates mount DESTS, not sources. A trusted layer entry
+  `path = "/proc"` with `dest = "/hostproc"` is accepted, and under
+  `--userns=keep-id` the host processes of the same uid — including the
+  podman client, whose environment is deliberately not cleared — would
+  be readable at `/hostproc/<pid>/environ`. This needs an explicit
+  operator or sidecar mount; it is not reachable from the default argv.
+
+**Summary.** Closed on `bubblewrap` and `nono` — the supervisor's
+environment is built, not inherited, in every run mode, and a
+regression test asserts that both the foreground and the detached
+`/proc/1/environ` are free of the invoking shell's names
+(`run_env_never_reaches_the_backend_supervisor`). Not affected on
+`krun`, `microvm-qemu` and `microvm-ch`, for the reasons in the table.
+The podman tiers carry the proxy-name residual above; the three podman
+bullets are the residual risk that stays documented instead of closed.

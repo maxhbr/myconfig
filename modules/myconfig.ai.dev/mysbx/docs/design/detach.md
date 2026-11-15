@@ -174,8 +174,9 @@ $XDG_RUNTIME_DIR/mysbx/<fnv1a10(repo root)>/
    the D8 exit code. `--verbose` prints its report (D10) here.
 2. The outer takes the workspace lock (B6), writes the state file with
    `state: "starting"` (B5) and runs
-   `dtach -n <socket> -r winch <self> <args>` with its own cwd and
-   environment. `<args>` are the original arguments without `--detach`,
+   `dtach -n <socket> -r winch <self> <args>` with its own cwd and the
+   built environment of the paragraph below. `<args>` are the original
+   arguments without `--detach`,
    `--detachable` and `--verbose`. `MYSBX_DETACHED=<socket path>` marks
    the child.
 3. **The inner mysbx** (the dtach child, on the dtach pty) runs the
@@ -222,10 +223,30 @@ The argv the inner builds is the interactive one: the payload always
 has a terminal (the dtach pty), whatever the outer's stdin was. For
 podman this means `--interactive --tty` always.
 
-Environment: the detached run sees the environment of the shell that
-started it, like a foreground run. Attaching from another shell does
-not update it (`SSH_AUTH_SOCK`, `TERM`, `WAYLAND_DISPLAY`) — the same
-limitation as tmux.
+Environment: the launch carries a BUILT environment, never the
+outer's (bd myconfig-q8zg). `detach::detached_inner_env` passes the
+shell context the inner needs to re-derive the run — `PATH`, `HOME`,
+`XDG_RUNTIME_DIR`, `TMPDIR` and `XDG_CONFIG_HOME` — plus `WAYLAND_DISPLAY`,
+the host compositor's name: the inner's own `display = "waypipe"` runs
+spawn the host-side waypipe client, which resolves the host compositor
+through it, exactly like a foreground run. Plus the `MYSBX_`
+pin namespace (`MYSBX_DETACHED` excluded; the launch sets its own),
+plus the run's forwarded environment as `collect_host_env` narrowed
+it. Everything else the outer carried is dropped before the dtach
+spawn.
+
+The forwarded values are there for the PAYLOAD, and the host
+compositor name for the waypipe CHANNEL — both stop at the
+backend: the inner mysbx spawns it with a cleared environment, so the
+supervisor — PID 1 of the sandbox, whose `/proc/1/environ` the payload
+can read — carries none of them. A forwarded name therefore reaches
+the payload exactly as it does in a foreground run, and a variable the
+launching shell exported without a `forward-env` entry reaches
+neither the payload nor the supervisor.
+
+Attaching from another shell does not update the environment
+(`SSH_AUTH_SOCK`, `TERM`, `WAYLAND_DISPLAY`) — the same limitation as
+tmux — and neither does it widen it.
 
 ### B5: The state file records the run; the socket proves it is alive
 

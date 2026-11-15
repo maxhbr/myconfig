@@ -1191,6 +1191,87 @@ pub struct Launch<'a> {
     pub backend: &'a str,
     /// The merged multiplexer of the run.
     pub multiplexer: &'a str,
+    /// The run's forwarded environment, already narrowed to the merged
+    /// policy (`collect_host_env`): the values the inner must hand the
+    /// PAYLOAD. They ride the inner's own environment, which is dropped
+    /// again before the backend spawn — so the supervisor still starts
+    /// with nothing from the invoking shell.
+    pub host_env: &'a crate::bwrap::HostEnv,
+}
+
+/// The environment names the detached inner carries from the outer
+/// (bd myconfig-q8zg): the ordinary shell context a mysbx process
+/// needs to re-derive its run — a `PATH` for the unpinned fallbacks, the
+/// user's `HOME`/`XDG_CONFIG_HOME` for the config layers, `TMPDIR` for
+/// the scratch files, and `XDG_RUNTIME_DIR` for the registry root.
+/// `WAYLAND_DISPLAY` is the one host-DISPLAY name among them: the
+/// inner's `display = "waypipe"` runs spawn the host-side `waypipe
+/// client` (lib.rs's `start_waypipe_channel`) as the inner's own
+/// child, and the client resolves the HOST compositor through it —
+/// unset, it refuses (`WAYLAND_DISPLAY is not set`); wrong, it picks
+/// the wrong compositor. It stops at the host-side channel: the
+/// backend spawn clears the environment again, and the payload's
+/// `WAYLAND_DISPLAY` is set by the GUEST waypipe server
+/// (`wayland-0`), never inherited.
+///
+/// Everything else the outer carried is dropped before the spawn: the
+/// inner is not the sandbox, but the supervisor it spawns IS the
+/// sandbox's PID 1, and anything the chain carries is what a payload
+/// can read back through `/proc/1/environ`.
+pub const DETACHED_INNER_ENV: &[&str] = &[
+    "PATH",
+    "HOME",
+    "XDG_RUNTIME_DIR",
+    "TMPDIR",
+    "XDG_CONFIG_HOME",
+    "WAYLAND_DISPLAY",
+];
+
+/// The `MYSBX_` pin prefix: the inner mysbx re-reads its backend, tool
+/// and channel pins from the environment (`MYSBX_BWRAP`,
+/// `MYSBX_TOOLS_PATH`, the egress pins, …), so the pin namespace crosses
+/// to it verbatim. These are names mysbx itself sets — the wrapper's
+/// `--set`/`--set-default` block, never an operator's shell export —
+/// and every one of them is also what the outer's own pre-flight argv
+/// was built from, so dropping them would make the inner disagree with
+/// the `--dry-run` the operator audited.
+///
+/// Two members of the namespace matter beyond the backend pins:
+/// `MYSBX_FORWARD_ENV` is the wrapper's extension point for forwarded
+/// names, and the inner re-resolves it (a name that only the pin
+/// declares must reach the payload exactly as it does in the
+/// foreground). `MYSBX_DETACHED` is excluded — the launch sets its own
+/// value, and an inherited one must never override the marker.
+pub const PIN_PREFIX: &str = "MYSBX_";
+
+/// The environment the detached inner is launched with (bd
+/// myconfig-q8zg): [`DETACHED_INNER_ENV`], the [`PIN_PREFIX`] namespace
+/// and `host_env` — the run's already-narrowed forwarded names.
+///
+/// `host_env` is what makes the payload inside the detached sandbox see
+/// the same forwarded environment a foreground run does. The inner is a
+/// host-side mysbx, not the supervisor, and it spawns the backend with a
+/// cleared environment, so these values reach the payload and stop there.
+/// Empty for every name that is unset, so a run without a pin does not
+/// manufacture one.
+pub fn detached_inner_env(
+    host_env: &crate::bwrap::HostEnv,
+) -> Vec<(std::ffi::OsString, std::ffi::OsString)> {
+    let mut env = Vec::new();
+    for name in DETACHED_INNER_ENV {
+        if let Some(value) = std::env::var_os(name) {
+            env.push((std::ffi::OsString::from(name), value));
+        }
+    }
+    for (name, value) in std::env::vars_os() {
+        if name.to_string_lossy().starts_with(PIN_PREFIX) && name != "MYSBX_DETACHED" {
+            env.push((name, value));
+        }
+    }
+    for (name, value) in host_env {
+        env.push((std::ffi::OsString::from(name), value.into()));
+    }
+    env
 }
 
 /// The original argument tail of the invocation minus `--detach`,
@@ -1739,10 +1820,16 @@ pub fn launch_outer(l: &Launch, attach_after: bool) -> i32 {
             return crate::EXIT_INFRASTRUCTURE;
         }
     };
-    // The launch (B4 step 2): the outer's own cwd and environment,
-    // `MYSBX_DETACHED` marks the child, stdio pointed at
+    // The launch (B4 step 2): the outer's own cwd, stdio pointed at
     // `/dev/null` — the outer must not read stdin (B2), its
-    // diagnostics already went to its own stderr.
+    // diagnostics already went to its own stderr. `MYSBX_DETACHED`
+    // marks the child.
+    //
+    // The environment is BUILT, never inherited (bd myconfig-q8zg):
+    // [`detached_inner_env`] carries the shell context the inner needs
+    // to re-derive the run plus the `MYSBX_` pins, and drops everything
+    // else — a credential in the invoking shell must not reach the
+    // supervisor the payload reads as `/proc/1/environ`.
     let mut cmd = std::process::Command::new(&dtach);
     cmd.arg("-n")
         .arg(&paths.sock)
@@ -1750,6 +1837,8 @@ pub fn launch_outer(l: &Launch, attach_after: bool) -> i32 {
         .arg("winch")
         .arg(&self_exe)
         .args(detach_inner_args())
+        .env_clear()
+        .envs(detached_inner_env(l.host_env))
         .env("MYSBX_DETACHED", &paths.sock)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
@@ -2491,6 +2580,11 @@ mod tests {
     /// one at a time.
     static TEE_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+    /// [`detached_inner_env`] reads the PROCESS environment, and its
+    /// test also mutates two names of it: one at a time against every
+    /// other test that touches the process environment.
+    static INNER_ENV_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     /// A fresh temporary directory per test; hand-rolled, the crate
     /// has no dependencies. Unique per test name and pid, cleaned up
     /// like the repo.rs helper it mirrors.
@@ -3219,6 +3313,43 @@ mod tests {
                 "--session".to_owned(),
                 "fix-1".to_owned(),
             ]
+        );
+    }
+
+    // ---- the launch environment (bd myconfig-q8zg) --------------------
+
+    /// [`detached_inner_env`] is a thin filter over the PROCESS
+    /// environment, so its test pins the set against this very
+    /// process: the names `DETACHED_INNER_ENV` declares are carried,
+    /// everything else is dropped. `WAYLAND_DISPLAY` has its own row
+    /// (the review's finding): the inner's host-side waypipe client
+    /// resolves the host compositor through it, so it must cross
+    /// — while the canary, a shell export the launch never names,
+    /// must not.
+    #[test]
+    fn detached_inner_env_carries_the_allowlist_and_the_compositor_name() {
+        let _guard = INNER_ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        unsafe { std::env::set_var("WAYLAND_DISPLAY", "wayland-7") };
+        unsafe { std::env::set_var("Q8ZG_INNER_CANARY", "inner-canary") };
+        let env = detached_inner_env(&crate::bwrap::HostEnv::new());
+        let names: Vec<std::ffi::OsString> = env.iter().map(|(k, _)| k.clone()).collect();
+        assert!(
+            names.contains(&std::ffi::OsString::from("WAYLAND_DISPLAY")),
+            "the inner carries the host compositor name: {names:?}"
+        );
+        assert!(
+            !names.iter().any(|k| k == "Q8ZG_INNER_CANARY"),
+            "a shell export outside the allowlist is dropped: {names:?}"
+        );
+        let _ = std::env::remove_var("WAYLAND_DISPLAY");
+        let _ = std::env::remove_var("Q8ZG_INNER_CANARY");
+        // An unset allowlisted name is skipped, never manufactured.
+        let env = detached_inner_env(&crate::bwrap::HostEnv::new());
+        assert!(
+            !env.iter().any(|(k, _)| k == "WAYLAND_DISPLAY"),
+            "an unset name is not manufactured"
         );
     }
 
