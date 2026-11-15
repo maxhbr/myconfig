@@ -1868,8 +1868,8 @@ reachable depends on the pid namespace the backend gives the sandbox:
 | backend | pid namespace | `/proc/1/environ` inside the sandbox | verdict |
 | --- | --- | --- | --- |
 | `bubblewrap`, `nono` | `--unshare-all` (own pid ns) | the bwrap supervisor — the process whose environment is cleared above | **closed** |
-| `podman-gvisor` | podman default (private): the argv carries no `--pid`, no host `/proc` bind, and `/proc` is a protected mount DEST | the container's own init under `runsc`; the container env is exactly the `--env` list (no `--env-host`) | **not affected** |
-| `podman-krun` | podman default on the host side; the payload runs in a libkrun guest kernel | the guest's own init; only `Env`/`args`/`WorkingDir` cross into the guest | **not affected** |
+| `podman-gvisor` | podman default (private): the argv carries no `--pid`, no host `/proc` bind, and `/proc` is a protected mount DEST | the container's own init under `runsc`; the container env is the `--env` list (no `--env-host`) — except the proxy names podman forwards implicitly (bullet below) | **residual: proxy names** |
+| `podman-krun` | podman default on the host side; the payload runs in a libkrun guest kernel | the guest's own init; `Env`/`args`/`WorkingDir` cross into the guest — `Env` again includes the proxy names podman forwards implicitly | **residual: proxy names** |
 | `krun`, `microvm-qemu`, `microvm-ch` | a real guest kernel | the guest's baked init | **not affected** |
 
 The `--unshare-all` pid namespace is not bubblewrap-only usage: the
@@ -1881,6 +1881,19 @@ own runtime dir and registries — and that process lives in the host pid
 namespace, invisible to a container with a private one. **Remaining
 residual risk, both podman tiers:**
 
+- Podman forwards the host's proxy variables implicitly: `--http-proxy`
+  defaults to TRUE (`podman run --help`: "Set proxy environment variables
+  in the container based on the host proxy vars (default true)"), and
+  the argv mysbx emits does not disable it. The podman client inherits
+  mysbx's own environment (the exclusion above), so a host shell's
+  `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` — including an authenticated
+  `http://user:password@proxy:port` value — enter the container and
+  its `/proc/1/environ` without any `--env` entry and without a
+  `forward-env` name. This predates the built supervisor environment
+  and stays outside it; closing it means emitting
+  `--http-proxy=false` (which would also break the very proxy setups
+  the default exists for) or validating the three names at the
+  wrapper — both a deliberate operator decision, not taken here.
 - The pid-namespace facts are podman's, `runsc`'s and `crun`'s
   defaults, not lines this repo pins: no `--pid` flag is emitted, so a
   host-wide `[containers] default_pid_ns = "host"` (or a runtime flag
@@ -1898,6 +1911,6 @@ environment is built, not inherited, in every run mode, and a
 regression test asserts that both the foreground and the detached
 `/proc/1/environ` are free of the invoking shell's names
 (`run_env_never_reaches_the_backend_supervisor`). Not affected on
-`podman-gvisor`, `podman-krun`, `krun`, `microvm-qemu` and
-`microvm-ch`, for the reasons in the table. The two podman bullets
-above are the residual risk that stays documented instead of closed.
+`krun`, `microvm-qemu` and `microvm-ch`, for the reasons in the table.
+The podman tiers carry the proxy-name residual above; the three podman
+bullets are the residual risk that stays documented instead of closed.
