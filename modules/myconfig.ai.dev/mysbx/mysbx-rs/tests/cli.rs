@@ -3150,6 +3150,22 @@ fn failing_payload_propagates_exit_code() {
 
 // ---- the sandbox's own $HOME (config.md D14) --------------------------------
 
+/// A `bash` from the test runner's own `PATH`, as an absolute path —
+/// [`sandbox_bash`] without its sandbox-reachability filter: the
+/// environ-reporting stubs run as the BACKEND on the host, so any
+/// bash the runner can resolve serves. `None` when `PATH` holds
+/// none, which the environ harnesses take as their skip.
+fn which_bash() -> Option<PathBuf> {
+    let path = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&path) {
+        let candidate = dir.join("bash");
+        if candidate.is_file() {
+            return std::fs::canonicalize(&candidate).ok();
+        }
+    }
+    None
+}
+
 /// A `bash` that is reachable *inside* the sandbox, i.e. one whose real
 /// path lies under a base-bound directory (`/nix/store`, `/usr/bin`).
 /// `/run/current-system/sw/bin/bash` qualifies after canonicalization —
@@ -12959,27 +12975,62 @@ fn bwrap_knobs(base: &Path, knobs: &[(&str, &str)]) {
 /// the shell's inherited environment. `exec 3<` opens the file in the
 /// SHELL, before any child exists.
 ///
+/// The reader needs `read -d ''` — a BASH-ism, and the harness must
+/// not pass vacuously (the review of this harness found it doing
+/// exactly that): the stub's `#!/bin/sh` is the HOST's `/bin/sh`, and
+/// a host where that is dash rejects `-d` (`read: Illegal option -d`),
+/// writes an EMPTY dump and still exits zero — so every leak
+/// assertion on the dump would hold without the dump proving
+/// anything. The shebang is therefore the test runner's own bash,
+/// resolved from ITS `PATH` and baked in as an absolute path: the
+/// stub runs under `env_clear`, where no `PATH` could resolve it.
+/// No bash on `PATH` is an honest skip — the harness cannot observe
+/// a supervisor leak on such a host at all.
+///
 /// The record path is baked into the script text, the `bwrap_stub`
 /// idiom: the child's environment is what is under test, so no env
 /// variable may name the record file.
-fn environ_reporting_stub(base: &Path, name: &str) -> (PathBuf, PathBuf) {
+fn environ_reporting_stub(base: &Path, name: &str) -> Option<(PathBuf, PathBuf)> {
+    environ_reporting_stub_with_argv(base, name, None)
+}
+
+/// [`environ_reporting_stub`] with a second record file: when
+/// `argv_record` is `Some`, the stub also writes its `$@` there, one
+/// argument per line — the forwarding test's shape, where the argv is
+/// where a payload's `--setenv` lands and the environ dump is where a
+/// supervisor leak would show.
+fn environ_reporting_stub_with_argv(
+    base: &Path,
+    name: &str,
+    argv_record: Option<&Path>,
+) -> Option<(PathBuf, PathBuf)> {
+    // A bash from the TEST RUNNER's PATH — `sandbox_bash`'s
+    // resolution without its sandbox-reachability filter, which
+    // nothing here needs: the stub runs as the BACKEND on the host,
+    // not inside the sandbox. `Command::new` resolves the same way
+    // `env_or("MYSBX_BWRAP", "bwrap")` would at spawn time.
+    let bash = which_bash()?;
     let record = base.join(format!("{name}-environ.txt"));
     let stub = base.join(name);
     // `tr` is not reachable: the backend starts with a cleared
     // environment, so no PATH resolves it. The loop is shell builtins
     // only, reading the NUL-separated blob through fd 3 opened in the
     // shell.
+    let argv_dump = argv_record
+        .map(|p| format!("printf '%s\\n' \"$@\" > {}\n", p.display()))
+        .unwrap_or_default();
     std::fs::write(
         &stub,
         format!(
-            "#!/bin/sh\nexec 3< /proc/$$/environ\nwhile IFS= read -r -d '' line <&3; do printf '%s\\n' \"$line\"; done > {}\n",
+            "#!{}\nexec 3< /proc/$$/environ\nwhile IFS= read -r -d '' line <&3; do printf '%s\\n' \"$line\"; done > {}\n{argv_dump}",
+            bash.display(),
             record.display()
         ),
     )
     .unwrap();
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
-    (stub, record)
+    Some((stub, record))
 }
 
 /// The `NAME=` names of an environ dump written by
@@ -13042,13 +13093,18 @@ fn run_env_never_reaches_the_backend_supervisor() {
     if !is_ssh_keygen_available() {
         return; // no usable ssh-keygen (the baseline env's uid-0 quirk)
     }
+    let Some(_bash) = which_bash() else {
+        eprintln!("skipping: no bash on PATH for the environ-reporting stub");
+        return;
+    };
     for (mode, args) in [
         ("foreground", vec!["run", "--", "/bin/true"]),
         ("result", vec!["run", "--result", "--", "/bin/true"]),
         ("detach", vec!["--detach"]),
     ] {
         let (inv, _repo, _sidecar) = fixture_with_backend("env-canary", &["run"]);
-        let (stub, record) = environ_reporting_stub(&inv.home, "bwrap-env-stub");
+        let (stub, record) =
+            environ_reporting_stub(&inv.home, "bwrap-env-stub").expect("checked which_bash");
         let runtime = short_runtime_root("env-canary");
         std::fs::create_dir_all(&runtime).unwrap();
         let mut cmd = if mode == "detach" {
@@ -13077,6 +13133,14 @@ fn run_env_never_reaches_the_backend_supervisor() {
         );
         let dump = wait_for_file(&record);
         let names = environ_names(&dump);
+        // The POSITIVE CONTROL (the review's finding): an empty dump
+        // is only evidence when the stub demonstrably records an
+        // INHERITED value, so the probe itself is proven live before
+        // it is trusted to prove absence.
+        assert!(
+            probe_detects_an_inherited_value(&inv.home),
+            "{mode}: the environ stub recorded nothing at all — its reader is broken"
+        );
         for canary in [
             "Q8ZG_CANARY",
             "HF_TOKEN",
@@ -13115,6 +13179,10 @@ fn a_detached_run_forwards_the_payload_environment_like_the_foreground() {
     if !is_ssh_keygen_available() {
         return; // no usable ssh-keygen (the baseline env's uid-0 quirk)
     }
+    let Some(_bash) = which_bash() else {
+        eprintln!("skipping: no bash on PATH for the environ-reporting stub");
+        return;
+    };
     for mode in ["foreground", "detach"] {
         let (inv, repo, sidecar) = fixture_with_backend("env-forward", &["run"]);
         std::fs::write(
@@ -13125,19 +13193,10 @@ fn a_detached_run_forwards_the_payload_environment_like_the_foreground() {
         // The stub records its own environment AND its argv: the argv is
         // where a payload's `--setenv` lands, the environment is where a
         // supervisor leak would show.
-        let (stub, record) = environ_reporting_stub(&inv.home, "bwrap-env-stub");
         let argv_record = inv.home.join("bwrap-env-stub-argv.txt");
-        std::fs::write(
-            &stub,
-            format!(
-                "#!/bin/sh\nexec 3< /proc/$$/environ\n\
-                 while IFS= read -r -d '' line <&3; do printf '%s\\n' \"$line\"; done > {}\n\
-                 printf '%s\\n' \"$@\" > {}\n",
-                record.display(),
-                argv_record.display()
-            ),
-        )
-        .unwrap();
+        let (stub, record) =
+            environ_reporting_stub_with_argv(&inv.home, "bwrap-env-stub", Some(&argv_record))
+                .expect("checked which_bash");
         let runtime = short_runtime_root("env-forward");
         std::fs::create_dir_all(&runtime).unwrap();
         let mut cmd = if mode == "detach" {
@@ -13185,6 +13244,41 @@ fn a_detached_run_forwards_the_payload_environment_like_the_foreground() {
         }
         let _ = repo;
     }
+}
+
+/// The positive control of the environ-reporting stubs (the review's
+/// finding): run a stub from [`environ_reporting_stub`] itself — the
+/// very script text the leak harnesses rely on — with a KNOWN
+/// inherited value, and assert its dump records that value. A
+/// reader that silently wrote an empty dump (dash rejecting bash's
+/// `read -d`, a renamed `/proc` mount, …) would otherwise make every
+/// absence assertion pass vacuously; this probe pins that it does
+/// not. `false` also covers "no bash on PATH", the harnesses' skip.
+fn probe_detects_an_inherited_value(base: &Path) -> bool {
+    let Some((stub, record)) = environ_reporting_stub(base, "probe-control-stub") else {
+        return false; // no bash on PATH — the harnesses' own skip
+    };
+    let out = std::process::Command::new(&stub)
+        .env("Q8ZG_PROBE_CONTROL", "probe-control-value")
+        .output()
+        .expect("failed to spawn the probe-control stub");
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "the probe-control stub failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let dump = std::fs::read_to_string(&record).unwrap_or_default();
+    dump.contains("Q8ZG_PROBE_CONTROL=probe-control-value")
+}
+
+#[test]
+fn the_environ_probe_detects_an_inherited_value() {
+    let base = tmpdir("environ-probe-control");
+    assert!(
+        probe_detects_an_inherited_value(&base),
+        "the environ-reporting stub recorded nothing at all — its reader is broken"
+    );
 }
 
 /// The registry paths of a live-workspace detached run for `repo`
