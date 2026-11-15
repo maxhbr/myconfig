@@ -1852,9 +1852,12 @@ backends are argv-driven, and the executable is resolved before the
 clear so a bare `bwrap`/`nono` fallback still spawns.
 - The detached inner (`detach.rs`) is launched with
 `DETACHED_INNER_ENV` — `PATH`, `HOME`, `XDG_RUNTIME_DIR`, `TMPDIR`,
-`XDG_CONFIG_HOME` — plus the `MYSBX_` pin namespace and the run's
+`XDG_CONFIG_HOME`, `WAYLAND_DISPLAY` — plus the `MYSBX_` pin namespace and the run's
 narrowed forwarded environment (`collect_host_env`). Each of these is
-a value the run itself computed; nothing is inherited from the
+a value the run itself computed — `WAYLAND_DISPLAY` included: the
+inner's `display = "waypipe"` runs spawn the host-side waypipe client,
+which needs the host compositor's name, and it is dropped again before
+the backend. Nothing is inherited from the
 launching shell. The forwarded names are for the PAYLOAD and stop at
 the backend: the inner spawns it with a cleared environment (the rule
 above), so the supervisor stays empty.

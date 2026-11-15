@@ -226,13 +226,17 @@ podman this means `--interactive --tty` always.
 Environment: the launch carries a BUILT environment, never the
 outer's (bd myconfig-q8zg). `detach::detached_inner_env` passes the
 shell context the inner needs to re-derive the run — `PATH`, `HOME`,
-`XDG_RUNTIME_DIR`, `TMPDIR` and `XDG_CONFIG_HOME` — plus the `MYSBX_`
+`XDG_RUNTIME_DIR`, `TMPDIR` and `XDG_CONFIG_HOME` — plus `WAYLAND_DISPLAY`,
+the host compositor's name: the inner's own `display = "waypipe"` runs
+spawn the host-side waypipe client, which resolves the host compositor
+through it, exactly like a foreground run. Plus the `MYSBX_`
 pin namespace (`MYSBX_DETACHED` excluded; the launch sets its own),
 plus the run's forwarded environment as `collect_host_env` narrowed
 it. Everything else the outer carried is dropped before the dtach
 spawn.
 
-The forwarded values are there for the PAYLOAD, and they stop at the
+The forwarded values are there for the PAYLOAD, and the host
+compositor name for the waypipe CHANNEL — both stop at the
 backend: the inner mysbx spawns it with a cleared environment, so the
 supervisor — PID 1 of the sandbox, whose `/proc/1/environ` the payload
 can read — carries none of them. A forwarded name therefore reaches

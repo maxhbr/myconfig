@@ -1204,6 +1204,15 @@ pub struct Launch<'a> {
 /// needs to re-derive its run — a `PATH` for the unpinned fallbacks, the
 /// user's `HOME`/`XDG_CONFIG_HOME` for the config layers, `TMPDIR` for
 /// the scratch files, and `XDG_RUNTIME_DIR` for the registry root.
+/// `WAYLAND_DISPLAY` is the one host-DISPLAY name among them: the
+/// inner's `display = "waypipe"` runs spawn the host-side `waypipe
+/// client` (lib.rs's `start_waypipe_channel`) as the inner's own
+/// child, and the client resolves the HOST compositor through it —
+/// unset, it refuses (`WAYLAND_DISPLAY is not set`); wrong, it picks
+/// the wrong compositor. It stops at the host-side channel: the
+/// backend spawn clears the environment again, and the payload's
+/// `WAYLAND_DISPLAY` is set by the GUEST waypipe server
+/// (`wayland-0`), never inherited.
 ///
 /// Everything else the outer carried is dropped before the spawn: the
 /// inner is not the sandbox, but the supervisor it spawns IS the
@@ -1215,6 +1224,7 @@ pub const DETACHED_INNER_ENV: &[&str] = &[
     "XDG_RUNTIME_DIR",
     "TMPDIR",
     "XDG_CONFIG_HOME",
+    "WAYLAND_DISPLAY",
 ];
 
 /// The `MYSBX_` pin prefix: the inner mysbx re-reads its backend, tool
@@ -2570,6 +2580,11 @@ mod tests {
     /// one at a time.
     static TEE_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+    /// [`detached_inner_env`] reads the PROCESS environment, and its
+    /// test also mutates two names of it: one at a time against every
+    /// other test that touches the process environment.
+    static INNER_ENV_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     /// A fresh temporary directory per test; hand-rolled, the crate
     /// has no dependencies. Unique per test name and pid, cleaned up
     /// like the repo.rs helper it mirrors.
@@ -3298,6 +3313,43 @@ mod tests {
                 "--session".to_owned(),
                 "fix-1".to_owned(),
             ]
+        );
+    }
+
+    // ---- the launch environment (bd myconfig-q8zg) --------------------
+
+    /// [`detached_inner_env`] is a thin filter over the PROCESS
+    /// environment, so its test pins the set against this very
+    /// process: the names `DETACHED_INNER_ENV` declares are carried,
+    /// everything else is dropped. `WAYLAND_DISPLAY` has its own row
+    /// (the review's finding): the inner's host-side waypipe client
+    /// resolves the host compositor through it, so it must cross
+    /// — while the canary, a shell export the launch never names,
+    /// must not.
+    #[test]
+    fn detached_inner_env_carries_the_allowlist_and_the_compositor_name() {
+        let _guard = INNER_ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        unsafe { std::env::set_var("WAYLAND_DISPLAY", "wayland-7") };
+        unsafe { std::env::set_var("Q8ZG_INNER_CANARY", "inner-canary") };
+        let env = detached_inner_env(&crate::bwrap::HostEnv::new());
+        let names: Vec<std::ffi::OsString> = env.iter().map(|(k, _)| k.clone()).collect();
+        assert!(
+            names.contains(&std::ffi::OsString::from("WAYLAND_DISPLAY")),
+            "the inner carries the host compositor name: {names:?}"
+        );
+        assert!(
+            !names.iter().any(|k| k == "Q8ZG_INNER_CANARY"),
+            "a shell export outside the allowlist is dropped: {names:?}"
+        );
+        let _ = std::env::remove_var("WAYLAND_DISPLAY");
+        let _ = std::env::remove_var("Q8ZG_INNER_CANARY");
+        // An unset allowlisted name is skipped, never manufactured.
+        let env = detached_inner_env(&crate::bwrap::HostEnv::new());
+        assert!(
+            !env.iter().any(|(k, _)| k == "WAYLAND_DISPLAY"),
+            "an unset name is not manufactured"
         );
     }
 
