@@ -13274,6 +13274,13 @@ fn probe_detects_an_inherited_value(base: &Path) -> bool {
 
 #[test]
 fn the_environ_probe_detects_an_inherited_value() {
+    // Same skip as the leak harnesses: bash is the stub's interpreter,
+    // and no bash on PATH means the harness cannot observe anything on
+    // such a host — a missing optional prerequisite, not a failure.
+    if which_bash().is_none() {
+        eprintln!("skipping: no bash on PATH for the environ-reporting stub");
+        return;
+    }
     let base = tmpdir("environ-probe-control");
     assert!(
         probe_detects_an_inherited_value(&base),
