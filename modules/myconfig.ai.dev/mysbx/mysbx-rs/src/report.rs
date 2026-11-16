@@ -79,6 +79,13 @@ pub struct Report<'a> {
     /// (`mysbx::PROXY_ONLY_PLACEHOLDER`, D28 rule 6d). The rest were
     /// dropped bare (a base-URL name keeps its baked value).
     pub placeholder_env: &'a [String],
+    /// The proxy-control names this run RESERVES (backends.md D1's
+    /// caveat, implemented — bd myconfig-ew9s E13): nono injects them
+    /// in domain-allowlist mode, so a configured or forwarded value
+    /// is dropped and marked `[config/host, ignored — set by the
+    /// proxy]` instead of silently overwriting the proxy
+    /// configuration. Empty under every other mode.
+    pub reserved_env: &'a [String],
     pub params: &'a Params<'a>,
     /// The backend binary that would be executed (`MYSBX_BWRAP` /
     /// `MYSBX_PODMAN` / `MYSBX_NONO` after their fallbacks).
@@ -485,7 +492,9 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         // so a host variable that `[env]` also sets never reaches the
         // payload. Say so, instead of listing the same name twice with
         // two values and no hint which one applies.
-        if infrastructure(k, display_on) {
+        if r.reserved_env.iter().any(|n| n == k) {
+            p(format!("  {k}={v}  [host, ignored — set by the proxy]"));
+        } else if infrastructure(k, display_on) {
             p(format!("  {k}={v}  [host, ignored — set by mysbx]"));
         } else if r.merged.env.contains_key(k) {
             p(format!("  {k}={v}  [host, overridden by [env]]"));
@@ -494,7 +503,9 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         }
     }
     for (k, v) in &r.merged.env {
-        if infrastructure(k, display_on) {
+        if r.reserved_env.iter().any(|n| n == k) {
+            p(format!("  {k}={v}  [config, ignored — set by the proxy]"));
+        } else if infrastructure(k, display_on) {
             // `HOME` and `PATH` are set after `[env]` (config.md D14), so
             // a layer that names them never reaches the payload.
             p(format!("  {k}={v}  [config, ignored — set by mysbx]"));
@@ -856,6 +867,7 @@ mod tests {
             host_env: &host,
             dropped_env: &[],
             placeholder_env: &[],
+            reserved_env: &[],
             params: &params,
             bwrap_bin: "/synth/bin/bwrap",
             backend: "bubblewrap",
@@ -971,6 +983,7 @@ mod tests {
             host_env: &host,
             dropped_env: &[],
             placeholder_env: &[],
+            reserved_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -1025,6 +1038,7 @@ mod tests {
             host_env: &host,
             dropped_env: &[],
             placeholder_env: &[],
+            reserved_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -1044,6 +1058,74 @@ mod tests {
         );
         assert!(
             joined.contains(&format!("  HOME={SANDBOX_HOME}  [sandbox home]")),
+            "{joined}"
+        );
+    }
+
+    #[test]
+    fn a_reserved_proxy_name_is_reported_as_set_by_the_proxy() {
+        // The D1 caveat's marking (bd myconfig-ew9s E13): a reserved
+        // name is shown with `[config/host, ignored — set by the
+        // proxy]`, so an operator reading the report sees WHY their
+        // HTTPS_PROXY entry did not reach the payload instead of
+        // hunting for a silently dropped variable.
+        let (repo, mut merged, mut host) = fixture_report();
+        merged.env.insert(
+            "HTTPS_PROXY".to_owned(),
+            "http://config.example:3128".to_owned(),
+        );
+        host.insert(
+            "http_proxy".to_owned(),
+            "http://host.example:3128".to_owned(),
+        );
+        let params = Params {
+            shell: "/synth/bin/bash",
+            tools_path: "/synth/bin",
+            bin_sh: None,
+            nix_conf: None,
+            ca_bundle: None,
+            policy_paths: &[],
+            mux_entry: None,
+            waypipe: None,
+            workspace: Workspace::Live,
+            inner: None,
+            detachable: false,
+            egress: None,
+        };
+        let joined = lines(&Report {
+            repo: &repo,
+            sidecar_exists: true,
+            user_config: Path::new("/synth/xdg/mysbx/config.toml"),
+            user_config_exists: true,
+            sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
+            sidecar_config_exists: true,
+            merged: &merged,
+            backend_from_cli: false,
+            user_mount_count: 1,
+            cli_mount_count: 0,
+            host_env: &host,
+            dropped_env: &[],
+            placeholder_env: &[],
+            reserved_env: &["HTTPS_PROXY".to_owned(), "http_proxy".to_owned()],
+            params: &params,
+            bwrap_bin: "bwrap",
+            backend: "bubblewrap",
+            image: None,
+            payload: &Payload::Shell,
+            dry_run: true,
+            result: false,
+        })
+        .join("\n");
+        assert!(
+            joined.contains(
+                "HTTPS_PROXY=http://config.example:3128  [config, ignored — set by the proxy]"
+            ),
+            "{joined}"
+        );
+        assert!(
+            joined.contains(
+                "http_proxy=http://host.example:3128  [host, ignored — set by the proxy]"
+            ),
             "{joined}"
         );
     }
@@ -1080,6 +1162,7 @@ mod tests {
             host_env: &host,
             dropped_env: &[],
             placeholder_env: &[],
+            reserved_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -1141,6 +1224,7 @@ mod tests {
             host_env: &host,
             dropped_env: &[],
             placeholder_env: &[],
+            reserved_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -1199,6 +1283,7 @@ mod tests {
             host_env: &host,
             dropped_env: &[],
             placeholder_env: &[],
+            reserved_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -1263,6 +1348,7 @@ mod tests {
                     host_env: &host,
                     dropped_env: &[],
                     placeholder_env: &[],
+                    reserved_env: &[],
                     params: &params,
                     bwrap_bin: "bwrap",
                     backend: "bubblewrap",
@@ -1356,6 +1442,7 @@ mod tests {
                 host_env: &host,
                 dropped_env: &[],
                 placeholder_env: &[],
+                reserved_env: &[],
                 params: &herdr_params(workspace),
                 bwrap_bin: "bwrap",
                 backend: "bubblewrap",
@@ -1449,6 +1536,7 @@ mod tests {
                 host_env: &host,
                 dropped_env: &[],
                 placeholder_env: &[],
+                reserved_env: &[],
                 params: &params,
                 bwrap_bin: "bwrap",
                 backend: "bubblewrap",
@@ -1499,6 +1587,7 @@ mod tests {
             host_env: &forwarded,
             dropped_env: &[],
             placeholder_env: &[],
+            reserved_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -1534,6 +1623,7 @@ mod tests {
             host_env: &host,
             dropped_env: &[],
             placeholder_env: &[],
+            reserved_env: &[],
             params: &unrefused,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -1601,6 +1691,7 @@ mod tests {
             host_env: &host,
             dropped_env: &[],
             placeholder_env: &[],
+            reserved_env: &[],
             params: &params,
             bwrap_bin: "/synth/bin/bwrap",
             backend: "bubblewrap",
@@ -1659,6 +1750,7 @@ mod tests {
             host_env: &host,
             dropped_env: &[],
             placeholder_env: &[],
+            reserved_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -1720,6 +1812,7 @@ mod tests {
             host_env: &host,
             dropped_env: &[],
             placeholder_env: &[],
+            reserved_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",
@@ -1809,6 +1902,7 @@ mod tests {
             host_env: &host,
             dropped_env: &[],
             placeholder_env: &[],
+            reserved_env: &[],
             params: &params,
             bwrap_bin: "bwrap",
             backend: "bubblewrap",

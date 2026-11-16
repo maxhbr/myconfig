@@ -3152,6 +3152,13 @@ fn sandbox_pipeline(
         .cloned()
         .collect();
     let mut host_env = collect_host_env(&merged);
+    // The proxy-variable reservation (backends.md D1's caveat,
+    // implemented — bd myconfig-ew9s E13): the proxy-control names a
+    // nono domain-allowlist run would let the pinned `env` overwrite
+    // after nono's injection. Computed from the same merged config the
+    // argv builder filters with, so the report and the argv cannot
+    // drift apart.
+    let reserved_env: Vec<String> = nono::reserved_proxy_env(&merged, &host_env);
     // The console size marker (bd myconfig-a2uq, backends.md D9): the
     // qemu guest's serial console carries no winsize, so the caller's
     // terminal size rides the manifest env instead — the init stty's
@@ -4627,6 +4634,7 @@ fn sandbox_pipeline(
             host_env: &host_env,
             dropped_env: &dropped_env,
             placeholder_env: &placeholder_env,
+            reserved_env: &reserved_env,
             params: &report_params,
             bwrap_bin: &backend_bin,
             backend,

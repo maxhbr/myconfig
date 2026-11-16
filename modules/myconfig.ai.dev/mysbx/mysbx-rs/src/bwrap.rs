@@ -1384,10 +1384,30 @@ pub fn bwrap_argv(
             argv.push("-u".into());
             argv.push(key.into());
         }
+        // The proxy-variable reservation (backends.md D1's caveat,
+        // implemented — bd myconfig-ew9s E13): nono injects the
+        // proxy-control names in domain-allowlist mode, and the
+        // pinned `env` applies the payload environment AFTER that
+        // injection, so a configured or forwarded HTTP_PROXY would
+        // silently overwrite the working proxy configuration. The
+        // reserved names are dropped here — the later assignment
+        // never happens — and the report marks them
+        // `[config/host, ignored — set by the proxy]`. Scope per D1:
+        // on nono an override breaks connectivity; the supervisor
+        // still denies direct remote connects, so this is a
+        // correctness and marking reservation, not a demonstrated
+        // policy bypass.
+        let reserved = crate::nono::reserved_proxy_env(cfg, host_env);
         for (key, value) in host_env {
+            if reserved.iter().any(|r| r == key) {
+                continue;
+            }
             argv.push(format!("{key}={value}"));
         }
         for (key, value) in &cfg.env {
+            if reserved.iter().any(|r| r == key) {
+                continue;
+            }
             argv.push(format!("{key}={value}"));
         }
         if let Some(nix_config) = cfg.nix_config() {

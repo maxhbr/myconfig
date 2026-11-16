@@ -6040,6 +6040,96 @@ fn nono_golden_allowlist() {
 }
 
 #[test]
+fn the_nono_allowlist_reserves_the_proxy_control_names() {
+    // The D1 caveat, implemented (bd myconfig-ew9s E13): in
+    // domain-allowlist mode nono injects HTTP(S)_PROXY/NO_PROXY and
+    // its own control names, and the pinned `env` applies the payload
+    // environment AFTER that injection — so a configured or
+    // forwarded proxy variable would silently overwrite the working
+    // proxy configuration. The argv builder drops those names from
+    // the payload env segment instead.
+    let mut cfg = nono_base(true);
+    cfg.allow_domains = vec!["github.com".into()];
+    cfg.env
+        .insert("HTTPS_PROXY".into(), "http://evil.example:3128".into());
+    cfg.env.insert("KEEP_ME".into(), "stays".into());
+    let argv = nono_layered_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[("HTTP_PROXY", "http://also-evil.example:3128")]),
+        &nono_params(),
+    )
+    .unwrap();
+    // Neither reserved name reaches the pinned `env` segment.
+    assert!(
+        !argv.contains(&"HTTPS_PROXY=http://evil.example:3128".to_string()),
+        "a [env] proxy override is dropped: {argv:?}"
+    );
+    assert!(
+        !argv.contains(&"HTTP_PROXY=http://also-evil.example:3128".to_string()),
+        "a forwarded proxy override is dropped: {argv:?}"
+    );
+    // An unrelated [env] entry still reaches the payload.
+    assert!(
+        argv.contains(&"KEEP_ME=stays".to_string()),
+        "the reservation is exactly the proxy-control names: {argv:?}"
+    );
+    // Every reserved name the config or host carried is reported.
+    let reserved = mysbx::nono::reserved_proxy_env(
+        &cfg,
+        &host_env(&[("HTTP_PROXY", "http://also-evil.example:3128")]),
+    );
+    assert!(
+        reserved.contains(&"HTTPS_PROXY".to_string()),
+        "{reserved:?}"
+    );
+    assert!(reserved.contains(&"HTTP_PROXY".to_string()), "{reserved:?}");
+    assert!(!reserved.contains(&"KEEP_ME".to_string()), "{reserved:?}");
+}
+
+#[test]
+fn without_domains_nono_injects_nothing_and_nothing_is_reserved() {
+    // Ports-only (or no allowlist at all) is not domain-allowlist
+    // mode: nono injects no proxy variables, so the reservation is
+    // empty and a configured HTTPS_PROXY reaches the payload like any
+    // other variable — the same freedom the plain shared network has.
+    for domains in [vec![], vec!["github.com".into()]] {
+        let mut cfg = nono_base(true);
+        cfg.allow_domains = domains;
+        if cfg.allow_domains.is_empty() {
+            cfg.connect_ports = vec![443];
+        }
+        cfg.env
+            .insert("HTTPS_PROXY".into(), "http://mine.example:3128".into());
+        let reserved = mysbx::nono::reserved_proxy_env(&cfg, &host_env(&[]));
+        let expect_empty = cfg.allow_domains.is_empty();
+        assert_eq!(
+            reserved.is_empty(),
+            expect_empty,
+            "domains={:?}: {reserved:?}",
+            cfg.allow_domains
+        );
+    }
+}
+
+#[test]
+fn the_bubblewrap_backend_reserves_nothing() {
+    // The reservation is nono's domain-allowlist mode only: the plain
+    // bubblewrap backend (even with a hypothetical allowlist) runs no
+    // proxy injection, so nothing is reserved there. (Step 4 lifts
+    // the bubblewrap refusal and adds the bubblewrap half for the
+    // CONNECT lane — this test pins that step 2 alone changed no
+    // bubblewrap behavior.)
+    let mut cfg = nono_base(true);
+    cfg.backend = Some("bubblewrap".into());
+    cfg.allow_domains = vec!["github.com".into()];
+    cfg.env
+        .insert("HTTPS_PROXY".into(), "http://mine.example:3128".into());
+    assert!(mysbx::nono::reserved_proxy_env(&cfg, &host_env(&[])).is_empty());
+}
+
+#[test]
 fn nono_needs_port_rules_agrees_with_the_argv() {
     // bd myconfig-1012: doctor fails a run on a Landlock ABI < 4 only when
     // nono will be asked for a TCP PORT grant. That verdict is a predicate
