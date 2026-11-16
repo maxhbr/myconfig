@@ -1870,11 +1870,28 @@ reachable depends on the pid namespace the backend gives the sandbox:
 | `bubblewrap`, `nono` | `--unshare-all` (own pid ns) | the bwrap supervisor — the process whose environment is cleared above | **closed** |
 | `podman-gvisor` | podman default (private): the argv carries no `--pid`, no host `/proc` bind, and `/proc` is a protected mount DEST | the container's own init under `runsc`; the container env is the `--env` list (no `--env-host`) — except the proxy names podman forwards implicitly (bullet below) | **residual: proxy names** |
 | `podman-krun` | podman default on the host side; the payload runs in a libkrun guest kernel | the guest's own init; `Env`/`args`/`WorkingDir` cross into the guest — `Env` again includes the proxy names podman forwards implicitly | **residual: proxy names** |
-| `krun`, `microvm-qemu`, `microvm-ch` | a real guest kernel | the guest's baked init | **not affected** |
+| `krun`, `microvm-qemu`, `microvm-ch` | the launcher's own bwrap view unshares NO pid namespace (see below); the PAYLOAD runs in a real guest kernel | the guest's baked init | **not affected** |
 
-The `--unshare-all` pid namespace is not bubblewrap-only usage: the
-doctor's probe argv and the krun wrap emit it too, so the same
-supervisor shape and the same clearing cover those runs as well.
+Two other places build a bwrap view. Neither matches the `bubblewrap`
+row line for line, and only one of them has the closed property at
+all — which is fine, because neither view is where a payload runs:
+
+- The `krun`/`microvm-qemu`/`microvm-ch` wrap (the view the VM launcher
+  runs in) emits `--clearenv`, so the launcher's environment is empty
+  like any other supervisor's. It does NOT unshare the pid namespace:
+  the only `--unshare*` it can emit is `--unshare-net`, and only for a
+  run that does not share the network. Its `--proc /proc` therefore
+  mounts the HOST's procfs, and host processes' `/proc/<pid>/environ`
+  stay readable from the launcher. That does not reopen this finding:
+  the PAYLOAD of these backends runs in the guest kernel, never in that
+  view, so it cannot reach that procfs — which is all the table's
+  `not affected` for these three backends rests on.
+- The doctor's `bwrap_probe_argv` emits `--unshare-all` (`--share-net`
+  when the run shares the network), so its supervisor shape does match
+  the `bubblewrap` row. The CLEARING does not: neither that argv nor
+  `run_probe` clears the environment. Nothing reads it back either —
+  the probe runs `shell -c 'exit 0'`, a liveness check with no payload
+  and no channel to a sandbox.
 
 The podman client keeps mysbx's environment on purpose — it reads its
 own runtime dir and registries — and that process lives in the host pid
@@ -1911,6 +1928,7 @@ environment is built, not inherited, in every run mode, and a
 regression test asserts that both the foreground and the detached
 `/proc/1/environ` are free of the invoking shell's names
 (`run_env_never_reaches_the_backend_supervisor`). Not affected on
-`krun`, `microvm-qemu` and `microvm-ch`, for the reasons in the table.
-The podman tiers carry the proxy-name residual above; the three podman
-bullets are the residual risk that stays documented instead of closed.
+`krun`, `microvm-qemu` and `microvm-ch`, for the reasons in the table
+and the bullets below it. The podman tiers carry the proxy-name
+residual above; the three podman bullets are the residual risk that
+stays documented instead of closed.
