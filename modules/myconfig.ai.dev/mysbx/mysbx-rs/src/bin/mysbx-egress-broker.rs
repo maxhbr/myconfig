@@ -535,6 +535,15 @@ impl ConnectTable {
     /// Without this rule an allowed name whose A record points at
     /// `127.0.0.1` or `169.254.169.254` would make the broker a
     /// host-service and metadata client.
+    ///
+    /// IPv4-mapped IPv6 addresses (`::ffff:127.0.0.1`) run the FULL
+    /// IPv4 rule set: `std`'s per-family predicates do not see through
+    /// the mapping (`'::ffff:127.0.0.1'.parse::<Ipv6Addr>()` is not
+    /// `is_loopback`), so a per-family check let the mapped forms of
+    /// every refused v4 class through — review finding 1 on 53a6c680b3,
+    /// probed live as a 200 from a local listener. Mapping first applies
+    /// the same rule the v4 spellings get to the v6 spellings of the
+    /// same address.
     fn dialable_addr(&self, addr: std::net::IpAddr) -> Result<(), String> {
         let refused = match addr {
             std::net::IpAddr::V4(v4) => {
@@ -545,9 +554,32 @@ impl ConnectTable {
                     || v4.is_broadcast()
                     || v4.is_documentation()
             }
-            std::net::IpAddr::V6(v6) => {
-                v6.is_loopback() || is_link_local_v6(v6) || v6.is_unspecified() || v6.is_multicast()
-            }
+            std::net::IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
+                // The mapped form IS that v4 address; refuse it exactly
+                // as the v4 spelling is refused (loopback, link-local,
+                // unspecified, multicast, broadcast, documentation).
+                Some(v4) => {
+                    v4.is_loopback()
+                        || v4.is_link_local()
+                        || v4.is_unspecified()
+                        || v4.is_multicast()
+                        || v4.is_broadcast()
+                        || v4.is_documentation()
+                }
+                // Genuine v6: the v6 rules only. `to_ipv4()` (the
+                // deprecated IPv4-compatible ::a.b.c.d form) is NOT
+                // mapped here on purpose: it is unassigned space no
+                // real resolver returns, and treating it as v4 would
+                // make `::127.0.0.1` a loopback — harmless to refuse,
+                // but the mapped form is the one that reaches the
+                // kernel's v4 stack and the one the reviewer probed.
+                None => {
+                    v6.is_loopback()
+                        || is_link_local_v6(v6)
+                        || v6.is_unspecified()
+                        || v6.is_multicast()
+                }
+            },
         };
         if refused {
             return Err(format!(
@@ -1342,6 +1374,43 @@ mod tests {
             let addr: std::net::IpAddr = allowed.parse().unwrap();
             assert!(table.dialable_addr(addr).is_ok(), "{allowed}");
         }
+    }
+
+    #[test]
+    fn dialable_addr_refuses_the_ipv4_mapped_forms_of_the_refused_classes() {
+        // Review finding 1 on 53a6c680b3: `std`'s per-family predicates
+        // do not see through the IPv4-mapped form —
+        // `'::ffff:127.0.0.1'.parse::<Ipv6Addr>()` is NOT `is_loopback()`
+        // — so every refused v4 class had a v6 spelling that passed the
+        // class check and dialed the host service it names. The mapped
+        // form runs the FULL v4 rule set; genuine v6 keeps the v6 rules.
+        let table = ConnectTable::validate(&["github.com".to_owned()], &[]).unwrap();
+        // The mapped spellings of every refused v4 class, including the
+        // documentation range the v4 rule already carried.
+        for refused in [
+            "::ffff:127.0.0.1",
+            "::ffff:127.8.8.8",
+            "::ffff:169.254.169.254",
+            "::ffff:0.0.0.0",
+            "::ffff:224.0.0.1",
+            "::ffff:255.255.255.255",
+            "::ffff:192.0.2.1",
+        ] {
+            let addr: std::net::IpAddr = refused.parse().unwrap();
+            assert!(table.dialable_addr(addr).is_err(), "{refused}");
+        }
+        // A mapped PRIVATE or real address stays dialable like its v4
+        // spelling: the mapping refuses classes, not the address family.
+        for allowed in ["::ffff:140.82.121.4", "::ffff:10.0.0.5"] {
+            let addr: std::net::IpAddr = allowed.parse().unwrap();
+            assert!(table.dialable_addr(addr).is_ok(), "{allowed}");
+        }
+        // Genuine v6: the v6 rules still govern (loopback refused,
+        // global allowed).
+        assert!(table.dialable_addr("::1".parse().unwrap()).is_err());
+        assert!(table
+            .dialable_addr("2001:db8:1::1".parse().unwrap())
+            .is_ok());
     }
 
     #[test]

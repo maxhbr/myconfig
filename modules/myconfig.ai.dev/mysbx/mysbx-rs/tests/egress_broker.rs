@@ -713,6 +713,53 @@ fn a_connect_to_an_allowed_domain_and_port_is_admitted_and_tunneled() {
 }
 
 #[test]
+fn the_ipv4_mapped_spelling_of_a_refused_class_is_not_a_bypass() {
+    // Review finding 1 on 53a6c680b3: `::ffff:127.0.0.1` parses as a
+    // non-loopback Ipv6Addr, so the per-family class check admitted
+    // it — the reviewer relayed a 200 from a local listener through
+    // exactly this spelling. The CONNECT authority grammar puts the
+    // port last, so the unbracketed spelling is the one that parses
+    // AND resolves; the mapped form must run the FULL v4 rule set:
+    // same admission (ports-only, IP literal admitted), the dial
+    // refused as a transport `unreachable` naming the class — never
+    // a tunnel, never a `deny` (it is not a policy decision).
+    let dir = run_dir("connect-mapped-loopback");
+    let addr = upstream_fixture();
+    let (child, socket) = spawn_ready_with(&dir, &addr, &["--allow-connect-port", "443"]);
+    let mut client = std::os::unix::net::UnixStream::connect(&socket).expect("connect");
+    client
+        .write_all(b"CONNECT ::ffff:127.0.0.1:443 HTTP/1.1\r\n\r\n")
+        .expect("write CONNECT");
+    let answer = read_line_until_double_crlf(&mut client);
+    let mut child = child;
+    let _ = client.shutdown(std::net::Shutdown::Both);
+    let _ = child.kill();
+    let _ = child.wait();
+    let log = std::fs::read_to_string(log_in(&dir)).expect("read the decision log");
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(
+        log.contains("\"event\":\"allow\""),
+        "the admission is recorded before the class check: {log}"
+    );
+    assert!(
+        log.contains("refused address class"),
+        "the mapped loopback is refused by the class rule: {log}"
+    );
+    assert!(
+        log.contains("::ffff:127.0.0.1"),
+        "the refusal names the mapped spelling: {log}"
+    );
+    assert!(
+        !log.contains("\"event\":\"deny\""),
+        "a class refusal is a transport event: {log}"
+    );
+    assert!(
+        answer.is_empty() || answer.starts_with("HTTP/1.1 502"),
+        "no tunnel to the mapped loopback: {answer}"
+    );
+}
+
+#[test]
 fn a_connect_to_a_denied_target_is_refused_and_logged_as_deny() {
     // E9's deny: a target outside the table gets a 403 handshake
     // failure, a `deny` event with a reason that names the policy
