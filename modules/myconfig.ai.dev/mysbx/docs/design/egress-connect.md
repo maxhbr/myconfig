@@ -5,16 +5,16 @@ SPDX-License-Identifier: MIT
 
 # Design: the broker's CONNECT mode — the D21 allowlist on the bubblewrap backend
 
-Status: PROPOSED (bd myconfig-ew9s, phase C of bd myconfig-n8kv.2) — a
-review artifact, not an implemented record. Every code anchor below was
-verified against aa763dd073 by symbol, and the kernel-level claims were
-probed live with bubblewrap 0.13.1 (see "What this sandbox proved").
-
-Continues [egress.md](./egress.md), the phase-B record (E1–E6); the
-decisions here are E7–E13. When this record is approved, the
-implementation's docs commit also supersedes the one paragraph of
-egress.md E4 that this record makes stale (E9) and config.md
-D20/D21's bubblewrap rows (E7/E12).
+Status: IMPLEMENTED (bd myconfig-ew9s, phase C of bd myconfig-n8kv.2) —
+the design record of what now ships, in the 4-commit order its own
+E-decomposition lists (broker lane, nono reservation half, registry
+enum, the lift). Every code anchor below was verified against
+aa763dd073 by symbol, and the kernel-level claims were probed live
+with bubblewrap 0.13.1 (see "What this sandbox proved"). The
+implementation's docs commit supersedes the one paragraph of
+egress.md E4 this record makes stale (E9) and config.md D20/D21's
+bubblewrap rows (E7/E12); the validation log records what was proven
+end to end and what this sandbox cannot prove.
 
 ## The two problems, verified
 

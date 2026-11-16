@@ -158,14 +158,19 @@ must not pass through nono:
 In domain-allowlist mode nono injects its proxy variables:
 `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, their lower-case forms,
 `NONO_PROXY_TOKEN`, `NONO_NO_PROXY` and `NODE_USE_ENV_PROXY`.
-**Documented protection, not implemented:** reserving these names,
-dropping payload overrides and marking them `[config, ignored — set by nono]`.
-The current payload builder instead restores configured AND forwarded
-proxy variables through the pinned `env`, after nono's injection. They
-can overwrite that environment and break connectivity. The already
-installed Landlock/seccomp/supervisor policy still applies; this is not
-a demonstrated policy bypass, nor grounds for promising that all
-possible overrides are harmless.
+**Implemented (bd myconfig-ew9s, docs/design/egress-connect.md E13):**
+these names are reserved — a configured or forwarded override is
+dropped from the payload env segment and marked in the report as
+`[config/host, ignored — set by the proxy]`, so an operator sees why
+the entry did not reach the payload. The scope stays what it was:
+an override breaks the payload's own egress (connectivity), while
+the supervisor still denies direct remote connects — a correctness
+and marking reservation, not the fix of a demonstrated policy
+bypass, nor grounds for promising that all possible overrides are
+harmless. The bubblewrap half of the same reservation (the
+`network = "proxy-only"` + allowlist pairing, where mysbx itself
+injects `HTTP(S)_PROXY`/`NO_PROXY` pointing at the relay) landed in
+the same bead.
 
 #### Naming-service probes and the IPC-denial block (bd myconfig-7ov)
 

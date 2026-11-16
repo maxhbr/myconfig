@@ -1242,11 +1242,19 @@ network, whose whole point is that a host-wide decision holds).
 **What `proxy-only` grants.** Only the host's LiteLLM endpoint is
 reachable, and no model credential exists inside the sandbox — the
 proxy holds it (D28 records the credential rules, including the
-residual risks the profile does NOT remove). The profile is mutually
-exclusive with D21's hostname/port allowlists: those keys describe
-what a sandbox with a *shared* network may reach, so they are a schema
-error next to `network = "proxy-only"` in one file and a refused run
-(exit `70`) when the layers combine them.
+residual risks the profile does NOT remove). On every backend except
+`bubblewrap` the profile is mutually exclusive with D21's
+hostname/port allowlists: those keys describe what a sandbox with a
+*shared* network may reach, so they are a schema error next to
+`network = "proxy-only"` in one file and a refused run (exit `70`)
+when the layers combine them. On `bubblewrap` the two pair instead
+(bd myconfig-ew9s, docs/design/egress-connect.md E7): the keys become
+the per-run egress broker's CONNECT table, riding the profile's
+transport without widening the network — see D21's table row. A
+paired run additionally injects `HTTP(S)_PROXY`/`NO_PROXY` pointing at
+the in-sandbox relay after `[env]` (E8) and reserves those names
+(E13); a plain profile run injects nothing and stays byte-identical
+to the pre-pairing transport.
 
 **Enforcement is per backend** — the same accepted-never-ignored rule
 as D21. The bwrap-built tiers enforce it (bubblewrap, and the layered
@@ -1347,9 +1355,11 @@ myconfig-mo3.2.1, restructured as the enum bd myconfig-ew9s:
 `NonosEgress` / `Broker` / `Refused`), not matched by name at the
 call site.
 
-The first enforcement is the nono backend (bd myconfig-6di.2). The
-refusal fires while the argv is laid out, BEFORE the `--dry-run` early
-return, so a dry run audits it too.
+The first enforcement is the nono backend (bd myconfig-6di.2); the
+second is the bubblewrap pairing through the per-run broker (bd
+myconfig-ew9s, docs/design/egress-connect.md). The refusal fires
+while the argv is laid out, BEFORE the `--dry-run` early return, so a
+dry run audits it too.
 
 **Pinned nono 0.80.0 distinguishes policy layers.** With ports only,
 listed destination ports have no destination-host restriction and no
