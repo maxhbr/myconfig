@@ -138,6 +138,8 @@ fn egress_channel() -> mysbx::bwrap::EgressChannel<'static> {
         port: 4000,
         relay_bin: "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
         etc_dir: "/synth/store/bbbb-mysbx-egress-etc",
+        allow_domains: &[],
+        connect_ports: &[],
     }
 }
 

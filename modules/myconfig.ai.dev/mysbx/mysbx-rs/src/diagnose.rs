@@ -174,9 +174,10 @@ fn print_run(log: &RunLog, verbose: bool) {
         None => println!("  channel:      (the log carries no listen line)"),
     }
     println!(
-        "  decisions:    {total} ({allow} admissions, {unreachable} unreachable, {io} io, {fatal} fatal)",
+        "  decisions:    {total} ({allow} admissions, {deny} denials, {unreachable} unreachable, {io} io, {fatal} fatal)",
         total = log.decisions.len(),
         allow = log.count("allow"),
+        deny = log.count("deny"),
         unreachable = log.count("unreachable"),
         io = log.count("io"),
         fatal = log.count("fatal"),
@@ -208,7 +209,7 @@ fn print_run(log: &RunLog, verbose: bool) {
 fn render_json(log: &RunLog) -> String {
     format!(
         "{{\"pid\":{pid},\"log\":{log_path},\"channel\":{channel},\
-         \"decisions\":{total},\"allow\":{allow},\"unreachable\":{unreachable},\
+         \"decisions\":{total},\"allow\":{allow},\"deny\":{deny},\"unreachable\":{unreachable},\
          \"io\":{io},\"fatal\":{fatal}}}",
         pid = log.pid,
         log_path = crate::result::quote(&log.path.to_string_lossy()),
@@ -218,6 +219,7 @@ fn render_json(log: &RunLog) -> String {
         },
         total = log.decisions.len(),
         allow = log.count("allow"),
+        deny = log.count("deny"),
         unreachable = log.count("unreachable"),
         io = log.count("io"),
         fatal = log.count("fatal"),
@@ -421,6 +423,9 @@ mod tests {
         let json = render_json(&log);
         assert!(json.starts_with("{\"pid\":7,"), "{json}");
         assert!(json.contains("\"allow\":2"), "{json}");
+        // The `deny` event joins the vocabulary (bd myconfig-ew9s,
+        // egress-connect.md E9): always counted, 0 here.
+        assert!(json.contains("\"deny\":0"), "{json}");
         assert!(json.contains("\"unreachable\":1"), "{json}");
         assert!(json.ends_with('}'), "{json}");
     }

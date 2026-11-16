@@ -797,12 +797,17 @@ impl Config {
             }
         }
         // `network = "proxy-only"` names the ONE reachable endpoint
-        // (docs/design/config.md D20/D21): D21's allowlist keys
-        // describe what a SHARED network may reach, so naming both in
-        // one file is a schema error. The cross-layer variant is
-        // refused at run time (lib.rs step 4b), where the merged
-        // values are known.
-        if config.network == Some(Network::ProxyOnly) {
+        // (docs/design/config.md D20/D21, egress-connect.md E7, bd
+        // myconfig-ew9s): D21's allowlist keys next to `network =
+        // "proxy-only"` are a schema error in one file — EXCEPT on
+        // the `bubblewrap` backend, where the pairing rides the
+        // profile's broker transport as CONNECT-table rows (the
+        // netns stays empty; the keys widen nothing). The cross-layer
+        // variant is refused at run time (lib.rs step 4b), where the
+        // merged values and the backend are known.
+        if config.network == Some(Network::ProxyOnly)
+            && config.backend.as_deref() != Some("bubblewrap")
+        {
             let keys: Vec<&str> = [
                 (!config.allow_domains.is_empty()).then_some("allow-domains"),
                 (!config.connect_ports.is_empty()).then_some("connect-ports"),
