@@ -7298,8 +7298,15 @@ fn start_egress_broker(
         log_str,
         pinned,
     );
+    // `broker_argv` returns the PROGRAM as element 0 (the dry-run audit
+    // prints it, argv[0]-first like the backend argv block); the spawn
+    // must skip it — `Command::new` already names the program, and
+    // passing it again made the broker die on its own path as an
+    // unknown argument (review finding 2 on 53a6c680b3: EVERY
+    // broker-backed real run failed, plain proxy-only included).
+    debug_assert_eq!(argv.first().map(String::as_str), Some(broker_bin.as_str()));
     let mut cmd = std::process::Command::new(&broker_bin);
-    cmd.args(&argv);
+    cmd.args(&argv[1..]);
     cmd.stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null());
     // Die with mysbx's process: in exec mode mysbx IS the backend after the

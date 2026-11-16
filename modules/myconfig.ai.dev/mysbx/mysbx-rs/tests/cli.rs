@@ -206,6 +206,28 @@ fn spawn_proxy_only<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> 
     cmd
 }
 
+/// A fake `ssh-keygen` for REAL-RUN tests in degraded environments (the
+/// q8zg precedent, bd myconfig-ew9s): this sandbox runs as a uid without
+/// a passwd entry, so the real `ssh-keygen -t ed25519` dies with "No user
+/// exists for uid 1000" before the run ever reaches the egress broker —
+/// masking a real spawn bug behind an environmental failure (review
+/// finding 2 on 53a6c680b3 was invisible for exactly this reason). The
+/// fake accepts the pipeline's argv shape and writes a plausible pair,
+/// so the run proceeds to the channel and the backend.
+fn fake_ssh_keygen(base: &std::path::Path) -> std::path::PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = base.join("fake-keygen");
+    std::fs::create_dir_all(&dir).unwrap();
+    let script = dir.join("ssh-keygen");
+    std::fs::write(
+        &script,
+        "#!/bin/sh\n# fakes: -t ed25519 -N '' -C <comment> -f <path>\nkey=''\nwhile [ $# -gt 0 ]; do\n    case \"$1\" in\n        -f) key=\"$2\"; shift 2 ;;\n        *) shift ;;\n    esac\ndone\n[ -n \"$key\" ] || exit 1\nprintf 'FAKE-ED25519-PRIVATE-KEY\n' > \"$key\"\nprintf 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFAKEKEY mysbx sandbox\n' > \"$key.pub\"\nexit 0\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    script
+}
+
 /// Like [`run_binary_with`], but on a caller-built [`Command`] (the
 /// proxy-only tests need the egress pins, which `spawn` does not set).
 fn run_command(mut cmd: Command) -> (i32, String, String) {
@@ -10778,7 +10800,12 @@ fn a_broker_backed_real_run_starts_the_broker_and_logs_to_the_sidecar() {
         .env(
             "MYSBX_EGRESS_BROKER",
             env!("CARGO_BIN_EXE_mysbx-egress-broker"),
-        );
+        )
+        // The fake keygen (q8zg precedent) lets the run REACH the
+        // broker spawn in this degraded environment — without it the
+        // uid-1000 ssh-keygen failure masks every later channel bug
+        // (review finding 2 was hidden behind exactly that).
+        .env("MYSBX_SSH_KEYGEN", fake_ssh_keygen(&inv.home));
     let (code, _stdout, stderr) = run_command(cmd);
     // The channel came up, so the run got as far as the backend spawn and
     // failed there (the unpinned bwrap binary).
