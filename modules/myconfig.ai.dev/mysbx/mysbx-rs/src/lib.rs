@@ -2767,10 +2767,19 @@ fn sandbox_pipeline(
     }
 
     if !allowlist_keys.is_empty() {
-        // Asked of the registry (bd myconfig-mo3.2.1): the row's
-        // network_allowlist predicate is D21's enforcement table —
-        // nono alone enforces an allowlist today.
-        if !backends::find(backend).is_some_and(|row| row.network_allowlist) {
+        // Asked of the registry (bd myconfig-mo3.2.1, restructured bd
+        // myconfig-ew9s): the row's `allowlist` is D21's enforcement
+        // table. `NonosEgress` enforces the keys itself; `Broker`
+        // names the backends whose broker CAN enforce them (the
+        // bwrap-built tiers) — the gate for those rows lands with
+        // the CONNECT lane's argv plumbing (E7), until then they
+        // refuse like `Refused`; every other row refuses outright.
+        // Never accepted-and-ignored in any arm.
+        let enforcing = match backends::find(backend).map(|row| row.allowlist) {
+            Some(backends::Allowlist::NonosEgress) => true,
+            _ => false,
+        };
+        if !enforcing {
             eprintln!(
                 "mysbx: the configuration sets {} — only the `nono` backend enforces them; the `{backend}` backend cannot (bubblewrap shares or unshares the whole network namespace; the podman backends dial from an unfiltered netns — pasta on `podman-gvisor`, libkrun's TSI proxy on `podman-krun`, bd myconfig-6di.3/myconfig-6di.5.5)",
                 allowlist_keys

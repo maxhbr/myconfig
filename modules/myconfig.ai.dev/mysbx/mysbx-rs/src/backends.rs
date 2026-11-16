@@ -19,6 +19,30 @@
 //! the two stay in lockstep, so adding a row without its name (or
 //! vice versa) fails the suite, never a silent drift.
 
+/// How a backend handles D21's allowlist keys
+/// (`allow-domains`/`connect-ports`/`listen-ports`) — the
+/// restructure of the old `network_allowlist` bool (bd
+/// myconfig-ew9s, docs/design/egress-connect.md E12): the two
+/// booleans could not express "enforceable only with a broker
+/// pinned" (bubblewrap's row would need to be true with the pin and
+/// false without it, while nono's is unconditionally true, and
+/// `network_proxy_only` already says something else about both —
+/// so the D20/D21 distinction would collapse). One enum instead:
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Allowlist {
+    /// The backend cannot enforce the keys; the run is refused
+    /// (config.md D21's table).
+    Refused,
+    /// nono enforces them itself: its per-domain hostname proxy,
+    /// Landlock and seccomp port grants (bd myconfig-6di.2).
+    NonosEgress,
+    /// The bwrap-built tiers enforce them through the per-run
+    /// egress broker, and only when the wrapper pinned one
+    /// (`MYSBX_EGRESS_BROKER`); without the pin the run is refused,
+    /// never advisory (docs/design/egress-connect.md E7/E10).
+    Broker,
+}
+
 /// One backend's row (all fields are facts about the backend, never
 /// run state).
 pub struct Backend {
@@ -65,11 +89,13 @@ pub struct Backend {
     /// the VM backends with no guest channel for it refuse it.
     pub waypipe_refused: bool,
     /// Whether the backend enforces D21's allowlist keys
-    /// (`allow-domains`/`connect-ports`/`listen-ports`):
-    /// `true` only for nono (nono's per-domain proxy and
-    /// Landlock/seccomp port grants). Every other backend refuses
-    /// an allowlist (config.md D21), never accepts-and-ignores it.
-    pub network_allowlist: bool,
+    /// (`allow-domains`/`connect-ports`/`listen-ports`) — the HOW
+    /// is [`Allowlist`]: nono enforces them itself; the bwrap-built
+    /// tiers enforce them through the per-run egress broker, and
+    /// only when the wrapper pinned one; every other backend
+    /// refuses the keys (config.md D21), never accepts-and-ignores
+    /// them.
+    pub allowlist: Allowlist,
     /// Whether the backend enforces the D20 proxy-only network
     /// profile (`network = "proxy-only"`): `true` for the bwrap-built
     /// tiers, whose unshared netns plus forwarder socket and
@@ -103,7 +129,7 @@ pub const REGISTRY: &[Backend] = &[
         nested_virt: false,
         detach_refused: false,
         waypipe_refused: false,
-        network_allowlist: false,
+        allowlist: Allowlist::Broker,
         network_proxy_only: true,
     },
     Backend {
@@ -116,7 +142,7 @@ pub const REGISTRY: &[Backend] = &[
         nested_virt: false,
         detach_refused: true,
         waypipe_refused: false,
-        network_allowlist: false,
+        allowlist: Allowlist::Refused,
         network_proxy_only: false,
     },
     Backend {
@@ -129,7 +155,7 @@ pub const REGISTRY: &[Backend] = &[
         nested_virt: false,
         detach_refused: false,
         waypipe_refused: false,
-        network_allowlist: true,
+        allowlist: Allowlist::NonosEgress,
         network_proxy_only: true,
     },
     Backend {
@@ -142,7 +168,7 @@ pub const REGISTRY: &[Backend] = &[
         nested_virt: false,
         detach_refused: true,
         waypipe_refused: true,
-        network_allowlist: false,
+        allowlist: Allowlist::Refused,
         network_proxy_only: false,
     },
     Backend {
@@ -155,7 +181,7 @@ pub const REGISTRY: &[Backend] = &[
         nested_virt: false,
         detach_refused: false,
         waypipe_refused: true,
-        network_allowlist: false,
+        allowlist: Allowlist::Refused,
         network_proxy_only: false,
     },
     Backend {
@@ -168,7 +194,7 @@ pub const REGISTRY: &[Backend] = &[
         nested_virt: true,
         detach_refused: false,
         waypipe_refused: true,
-        network_allowlist: false,
+        allowlist: Allowlist::Refused,
         network_proxy_only: false,
     },
     Backend {
@@ -181,7 +207,7 @@ pub const REGISTRY: &[Backend] = &[
         nested_virt: true,
         detach_refused: false,
         waypipe_refused: true,
-        network_allowlist: false,
+        allowlist: Allowlist::Refused,
         network_proxy_only: false,
     },
 ];
@@ -275,14 +301,26 @@ mod tests {
                     b.name
                 );
             }
-            // D21's allowlist is enforced by exactly one backend
-            // (nono); D20's proxy-only profile by the bwrap-based
-            // tiers. The registry predicates the egress work asks
-            // stay derivable from the table (bd myconfig-mo3.2.1).
+            // D21's allowlist enforcement, per the E12 restructure
+            // (bd myconfig-ew9s): nono enforces it itself; the
+            // bwrap-built tiers through the per-run broker (and
+            // only with one pinned — the gate asks the pin too);
+            // every other backend refuses. The old `network_allowlist`
+            // bool could not express the middle row (true with a pin,
+            // false without one, while `network_proxy_only` already
+            // says something else about the same backends), which is
+            // why this is an enum. The D20/D21 distinction stays:
+            // the proxy-only profile remains its own bool below.
+            let expect = if b.name == "nono" {
+                Allowlist::NonosEgress
+            } else if b.name == "bubblewrap" {
+                Allowlist::Broker
+            } else {
+                Allowlist::Refused
+            };
             assert_eq!(
-                b.network_allowlist,
-                b.name == "nono",
-                "`{}`: network_allowlist must match config.md D21's table",
+                b.allowlist, expect,
+                "`{}`: allowlist must match config.md D21's table",
                 b.name
             );
             // D20's proxy-only profile needs an EMPTY network

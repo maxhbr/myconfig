@@ -1335,15 +1335,17 @@ a security bug:
 | backend | an allowlist means |
 | --- | --- |
 | `nono` | enforced (bd myconfig-6di.2, layered bd myconfig-6di.4.4): `--allow-domain` / `--allow-connect-port` / `--listen-port` per merged entry, in merged order; DNS is resolved by nono's own proxy, so no implicit `connect-ports` 53/853 is added; `listen-ports` WITHOUT `allow-domains`/`connect-ports` is refused (with only listen ports nono reports "outbound allowed", bd myconfig-a14) and URL/path-form entries are refused (no TLS interception here) |
-| `bubblewrap` | refused — bubblewrap shares or unshares the whole network namespace (`--share-net`/nothing), it cannot filter per domain or port |
+| `bubblewrap` | enforced through the per-run egress broker's CONNECT lane, and only when the wrapper pinned one (`MYSBX_EGRESS_BROKER`, docs/design/egress-connect.md E7/E10, bd myconfig-ew9s): the keys select broker policy next to `network = "proxy-only"`, and the broker resolves, admits and dials per row. Without a broker pinned the run is refused, never advisory — and keys next to a merely shared network are refused too (the proxy would be advisory, `curl --noproxy '*'` walks past it) |
 | `podman-gvisor` | refused — pasta does not filter by domain (bd myconfig-6di.3) |
 | `podman-krun` | refused — libkrun's TSI is an UNFILTERED proxy: the VMM dials whatever the guest connects to, from the container's own netns (pasta by default, the empty netns under `network = false`); no per-domain or per-port hook exists in the muxer (verified against the sources, bd myconfig-6di.5.5) |
 | `krun` | refused — direct libkrun TSI has no implemented allowlist hook |
 | `microvm-qemu` | refused — the SLiRP network path has no implemented allowlist enforcement |
 | `microvm-ch` | refused — passt's vhost-user net device (D11's SLiRP-compatible address plan) has no implemented allowlist hook |
 
-Every backend's row is asked of the registry (`network_allowlist`,
-bd myconfig-mo3.2.1), not matched by name at the call site.
+Every backend's row is asked of the registry (`allowlist`, bd
+myconfig-mo3.2.1, restructured as the enum bd myconfig-ew9s:
+`NonosEgress` / `Broker` / `Refused`), not matched by name at the
+call site.
 
 The first enforcement is the nono backend (bd myconfig-6di.2). The
 refusal fires while the argv is laid out, BEFORE the `--dry-run` early
