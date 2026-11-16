@@ -2892,6 +2892,29 @@ fn sandbox_pipeline(
                 eprintln!("mysbx: {e}");
                 return EXIT_INFRASTRUCTURE;
             }
+            // The broker table's own honesty rule (bd myconfig-ew9s,
+            // egress-connect.md E10 CORRECTED by review finding 3):
+            // the table's two axes are the HOST (allow-domains) and
+            // the PORT (connect-ports), and a table naming only hosts
+            // is refused — the unrestricted port axis it implied
+            // cannot be expressed in the Landlock fence, so the fence
+            // would grant only the upstream port while claiming the
+            // widening. The broker re-runs the same refusal
+            // fail-closed (exit 70, before its socket) as defense in
+            // depth; this gate keeps the refusal ahead of the session
+            // clone and the dry-run return.
+            if broker_pairing && !merged.allow_domains.is_empty() && merged.connect_ports.is_empty()
+            {
+                eprintln!(
+                    "mysbx: allow-domains ({}) names the CONNECT lane's HOST axis, \
+                     but no connect-ports names its PORT axis — a domains-only table \
+                     promised an unrestricted port axis the Landlock fence cannot \
+                     express; name the ports too (e.g. [443, 80]) \
+                     (docs/design/egress-connect.md E10)",
+                    merged.allow_domains.join(", ")
+                );
+                return EXIT_INFRASTRUCTURE;
+            }
         }
     }
 

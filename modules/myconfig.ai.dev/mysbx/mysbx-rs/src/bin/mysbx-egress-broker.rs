@@ -23,10 +23,12 @@
 //!    owned by this user with no group/other bits, a kernel whose
 //!    Landlock ABI is below 4, a table entry the broker cannot apply.
 //! 3. Confine itself with Landlock: `connect(2)` to TCP is allowed on
-//!    the fence's ports and nowhere else (E10: the upstream port plus
-//!    every `--allow-connect-port`; with domains but no ports the port
-//!    axis is unrestricted, the one sanctioned widening, named in the
-//!    `listen` line). The fence is applied BEFORE the
+//!    the fence's ports and nowhere else (E10, corrected by review
+//!    finding 3: the upstream port plus every `--allow-connect-port`;
+//!    a table that names hosts must name ports too, so the fence, the
+//!    listen line and the admission rule are exactly equal — the
+//!    domains-only "unrestricted port axis" was never expressible in
+//!    the fence and is refused). The fence is applied BEFORE the
 //!    socket exists — Landlock does not restrict AF_UNIX, so binding
 //!    afterwards is unaffected, and a refused confinement leaves no socket
 //!    file behind.
@@ -117,9 +119,10 @@ struct Invocation {
     /// case-insensitively. Empty means no name may CONNECT.
     allow_domains: Vec<String>,
     /// The CONNECT lane's `connect-ports` rows: the ports a CONNECT
-    /// target may name (the port filter of E9's conjunction). Empty
-    /// WITH non-empty `allow_domains` means the port axis is
-    /// unrestricted (E10's one sanctioned widening).
+    /// target may name (the port filter of E9's conjunction). Both
+    /// axes are named whenever hosts are: `validate` refuses a
+    /// domains-only table (review finding 3, correcting E10), so the
+    /// fence can always list the ports exactly (E10).
     allow_connect_ports: Vec<u16>,
 }
 
@@ -218,10 +221,10 @@ fn run(inv: &Invocation) -> Result<(), String> {
     // The fence is applied BEFORE the socket exists: Landlock restricts
     // only TCP `connect(2)`, so binding the AF_UNIX socket after it is
     // unaffected, and a refused confinement leaves no socket file
-    // behind. E10: the upstream port plus every allow-connect-port;
-    // with domains but no port rows the port axis is unrestricted (the
-    // one sanctioned widening, named in the `listen` line, never
-    // silent).
+    // behind. E10 (corrected by review finding 3): the upstream port
+    // plus every allow-connect-port — the table's ports are always
+    // named when its hosts are, so the fence is exactly the admission
+    // rule's port set, and the listen line says the same thing.
     let mut fence_ports = vec![inv.upstream.port()];
     fence_ports.extend(table.dial_ports());
     confine_to_ports(&fence_ports)?;
@@ -355,13 +358,15 @@ fn unsupported_landlock(abi: i64) -> String {
 }
 
 /// The CONNECT lane's policy table (docs/design/egress-connect.md
-/// E9/E10, bd myconfig-ew9s). Two row classes, one conjunction:
-/// `domains` filters the CONNECT target's HOST, `connect_ports` its
-/// PORT; both must admit when both are non-empty. `connect_ports`
-/// alone means any host on those ports (nono's ports-only semantics,
-/// honestly mapped: the empty netns denies every direct connect, so
-/// the ports can only mean this lane). `domains` alone means any port
-/// on those hosts (E10's sanctioned unrestricted port axis).
+/// E9/E10, bd myconfig-ew9s; E10 corrected by review finding 3). Two
+/// row classes, one conjunction: `domains` filters the CONNECT
+/// target's HOST, `connect_ports` its PORT; both axes are named
+/// whenever hosts are — a domains-only table is REFUSED, because the
+/// unrestricted port axis it implied cannot be expressed in the
+/// Landlock fence. `connect_ports` alone means any host on those
+/// ports (nono's ports-only semantics, honestly mapped: the empty
+/// netns denies every direct connect, so the ports can only mean
+/// this lane).
 ///
 /// Matching is on the NAME, never an IP literal: the name is the
 /// policy, and an IP-literal CONNECT target has no name to match, so
@@ -429,6 +434,27 @@ impl ConnectTable {
         let mut ports = connect_ports.to_vec();
         ports.sort_unstable();
         ports.dedup();
+        // Domains without ports is REFUSED (review finding 3 on
+        // 53a6c680b3, correcting E10): the table's two axes are the
+        // HOST (`allow-domains`) and the PORT (`connect-ports`), and
+        // a table naming only hosts promised an unrestricted port
+        // axis the Landlock fence could not express — the fence
+        // stayed at the upstream port while `fence_summary` claimed
+        // the widening, so an allowed host on any other port was
+        // refused by the kernel with EACCES while the log said it was
+        // granted. A claim of a widening the kernel does not grant
+        // must not survive; requiring both axes keeps the fence, the
+        // listen line and the admission rule exactly equal.
+        if !normalized.is_empty() && ports.is_empty() {
+            return Err(format!(
+                "`--allow-domain {}` names the CONNECT target's HOST axis but no \
+                 `--allow-connect-port` names its PORT axis — a domains-only table \
+                 promised an unrestricted port axis the Landlock fence cannot \
+                 express (docs/design/egress-connect.md E10, corrected); name the \
+                 ports too (e.g. 443, 80), or use `--allow-connect-port` alone",
+                normalized.join(", ")
+            ));
+        }
         Ok(ConnectTable {
             domains: normalized,
             connect_ports: ports,
@@ -436,24 +462,12 @@ impl ConnectTable {
     }
 
     /// The ports the Landlock fence must carry beyond the upstream
-    /// (E10): the table's port rows. Empty WITH non-empty `domains`
-    /// means the port axis is unrestricted — every port must be in the
-    /// fence, expressed by the caller NOT narrowing (an unrestricted
-    /// axis cannot be listed port by port, so the fence omits the port
-    /// rules only when the table's `connect_ports` is empty and its
-    /// `domains` is not — see [`Self::fence_summary`]).
+    /// (E10): the table's port rows — always named when hosts are
+    /// (`validate` refuses a domains-only table, review finding 3),
+    /// so the fence lists exactly the admission rule's ports and the
+    /// listen line says the same thing.
     fn dial_ports(&self) -> Vec<u16> {
-        if !self.domains.is_empty() && self.connect_ports.is_empty() {
-            // Domains-only: every port is dialable for an admitted
-            // host, and Landlock grants ports — the fence cannot list
-            // them, so it stays at the upstream port plus nothing.
-            // The RESOLUTION-side checks (address classes, name
-            // matching) carry the host axis; the CONNECT target's
-            // port is unrestricted by policy.
-            Vec::new()
-        } else {
-            self.connect_ports.clone()
-        }
+        self.connect_ports.clone()
     }
 
     /// Whether the CONNECT lane exists at all: no rows, no policy —
@@ -591,17 +605,15 @@ impl ConnectTable {
         Ok(())
     }
 
-    /// The `listen` line's fence description, never silent about the
-    /// one sanctioned widening (E10).
+    /// The `listen` line's fence description: exactly the ports the
+    /// fence grants, so the log never claims a widening the kernel
+    /// does not grant (review finding 3: the old domains-only arm
+    /// claimed an unrestricted port axis while the fence granted only
+    /// the upstream port — a lie in a log line, the exact failure
+    /// mode this design was written to avoid).
     fn fence_summary(&self) -> String {
         if self.is_empty() {
             "that one port".to_owned()
-        } else if !self.domains.is_empty() && self.connect_ports.is_empty() {
-            format!(
-                "the ports named by the CONNECT table — upstream plus any port \
-                 (domains-only: the port axis is unrestricted, the one sanctioned \
-                 widening, docs/design/egress-connect.md E10)"
-            )
         } else {
             format!(
                 "the ports named by the CONNECT table: {}",
@@ -1327,7 +1339,7 @@ mod tests {
     fn admit_refuses_ip_literals_only_when_domains_restrain() {
         // With domains in the table an IP-literal CONNECT target is
         // denied: the name is the policy (E9).
-        let with_domains = ConnectTable::validate(&["github.com".to_owned()], &[]).unwrap();
+        let with_domains = ConnectTable::validate(&["github.com".to_owned()], &[443]).unwrap();
         assert!(with_domains.admit("140.82.121.4", 443).is_err());
         // Ports-only has no names to match, so any host — IP literal
         // included — is admitted on the allowed port; the address
@@ -1350,7 +1362,7 @@ mod tests {
 
     #[test]
     fn dialable_addr_refuses_the_host_service_classes() {
-        let table = ConnectTable::validate(&["github.com".to_owned()], &[]).unwrap();
+        let table = ConnectTable::validate(&["github.com".to_owned()], &[443]).unwrap();
         for refused in [
             "127.0.0.1",
             "127.8.8.8",
@@ -1384,7 +1396,7 @@ mod tests {
         // — so every refused v4 class had a v6 spelling that passed the
         // class check and dialed the host service it names. The mapped
         // form runs the FULL v4 rule set; genuine v6 keeps the v6 rules.
-        let table = ConnectTable::validate(&["github.com".to_owned()], &[]).unwrap();
+        let table = ConnectTable::validate(&["github.com".to_owned()], &[443]).unwrap();
         // The mapped spellings of every refused v4 class, including the
         // documentation range the v4 rule already carried.
         for refused in [
@@ -1419,15 +1431,21 @@ mod tests {
         // row.
         let ports = ConnectTable::validate(&[], &[443, 22]).unwrap();
         assert_eq!(ports.dial_ports(), [22, 443]);
-        // Domains-only: the port axis is unrestricted and the fence
-        // carries NO port rows — the one sanctioned widening, named in
-        // the `listen` line.
-        let domains = ConnectTable::validate(&["github.com".to_owned()], &[]).unwrap();
-        assert_eq!(domains.dial_ports(), Vec::<u16>::new());
-        assert!(domains.fence_summary().contains("unrestricted"));
-        // Both: the conjunction's ports.
+        // Domains-only is REFUSED (review finding 3): the unrestricted
+        // port axis it implied cannot be expressed in the Landlock
+        // fence, so a table naming hosts must name ports too. The
+        // refusal names the missing axis.
+        let err = ConnectTable::validate(&["github.com".to_owned()], &[]).unwrap_err();
+        assert!(err.contains("--allow-connect-port"), "{err}");
+        // Both: the conjunction's ports, and the listen line says
+        // exactly those.
         let both = ConnectTable::validate(&["github.com".to_owned()], &[443]).unwrap();
         assert_eq!(both.dial_ports(), [443]);
+        assert!(
+            both.fence_summary().contains("CONNECT table: 443"),
+            "{}",
+            both.fence_summary()
+        );
         // Empty table: the phase-B fence summary, unchanged.
         let empty = ConnectTable::validate(&[], &[]).unwrap();
         assert_eq!(empty.fence_summary(), "that one port");

@@ -788,7 +788,12 @@ fn a_connect_to_a_denied_target_is_refused_and_logged_as_deny() {
         ),
         (
             // Domains restrain: an IP literal has no name to match.
-            vec!["--allow-domain", "github.com"],
+            vec![
+                "--allow-domain",
+                "github.com",
+                "--allow-connect-port",
+                "443",
+            ],
             "CONNECT 1.2.3.4:443 HTTP/1.1\r\n\r\n",
             "the CONNECT lane's policy is the NAME",
         ),
@@ -945,18 +950,65 @@ fn the_connect_table_widens_the_fence_and_names_it_in_the_listen_line() {
 }
 
 #[test]
-fn the_domains_only_table_names_the_widening_in_the_listen_line() {
-    let dir = run_dir("connect-fence-widening");
+fn a_domains_only_table_is_refused_the_unrestricted_axis_was_a_log_line_lie() {
+    // Review finding 3 on 53a6c680b3: the domains-only table promised
+    // an unrestricted port axis the Landlock fence cannot express —
+    // the fence granted only the upstream port while the listen line
+    // claimed the widening, and an allowed host on any other port got
+    // EACCES. A claim of a widening the kernel does not grant must
+    // not survive: the table refuses fail-closed (exit 70, before
+    // the socket), naming the missing axis and the fix.
+    let dir = run_dir("connect-domains-only-refused");
+    let (code, _stdout, stderr) = run(&[
+        "--listen",
+        &sock(&dir),
+        "--upstream",
+        "127.0.0.1:4000",
+        "--decision-log",
+        &log_in(&dir),
+        "--allow-domain",
+        "github.com",
+    ]);
+    let socket_existed = Path::new(&sock(&dir)).exists();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(code, Some(70), "stderr: {stderr}");
+    assert!(
+        !socket_existed,
+        "a refused table must not leave a socket behind"
+    );
+    assert!(
+        stderr.contains("--allow-connect-port"),
+        "the refusal names the missing axis: {stderr}"
+    );
+    assert!(
+        stderr.contains("cannot express"),
+        "the refusal says WHY, not just what: {stderr}"
+    );
+    // And a paired table (hosts AND ports) still starts and names its
+    // exact ports in the listen line — the fence and the log agree.
+    let dir = run_dir("connect-paired-fence-line");
     let addr = upstream_fixture();
-    let (child, _socket) = spawn_ready_with(&dir, &addr, &["--allow-domain", "github.com"]);
+    let (child, _socket) = spawn_ready_with(
+        &dir,
+        &addr,
+        &[
+            "--allow-domain",
+            "github.com",
+            "--allow-connect-port",
+            "443",
+        ],
+    );
     let mut child = child;
     let _ = child.kill();
     let _ = child.wait();
     let log = std::fs::read_to_string(log_in(&dir)).expect("read the decision log");
     let _ = std::fs::remove_dir_all(&dir);
     assert!(
-        log.contains("unrestricted"),
-        "the domains-only widening is named, never silent: {log}"
+        log.contains("the ports named by the CONNECT table: 443"),
+        "the listen line names exactly the fence's ports: {log}"
     );
-    assert!(log.contains("E10"), "the line cites its decision: {log}");
+    assert!(
+        !log.contains("unrestricted"),
+        "no widening claim survives: {log}"
+    );
 }

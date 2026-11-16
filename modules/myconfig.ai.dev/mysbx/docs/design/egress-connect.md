@@ -145,16 +145,32 @@ channel are updated with it.
 
 ## E10: the Landlock fence under CONNECT
 
+> **CORRECTED by review finding 3 on 53a6c680b3.** The original text
+> of this decision promised a domains-only table an "unrestricted
+> port axis, the one sanctioned widening" — but the fence as
+> implemented granted only the upstream port for such a table
+> (Landlock cannot list 65 535 ports, and the implementation returned
+> no port rows), while `fence_summary` and this paragraph claimed the
+> widening. An allowed host on any other port was refused by the
+> kernel with `EACCES` while the log said it was granted: a lie in a
+> log line, the exact failure mode this design was written to avoid.
+> A claim of a widening the kernel does not grant must not survive.
+> The correction: a table that names HOSTS must name PORTS too.
+
 The phase-B fence is one port (`landlock.rs`,
 `confine_to_tcp_port`). Under CONNECT the rule set extends to one rule
-per allowed port. `connect-ports` empty + `allow-domains` non-empty
-means the port axis is unrestricted (D21 semantics), so the fence
-widens to every port — the ONE sanctioned widening, and it is written
-into the `listen` line of the decision log, never silent. The host
-axis is carried by E9's matching and address-class refusals, not by
-Landlock, which grants ports and never addresses. Handling
-`ACCESS_NET_BIND_TCP` as well (deny all TCP bind for the broker) is
-optional defense in depth; the security claim does not rest on it.
+per allowed port. `connect-ports` empty + `allow-domains` non-empty is
+REFUSED — both by the pipeline gate (ahead of the session clone and
+the dry-run return) and fail-closed by the broker itself (exit 70,
+before its socket), the message naming the missing axis and the fix.
+So the fence, the `listen` line and the admission rule are always
+EXACTLY equal: the fence carries the upstream port plus every named
+`connect-ports`, and nothing else. `connect-ports` alone (any host on
+those ports) keeps the D21 ports-only semantics. The host axis is
+carried by E9's matching and address-class refusals, not by Landlock,
+which grants ports and never addresses. Handling `ACCESS_NET_BIND_TCP`
+as well (deny all TCP bind for the broker) is optional defense in
+depth; the security claim does not rest on it.
 
 ## E11: why a permitted destination cannot become a relay
 

@@ -10722,6 +10722,38 @@ fn listen_ports_only_on_bubblewrap_is_refused_under_the_pairing_rules() {
 }
 
 #[test]
+fn a_domains_only_pairing_is_refused_the_port_axis_must_be_named() {
+    // Review finding 3 on 53a6c680b3, correcting E10: a table naming
+    // only hosts promised an unrestricted port axis the Landlock
+    // fence cannot express — the fence granted only the upstream
+    // port while the listen line claimed the widening. Refused at
+    // the gate, ahead of the session clone and the dry-run return,
+    // naming the missing axis and the fix; the broker re-runs the
+    // same rule fail-closed as defense in depth.
+    let (inv, _, sidecar) = fixture("pairing-domains-only", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\nallow-domains = [\"github.com\"]\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["--dry-run"]);
+    cmd.env(
+        "MYSBX_EGRESS_BROKER",
+        "/synth/store/cccc-mysbx/bin/mysbx-egress-broker",
+    );
+    let (code, stdout, stderr) = run_command(cmd);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("no connect-ports names its PORT axis"),
+        "the refusal names the missing axis: {stderr}"
+    );
+    assert!(stderr.contains("443"), "the refusal names a fix: {stderr}");
+    assert!(
+        !stdout.contains("--clearenv"),
+        "no argv on refusal: {stdout}"
+    );
+}
+#[test]
 fn url_form_allowlist_on_bubblewrap_is_refused_under_the_pairing_rules() {
     // E9 again: URL/path-form `allow-domains` entries would need TLS
     // interception no enforcing backend has — refused on bubblewrap
