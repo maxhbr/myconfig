@@ -78,6 +78,19 @@ The decision:
 
 ## E8: two lanes on one socket; the relay is untouched
 
+> **Implementation note added by review finding 4 on 53a6c680b3.** The
+> first implementation classified with a single `MSG_PEEK` and
+> required the whole request line in one read — but the in-sandbox
+> relay is a dumb byte pipe that does NOT preserve write boundaries,
+> so a CONNECT line split across writes was classified as model
+> traffic and silently tunneled with no table evaluation and no deny
+> record. The classifier contract is: bounded preface buffering
+> (consume, don't peek) until the first line is decisively complete,
+> `CONNECT`-prefix divergence falling back at once, the consumed
+> bytes replayed to the model upstream first so nothing is lost or
+> reordered, and a bound-filling preface without a decisive line being
+> the model lane. A test drives the line split at every byte boundary.
+
 The broker keeps serving the phase-B lane byte-for-byte: bytes that
 are not a `CONNECT` request are relayed to the LiteLLM row, so the
 agents' baked `http://127.0.0.1:<port>/v1` URLs keep working with no

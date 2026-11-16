@@ -904,6 +904,189 @@ fn the_model_lane_is_untouched_by_the_connect_table() {
 }
 
 #[test]
+fn a_connect_request_split_across_writes_is_still_the_policy_lane() {
+    // Review finding 4 on 53a6c680b3: the single MSG_PEEK classified
+    // a request line split across writes as model traffic — silently
+    // tunneled to the model upstream, no table evaluation, no deny
+    // record — because the in-sandbox relay does not preserve write
+    // boundaries. The preface reader consumes byte-by-byte until the
+    // first line terminates, so delivery split at EVERY byte boundary
+    // of the line must classify as CONNECT. Byte-at-a-time writes are
+    // the worst case (each write lands in its own broker read), so
+    // one pass over every split point of a fragmented DENIED target
+    // pins the deny (never a model-lane tunnel), and a split ADMITTED
+    // target pins the 200.
+    //
+    // The denied split: CONNECT to a host outside the table, split at
+    // every boundary — each split must produce a `deny`, never a
+    // model-lane `allow` -> upstream line.
+    for split in 0..request_line_len() {
+        let dir = run_dir(&format!("connect-split-{split}"));
+        let addr = upstream_fixture();
+        let (child, socket) = spawn_ready_with(
+            &dir,
+            &addr,
+            &[
+                "--allow-domain",
+                "github.com",
+                "--allow-connect-port",
+                "443",
+            ],
+        );
+        let mut client = std::os::unix::net::UnixStream::connect(&socket).expect("connect");
+        let line: &[u8] = b"CONNECT example.com:443 HTTP/1.1\r\n\r\n";
+        write_split(&mut client, line, split);
+        let answer = read_line_until_double_crlf(&mut client);
+        let mut child = child;
+        let _ = client.shutdown(std::net::Shutdown::Both);
+        let _ = child.kill();
+        let _ = child.wait();
+        let log = std::fs::read_to_string(log_in(&dir)).expect("read the decision log");
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(
+            log.contains("\"event\":\"deny\""),
+            "split at {split}: the split line reaches the policy lane: {log}"
+        );
+        assert!(
+            answer.is_empty() || answer.starts_with("HTTP/1.1 403"),
+            "split at {split}: the denied handshake: {answer}"
+        );
+        assert!(
+            !log.lines()
+                .any(|l| l.contains("\"event\":\"allow\"") && l.contains("-> 127.0.0.1:")),
+            "split at {split}: never a model-lane tunnel: {log}"
+        );
+    }
+    // The admitted split, at one representative boundary mid-line:
+    // the POLICY lane is what matters — in this offline sandbox the
+    // name cannot resolve, so the honest outcome is the transport
+    // `unreachable` and a 502, never a model-lane tunnel. (The
+    // 200-handshake half is covered by the table-less and denied
+    // tests upstream of resolution; an online host gets it.)
+    let dir = run_dir("connect-split-admitted");
+    let addr = upstream_fixture();
+    let (child, socket) = spawn_ready_with(
+        &dir,
+        &addr,
+        &[
+            "--allow-domain",
+            "github.com",
+            "--allow-connect-port",
+            "443",
+        ],
+    );
+    let mut client = std::os::unix::net::UnixStream::connect(&socket).expect("connect");
+    let line: &[u8] = b"CONNECT github.com:443 HTTP/1.1\r\n\r\n";
+    write_split(&mut client, line, 12);
+    let answer = read_line_until_double_crlf(&mut client);
+    let mut child = child;
+    let _ = client.shutdown(std::net::Shutdown::Both);
+    let _ = child.kill();
+    let _ = child.wait();
+    let log = std::fs::read_to_string(log_in(&dir)).expect("read the decision log");
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(
+        log.lines()
+            .any(|l| l.contains("\"event\":\"allow\"") && l.contains("CONNECT")),
+        "the split admitted line is the policy lane: {log}"
+    );
+    assert!(
+        answer.is_empty()
+            || answer.starts_with("HTTP/1.1 200")
+            || answer.starts_with("HTTP/1.1 502"),
+        "the policy lane's answer, whatever the transport found: {answer}"
+    );
+    assert!(
+        !log.lines()
+            .any(|l| l.contains("\"event\":\"allow\"") && l.contains("-> 127.0.0.1:")),
+        "never a model-lane tunnel: {log}"
+    );
+}
+
+/// The length of the test CONNECT request line WITHOUT the head's
+/// empty-line terminator — the split points range over every byte
+/// boundary of the LINE, so the first half never completes the head
+/// and the broker cannot answer before the tail lands.
+fn request_line_len() -> usize {
+    b"CONNECT example.com:443 HTTP/1.1\r\n".len()
+}
+
+/// Write `line` in two pieces, `split` bytes then the rest, with a
+/// flush and a generous window between: the broker's preface reader
+/// consumes between the writes, so the line is classified from a
+/// fragmented delivery. The window must be long enough that even a
+/// peek-based classifier sees ONLY the first half — the whole point
+/// of the test is that the fragmented line must still classify as
+/// CONNECT, so a window too short would let a buggy peek see the
+/// completed line and pass by accident.
+fn write_split(stream: &mut std::os::unix::net::UnixStream, line: &[u8], split: usize) {
+    use std::io::Write;
+    stream
+        .write_all(&line[..split])
+        .expect("write the head half");
+    let _ = stream.flush();
+    std::thread::sleep(std::time::Duration::from_millis(150));
+    stream
+        .write_all(&line[split..])
+        .expect("write the tail half");
+    let _ = stream.flush();
+}
+
+#[test]
+fn a_fragmented_non_connect_head_and_an_empty_connection_stay_the_model_lane() {
+    // The fallback edge of the preface reader (review finding 4): a
+    // non-CONNECT head — even one whose first bytes look like nothing
+    // yet — falls back as soon as the prefix diverges, and an EMPTY
+    // connection (EOF before any byte) is the model lane with nothing
+    // replayed. Neither may stall: the reader must not wait for a
+    // newline it will never get once `CONNECT ` is impossible.
+    let dir = run_dir("preface-fallback");
+    let addr = upstream_fixture();
+    let (child, socket) = spawn_ready_with(
+        &dir,
+        &addr,
+        &[
+            "--allow-domain",
+            "github.com",
+            "--allow-connect-port",
+            "443",
+        ],
+    );
+    // A GET head, split mid-line: diverges from CONNECT at byte 0,
+    // so the model lane runs after ONE byte, and the full head still
+    // reaches the upstream (the replay is complete and in order).
+    let mut client = std::os::unix::net::UnixStream::connect(&socket).expect("connect");
+    let head: &[u8] = b"GET /v1/models HTTP/1.1\r\nHost: localhost\r\n\r\n";
+    write_split(&mut client, head, 8);
+    let mut answer = Vec::new();
+    let _ = client.read_to_end(&mut answer);
+    let text = String::from_utf8_lossy(&answer);
+    // An empty connection, while the broker is still up: EOF before
+    // any byte — the model lane dials, sees EOF immediately, nothing
+    // replayed, no policy event.
+    let mut empty = std::os::unix::net::UnixStream::connect(&socket).expect("connect");
+    let _ = empty.shutdown(std::net::Shutdown::Both);
+    drop(empty);
+    let mut child = child;
+    let _ = child.kill();
+    let _ = child.wait();
+    let log = std::fs::read_to_string(log_in(&dir)).expect("read the decision log");
+    assert!(
+        text.starts_with("HTTP/1.1 200"),
+        "the split GET head still reaches the upstream whole: {text}"
+    );
+    assert!(
+        log.contains("\"event\":\"allow\""),
+        "the model lane is the fallback: {log}"
+    );
+    assert!(
+        !log.contains("\"event\":\"deny\""),
+        "neither fallback case is a policy event: {log}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn a_table_entry_the_broker_cannot_apply_refuses_the_run_before_the_socket() {
     // E9's fail-closed rule at the binary level: an unapplicable table
     // entry (URL form, an IP literal, gateway syntax) refuses with 70

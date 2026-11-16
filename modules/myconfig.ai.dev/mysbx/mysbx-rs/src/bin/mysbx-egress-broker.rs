@@ -702,26 +702,98 @@ fn relay_one(client: UnixStream, upstream: SocketAddr, table: &ConnectTable, log
         Some((pid, uid)) => format!("pid {pid} uid {uid}"),
         None => "unknown peer".to_owned(),
     };
-    // Read the first bytes without consuming them from the lane's
-    // view: a `recv(MSG_PEEK)` keeps the bytes for whichever lane
-    // runs, so the model lane can hand the connection over whole and
-    // the CONNECT lane can parse its request line off the same
-    // stream. (`UnixStream::peek` is unstable in this toolchain; the
-    // raw `recv` is the same zero-dependency idiom the crate uses
-    // elsewhere.)
-    let mut peek = [0u8; 512];
-    let n = match recv_peek(&client, &mut peek) {
-        Ok(n) => n,
-        Err(e) => {
-            log.record("io", &format!("{peer}: cannot peek the lane: {e}"));
-            return;
+    // Bounded preface buffering (review finding 4 on 53a6c680b3,
+    // replacing the single MSG_PEEK): the in-sandbox relay is a dumb
+    // byte pipe and does NOT preserve write boundaries, so a CONNECT
+    // request line can arrive split across reads — the one-peek
+    // classifier saw a truncated line, found no newline, and silently
+    // forwarded the request to the model upstream with no table
+    // evaluation and no deny record. Instead: CONSUME bytes into a
+    // bounded preface until the first line is decisively complete,
+    // then classify. The consumed bytes are handed to whichever lane
+    // runs — written to the upstream first on the model lane, or
+    // counted off the request head on the CONNECT lane — so nothing
+    // is lost or reordered. A preface that fills the bound with no
+    // decisive first line is the model lane (a model client's head
+    // can legitimately exceed the bound; a CONNECT line never does).
+    match read_preface(&client) {
+        Preface::Connect(head_so_far) => {
+            let first_line = first_line_of(&head_so_far).to_vec();
+            match parse_connect_request(&first_line) {
+                Some(target) => connect_lane(client, target, table, &peer, log, head_so_far),
+                None => model_lane(client, upstream, &peer, log, head_so_far),
+            }
         }
-    };
-    if let Some(target) = parse_connect_request(&peek[..n]) {
-        connect_lane(client, target, table, &peer, log);
-    } else {
-        model_lane(client, upstream, &peer, log);
+        Preface::Model(preface) => model_lane(client, upstream, &peer, log, preface),
     }
+}
+
+/// The bounded preface buffer's size: a CONNECT request line is a few
+/// dozen bytes and every real proxy client sends it in the first
+/// write, but the bound is generous so a head with many headers still
+/// classifies without falling back on a line the parser can decide.
+const PREFACE_BOUND: usize = 8 * 1024;
+
+/// The lane decision's input: the consumed preface bytes. `Connect`
+/// carries a head whose FIRST LINE terminated inside the bound — the
+/// parser decides the lane on that line alone. `Model` carries
+/// whatever was read before the decision to fall back (a bound filled
+/// with no newline, a first line that cannot be `CONNECT`, or EOF on
+/// an empty or short connection).
+enum Preface {
+    Connect(Vec<u8>),
+    Model(Vec<u8>),
+}
+
+/// Read the connection's preface, CONSUMING it, until the first line
+/// is decisively complete or the fallback rules fire. A first line
+/// that has already diverged from the `CONNECT ` prefix cannot become
+/// one, so bytes are not held hostage while a non-CONNECT client
+/// stalls: the model lane runs as soon as the divergence is visible.
+fn read_preface(client: &UnixStream) -> Preface {
+    let mut buf: Vec<u8> = Vec::new();
+    let mut byte = [0u8; 1];
+    let mut readable = client;
+    loop {
+        // A first line that can no longer become `CONNECT `: the model
+        // lane, with every consumed byte handed over.
+        if !could_start_connect(&buf) {
+            return Preface::Model(buf);
+        }
+        // A terminated first line: decisive either way.
+        if buf.iter().any(|&b| b == b'\n') {
+            return Preface::Connect(buf);
+        }
+        if buf.len() >= PREFACE_BOUND {
+            return Preface::Model(buf);
+        }
+        match readable.read(&mut byte) {
+            Ok(0) => return Preface::Model(buf),
+            Ok(_) => buf.push(byte[0]),
+            Err(_) => return Preface::Model(buf),
+        }
+    }
+}
+
+/// Whether `buf` could still be the start of a `CONNECT ` request
+/// line: the method token is case-SENSITIVE (RFC 7231), so the check
+/// is a byte comparison of the prefix so far. An empty buffer could
+/// still become anything.
+fn could_start_connect(buf: &[u8]) -> bool {
+    const METHOD: &[u8] = b"CONNECT ";
+    buf.len() < METHOD.len() || buf[..METHOD.len()] == *METHOD
+}
+
+/// The bytes of the preface's first line, without its terminator.
+fn first_line_of(head: &[u8]) -> &[u8] {
+    let end = head
+        .iter()
+        .position(|&b| b == b'\n')
+        .expect("read_preface only returns Connect with a newline");
+    // The line WITH its `\n` terminator: `parse_connect_request`
+    // requires the terminated line (it finds the newline itself, so
+    // a truncated head can never parse).
+    &head[..end + 1]
 }
 
 /// Whether the connection's first bytes are a `CONNECT` request line
@@ -729,16 +801,17 @@ fn relay_one(client: UnixStream, upstream: SocketAddr, table: &ConnectTable, log
 /// it `CONNECT host:port HTTP/1.1` (RFC 7231 §4.3.6 — the method is
 /// case-SENSITIVE, so a lowercase `connect` is not a proxy request);
 /// anything else (GET, POST, a bare TLS hello, an empty connection)
-/// is the model lane. Returns the `host:port` target of a request
-/// line that fits in the peek buffer.
+/// is the model lane. Returns the `host:port` target of a COMPLETE
+/// request line.
 ///
-/// The line must be TERMINATED inside the peeked bytes: a head that
-/// the peek buffer split mid-line is indistinguishable from a
-/// complete one, and acting on a truncated head would tunnel a
-/// request whose tail is still unread — so a peek without a newline
-/// takes the model lane (a real proxy client sends the whole head in
-/// one write; a model-lane client whose bytes merely start with the
-/// letters `CONNECT` never reaches the policy lane this way).
+/// The caller hands the FIRST LINE only, already terminated (the
+/// preface reader consumes until the newline, review finding 4): the
+/// one-peek classifier classified a line split across writes as
+/// model traffic and silently tunneled it — no table evaluation, no
+/// deny record — because the in-sandbox relay does not preserve
+/// write boundaries. A line that parses here decides the policy
+/// lane; a line that does not decides the model lane, with the
+/// consumed bytes replayed.
 fn parse_connect_request(bytes: &[u8]) -> Option<ConnectTarget> {
     let text = std::str::from_utf8(bytes).ok()?;
     // The first line, and only if it is terminated inside the peek.
@@ -778,13 +851,21 @@ struct ConnectTarget {
     port: u16,
 }
 
-/// The model lane: the phase-B behavior, byte-for-byte. The
-/// connection was peeked at, not read, so this dials the upstream
-/// and copies both ways as before — the peeked bytes are still in
-/// the stream.
-fn model_lane(client: UnixStream, upstream: SocketAddr, peer: &str, log: &DecisionLog) {
+/// The model lane: the phase-B behavior, byte-for-byte in what the
+/// PEER sees. The preface bytes were CONSUMED while classifying
+/// (review finding 4), so they are replayed to the upstream FIRST —
+/// in their original order — before the two-way copy continues from
+/// the stream; to the upstream the connection is indistinguishable
+/// from one that was never buffered.
+fn model_lane(
+    client: UnixStream,
+    upstream: SocketAddr,
+    peer: &str,
+    log: &DecisionLog,
+    preface: Vec<u8>,
+) {
     log.record("allow", &format!("{peer} -> {upstream}"));
-    let upstream_stream = match TcpStream::connect(upstream) {
+    let mut upstream_stream = match TcpStream::connect(upstream) {
         Ok(stream) => stream,
         Err(e) => {
             log.record(
@@ -795,6 +876,16 @@ fn model_lane(client: UnixStream, upstream: SocketAddr, peer: &str, log: &Decisi
             return;
         }
     };
+    // The preface was CONSUMED while classifying (review finding 4):
+    // replay it to the upstream FIRST, in its original order, so the
+    // connection is byte-for-byte what a never-buffered one would
+    // have been.
+    if !preface.is_empty() {
+        if let Err(e) = upstream_stream.write_all(&preface) {
+            log.record("io", &format!("{peer}: cannot replay the preface: {e}"));
+            return;
+        }
+    }
     pipe_bidirectional(client, upstream_stream, peer, log);
 }
 
@@ -810,6 +901,7 @@ fn connect_lane(
     table: &ConnectTable,
     peer: &str,
     log: &DecisionLog,
+    head_so_far: Vec<u8>,
 ) {
     // No table, no lane: a plain phase-B broker serves no CONNECT at
     // all — the model lane is the whole channel. (This is unreachable
@@ -880,10 +972,10 @@ fn connect_lane(
         }
     };
     // The tunnel is up: answer the handshake, then relay both ways.
-    // The request line and headers were peeked, not read — consume
-    // exactly the request head so the tunneled bytes start at the
-    // client's first payload byte.
-    read_request_head(&mut client);
+    // The preface (review finding 4) already CONSUMED part of the
+    // request head — consume exactly the remainder so the tunneled
+    // bytes start at the client's first payload byte, then answer.
+    read_request_head(&mut client, &head_so_far);
     let _ = client.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n");
     log.record(
         "tunnel",
@@ -892,21 +984,24 @@ fn connect_lane(
     pipe_bidirectional(client, upstream_stream, peer, log);
 }
 
-/// Read and discard bytes up to (and including) the empty line that
-/// ends a request head. `peek` left the head in the stream, so the
-/// tunnel must consume it before the first payload byte. Bounded by
-/// the peek buffer's worth of reads: a head that never ends leaves
-/// the tunnel dead, which the client sees as a refused handshake.
-fn read_request_head(client: &mut UnixStream) {
-    let mut buf = Vec::new();
-    let mut byte = [0u8; 1];
-    // The head ends at `\r\n\r\n`; track the last four bytes.
+/// Read and discard the REST of the request head, given the bytes
+/// the preface already consumed (review finding 4). The head ends at
+/// the empty line (`\r\n\r\n` or `\n\n`) — if the preface already
+/// contains it, nothing is read; otherwise bytes are consumed until
+/// it ends. Bounded: a head that never ends leaves the tunnel dead,
+/// which the client sees as a refused handshake.
+fn read_request_head(client: &mut UnixStream, head_so_far: &[u8]) {
+    if head_ends_with_terminator(head_so_far) {
+        return;
+    }
+    let mut buf = head_so_far.to_vec();
+    let mut chunk = [0u8; 256];
     loop {
-        match client.read(&mut byte) {
+        match client.read(&mut chunk) {
             Ok(0) => return,
-            Ok(_) => {
-                buf.push(byte[0]);
-                if buf.ends_with(b"\r\n\r\n") || buf.ends_with(b"\n\n") {
+            Ok(n) => {
+                buf.extend_from_slice(&chunk[..n]);
+                if head_ends_with_terminator(&buf) {
                     return;
                 }
                 if buf.len() > 8 * 1024 {
@@ -916,6 +1011,14 @@ fn read_request_head(client: &mut UnixStream) {
             Err(_) => return,
         }
     }
+}
+
+/// Whether `buf` already contains the request head's empty-line end.
+fn head_ends_with_terminator(buf: &[u8]) -> bool {
+    buf.ends_with(b"\r\n\r\n")
+        || buf.ends_with(b"\n\n")
+        || buf.windows(4).any(|w| w == b"\r\n\r\n")
+        || buf.windows(2).any(|w| w == b"\n\n")
 }
 
 /// Split `client` and `upstream`, then copy both ways with the
@@ -1078,25 +1181,6 @@ fn geteuid() -> u32 {
         fn geteuid() -> u32;
     }
     unsafe { geteuid() }
-}
-
-/// `recv(2)` with `MSG_PEEK`: read up to `buf.len()` bytes WITHOUT
-/// consuming them, so the lane decision leaves the stream whole for
-/// whichever lane runs. `MSG_PEEK` is `2`; a return of 0 is a closed
-/// peer (an empty peek, not an error — the model lane dials anyway and
-/// the copy sees EOF immediately).
-fn recv_peek(socket: &UnixStream, buf: &mut [u8]) -> Result<usize, io::Error> {
-    use std::os::unix::io::AsRawFd;
-    extern "C" {
-        fn recv(fd: i32, buf: *mut u8, len: usize, flags: i32) -> isize;
-    }
-    const MSG_PEEK: i32 = 2;
-    let rc = unsafe { recv(socket.as_raw_fd(), buf.as_mut_ptr(), buf.len(), MSG_PEEK) };
-    if rc < 0 {
-        Err(io::Error::last_os_error())
-    } else {
-        Ok(rc as usize)
-    }
 }
 
 /// The credentials of the peer at the other end of `socket`
