@@ -10112,12 +10112,12 @@ fn proxy_only_is_refused_on_every_backend_but_the_bwrap_tiers() {
 
 #[test]
 fn proxy_only_with_an_allowlist_is_refused_cross_layer() {
-    // D20/D21, under the E7 pairing (bd myconfig-ew9s): the
-    // SAME-file form is a schema error (config.rs) except on
-    // bubblewrap; the CROSS-layer form on bubblewrap is the pairing
-    // itself, admitted when a broker is pinned and refused when one
-    // is not — this test runs unpinned, so the refusal names the
-    // missing transport (E12), never a weakened advisory run.
+    // D20/D21, under the E7 pairing (bd myconfig-ew9s; the same-file
+    // schema twin was REMOVED by review finding 5 — the combination's
+    // legality is merge-time): the CROSS-layer form on bubblewrap is
+    // the pairing itself, admitted when a broker is pinned and refused
+    // when one is not — this test runs unpinned, so the refusal names
+    // the missing transport (E12), never a weakened advisory run.
     let (inv, _, sidecar) = fixture("proxy-only-cross-layer-allowlist", &[]);
     std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
     std::fs::write(
@@ -10141,6 +10141,86 @@ fn proxy_only_with_an_allowlist_is_refused_cross_layer() {
         "the refusal names the pin: {stderr}"
     );
     assert!(stderr.contains("allow-domains"), "{stderr}");
+    assert!(
+        !stdout.contains("--clearenv"),
+        "no argv on refusal: {stdout}"
+    );
+}
+
+#[test]
+fn the_split_layer_pairing_decides_at_merge_time_not_per_file() {
+    // Review finding 5 on 53a6c680b3: the OLD same-file schema check
+    // looked at the backend declared IN THE SAME FILE, so this exact
+    // shape — a user layer with `backend = "bubblewrap"`, a sidecar
+    // with the profile and the keys — was rejected BEFORE the merge,
+    // while the identical effective config with a redundant backend
+    // key in the sidecar passed. Both shapes must now behave the
+    // same: the decision is the post-merge gate's, and a dry run
+    // audits it. Pinned broker, so the pairing is ADMITTED and the
+    // dry run emits the table.
+    for (name, extra_sidecar_key) in [("split-pairing", false), ("split-pairing-redundant", true)] {
+        let (inv, _, sidecar) = fixture(name, &[]);
+        std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+        std::fs::write(
+            inv.xdg.join("mysbx").join("config.toml"),
+            "backend = \"bubblewrap\"\n",
+        )
+        .unwrap();
+        let redundant = if extra_sidecar_key {
+            "backend = \"bubblewrap\"\n"
+        } else {
+            ""
+        };
+        std::fs::write(
+            sidecar.join("config.toml"),
+            format!(
+                "{redundant}network = \"proxy-only\"\nallow-domains = [\"api.openai.com\"]\nconnect-ports = [443]\n"
+            ),
+        )
+        .unwrap();
+        let runtime =
+            std::env::temp_dir().join(format!("mysbx-rt-split-{}-{}", name, std::process::id()));
+        let _ = std::fs::remove_dir_all(&runtime);
+        std::fs::create_dir_all(&runtime).unwrap();
+        let mut cmd = spawn_proxy_only(&inv, &["--dry-run"]);
+        cmd.env("XDG_RUNTIME_DIR", &runtime).env(
+            "MYSBX_EGRESS_BROKER",
+            "/synth/store/cccc-mysbx/bin/mysbx-egress-broker",
+        );
+        let (code, stdout, stderr) = run_command(cmd);
+        let _ = std::fs::remove_dir_all(&runtime);
+        assert_eq!(code, 0, "{name}: stderr: {stderr}");
+        assert!(
+            stdout.contains("--allow-domain") && stdout.contains("api.openai.com"),
+            "{name}: the pairing is decided at merge time and the table rides: {stdout}"
+        );
+    }
+    // And the refusal shape: the SAME split with `backend = "nono"`
+    // in the user layer is still refused — the merge-time gate says
+    // which backends may pair, not the file layout.
+    let (inv, _, sidecar) = fixture("split-pairing-nono", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"nono\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "network = \"proxy-only\"\nallow-domains = [\"api.openai.com\"]\nconnect-ports = [443]\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["--dry-run"]);
+    cmd.env(
+        "MYSBX_EGRESS_BROKER",
+        "/synth/store/cccc-mysbx/bin/mysbx-egress-broker",
+    );
+    let (code, stdout, stderr) = run_command(cmd);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("contradicts it"),
+        "the nono pairing stays refused, at merge time: {stderr}"
+    );
     assert!(
         !stdout.contains("--clearenv"),
         "no argv on refusal: {stdout}"

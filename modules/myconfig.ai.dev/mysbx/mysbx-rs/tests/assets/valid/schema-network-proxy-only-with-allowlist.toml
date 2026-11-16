@@ -1,0 +1,7 @@
+# The proxy-only + allowlist combination is a MERGE-time question
+# (review finding 5, bd myconfig-ew9s): the pairing is legal on the
+# bubblewrap backend, refused on every other. A file by itself names
+# no impossibility, so this parses — the post-merge runtime gate
+# decides.
+network = "proxy-only"
+allow-domains = ["api.openai.com"]

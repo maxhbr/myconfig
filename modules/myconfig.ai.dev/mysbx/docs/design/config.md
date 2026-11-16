@@ -1245,9 +1245,14 @@ proxy holds it (D28 records the credential rules, including the
 residual risks the profile does NOT remove). On every backend except
 `bubblewrap` the profile is mutually exclusive with D21's
 hostname/port allowlists: those keys describe what a sandbox with a
-*shared* network may reach, so they are a schema error next to
-`network = "proxy-only"` in one file and a refused run (exit `70`)
-when the layers combine them. On `bubblewrap` the two pair instead
+*shared* network may reach, so next to `network = "proxy-only"` they
+are a refused run (exit `70`) — decided at MERGE time, where the
+merged backend and network are both known, never by a file-local
+schema check (review finding 5 on 53a6c680b3-era code: the same-file
+check looked at the backend declared in the same file, so a
+`backend = "bubblewrap"` user layer with a sidecar profile + keys was
+rejected before the merge while the identical effective config with
+a redundant backend key passed). On `bubblewrap` the two pair instead
 (bd myconfig-ew9s, docs/design/egress-connect.md E7): the keys become
 the per-run egress broker's CONNECT table, riding the profile's
 transport without widening the network — see D21's table row. A

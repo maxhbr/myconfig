@@ -331,7 +331,12 @@ lift.
    re-pinned table test. No behavior change yet — bubblewrap still
    refuses keys (the gate now refuses them via `Broker` + no pin).
 4. **The lift**: the E7 pairing — the two lib.rs refusal blocks and
-   the config.rs schema twin, the row emission into the broker argv,
+   the config.rs schema twin (REMOVED again by review finding 5: the
+   combination's legality is a merge-time property, so a file-local
+   schema check ran too early and behaved differently for identical
+   effective configs that differed only in where `backend` was
+   spelled; the post-merge gate alone decides now), the row emission
+   into the broker argv,
    the injected + reserved proxy variables (E8/E13), the generalized
    `validate_allowlist` call, the dry-run broker-argv block, goldens,
    CLI tests for every refusal (keys + shared; listen-ports-only;
