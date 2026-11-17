@@ -1974,11 +1974,19 @@ in
       expectedDestsOf =
         cfg:
         map (sub: "/mysbx-home/${sub}") (
-          import ../../programs/pi-sandbox-subtrees.nix {
+          (import ../../programs/pi-sandbox-subtrees.nix {
             config = cfg;
             inherit lib;
-          }
+          }).subtrees
         );
+      # The sandbox-only target paths, from the same shared contract the
+      # pi module mounts through — a rename there cannot leave this check
+      # asserting a stale name.
+      sandboxOnlyFiles =
+        (import ../../programs/pi-sandbox-subtrees.nix {
+          config = cfg;
+          inherit lib;
+        }).sandboxOnlyFiles;
       cfg = self.nixosConfigurations.test-f13.config;
       thinkrailOnlyCfg =
         (self.nixosConfigurations.test-f13.extendModules {
@@ -2013,6 +2021,18 @@ in
       );
       trMissingDests = builtins.filter (d: !(builtins.elem d trDests)) trExpected;
       trUnexpectedDests = builtins.filter (d: !(builtins.elem d trExpected)) trDests;
+      # The sandbox-only files (the `project_trust` auto-answerer among
+      # them): they must be absent from the host's `home.file` — deploying
+      # them would silence the trust prompt for un-jailed pi sessions too.
+      # The target paths come from the same shared contract the pi module
+      # mounts through (../../programs/pi-sandbox-subtrees.nix), so a
+      # rename there cannot leave this check asserting a stale name.
+      # `home.file` keys are relative or absolute-home spellings; check
+      # both (the sandbox-config helper normalizes them the same way).
+      hmHomeFile = cfg.home-manager.users.mhuber.home.file;
+      hostDeploysSandboxOnly = builtins.filter (
+        f: hmHomeFile ? ${f} || hmHomeFile ? ${"${cfg.home-manager.users.mhuber.home.homeDirectory}/${f}"}
+      ) sandboxOnlyFiles;
       evalAssertions = [
         {
           assertion = duplicateDests == [ ];
@@ -2057,6 +2077,10 @@ in
           message = "mysbx-pi-mounts-test: every pi mount path must sit inside the pi-sandbox-config derivation";
         }
         {
+          assertion = hostDeploysSandboxOnly == [ ];
+          message = "mysbx-pi-mounts-test: sandbox-only files must stay out of home.file (${lib.concatStringsSep ", " hostDeploysSandboxOnly}) — they would auto-trust un-jailed host pi sessions; wire them through mkSandboxConfig's extraFiles only";
+        }
+        {
           assertion = builtins.all (m: m.mode == "ro") piMounts;
           message = "mysbx-pi-mounts-test: every pi mount must stay read-only";
         }
@@ -2078,6 +2102,11 @@ in
         sandboxSubtrees = lib.concatStringsSep " " (
           map (d: lib.removePrefix "/mysbx-home/" d) expectedDests
         );
+        # The sandbox-only files (the trust extension among them) ride
+        # `extraFiles`, so only the realised tree can prove they landed.
+        # The names come from the same shared contract the pi module
+        # mounts through — see the home.file assertion above.
+        sandboxOnlyFilesDests = lib.concatStringsSep " " sandboxOnlyFiles;
         nativeBuildInputs = with pkgs; [
           gnugrep
           findutils
@@ -2094,6 +2123,12 @@ in
         # The mounted subtrees must exist in the copied tree ...
         for sub in $sandboxSubtrees; do
           test -e "$sandboxTree/$sub" || fail "$sub is missing from the pi-sandbox-config tree"
+        done
+
+        # The sandbox-only files ride `extraFiles`, so only the realised
+        # tree can prove they landed.
+        for f in $sandboxOnlyFilesDests; do
+          test -f "$sandboxTree/$f" || fail "$f is missing from the pi-sandbox-config tree"
         done
 
         # ... and be REAL files: a symlink anywhere below the mounted

@@ -41,28 +41,40 @@ let
   hasHandcraftedSkills =
     (config.myconfig.ai.dev.skills.handcrafted or { }) != { }
     || (config.myconfig.ai.dev.skills.enable or false);
+
+  # Sandbox-only content (never `home.file`): pi's `project_trust`
+  # handler that answers the trust prompt per-process for jailed
+  # sessions. Declared here, next to the subtrees, because the check
+  # (../../mysbx/nix/checks.nix) must assert the same target path the
+  # pi module mounts — two pinned spellings drift apart silently.
+  sandboxOnlyFiles = [ ".pi/agent/extensions/myconfig-mysbx-trust.ts" ];
 in
-[
-  # Generated + example extensions (myconfig-providers.ts,
-  # myconfig-jail-marker.ts, handoff.ts, subagent/, rtk.ts,
-  # workmux-status.ts) — always deployed by the pi module's `home.file`
-  # block or by the rtk/workmux modules.
-  ".pi/agent/extensions"
-  # Sub-agent definitions (upstream samples + handcrafted ones).
-  ".pi/agent/agents"
-  # Workflow prompt templates (`/implement`, `/commit`, …).
-  ".pi/agent/prompts"
-  # Themes (`unjailed.json`).
-  ".pi/agent/themes"
-  # Keybinding overrides (keybindings.json). A TUI concern; inert for a
-  # headless engine host, and mounted anyway so both callers bind the
-  # same set.
-  ".pi/agent/keybindings.json"
-]
-# The global AGENTS.md (../../agentsMd), deployed through a `home.file`
-# entry when the feature is on. Not mounted otherwise: the helper
-# materialises an EMPTY DIRECTORY for a subtree nothing deployed into,
-# which would shadow the file name inside the sandbox.
-++ lib.optional (config.myconfig.ai.dev.agentsMd.enable or false) ".pi/agent/AGENTS.md"
-# Handcrafted skills, discovered by pi from `~/.agents/skills/`.
-++ lib.optional hasHandcraftedSkills ".agents/skills"
+{
+  # Relative paths under `$HOME` that get mounted into the sandbox.
+  subtrees = [
+    # Generated + example extensions (myconfig-providers.ts,
+    # myconfig-jail-marker.ts, handoff.ts, subagent/, rtk.ts,
+    # workmux-status.ts) — always deployed by the pi module's `home.file`
+    # block or by the rtk/workmux modules.
+    ".pi/agent/extensions"
+    # Sub-agent definitions (upstream samples + handcrafted ones).
+    ".pi/agent/agents"
+    # Workflow prompt templates (`/implement`, `/commit`, …).
+    ".pi/agent/prompts"
+    # Themes (`unjailed.json`).
+    ".pi/agent/themes"
+    # Keybinding overrides (keybindings.json). A TUI concern; inert for a
+    # headless engine host, and mounted anyway so both callers bind the
+    # same set.
+    ".pi/agent/keybindings.json"
+  ]
+  # The global AGENTS.md (../../agentsMd), deployed through a `home.file`
+  # entry when the feature is on. Not mounted otherwise: the helper
+  # materialises an EMPTY DIRECTORY for a subtree nothing deployed into,
+  # which would shadow the file name inside the sandbox.
+  ++ lib.optional (config.myconfig.ai.dev.agentsMd.enable or false) ".pi/agent/AGENTS.md"
+  # Handcrafted skills, discovered by pi from `~/.agents/skills/`.
+  ++ lib.optional hasHandcraftedSkills ".agents/skills";
+
+  inherit sandboxOnlyFiles;
+}

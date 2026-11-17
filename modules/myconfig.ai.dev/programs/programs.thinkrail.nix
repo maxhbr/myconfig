@@ -45,7 +45,7 @@ let
   # win (../../mysbx/mysbx-rs/src/nono.rs), so two lists would silently
   # hand the payload a mixture of two store trees ordered by module
   # merge order.
-  mysbxThinkrailSubtrees = import ./pi-sandbox-subtrees.nix { inherit config lib; };
+  mysbxThinkrailSubtrees = (import ./pi-sandbox-subtrees.nix { inherit config lib; }).subtrees;
 
   # Like pi's integration: copies of the home-manager-deployed config,
   # NOT the host home (the podman-gvisor backend mounts nothing from the
