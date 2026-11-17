@@ -49,6 +49,12 @@ none
 --setenv
 MYSBX_HOST
 localhost
+--setenv
+MYSBX_NETWORK
+proxy-only
+--setenv
+MYSBX_EGRESS_PROXY
+http://127.0.0.1:4000
 --chdir
 /synth/repo
 --

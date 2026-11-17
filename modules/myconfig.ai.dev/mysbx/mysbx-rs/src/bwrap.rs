@@ -1308,6 +1308,29 @@ pub fn bwrap_argv(
             argv.push("MYSBX_HOST".into());
             argv.push(host);
         }
+        // The merged network policy (bd myconfig-w44l), in the same
+        // infrastructure class: `none`, `proxy-only` or `shared` —
+        // the merged `network` value, set after `[env]` so a layer
+        // cannot hide the profile from the agent (a `[env]`
+        // MYSBX_NETWORK entry shows in the audit, never reaches the
+        // payload). An in-sandbox agent reads it to reason about
+        // egress without probing (dialing hosts to see what is
+        // refused).
+        argv.push("--setenv".into());
+        argv.push("MYSBX_NETWORK".into());
+        argv.push(cfg.network.name().into());
+        // The proxy-only channel's endpoint (bd myconfig-w44l): the
+        // relay's loopback listener, the ONE address a `proxy-only`
+        // payload may reach (config.md D20). Announced like the
+        // policy itself — infrastructure, after `[env]` — so the
+        // agent does not have to reverse-engineer the baked
+        // `http://127.0.0.1:<port>/v1` URLs. Absent on every other
+        // policy: an unset variable IS the honest answer.
+        if let Some(egress) = egress {
+            argv.push("--setenv".into());
+            argv.push("MYSBX_EGRESS_PROXY".into());
+            argv.push(format!("http://127.0.0.1:{}", egress.port).into());
+        }
         // The CONNECT-lane proxy variables (docs/design/
         // egress-connect.md E8, bd myconfig-ew9s): only a paired run
         // (allowlist keys under the profile, `egress.allow_domains`
@@ -1526,6 +1549,17 @@ pub fn bwrap_argv(
         // infrastructure).
         if let Some(host) = crate::host_hostname() {
             argv.push(format!("MYSBX_HOST={host}"));
+        }
+        // The merged network policy and the proxy-only endpoint (bd
+        // myconfig-w44l) ride the payload env segment like the
+        // identity entries above — nono's own `--setenv` set
+        // carries only nono's infrastructure (backends.md D1).
+        argv.push(format!("MYSBX_NETWORK={}", cfg.network.name()));
+        if let Some(egress) = egress {
+            argv.push(format!(
+                "MYSBX_EGRESS_PROXY=http://127.0.0.1:{}",
+                egress.port
+            ));
         }
         if let Some(ca_bundle) = params.ca_bundle {
             for key in ["SSL_CERT_FILE", "GIT_SSL_CAINFO", "NIX_SSL_CERT_FILE"] {
@@ -2818,8 +2852,8 @@ mod tests {
         assert_eq!(argv[setenvs[5] + 2], "/synth/bin");
         // … then the identity variables (bd myconfig-3nn): MYSBX_BACKEND
         // and MYSBX_MULTIPLEXER follow PATH, then the outer host's
-        // name (bd myconfig-5wf), before the `--chdir` and payload
-        // sections.
+        // name (bd myconfig-5wf) and the merged network policy (bd
+        // myconfig-w44l), before the `--chdir` and payload sections.
         assert_eq!(argv[setenvs[6]], "--setenv");
         assert_eq!(argv[setenvs[6] + 1], "MYSBX_BACKEND");
         assert_eq!(argv[setenvs[6] + 2], "bubblewrap");
@@ -2832,10 +2866,16 @@ mod tests {
         // test cannot pin it, only that it is the same string the
         // helper returns.
         assert_eq!(argv[setenvs[8] + 2], crate::host_hostname().unwrap());
+        // The network policy (bd myconfig-w44l): the merged value,
+        // and the block's last entry on a shared run without a
+        // proxy-only channel.
+        assert_eq!(argv[setenvs[9]], "--setenv");
+        assert_eq!(argv[setenvs[9] + 1], "MYSBX_NETWORK");
+        assert_eq!(argv[setenvs[9] + 2], "shared");
         assert_eq!(
-            argv.len() - setenvs[8] - 3,
+            argv.len() - setenvs[9] - 3,
             4, // --chdir /synth/repo -- /synth/bin/bash
-            "nothing after the host name but --chdir, -- and the payload"
+            "nothing after the network policy but --chdir, -- and the payload"
         );
     }
 
@@ -2946,6 +2986,105 @@ mod tests {
             .expect("the layer entry exists");
         assert!(first < last, "the infrastructure entry must win");
         assert_eq!(argv[first + 2], "spoofed");
+    }
+
+    #[test]
+    fn the_network_policy_is_infrastructure_not_config() {
+        // bd myconfig-w44l: MYSBX_NETWORK reports the merged `network`
+        // value, set with the infrastructure block so a config layer
+        // cannot hide the sandbox's own connectivity story from the
+        // agent. And `[env]` cannot override it: the layer's entry
+        // appears EARLIER, the infrastructure entry is the last one.
+        let (repo, cfg, p) = shell_repo_defaults();
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
+        let identity = |argv: &[String], key: &str| -> String {
+            argv.windows(3)
+                .find(|w| w[0] == "--setenv" && w[1] == key)
+                .map(|w| w[2].clone())
+                .unwrap_or_else(|| panic!("missing --setenv {key}"))
+        };
+        assert_eq!(identity(&argv, "MYSBX_NETWORK"), "shared");
+        // Infrastructure position: after MYSBX_HOST, before TMUX_TMPDIR.
+        let host_pos = pos(&argv, "MYSBX_HOST");
+        let net_pos = pos(&argv, "MYSBX_NETWORK");
+        assert!(host_pos < net_pos);
+        if let Some(tmux_dir) = argv
+            .windows(3)
+            .position(|w| w[0] == "--setenv" && w[1] == "TMUX_TMPDIR")
+        {
+            assert!(net_pos < tmux_dir);
+        }
+        let mut layered = cfg.clone();
+        layered
+            .env
+            .insert("MYSBX_NETWORK".to_string(), "spoofed".to_string());
+        let argv = bwrap_argv(&layered, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
+        let last = argv
+            .windows(3)
+            .rposition(|w| w[0] == "--setenv" && w[1] == "MYSBX_NETWORK")
+            .expect("the infrastructure entry exists");
+        assert_eq!(argv[last + 2], "shared");
+        let first = argv
+            .windows(3)
+            .position(|w| w[0] == "--setenv" && w[1] == "MYSBX_NETWORK")
+            .expect("the layer entry exists");
+        assert!(first < last, "the infrastructure entry must win");
+        assert_eq!(argv[first + 2], "spoofed");
+        // A shared run names no proxy: an unset MYSBX_EGRESS_PROXY IS
+        // the honest answer (the CONNECT-lane HTTP_PROXY block is
+        // separate, bd myconfig-ew9s E8).
+        assert!(!argv
+            .windows(3)
+            .any(|w| w[0] == "--setenv" && w[1] == "MYSBX_EGRESS_PROXY"));
+    }
+
+    #[test]
+    fn a_proxy_only_run_announces_its_egress_endpoint() {
+        // bd myconfig-w44l: a `network = "proxy-only"` run names the
+        // relay's loopback listener — the ONE address the payload
+        // may reach — as MYSBX_EGRESS_PROXY, in the infrastructure
+        // block (after MYSBX_NETWORK, before the CONNECT-lane
+        // HTTP_PROXY variables of a paired run, bd myconfig-ew9s
+        // E8), so no layer can repoint a payload's egress at a host
+        // socket. The value matches the relay the argv also starts.
+        let (repo, mut cfg, mut p) = shell_repo_defaults();
+        cfg.network = crate::config::Network::ProxyOnly;
+        p.egress = Some(EgressChannel {
+            socket_dir: "/synth/egress",
+            socket: "litellm.sock",
+            port: 4000,
+            relay_bin: "/synth/bin/mysbx-egress-relay",
+            etc_dir: "/synth/etc",
+            allow_domains: &[],
+            connect_ports: &[],
+        });
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
+        let identity = |argv: &[String], key: &str| -> String {
+            argv.windows(3)
+                .find(|w| w[0] == "--setenv" && w[1] == key)
+                .map(|w| w[2].clone())
+                .unwrap_or_else(|| panic!("missing --setenv {key}"))
+        };
+        assert_eq!(identity(&argv, "MYSBX_NETWORK"), "proxy-only");
+        assert_eq!(
+            identity(&argv, "MYSBX_EGRESS_PROXY"),
+            "http://127.0.0.1:4000"
+        );
+        // Position: right after MYSBX_NETWORK, before TMUX_TMPDIR —
+        // and a `[env]` MYSBX_EGRESS_PROXY entry never wins.
+        let net_pos = pos(&argv, "MYSBX_NETWORK");
+        let proxy_pos = pos(&argv, "MYSBX_EGRESS_PROXY");
+        assert!(net_pos < proxy_pos);
+        let mut layered = cfg.clone();
+        layered
+            .env
+            .insert("MYSBX_EGRESS_PROXY".to_string(), "http://evil".to_string());
+        let argv = bwrap_argv(&layered, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
+        let last = argv
+            .windows(3)
+            .rposition(|w| w[0] == "--setenv" && w[1] == "MYSBX_EGRESS_PROXY")
+            .expect("the infrastructure entry exists");
+        assert_eq!(argv[last + 2], "http://127.0.0.1:4000");
     }
 
     #[test]

@@ -1136,6 +1136,15 @@ pub fn podman_run_argv(
     if let Some(host) = crate::host_hostname() {
         argv.extend(["--env".into(), format!("MYSBX_HOST={host}")]);
     }
+    // The merged network policy (bd myconfig-w44l), the same
+    // infrastructure class as the identity entries above: `none`,
+    // `proxy-only` or `shared`. No endpoint variable on this backend
+    // — `proxy-only` is refused here (D20's table), so a shared or
+    // empty network has no in-sandbox proxy to name.
+    argv.extend([
+        "--env".into(),
+        format!("MYSBX_NETWORK={}", cfg.network.name()),
+    ]);
     // The XDG base dirs are infrastructure like `HOME` (config.md D14):
     // they are derived FROM it, and re-anchoring them matters ONLY under
     // this backend — bubblewrap's `HOME` is already its own tmpfs,

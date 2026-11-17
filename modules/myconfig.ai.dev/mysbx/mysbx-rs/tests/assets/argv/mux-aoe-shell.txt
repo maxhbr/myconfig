@@ -63,6 +63,9 @@ aoe
 MYSBX_HOST
 localhost
 --setenv
+MYSBX_NETWORK
+shared
+--setenv
 TMUX_TMPDIR
 /mysbx-home/.mysbx-tmux
 --chdir

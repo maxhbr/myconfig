@@ -103,4 +103,5 @@ PATH=/synth/bin
 MYSBX_BACKEND=nono
 MYSBX_MULTIPLEXER=none
 MYSBX_HOST=localhost
+MYSBX_NETWORK=none
 /synth/bin/bash

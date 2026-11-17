@@ -690,6 +690,28 @@ which of f13/workstation/nas a session ran on). Omitted — never set
 empty — when the libc call fails. Emitted with the identity pair,
 after `[env]`, on every backend.
 
+`MYSBX_NETWORK` and `MYSBX_EGRESS_PROXY` complete the picture
+(bd myconfig-w44l): they report the sandbox's own CONNECTIVITY, so
+an in-sandbox agent reasons about egress from the environment
+instead of probing (dialing hosts to see what is refused).
+`MYSBX_NETWORK` is the merged `network` value (`none`,
+`proxy-only`, `shared`, D20), emitted after the identity block on
+every backend — a layer cannot hide the profile from the agent,
+whatever it spells out in `[env]`. `MYSBX_EGRESS_PROXY` names the
+egress endpoint a `proxy-only` payload is expected to use — the
+in-sandbox relay's loopback listener,
+`http://127.0.0.1:<litellm port>` — right after `MYSBX_NETWORK`,
+only on the bwrap-built tiers that enforce the profile (D20's
+table: bubblewrap, and the layered nono backend); every other
+policy and backend leaves it unset, and an unset variable IS the
+honest answer. Both are the same infrastructure class as the
+identity pair: a config `[env]` entry shows in the `--dry-run`
+audit (marked ignored) but never reaches the payload. The
+CONNECT-lane `HTTP(S)_PROXY`/`NO_PROXY` variables of a PAIRED run
+(egress-connect.md E8, bd myconfig-ew9s) are a different mechanism —
+they configure proxy-honoring tools — while `MYSBX_EGRESS_PROXY`
+is the announcement of the one endpoint the profile grants.
+
 ### D15: `state-dirs` — persisted sandbox-home subdirectories, backed by the sidecar
 
 `state-dirs` is a list of paths **relative to the sandbox home** whose
@@ -1271,7 +1293,9 @@ transport without widening the network — see D21's table row. A
 paired run additionally injects `HTTP(S)_PROXY`/`NO_PROXY` pointing at
 the in-sandbox relay after `[env]` (E8) and reserves those names
 (E13); a plain profile run injects nothing and stays byte-identical
-to the pre-pairing transport.
+to the pre-pairing transport. Independently of the pairing, every
+profile run announces its endpoint as `MYSBX_EGRESS_PROXY` (D14's
+infrastructure class, bd myconfig-w44l).
 
 **Enforcement is per backend** — the same accepted-never-ignored rule
 as D21. The bwrap-built tiers enforce it (bubblewrap, and the layered

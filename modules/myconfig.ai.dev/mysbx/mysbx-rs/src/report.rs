@@ -539,6 +539,13 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     if let Some(host) = host_hostname() {
         p(format!("  MYSBX_HOST={host}  [outer host]"));
     }
+    // The merged network policy (bd myconfig-w44l), reported like
+    // the identity entries above so the operator sees what the
+    // in-sandbox agent reads about its own connectivity.
+    p(format!(
+        "  MYSBX_NETWORK={}  [merged network]",
+        r.merged.network.name()
+    ));
     // The pinned CA bundle belongs in the report for the same reason
     // as the nix.conf and `/bin/sh` lines below: which trust anchors
     // the sandbox's TLS tools use — the wrapper's own `nss-cacert`, or
@@ -776,6 +783,8 @@ fn infrastructure(key: &str, display_on: bool) -> bool {
         || key == "MYSBX_BACKEND"
         || key == "MYSBX_MULTIPLEXER"
         || key == "MYSBX_HOST"
+        || key == "MYSBX_NETWORK"
+        || key == "MYSBX_EGRESS_PROXY"
         || key == "SSL_CERT_FILE"
         || key == "GIT_SSL_CAINFO"
         || key == "NIX_SSL_CERT_FILE"

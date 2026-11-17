@@ -91,5 +91,6 @@ PATH=/synth/bin
 MYSBX_BACKEND=nono
 MYSBX_MULTIPLEXER=tmux
 MYSBX_HOST=localhost
+MYSBX_NETWORK=none
 TMUX_TMPDIR=/mysbx-home/.mysbx-tmux
 /synth/bin/mysbx-tmux-entry

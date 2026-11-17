@@ -66,6 +66,9 @@ none
 MYSBX_HOST
 localhost
 --setenv
+MYSBX_NETWORK
+shared
+--setenv
 XDG_RUNTIME_DIR
 /mysbx-home
 --chdir

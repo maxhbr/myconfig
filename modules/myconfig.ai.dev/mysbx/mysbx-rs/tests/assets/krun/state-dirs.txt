@@ -29,6 +29,8 @@ MYSBX_MULTIPLEXER=none
 --env
 MYSBX_HOST=localhost
 --env
+MYSBX_NETWORK=shared
+--env
 XDG_CONFIG_HOME=/mysbx-home/.config
 --env
 XDG_CACHE_HOME=/mysbx-home/.cache

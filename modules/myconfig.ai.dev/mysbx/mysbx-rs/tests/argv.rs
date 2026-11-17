@@ -1244,6 +1244,7 @@ fn golden_multiplexer_interactive_sessions() {
                 "MYSBX_BACKEND",
                 "MYSBX_MULTIPLEXER",
                 "MYSBX_HOST",
+                "MYSBX_NETWORK",
                 "TMUX_TMPDIR"
             ],
             "{mux}"
@@ -1607,6 +1608,7 @@ fn forward_only_set_host_variables() {
             "MYSBX_BACKEND",
             "MYSBX_MULTIPLEXER",
             "MYSBX_HOST",
+            "MYSBX_NETWORK",
         ],
     );
 }
@@ -1634,6 +1636,7 @@ fn env_precedence_host_then_config_then_path() {
             "MYSBX_BACKEND",
             "MYSBX_MULTIPLEXER",
             "MYSBX_HOST",
+            "MYSBX_NETWORK",
         ],
     );
     // The later TERM value really is the [env] one.
@@ -1751,15 +1754,17 @@ fn config_env_cannot_repoint_home_or_path() {
             "MYSBX_BACKEND",
             "MYSBX_MULTIPLEXER",
             "MYSBX_HOST",
+            "MYSBX_NETWORK",
         ],
         "[env] entries first, the infrastructure pair and the identity pair last"
     );
     // … and the last block really carries mysbx's values (through
-    // MYSBX_HOST, the block's last entry — bd myconfig-5wf). Anchored
+    // MYSBX_NETWORK, the block's last entry — bd myconfig-5wf,
+    // myconfig-w44l). Anchored
     // on the payload separator, not index arithmetic: the tail's
     // shape is --chdir <repo> -- <shell>.
     let dashdash = argv.iter().rposition(|a| a == "--").unwrap();
-    let block = &argv[dashdash - 17..dashdash - 2];
+    let block = &argv[dashdash - 20..dashdash - 2];
     assert_eq!(
         block,
         &[
@@ -1778,6 +1783,9 @@ fn config_env_cannot_repoint_home_or_path() {
             "--setenv",
             "MYSBX_HOST",
             &mysbx::host_hostname().expect("the test host has a name"),
+            "--setenv",
+            "MYSBX_NETWORK",
+            "shared",
         ]
     );
 }
@@ -3921,6 +3929,7 @@ fn window_mode_sets_no_session_name_env() {
             "MYSBX_BACKEND",
             "MYSBX_MULTIPLEXER",
             "MYSBX_HOST",
+            "MYSBX_NETWORK",
             "TMUX_TMPDIR"
         ]
     );
@@ -3947,6 +3956,7 @@ fn session_mode_sets_session_name_env() {
             "MYSBX_BACKEND",
             "MYSBX_MULTIPLEXER",
             "MYSBX_HOST",
+            "MYSBX_NETWORK",
             "TMUX_TMPDIR",
             "MYSBX_SESSION_NAME",
         ]
@@ -3986,6 +3996,7 @@ fn session_name_env_works_for_all_multiplexers() {
                 "MYSBX_BACKEND",
                 "MYSBX_MULTIPLEXER",
                 "MYSBX_HOST",
+                "MYSBX_NETWORK",
                 "TMUX_TMPDIR",
                 "MYSBX_SESSION_NAME",
             ],
@@ -7550,7 +7561,8 @@ fn nono_two_environments_the_env_segment_applies_the_payload_env() {
         // segment like HOME/PATH: the nono backend's `--setenv` set
         // carries only nono's own infrastructure, so these must be
         // assignments, not --setenv. The outer host's name (bd
-        // myconfig-5wf) follows the pair.
+        // myconfig-5wf) and the network policy (bd myconfig-w44l)
+        // follow the pair.
         "MYSBX_BACKEND=nono",
         "MYSBX_MULTIPLEXER=none",
     ]
@@ -7562,6 +7574,7 @@ fn nono_two_environments_the_env_segment_applies_the_payload_env() {
         "MYSBX_HOST={}",
         mysbx::host_hostname().expect("the test host has a name")
     ));
+    expected.push("MYSBX_NETWORK=shared".to_string());
     let assignments: Vec<String> = argv[i..]
         .iter()
         .take_while(|a| !a.is_empty() && a.as_str() != "/synth/bin/bash")
@@ -7716,6 +7729,7 @@ fn nono_no_env_binary_no_payload_env_vars_still_runs() {
                 "MYSBX_HOST={}",
                 mysbx::host_hostname().expect("the test host has a name")
             ),
+            "MYSBX_NETWORK=shared",
             "/synth/bin/bash",
         ],
         "the minimal env-segment: {argv:?}"

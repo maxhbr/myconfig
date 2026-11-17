@@ -1223,6 +1223,12 @@ fn sandbox_env(
     if let Some(host) = crate::host_hostname() {
         set("MYSBX_HOST", host);
     }
+    // The merged network policy (bd myconfig-w44l), the same
+    // infrastructure class as the identity pair: `none` or
+    // `shared` here — `proxy-only` is refused on this backend (D20's
+    // table), and an agent inside the guest reads the variable to
+    // know whether the implicit vsock's TSI carries a route out.
+    set("MYSBX_NETWORK", cfg.network.name().to_owned());
     set(
         "XDG_CONFIG_HOME",
         format!("{}/.config", crate::bwrap::SANDBOX_HOME),

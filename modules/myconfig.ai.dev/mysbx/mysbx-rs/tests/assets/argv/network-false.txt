@@ -40,6 +40,9 @@ none
 --setenv
 MYSBX_HOST
 localhost
+--setenv
+MYSBX_NETWORK
+none
 --chdir
 /synth/repo
 --

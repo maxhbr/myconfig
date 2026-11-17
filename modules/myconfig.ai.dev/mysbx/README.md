@@ -524,6 +524,25 @@ the sandbox, on every backend (bubblewrap's `--setenv`, the podman
 backends' `--env`, the nono payload-env segment, and the krun
 manifest's env block).
 
+## The network configuration variables (`MYSBX_NETWORK`, `MYSBX_EGRESS_PROXY`)
+
+Next to the identity variables, every sandbox exports its own
+connectivity story (bd myconfig-w44l), so an agent reasons about
+egress from the environment instead of probing (dialing hosts to
+see what is refused):
+
+- `MYSBX_NETWORK` — the merged `network` value (`none`,
+  `proxy-only`, `shared`, [`docs/design/config.md` D20](docs/design/config.md)),
+  set after the identity block on every backend.
+- `MYSBX_EGRESS_PROXY` — on a `proxy-only` run of the bwrap-built
+  tiers (bubblewrap, nono): the in-sandbox relay's loopback
+  listener (`http://127.0.0.1:<litellm port>`), the ONE endpoint
+  the profile grants. Unset on every other policy and backend.
+
+Both are infrastructure like the identity variables: a config
+layer that spells them out shows up in the `--dry-run` audit but
+never reaches the payload.
+
 ## The display channel (`display`)
 
 `display = "off" | "waypipe"` in a configuration layer selects how a
