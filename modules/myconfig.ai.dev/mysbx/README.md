@@ -543,6 +543,13 @@ Both are infrastructure like the identity variables: a config
 layer that spells them out shows up in the `--dry-run` audit but
 never reaches the payload.
 
+An in-sandbox pi session does not even have to read them: the
+`/mysbx-inform` skill (bd myconfig-a2nj, deployed by the
+pi-coding-agent module's `myconfig-mysbx-inform.ts` extension)
+renders these variables into a per-run skill at session start, so
+the agent gets its backend's capabilities and its network policy as
+prose — state baked into the skill text, not looked up at runtime.
+
 ## The display channel (`display`)
 
 `display = "off" | "waypipe"` in a configuration layer selects how a

@@ -1267,6 +1267,46 @@ let
     readOnlyConfigDirs = [ ".agents" ];
   };
 
+  # The `/mysbx-inform` skill (bd myconfig-a2nj): a GENERATED skill,
+  # not a static one — its whole point is that the sandbox's per-run
+  # state is BAKED into the skill text, so the in-sandbox agent never
+  # has to look up the `MYSBX_*` environment. The facts that vary per
+  # run (backend, network policy, egress endpoint, host, multiplexer,
+  # session) are only known inside the sandbox, after the backend set
+  # the `MYSBX_*` identity variables (config.md D14's infrastructure
+  # class) — so a host-deployed static skill cannot carry them.
+  #
+  # Instead the deployed extension (mysbx-inform-extension.ts) renders
+  # the template (mysbx-inform-template.md) from those variables at
+  # pi startup (`resources_discover`: the extension event for
+  # contributing skill paths), writes the result below the agent dir
+  # (inside a sandbox that is the writable tmpfs home; on the host it
+  # is ~/.pi/agent, where ~/.pi is persistent user data) and registers
+  # it as a skill — `/skill:mysbx-inform` then presents the run's own
+  # backend capabilities and network policy as prose, with the design
+  # docs referenced for deeper digging.
+  #
+  # Deployed unconditionally like the status extension: outside a
+  # mysbx sandbox MYSBX_BACKEND is unset and the handler contributes
+  # nothing, so plain pi/piBwrap/agent-bubblewrap-pi sessions are
+  # unaffected.
+  mysbxInformExtension =
+    let
+      # The template as a JSON string literal: JSON escaping keeps
+      # every markdown character (backticks, quotes, newlines) safe
+      # inside the generated TypeScript source, with no Nix-string
+      # escaping of the template body to get right.
+      templateJson = builtins.toJSON (builtins.readFile ./mysbx-inform-template.md);
+      # The extension body with the template substituted for the
+      # `{{template}}` placeholder. `replaceStrings` on the literal
+      # marker avoids `${...}` interpolation entirely (the body
+      # contains no other `{{template}}` text).
+      body = builtins.replaceStrings [ "{{template}}" ] [ templateJson ] (
+        builtins.readFile ./mysbx-inform-extension.ts
+      );
+    in
+    pkgs.writeText "pi-mysbx-inform.ts" body;
+
   # `agent-bubblewrap-pi` is an alternative to `piBwrap` that uses the jail.nix library
   # (vendored at ./vendor/alexdavid-jail.nix) instead of a hand-rolled
   # bubblewrap wrapper. See `../../fns/bubblewrap-app.nix` for the shared defaults.
@@ -1813,6 +1853,7 @@ in
               ".pi/agent/extensions/myconfig-providers.ts".source = providersExtension;
               ".pi/agent/extensions/myconfig-jail-marker.ts".source = jailMarkerExtension;
               ".pi/agent/extensions/myconfig-mysbx-status.ts".source = mysbxStatusExtension;
+              ".pi/agent/extensions/myconfig-mysbx-inform.ts".source = mysbxInformExtension;
               ".pi/agent/extensions/handoff.ts".source = handoffExtension;
               ".pi/agent/themes/unjailed.json".source = unjailedTheme;
               # Override the default `app.interrupt` (escape) with `ctrl+c`
