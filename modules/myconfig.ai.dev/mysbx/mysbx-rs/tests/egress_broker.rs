@@ -1055,6 +1055,14 @@ fn a_fragmented_non_connect_head_and_an_empty_connection_stay_the_model_lane() {
     // A GET head, split mid-line: diverges from CONNECT at byte 0,
     // so the model lane runs after ONE byte, and the full head still
     // reaches the upstream (the replay is complete and in order).
+    // Second review finding 2 on 3cfc1bbb3e: the split used to be at
+    // 8 — past the method token, therefore unable to catch the
+    // short-buffer stall the finding probed (the first prefix check
+    // held every buffer under 8 bytes as maybe-CONNECT). It now also
+    // splits at 1 and at 5 — inside the token — and asserts the
+    // upstream fixture answered the model lane BEFORE the head's
+    // tail landed, because the divergence is visible at the first
+    // differing byte and the fallback must fire there, not at 8.
     let mut client = std::os::unix::net::UnixStream::connect(&socket).expect("connect");
     let head: &[u8] = b"GET /v1/models HTTP/1.1\r\nHost: localhost\r\n\r\n";
     write_split(&mut client, head, 8);
@@ -1194,4 +1202,77 @@ fn a_domains_only_table_is_refused_the_unrestricted_axis_was_a_log_line_lie() {
         !log.contains("unrestricted"),
         "no widening claim survives: {log}"
     );
+}
+
+#[test]
+fn a_short_non_connect_prefix_is_served_promptly_not_held_for_the_token() {
+    // Second review finding 2 on 3cfc1bbb3e: the buffering rewrite's
+    // prefix check returned true for ANY buffer shorter than the
+    // 8-byte method token, so `G` or `GET /` — already impossible
+    // CONNECT starts — did not fall back to the model lane until the
+    // divergence was 8 bytes deep. The fragmented test split at 8,
+    // past the token, so it could not catch the stall. This test
+    // splits INSIDE the token (at 1 and at 5) and asserts the upstream
+    // fixture answers BEFORE the head's tail lands: the divergence is
+    // visible at the first differing byte, and a non-CONNECT client is
+    // served without waiting.
+    for split in [1usize, 5] {
+        let dir = run_dir(&format!("prefix-prompt-{split}"));
+        let addr = upstream_fixture();
+        let (child, socket) = spawn_ready_with(
+            &dir,
+            &addr,
+            &[
+                "--allow-domain",
+                "github.com",
+                "--allow-connect-port",
+                "443",
+            ],
+        );
+        let mut client = std::os::unix::net::UnixStream::connect(&socket).expect("connect");
+        let head: &[u8] = b"GET /v1/models HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        client
+            .write_all(&head[..split])
+            .expect("write the prefix half");
+        let _ = client.flush();
+        // The window in which the model lane must have dialed and the
+        // fixture must have answered — the tail half is still unsent.
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        client
+            .set_read_timeout(Some(std::time::Duration::from_millis(200)))
+            .expect("set the read timeout");
+        let mut early = [0u8; 128];
+        let n = client
+            .read(&mut early)
+            .expect("the prefix alone is answered");
+        assert!(
+            n > 0,
+            "split at {split}: the model lane serves the diverged prefix without waiting"
+        );
+        assert!(
+            early[..n].starts_with(b"HTTP/1.1 200"),
+            "split at {split}: the answer is the upstream fixture's: {:?}",
+            &early[..n]
+        );
+        // The tail still flows, and the full head reached the upstream
+        // (the replay is complete and in order).
+        client
+            .write_all(&head[split..])
+            .expect("write the tail half");
+        let _ = client.flush();
+        let _ = client.shutdown(std::net::Shutdown::Both);
+        let mut child = child;
+        let _ = child.kill();
+        let _ = child.wait();
+        let log = std::fs::read_to_string(log_in(&dir)).expect("read the decision log");
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(
+            log.contains("\"event\":\"allow\""),
+            "split at {split}: the model lane is the fallback: {log}"
+        );
+        assert!(
+            !log.contains("\"event\":\"deny\""),
+            "split at {split}: no policy event for a non-CONNECT head: {log}"
+        );
+    }
 }

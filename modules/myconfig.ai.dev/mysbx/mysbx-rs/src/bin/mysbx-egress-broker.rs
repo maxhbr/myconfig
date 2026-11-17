@@ -778,10 +778,18 @@ fn read_preface(client: &UnixStream) -> Preface {
 /// Whether `buf` could still be the start of a `CONNECT ` request
 /// line: the method token is case-SENSITIVE (RFC 7231), so the check
 /// is a byte comparison of the prefix so far. An empty buffer could
-/// still become anything.
+/// still become anything. Only the bytes that have ARRIVED are
+/// compared — second review finding 2 on 3cfc1bbb3e: the first
+/// version short-circuited `len < 8` to true, so a one-byte `G`, or
+/// `GET /`, was held as a maybe-CONNECT and the model lane did not
+/// run until the divergence became 8 bytes deep; the divergence is
+/// visible at the FIRST differing byte and the fallback must fire
+/// there (the doc contract: "the model lane runs as soon as the
+/// divergence is visible").
 fn could_start_connect(buf: &[u8]) -> bool {
     const METHOD: &[u8] = b"CONNECT ";
-    buf.len() < METHOD.len() || buf[..METHOD.len()] == *METHOD
+    let n = buf.len().min(METHOD.len());
+    buf[..n] == METHOD[..n]
 }
 
 /// The bytes of the preface's first line, without its terminator.
@@ -1693,6 +1701,49 @@ mod tests {
             );
         }
     }
+    // ---- second review finding 2: prefix divergence at the first byte ------
+
+    #[test]
+    fn prefix_divergence_is_visible_at_the_first_differing_byte() {
+        // Second review finding 2 on 3cfc1bbb3e: the buffering
+        // rewrite's prefix check short-circuited `len < 8` to true,
+        // so buffers shorter than the method token were ALL held as
+        // maybe-CONNECT — a one-byte `G` did not fall back, `GET /` did
+        // not fall back — and a non-CONNECT client waited for a
+        // divergence its own first byte had already made. The
+        // contract (read_preface's doc): the fallback fires as soon
+        // as the divergence is visible, which is the first byte that
+        // differs.
+        for impossible in [
+            &b"G"[..],
+            b"GE",
+            b"GET",
+            b"GET ",
+            b"GET /",
+            // The method is case-SENSITIVE (RFC 7231): the lowercase
+            // spelling is a divergence, not a CONNECT.
+            b"connect ",
+        ] {
+            assert!(
+                !could_start_connect(impossible),
+                "{impossible:?} has diverged from CONNECT already"
+            );
+        }
+        for possible in [
+            &b""[..],
+            b"C",
+            b"CON",
+            b"CONNECT",
+            b"CONNECT ",
+            b"CONNECT example.com:443 HTTP/1.1\r\n",
+        ] {
+            assert!(
+                could_start_connect(possible),
+                "{possible:?} could still become CONNECT"
+            );
+        }
+    }
+
     // ---- second review finding 1: coalesced head + payload ------------------
 
     /// A socketpair standing in for the broker's client stream — the
