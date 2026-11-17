@@ -25,6 +25,7 @@
       profile.exec = [
         "kanshi-audio-card alsa_card.pci-0000_c1_00.1 auto"
         "kanshi-audio-card alsa_card.pci-0000_c1_00.6 off"
+        "set-idle-inhibitor on"
       ];
     }
   ];
