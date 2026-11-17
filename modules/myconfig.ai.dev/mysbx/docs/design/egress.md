@@ -89,10 +89,16 @@ The upstream table has exactly one row in phase B:
 | --- | --- | --- |
 | the run directory's `<name>` socket | `127.0.0.1:<litellm port>` | admit, then log |
 
-Allowlist rows (`allow-domains`, `connect-ports`, D21) and the CONNECT
-proxy are phase C/D (bd myconfig-n8kv.2). The broker resolves no names,
-so the rebinding and metadata-range rules (bd myconfig-fvi) do not apply
-yet — a literal loopback address needs them neither.
+Allowlist rows (`allow-domains`, `connect-ports`, D21) ride the CONNECT
+lane since bd myconfig-ew9s (docs/design/egress-connect.md): the
+phase-B table above is the degenerate case of it, and a plain
+`network = "proxy-only"` run keeps it byte-for-byte. With a table
+the broker RESOLVES names at connect time, host-side, and pins one
+address per connection — so the rebinding and metadata-range
+concerns (bd myconfig-fvi) become applicable there; the
+address-class refusals (E9 of egress-connect.md) are the rule that
+keeps an allowed name's A record from turning the broker into a
+host-service and metadata client.
 
 The broker is a Rust binary in this crate, std only (the
 `mysbx-egress-relay` precedent: no runtime, no async), and it confines
@@ -240,6 +246,7 @@ refusal:
 | --- | --- |
 | `listen` | the channel opened; `why` is `<socket> -> <upstream>` |
 | `allow` | a peer was admitted; `why` carries its pid and uid |
+| `deny` | a CONNECT request was refused by the table (bd myconfig-ew9s); `why` names the rule |
 | `unreachable` | after admission, the upstream could not be dialed |
 | `io` | after admission, a stream could not be split |
 | `fatal` | the accept loop died; the process exits `70` |
@@ -248,9 +255,16 @@ So one connection produces `allow` and MAY then produce `unreachable` or
 `io`: `allow` counts ATTEMPTS, not successes, and the counts therefore do
 not sum to a connection total.
 
-There is no `deny` event. Nothing in phase B refuses a peer — the fence is
-the empty network namespace plus the one bound socket — so a `deny` in the
-log would be a broker bug, not a policy decision.
+There is a `deny` event — but only since the CONNECT lane (bd
+myconfig-ew9s, docs/design/egress-connect.md E9). In phase B nothing
+refuses a peer — the fence is the empty network namespace plus the one
+bound socket — so a `deny` in a phase-B log would be a broker bug, not
+a policy decision. A paired run (allowlist keys under the profile)
+adds the CONNECT table: a `CONNECT host:port` request the table does
+not admit produces `deny` with a reason naming the rule that refused
+it, and `mysbx diagnose egress` counts it. Transport failures stay
+separate — a resolution or dial failure after a CONNECT admission is
+`unreachable`, never `deny`.
 
 `mysbx diagnose egress` (n8kv.1.4, cli.md D29) is the reader. A line that
 does not parse is SKIPPED, not treated as an error: a broker killed

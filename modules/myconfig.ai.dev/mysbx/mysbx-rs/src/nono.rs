@@ -228,6 +228,69 @@ pub fn validate_allowlist(cfg: &Merged) -> Result<(), Error> {
     Ok(())
 }
 
+/// The proxy-control variable names nono injects in domain-allowlist
+/// mode (docs/design/backends.md D1, bd myconfig-ew9s E13): the
+/// credential, the no-proxy list and the opt-outs. mysbx RESERVES
+/// these names under that mode — a configured or forwarded value
+/// would be applied by the pinned `env` AFTER nono's injection and
+/// silently overwrite the working proxy configuration, breaking the
+/// payload's own egress (the fence holds; this is a correctness and
+/// marking reservation, not the fix of a demonstrated policy bypass —
+/// the same honest scope D1's note records).
+pub const RESERVED_PROXY_NAMES: &[&str] = &[
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "NO_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "no_proxy",
+    "NONO_PROXY_TOKEN",
+    "NONO_NO_PROXY",
+    "NODE_USE_ENV_PROXY",
+];
+
+/// Whether `name` is one of [`RESERVED_PROXY_NAMES`].
+pub fn is_reserved_proxy_name(name: &str) -> bool {
+    RESERVED_PROXY_NAMES.contains(&name)
+}
+
+/// The names the configuration ([env] and the forwarded host
+/// environment) would carry that this run RESERVES: the proxy-control
+/// names, dropped and marked `[config/host, ignored — set by the
+/// proxy]` — implemented protection, not the D1 documentation note
+/// alone. Under nono's domain-allowlist mode only: without domains
+/// nono injects no proxy variables, so nothing is reserved. Pure, so
+/// the pipeline can compute the same list for the report the argv
+/// builder applies.
+pub fn reserved_proxy_env(cfg: &Merged, host_env: &crate::bwrap::HostEnv) -> Vec<String> {
+    if !domain_allowlist_mode(cfg) {
+        return Vec::new();
+    }
+    let mut names: Vec<String> = cfg
+        .env
+        .keys()
+        .filter(|k| is_reserved_proxy_name(k))
+        .cloned()
+        .collect();
+    for name in host_env.keys() {
+        if is_reserved_proxy_name(name) && !names.iter().any(|n| n == name) {
+            names.push(name.clone());
+        }
+    }
+    names
+}
+
+/// Whether the merged configuration runs nono in the mode that
+/// injects proxy variables: the layered nono backend with the network
+/// shared and a non-empty `allow-domains` (backends.md D1's shipped
+/// semantics — the default `Auto` execution strategy installs proxy
+/// supervision for domain policy).
+fn domain_allowlist_mode(cfg: &Merged) -> bool {
+    cfg.backend.as_deref() == Some("nono")
+        && cfg.network.is_shared()
+        && !cfg.allow_domains.is_empty()
+}
+
 /// Build the `nono run` grant argv — the segment between `run
 /// --profile <path>` and nono's own `--` separator, wrapped by
 /// lib.rs into the bwrap layout as [`crate::bwrap::Params::inner`].

@@ -2726,10 +2726,42 @@ fn sandbox_pipeline(
     // other backend with a backend-specific
     // reason, before the session clone and before the `--dry-run`
     // return (a dry run audits the refusal too). The cross-layer
-    // allowlist contradiction is refused here as well; the SAME-file
-    // form is a schema error (config.rs).
+    // allowlist contradiction is refused here as well — EXCEPT the
+    // bubblewrap pairing (docs/design/egress-connect.md E7, bd
+    // myconfig-ew9s): the keys ride the profile's broker transport as
+    // CONNECT-table rows, they do not widen the network (the netns
+    // stays empty). The SAME-file form is a schema error on every
+    // backend EXCEPT bubblewrap (config.rs).
+    // The broker pin, read ONCE here for the GATE (E12): the
+    // registry's `Broker` arm asks it — "enforceable only with a
+    // broker pinned" — so the allowlist decision sees the transport
+    // before, not after, the profile's `resolve_egress` below (the
+    // same environment cannot change between the two reads; the
+    // value itself is still read there, where the channel is
+    // built).
+    let broker_pinned = env_opt("MYSBX_EGRESS_BROKER").is_some();
+    // Whether THIS run is the bubblewrap pairing: the keys ride the
+    // broker's CONNECT lane (E7). The registry's `Broker` arm says the
+    // backend CAN enforce them this way; the pin says the transport
+    // exists; the profile says the netns is the empty one.
+    let broker_pairing = merged.network == config::Network::ProxyOnly
+        && !allowlist_keys.is_empty()
+        && matches!(
+            backends::find(backend).map(|row| row.allowlist),
+            Some(backends::Allowlist::Broker)
+        )
+        && broker_pinned;
     if merged.network == config::Network::ProxyOnly {
-        if !allowlist_keys.is_empty() {
+        // The bubblewrap pairing is exempt from the contradiction
+        // refusal (E7): there the keys are the broker's TABLE, not a
+        // second network policy — the pin-vs-no-pin distinction is
+        // the registry gate's to make below (E12: the `Broker` arm asks
+        // the pin), so this block must not eat it.
+        let broker_row = matches!(
+            backends::find(backend).map(|row| row.allowlist),
+            Some(backends::Allowlist::Broker)
+        );
+        if !allowlist_keys.is_empty() && !broker_row {
             eprintln!(
                 "mysbx: network = \"proxy-only\" grants only the host model endpoint; an allowlist ({}) contradicts it — the allowlist keys describe a shared network (docs/design/config.md D20/D21); drop the keys or share the network",
                 allowlist_keys
@@ -2767,19 +2799,65 @@ fn sandbox_pipeline(
     }
 
     if !allowlist_keys.is_empty() {
-        // Asked of the registry (bd myconfig-mo3.2.1): the row's
-        // network_allowlist predicate is D21's enforcement table —
-        // nono alone enforces an allowlist today.
-        if !backends::find(backend).is_some_and(|row| row.network_allowlist) {
-            eprintln!(
-                "mysbx: the configuration sets {} — only the `nono` backend enforces them; the `{backend}` backend cannot (bubblewrap shares or unshares the whole network namespace; the podman backends dial from an unfiltered netns — pasta on `podman-gvisor`, libkrun's TSI proxy on `podman-krun`, bd myconfig-6di.3/myconfig-6di.5.5)",
-                allowlist_keys
-                    .iter()
-                    .map(|k| format!("`{k}`"))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            );
-            eprintln!("  a finer network policy is refused, never accepted-and-ignored — switch the backend to `nono`, or drop the keys");
+        // Asked of the registry (bd myconfig-mo3.2.1, restructured bd
+        // myconfig-ew9s): the row's `allowlist` is D21's enforcement
+        // table. `NonosEgress` enforces the keys itself.
+        // `Broker` names the bwrap-built tiers whose per-run egress
+        // broker enforces them through its CONNECT lane — the E7
+        // pairing: only under `network = "proxy-only"` (the empty
+        // netns; under a shared network a proxy is advisory — probed
+        // live, `curl --noproxy '*'` walks past it) and only with a
+        // broker pinned (no broker, no transport; the run is
+        // refused, never advisory). `Refused` refuses outright.
+        // Never accepted-and-ignored in any arm.
+        let enforcing = match backends::find(backend).map(|row| row.allowlist) {
+            Some(backends::Allowlist::NonosEgress) => true,
+            Some(backends::Allowlist::Broker) => broker_pairing,
+            _ => false,
+        };
+        if !enforcing {
+            // The Broker row's two refusals get their own reasons: the
+            // transport and the spelling each name the fix.
+            if matches!(
+                backends::find(backend).map(|row| row.allowlist),
+                Some(backends::Allowlist::Broker)
+            ) {
+                if merged.network.is_shared() {
+                    eprintln!(
+                        "mysbx: the configuration sets {} — the `{backend}` backend enforces them only through the per-run egress broker's CONNECT lane, which needs the empty netns of network = \"proxy-only\"; a proxy next to a shared network is advisory (curl --noproxy '*' walks past it)",
+                        allowlist_keys
+                            .iter()
+                            .map(|k| format!("`{k}`"))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    );
+                    eprintln!(
+                        "  set network = \"proxy-only\" (docs/design/egress-connect.md E7) or drop the keys"
+                    );
+                } else {
+                    eprintln!(
+                        "mysbx: the configuration sets {} — the `{backend}` backend enforces them through the per-run egress broker, but this build pinned no broker (MYSBX_EGRESS_BROKER); a run without the transport is refused, never advisory",
+                        allowlist_keys
+                            .iter()
+                            .map(|k| format!("`{k}`"))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    );
+                    eprintln!(
+                        "  enable the broker (myconfig.ai.dev.mysbx pins MYSBX_EGRESS_BROKER) or drop the keys"
+                    );
+                }
+            } else {
+                eprintln!(
+                    "mysbx: the configuration sets {} — the `nono` backend enforces them itself, the `bubblewrap` backend through its egress broker (a pin and network = \"proxy-only\"); the `{backend}` backend can do neither (the podman backends dial from an unfiltered netns — pasta on `podman-gvisor`, libkrun's TSI proxy on `podman-krun`, bd myconfig-6di.3/myconfig-6di.5.5)",
+                    allowlist_keys
+                        .iter()
+                        .map(|k| format!("`{k}`"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+                eprintln!("  a finer network policy is refused, never accepted-and-ignored — switch the backend, or drop the keys");
+            }
             return EXIT_INFRASTRUCTURE;
         }
         // The same contradiction the nono argv builder refuses as
@@ -2798,17 +2876,43 @@ fn sandbox_pipeline(
             );
             return EXIT_INFRASTRUCTURE;
         }
-        // The nono backend's allowlist honesty (bd myconfig-a14,
-        // bd myconfig-6di.4.4): `listen-ports` alone does not restrict
-        // outbound (nono reports "outbound allowed") and URL/path-form
-        // `allow-domains` entries would need nono's TLS interception —
-        // both are REFUSED here, before the session clone, so a
-        // broken configuration creates nothing. The builder re-runs
-        // the same pure predicate as defense in depth
-        // (nono::validate_allowlist).
-        if backend == "nono" {
+        // The allowlist honesty rules (bd myconfig-a14,
+        // bd myconfig-6di.4.4), generalized to every ENFORCING backend
+        // (bd myconfig-ew9s, egress-connect.md E9): `listen-ports`
+        // alone does not restrict outbound — an allowlist that does
+        // not restrict is a lie — and URL/path-form
+        // `allow-domains` entries would need TLS interception no
+        // enforcing backend has. Both are REFUSED here, before the
+        // session clone, so a broken configuration creates nothing.
+        // The nono argv builder re-runs the same pure predicate as
+        // defense in depth; the broker's own table validation is the
+        // second layer on the bubblewrap path.
+        if enforcing {
             if let Err(e) = nono::validate_allowlist(&merged) {
                 eprintln!("mysbx: {e}");
+                return EXIT_INFRASTRUCTURE;
+            }
+            // The broker table's own honesty rule (bd myconfig-ew9s,
+            // egress-connect.md E10 CORRECTED by review finding 3):
+            // the table's two axes are the HOST (allow-domains) and
+            // the PORT (connect-ports), and a table naming only hosts
+            // is refused — the unrestricted port axis it implied
+            // cannot be expressed in the Landlock fence, so the fence
+            // would grant only the upstream port while claiming the
+            // widening. The broker re-runs the same refusal
+            // fail-closed (exit 70, before its socket) as defense in
+            // depth; this gate keeps the refusal ahead of the session
+            // clone and the dry-run return.
+            if broker_pairing && !merged.allow_domains.is_empty() && merged.connect_ports.is_empty()
+            {
+                eprintln!(
+                    "mysbx: allow-domains ({}) names the CONNECT lane's HOST axis, \
+                     but no connect-ports names its PORT axis — a domains-only table \
+                     promised an unrestricted port axis the Landlock fence cannot \
+                     express; name the ports too (e.g. [443, 80]) \
+                     (docs/design/egress-connect.md E10)",
+                    merged.allow_domains.join(", ")
+                );
                 return EXIT_INFRASTRUCTURE;
             }
         }
@@ -2833,7 +2937,24 @@ fn sandbox_pipeline(
     // The missing-setting, path-shape and — for a REAL run only —
     // socket-existence refusals live here; the argv builder later takes
     // the same values as a `bwrap::EgressChannel`.
-    let egress: Option<EgressPins> = match resolve_egress(merged.network, backend, dry_run) {
+    let egress: Option<EgressPins> = match resolve_egress(
+        merged.network,
+        backend,
+        dry_run,
+        // The CONNECT-lane table, threaded for the E7 pairing (bd
+        // myconfig-ew9s): non-empty only when the gates above already
+        // admitted keys + `proxy-only` on the broker backends; every
+        // other run resolves the channel without a table.
+        if matches!(
+            backends::find(backend).map(|row| row.allowlist),
+            Some(backends::Allowlist::Broker)
+        ) {
+            merged.allow_domains.clone()
+        } else {
+            Vec::new()
+        },
+        merged.connect_ports.clone(),
+    ) {
         Ok(pins) => pins,
         Err(()) => return EXIT_INFRASTRUCTURE,
     };
@@ -3152,6 +3273,42 @@ fn sandbox_pipeline(
         .cloned()
         .collect();
     let mut host_env = collect_host_env(&merged);
+    // The proxy-variable reservation (backends.md D1's caveat,
+    // implemented — bd myconfig-ew9s E13), both halves: the nono
+    // domain-allowlist run (nono injects the names, the pinned `env`
+    // applies the payload env after that injection) and the
+    // bubblewrap E7 pairing (mysbx itself injects `HTTP(S)_PROXY` /
+    // `NO_PROXY` after `[env]` for the CONNECT lane). Both filter the
+    // same names out of the argv's env segment — computed here from
+    // the merged config so the report and the argv cannot drift apart.
+    // The pairing's condition mirrors the argv builder's gate exactly:
+    // the profile plus a non-empty table (the gate above already
+    // refused every other keys-under-profile combination).
+    let reserved_env: Vec<String> = {
+        let mut names = nono::reserved_proxy_env(&merged, &host_env);
+        if merged.network == config::Network::ProxyOnly
+            && backends::find(backend)
+                .is_some_and(|row| row.allowlist == backends::Allowlist::Broker)
+            && (!merged.allow_domains.is_empty() || !merged.connect_ports.is_empty())
+        {
+            // Exactly the names bwrap.rs injects (E8): nono's control
+            // names are not injected under bubblewrap, so they are not
+            // reserved there either.
+            for name in [
+                "HTTP_PROXY",
+                "HTTPS_PROXY",
+                "http_proxy",
+                "https_proxy",
+                "NO_PROXY",
+                "no_proxy",
+            ] {
+                if !names.iter().any(|n| n == name) {
+                    names.push(name.to_owned());
+                }
+            }
+        }
+        names
+    };
     // The console size marker (bd myconfig-a2uq, backends.md D9): the
     // qemu guest's serial console carries no winsize, so the caller's
     // terminal size rides the manifest env instead — the init stty's
@@ -3397,6 +3554,8 @@ fn sandbox_pipeline(
                 port: pinned.port,
                 relay_bin: &pinned.relay_bin,
                 etc_dir: &pinned.etc_dir,
+                allow_domains: &pinned.allow_domains,
+                connect_ports: &pinned.connect_ports,
             }),
             _ => None,
         };
@@ -4627,6 +4786,7 @@ fn sandbox_pipeline(
             host_env: &host_env,
             dropped_env: &dropped_env,
             placeholder_env: &placeholder_env,
+            reserved_env: &reserved_env,
             params: &report_params,
             bwrap_bin: &backend_bin,
             backend,
@@ -4713,6 +4873,42 @@ fn sandbox_pipeline(
         println!("{backend_program}");
         for arg in &argv {
             println!("{arg}");
+        }
+        // The broker argv block (docs/design/egress-connect.md E8, bd
+        // myconfig-ew9s): a `--dry-run` never spawns the broker (the
+        // spawn is below the dry-run return), but the E7 pairing made
+        // the broker's TABLE part of what an operator audits — so a
+        // broker-backed channel prints the argv the run would spawn,
+        // program first, one argument per line, the same shape the
+        // detached-dtach block uses. The would-be log path carries this
+        // dry run's own pid (nothing is created; `mysbx diagnose
+        // egress` reads the logs of REAL runs).
+        if let Some(pinned) = egress
+            .as_ref()
+            .and_then(|p| p.broker_bin.as_ref().map(|bin| (bin, p)))
+        {
+            let (bin, pinned) = pinned;
+            let log = repo
+                .sidecar
+                .join("egress")
+                .join(std::process::id().to_string())
+                .join("decisions.jsonl");
+            let socket = pinned
+                .broker_dir
+                .as_ref()
+                .map(|d| d.join(&pinned.socket))
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            println!();
+            for arg in broker_argv(
+                bin,
+                &socket,
+                &format!("127.0.0.1:{}", pinned.port),
+                &log.to_string_lossy(),
+                pinned,
+            ) {
+                println!("{arg}");
+            }
         }
         return 0;
     }
@@ -6046,6 +6242,16 @@ pub struct EgressPins {
     /// `$XDG_RUNTIME_DIR` refuses the run BEFORE anything is created
     /// (docs/design/egress.md E4/E5). `None` for a static-forwarder build.
     pub broker_dir: Option<std::path::PathBuf>,
+    /// The CONNECT-lane table (docs/design/egress-connect.md E7, bd
+    /// myconfig-ew9s): one row per merged `allow-domains` entry plus
+    /// the port filter from `connect-ports`. EMPTY for a plain
+    /// `proxy-only` run — the phase-B degenerate case, the table is
+    /// then the one LiteLLM row inside the broker, and no
+    /// `--allow-*` flag is emitted at all. Non-empty ONLY for the
+    /// bubblewrap pairing, so the layered nono backend's phase-B
+    /// behavior is untouched.
+    pub allow_domains: Vec<String>,
+    pub connect_ports: Vec<u16>,
 }
 
 /// Resolve and validate the `proxy-only` egress channel from
@@ -6071,6 +6277,8 @@ pub fn resolve_egress(
     network: config::Network,
     backend: &str,
     dry_run: bool,
+    allow_domains: Vec<String>,
+    connect_ports: Vec<u16>,
 ) -> Result<Option<EgressPins>, ()> {
     // Asked of the registry, never matched by name here
     // (backends.rs: every name-matching call site funnels through
@@ -6201,6 +6409,13 @@ pub fn resolve_egress(
         etc_dir,
         broker_bin,
         broker_dir,
+        // The CONNECT-lane table, populated only under the E7
+        // pairing (the gate above already refused every other
+        // keys-under-proxy-only combination): a plain profile run
+        // keeps the phase-B degenerate table, so these stay empty
+        // and no `--allow-*` flag is emitted.
+        allow_domains,
+        connect_ports,
     }))
 }
 
@@ -7020,6 +7235,47 @@ fn sweep_pid_dirs(root: &std::path::Path) {
 /// cleanup at all: when the backend exits, the kernel kills the broker and
 /// the next run's sweep removes the directory. A waited run kills it
 /// explicitly in [`cleanup_per_run_state`], like the waypipe client.
+/// The broker's argv, as a pure function of the pins (docs/design/
+/// egress-connect.md E8, bd myconfig-ew9s): the same list the real
+/// spawn builds in [`start_egress_broker`] and a `--dry-run` prints
+/// — the table is part of what an operator audits, so the audit
+/// cannot diverge from the spawn. `upstream` is pre-formatted so the
+/// dry run passes the same `127.0.0.1:<port>` string without
+/// duplicating the format here twice.
+fn broker_argv(
+    broker_bin: &str,
+    socket: &str,
+    upstream: &str,
+    log: &str,
+    pinned: &EgressPins,
+) -> Vec<String> {
+    let mut argv = vec![
+        broker_bin.to_owned(),
+        "--listen".into(),
+        socket.into(),
+        "--upstream".into(),
+        upstream.into(),
+        "--decision-log".into(),
+        log.into(),
+    ];
+    // The CONNECT-lane table (docs/design/egress-connect.md E7, bd
+    // myconfig-ew9s): one `--allow-domain` row per merged entry,
+    // `--allow-connect-port` per port. A plain profile run carries no
+    // table and no flags — its CONNECT lane refuses everything, the
+    // model lane is the phase-B transport. The broker re-validates
+    // the table fail-closed (exit 70) before its socket exists, so a
+    // bad entry here can never reach a payload.
+    for domain in &pinned.allow_domains {
+        argv.push("--allow-domain".into());
+        argv.push(domain.clone());
+    }
+    for port in &pinned.connect_ports {
+        argv.push("--allow-connect-port".into());
+        argv.push(port.to_string());
+    }
+    argv
+}
+
 fn start_egress_broker(
     pinned: &EgressPins,
     dir: &std::path::Path,
@@ -7058,15 +7314,23 @@ fn start_egress_broker(
          build pinned no MYSBX_EGRESS_BROKER (docs/design/egress.md E5)"
             .to_owned()
     })?;
-    let upstream = format!("127.0.0.1:{}", pinned.port);
+    let argv = broker_argv(
+        &broker_bin,
+        socket_str,
+        &format!("127.0.0.1:{}", pinned.port),
+        log_str,
+        pinned,
+    );
+    // `broker_argv` returns the PROGRAM as element 0 (the dry-run audit
+    // prints it, argv[0]-first like the backend argv block); the spawn
+    // must skip it — `Command::new` already names the program, and
+    // passing it again made the broker die on its own path as an
+    // unknown argument (review finding 2 on 53a6c680b3: EVERY
+    // broker-backed real run failed, plain proxy-only included).
+    debug_assert_eq!(argv.first().map(String::as_str), Some(broker_bin.as_str()));
     let mut cmd = std::process::Command::new(&broker_bin);
-    cmd.arg("--listen")
-        .arg(socket_str)
-        .arg("--upstream")
-        .arg(&upstream)
-        .arg("--decision-log")
-        .arg(log_str)
-        .stdin(std::process::Stdio::null())
+    cmd.args(&argv[1..]);
+    cmd.stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null());
     // Die with mysbx's process: in exec mode mysbx IS the backend after the
     // exec, so the kernel kills the broker when the run ends. Captured

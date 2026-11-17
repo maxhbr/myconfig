@@ -90,6 +90,23 @@ pub fn abi() -> Result<i64, String> {
 /// short of `exec` of a non-confined process. Landlock does not restrict
 /// AF_UNIX, so a listener and a Unix-socket log keep working.
 pub fn confine_to_tcp_port(port: u16) -> Result<(), String> {
+    confine_to_tcp_ports(&[port])
+}
+
+/// The multi-port generalization the broker's CONNECT lane needs
+/// (docs/design/egress-connect.md E10): the fence is one rule per
+/// allowed port, all in one ruleset, so an allowlist that names several
+/// connect-ports confines the broker to exactly those. `ports` must be
+/// non-empty — a broker with nothing to dial serves no lane and must
+/// refuse instead of installing an empty ruleset (a ruleset with no
+/// rules denies every `connect(2)`, which is the same failure read the
+/// caller wants, but the caller's refusal names the real reason).
+pub fn confine_to_tcp_ports(ports: &[u16]) -> Result<(), String> {
+    if ports.is_empty() {
+        return Err(
+            "cannot confine to no TCP port at all; the broker has nothing to dial".to_owned(),
+        );
+    }
     let ruleset_attr = RulesetAttr {
         handled_access_fs: 0,
         handled_access_net: ACCESS_CONNECT_TCP,
@@ -109,25 +126,27 @@ pub fn confine_to_tcp_port(port: u16) -> Result<(), String> {
         ));
     }
     let ruleset = ruleset as i32;
-    let rule = NetPortAttr {
-        allowed_access: ACCESS_CONNECT_TCP,
-        port: u64::from(port),
-    };
-    let added = unsafe {
-        syscall(
-            SYS_LANDLOCK_ADD_RULE,
-            ruleset,
-            LANDLOCK_RULE_NET_PORT,
-            &rule as *const NetPortAttr,
-            0u32,
-        )
-    };
-    if added != 0 {
-        let why = std::io::Error::last_os_error();
-        unsafe { close(ruleset) };
-        return Err(format!(
-            "cannot allow TCP port {port} in the Landlock ruleset: {why}"
-        ));
+    for &port in ports {
+        let rule = NetPortAttr {
+            allowed_access: ACCESS_CONNECT_TCP,
+            port: u64::from(port),
+        };
+        let added = unsafe {
+            syscall(
+                SYS_LANDLOCK_ADD_RULE,
+                ruleset,
+                LANDLOCK_RULE_NET_PORT,
+                &rule as *const NetPortAttr,
+                0u32,
+            )
+        };
+        if added != 0 {
+            let why = std::io::Error::last_os_error();
+            unsafe { close(ruleset) };
+            return Err(format!(
+                "cannot allow TCP port {port} in the Landlock ruleset: {why}"
+            ));
+        }
     }
     // `restrict_self(2)` requires no_new_privs. Setting it changes nothing
     // for a process that already dropped every privilege, and it is the

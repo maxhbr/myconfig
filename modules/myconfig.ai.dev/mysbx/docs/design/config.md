@@ -1242,11 +1242,24 @@ network, whose whole point is that a host-wide decision holds).
 **What `proxy-only` grants.** Only the host's LiteLLM endpoint is
 reachable, and no model credential exists inside the sandbox — the
 proxy holds it (D28 records the credential rules, including the
-residual risks the profile does NOT remove). The profile is mutually
-exclusive with D21's hostname/port allowlists: those keys describe
-what a sandbox with a *shared* network may reach, so they are a schema
-error next to `network = "proxy-only"` in one file and a refused run
-(exit `70`) when the layers combine them.
+residual risks the profile does NOT remove). On every backend except
+`bubblewrap` the profile is mutually exclusive with D21's
+hostname/port allowlists: those keys describe what a sandbox with a
+*shared* network may reach, so next to `network = "proxy-only"` they
+are a refused run (exit `70`) — decided at MERGE time, where the
+merged backend and network are both known, never by a file-local
+schema check (review finding 5 on 53a6c680b3-era code: the same-file
+check looked at the backend declared in the same file, so a
+`backend = "bubblewrap"` user layer with a sidecar profile + keys was
+rejected before the merge while the identical effective config with
+a redundant backend key passed). On `bubblewrap` the two pair instead
+(bd myconfig-ew9s, docs/design/egress-connect.md E7): the keys become
+the per-run egress broker's CONNECT table, riding the profile's
+transport without widening the network — see D21's table row. A
+paired run additionally injects `HTTP(S)_PROXY`/`NO_PROXY` pointing at
+the in-sandbox relay after `[env]` (E8) and reserves those names
+(E13); a plain profile run injects nothing and stays byte-identical
+to the pre-pairing transport.
 
 **Enforcement is per backend** — the same accepted-never-ignored rule
 as D21. The bwrap-built tiers enforce it (bubblewrap, and the layered
@@ -1335,19 +1348,23 @@ a security bug:
 | backend | an allowlist means |
 | --- | --- |
 | `nono` | enforced (bd myconfig-6di.2, layered bd myconfig-6di.4.4): `--allow-domain` / `--allow-connect-port` / `--listen-port` per merged entry, in merged order; DNS is resolved by nono's own proxy, so no implicit `connect-ports` 53/853 is added; `listen-ports` WITHOUT `allow-domains`/`connect-ports` is refused (with only listen ports nono reports "outbound allowed", bd myconfig-a14) and URL/path-form entries are refused (no TLS interception here) |
-| `bubblewrap` | refused — bubblewrap shares or unshares the whole network namespace (`--share-net`/nothing), it cannot filter per domain or port |
+| `bubblewrap` | enforced through the per-run egress broker's CONNECT lane, and only when the wrapper pinned one (`MYSBX_EGRESS_BROKER`, docs/design/egress-connect.md E7/E10, bd myconfig-ew9s): the keys select broker policy next to `network = "proxy-only"`, and the broker resolves, admits and dials per row. Without a broker pinned the run is refused, never advisory — and keys next to a merely shared network are refused too (the proxy would be advisory, `curl --noproxy '*'` walks past it) |
 | `podman-gvisor` | refused — pasta does not filter by domain (bd myconfig-6di.3) |
 | `podman-krun` | refused — libkrun's TSI is an UNFILTERED proxy: the VMM dials whatever the guest connects to, from the container's own netns (pasta by default, the empty netns under `network = false`); no per-domain or per-port hook exists in the muxer (verified against the sources, bd myconfig-6di.5.5) |
 | `krun` | refused — direct libkrun TSI has no implemented allowlist hook |
 | `microvm-qemu` | refused — the SLiRP network path has no implemented allowlist enforcement |
 | `microvm-ch` | refused — passt's vhost-user net device (D11's SLiRP-compatible address plan) has no implemented allowlist hook |
 
-Every backend's row is asked of the registry (`network_allowlist`,
-bd myconfig-mo3.2.1), not matched by name at the call site.
+Every backend's row is asked of the registry (`allowlist`, bd
+myconfig-mo3.2.1, restructured as the enum bd myconfig-ew9s:
+`NonosEgress` / `Broker` / `Refused`), not matched by name at the
+call site.
 
-The first enforcement is the nono backend (bd myconfig-6di.2). The
-refusal fires while the argv is laid out, BEFORE the `--dry-run` early
-return, so a dry run audits it too.
+The first enforcement is the nono backend (bd myconfig-6di.2); the
+second is the bubblewrap pairing through the per-run broker (bd
+myconfig-ew9s, docs/design/egress-connect.md). The refusal fires
+while the argv is laid out, BEFORE the `--dry-run` early return, so a
+dry run audits it too.
 
 **Pinned nono 0.80.0 distinguishes policy layers.** With ports only,
 listed destination ports have no destination-host restriction and no

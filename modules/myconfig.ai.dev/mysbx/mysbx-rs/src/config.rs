@@ -797,31 +797,20 @@ impl Config {
             }
         }
         // `network = "proxy-only"` names the ONE reachable endpoint
-        // (docs/design/config.md D20/D21): D21's allowlist keys
-        // describe what a SHARED network may reach, so naming both in
-        // one file is a schema error. The cross-layer variant is
-        // refused at run time (lib.rs step 4b), where the merged
-        // values are known.
-        if config.network == Some(Network::ProxyOnly) {
-            let keys: Vec<&str> = [
-                (!config.allow_domains.is_empty()).then_some("allow-domains"),
-                (!config.connect_ports.is_empty()).then_some("connect-ports"),
-                (!config.listen_ports.is_empty()).then_some("listen-ports"),
-            ]
-            .into_iter()
-            .flatten()
-            .collect();
-            if !keys.is_empty() {
-                return Err(Error::Schema(format!(
-                    "top level: network = \"proxy-only\" grants only the host model endpoint, so {} contradict{} it — the allowlist keys describe a shared network (docs/design/config.md D20/D21); drop them or drop the profile",
-                    keys.iter()
-                        .map(|k| format!("`{k}`"))
-                        .collect::<Vec<_>>()
-                        .join(", "),
-                    if keys.len() == 1 { "s" } else { "" },
-                )));
-            }
-        }
+        // (docs/design/config.md D20/D21, egress-connect.md E7, bd
+        // myconfig-ew9s; review finding 5): D21's allowlist keys next
+        // to `network = "proxy-only"` are NO LONGER a same-file
+        // schema error — the compatibility of the two is a property of
+        // the MERGED configuration (the pairing is legal on
+        // `bubblewrap`, refused everywhere else), and a file-local
+        // check ran too early: a user layer with `backend =
+        // "bubblewrap"` plus a sidecar with the profile and keys was
+        // rejected BEFORE the merge, while the identical effective
+        // config with a redundant backend key in the sidecar passed.
+        // The refusal lives in the post-merge runtime gate (lib.rs
+        // step 4b), where merged.backend and merged.network are both
+        // known — still ahead of the session clone and the
+        // `--dry-run` return, so a dry run audits it.
         Ok(config)
     }
 }

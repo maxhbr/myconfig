@@ -48,6 +48,7 @@ fn every_asset_is_exercised() {
         "valid/full.toml",
         "valid/minimal.toml",
         "valid/relative-and-home-paths.toml",
+        "valid/schema-network-proxy-only-with-allowlist.toml",
         "valid/syntax-zoo.toml",
         "valid/user-config.toml",
         "valid/network-string.toml",
@@ -74,7 +75,6 @@ fn every_asset_is_exercised() {
         "invalid/schema-workmux-key-removed.toml",
         "invalid/schema-wrong-type.toml",
         "invalid/schema-network-value.toml",
-        "invalid/schema-network-proxy-only-with-allowlist.toml",
         "invalid/syntax-duplicate-key.toml",
         "invalid/syntax-missing-value.toml",
         "invalid/syntax-unterminated-string.toml",
@@ -288,10 +288,14 @@ fn invalid_schema_is_reported_with_the_offending_key() {
             "invalid/schema-network-value.toml",
             "invalid network `public`, expected one of",
         ),
-        (
-            "invalid/schema-network-proxy-only-with-allowlist.toml",
-            "contradicts it",
-        ),
+        // The `network = "proxy-only"` + allowlist combination is NO
+        // LONGER a schema error (review finding 5, bd myconfig-ew9s):
+        // its legality is a property of the MERGED configuration — the
+        // pairing is legal on bubblewrap, refused on every other
+        // backend — so the refusal is the post-merge runtime gate's
+        // (pinned by a test there).
+        // (The same-file asset moved to valid/ and has its own test
+        // below.)
         ("invalid/schema-relative-dest.toml", "must be absolute"),
         (
             "invalid/schema-tilde-user-path.toml",
@@ -380,6 +384,32 @@ fn invalid_schema_is_reported_with_the_offending_key() {
 fn missing_file_is_an_io_error() {
     let e = Config::load(&asset("valid/does-not-exist.toml")).unwrap_err();
     assert!(matches!(e, Error::Io(_)), "{e}");
+}
+
+#[test]
+fn proxy_only_with_allowlist_parses_the_compatibility_is_merge_time() {
+    // Review finding 5 on 53a6c680b3: the combination's legality is a
+    // property of the MERGED configuration (pairing on bubblewrap,
+    // refusal on every other backend), so a file-local schema check
+    // ran too early — a user layer with `backend = "bubblewrap"` plus
+    // a sidecar with the profile and keys was rejected BEFORE the
+    // merge, while the identical effective config with a redundant
+    // backend key in the sidecar passed. The file parses; the
+    // post-merge gate decides (its refusal and its pairing both have
+    // end-to-end tests in the cli suite).
+    let cfg = Config::load(&asset(
+        "valid/schema-network-proxy-only-with-allowlist.toml",
+    ))
+    .unwrap();
+    assert_eq!(cfg.network, Some(mysbx::config::Network::ProxyOnly));
+    assert_eq!(cfg.allow_domains, vec!["api.openai.com"]);
+    // With the backend spelled in the same file, the pairing shape
+    // also parses — no schema twin remains for the combination.
+    let cfg = Config::parse(
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\nallow-domains = [\"api.openai.com\"]\n",
+    )
+    .unwrap();
+    assert_eq!(cfg.backend.as_deref(), Some("bubblewrap"));
 }
 
 // ---- git-dirs approval list (review-2 item 1) ------------------------------

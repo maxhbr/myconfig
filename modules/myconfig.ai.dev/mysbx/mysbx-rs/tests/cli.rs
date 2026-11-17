@@ -206,6 +206,28 @@ fn spawn_proxy_only<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> 
     cmd
 }
 
+/// A fake `ssh-keygen` for REAL-RUN tests in degraded environments (the
+/// q8zg precedent, bd myconfig-ew9s): this sandbox runs as a uid without
+/// a passwd entry, so the real `ssh-keygen -t ed25519` dies with "No user
+/// exists for uid 1000" before the run ever reaches the egress broker —
+/// masking a real spawn bug behind an environmental failure (review
+/// finding 2 on 53a6c680b3 was invisible for exactly this reason). The
+/// fake accepts the pipeline's argv shape and writes a plausible pair,
+/// so the run proceeds to the channel and the backend.
+fn fake_ssh_keygen(base: &std::path::Path) -> std::path::PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = base.join("fake-keygen");
+    std::fs::create_dir_all(&dir).unwrap();
+    let script = dir.join("ssh-keygen");
+    std::fs::write(
+        &script,
+        "#!/bin/sh\n# fakes: -t ed25519 -N '' -C <comment> -f <path>\nkey=''\nwhile [ $# -gt 0 ]; do\n    case \"$1\" in\n        -f) key=\"$2\"; shift 2 ;;\n        *) shift ;;\n    esac\ndone\n[ -n \"$key\" ] || exit 1\nprintf 'FAKE-ED25519-PRIVATE-KEY\n' > \"$key\"\nprintf 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFAKEKEY mysbx sandbox\n' > \"$key.pub\"\nexit 0\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    script
+}
+
 /// Like [`run_binary_with`], but on a caller-built [`Command`] (the
 /// proxy-only tests need the egress pins, which `spawn` does not set).
 fn run_command(mut cmd: Command) -> (i32, String, String) {
@@ -9991,7 +10013,7 @@ fn allowlist_on_krun_is_refused() {
     assert!(stderr.contains("krun"), "{stderr}");
     assert!(stderr.contains("connect-ports"), "{stderr}");
     assert!(
-        stderr.contains("only the `nono` backend enforces them"),
+        stderr.contains("the `nono` backend enforces them itself"),
         "{stderr}"
     );
 }
@@ -10090,9 +10112,12 @@ fn proxy_only_is_refused_on_every_backend_but_the_bwrap_tiers() {
 
 #[test]
 fn proxy_only_with_an_allowlist_is_refused_cross_layer() {
-    // D20/D21: the SAME-file form is a schema error (config.rs); a
-    // user-layer profile with a sidecar allowlist is refused at run
-    // time, exit 70, naming both keys.
+    // D20/D21, under the E7 pairing (bd myconfig-ew9s; the same-file
+    // schema twin was REMOVED by review finding 5 — the combination's
+    // legality is merge-time): the CROSS-layer form on bubblewrap is
+    // the pairing itself, admitted when a broker is pinned and refused
+    // when one is not — this test runs unpinned, so the refusal names
+    // the missing transport (E12), never a weakened advisory run.
     let (inv, _, sidecar) = fixture("proxy-only-cross-layer-allowlist", &[]);
     std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
     std::fs::write(
@@ -10108,10 +10133,94 @@ fn proxy_only_with_an_allowlist_is_refused_cross_layer() {
     let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(
-        stderr.contains("network = \"proxy-only\" grants only the host model endpoint"),
-        "{stderr}"
+        stderr.contains("this build pinned no broker"),
+        "the refusal names the missing transport: {stderr}"
+    );
+    assert!(
+        stderr.contains("MYSBX_EGRESS_BROKER"),
+        "the refusal names the pin: {stderr}"
     );
     assert!(stderr.contains("allow-domains"), "{stderr}");
+    assert!(
+        !stdout.contains("--clearenv"),
+        "no argv on refusal: {stdout}"
+    );
+}
+
+#[test]
+fn the_split_layer_pairing_decides_at_merge_time_not_per_file() {
+    // Review finding 5 on 53a6c680b3: the OLD same-file schema check
+    // looked at the backend declared IN THE SAME FILE, so this exact
+    // shape — a user layer with `backend = "bubblewrap"`, a sidecar
+    // with the profile and the keys — was rejected BEFORE the merge,
+    // while the identical effective config with a redundant backend
+    // key in the sidecar passed. Both shapes must now behave the
+    // same: the decision is the post-merge gate's, and a dry run
+    // audits it. Pinned broker, so the pairing is ADMITTED and the
+    // dry run emits the table.
+    for (name, extra_sidecar_key) in [("split-pairing", false), ("split-pairing-redundant", true)] {
+        let (inv, _, sidecar) = fixture(name, &[]);
+        std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+        std::fs::write(
+            inv.xdg.join("mysbx").join("config.toml"),
+            "backend = \"bubblewrap\"\n",
+        )
+        .unwrap();
+        let redundant = if extra_sidecar_key {
+            "backend = \"bubblewrap\"\n"
+        } else {
+            ""
+        };
+        std::fs::write(
+            sidecar.join("config.toml"),
+            format!(
+                "{redundant}network = \"proxy-only\"\nallow-domains = [\"api.openai.com\"]\nconnect-ports = [443]\n"
+            ),
+        )
+        .unwrap();
+        let runtime =
+            std::env::temp_dir().join(format!("mysbx-rt-split-{}-{}", name, std::process::id()));
+        let _ = std::fs::remove_dir_all(&runtime);
+        std::fs::create_dir_all(&runtime).unwrap();
+        let mut cmd = spawn_proxy_only(&inv, &["--dry-run"]);
+        cmd.env("XDG_RUNTIME_DIR", &runtime).env(
+            "MYSBX_EGRESS_BROKER",
+            "/synth/store/cccc-mysbx/bin/mysbx-egress-broker",
+        );
+        let (code, stdout, stderr) = run_command(cmd);
+        let _ = std::fs::remove_dir_all(&runtime);
+        assert_eq!(code, 0, "{name}: stderr: {stderr}");
+        assert!(
+            stdout.contains("--allow-domain") && stdout.contains("api.openai.com"),
+            "{name}: the pairing is decided at merge time and the table rides: {stdout}"
+        );
+    }
+    // And the refusal shape: the SAME split with `backend = "nono"`
+    // in the user layer is still refused — the merge-time gate says
+    // which backends may pair, not the file layout.
+    let (inv, _, sidecar) = fixture("split-pairing-nono", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"nono\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "network = \"proxy-only\"\nallow-domains = [\"api.openai.com\"]\nconnect-ports = [443]\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["--dry-run"]);
+    cmd.env(
+        "MYSBX_EGRESS_BROKER",
+        "/synth/store/cccc-mysbx/bin/mysbx-egress-broker",
+    );
+    let (code, stdout, stderr) = run_command(cmd);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("contradicts it"),
+        "the nono pairing stays refused, at merge time: {stderr}"
+    );
     assert!(
         !stdout.contains("--clearenv"),
         "no argv on refusal: {stdout}"
@@ -10458,6 +10567,330 @@ fn proxy_only_with_a_broker_pin_binds_the_per_run_directory_in_the_argv() {
 }
 
 #[test]
+fn allowlist_keys_next_to_a_shared_network_on_bubblewrap_are_refused_with_the_pairing_reason() {
+    // E7's refusal (bd myconfig-ew9s): under `network = "shared"` the
+    // keys cannot be enforced — a proxy there is advisory — so the run
+    // is refused and the message names the fix (switch to the profile),
+    // never `--share-net` with a table nobody reads.
+    let (inv, _, sidecar) = fixture("pairing-shared-refused", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nallow-domains = [\"api.openai.com\"]\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["--dry-run"]);
+    cmd.env(
+        "MYSBX_EGRESS_BROKER",
+        "/synth/store/cccc-mysbx/bin/mysbx-egress-broker",
+    );
+    let (code, stdout, stderr) = run_command(cmd);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("needs the empty netns of network = \"proxy-only\""),
+        "the refusal names the transport the keys need: {stderr}"
+    );
+    assert!(
+        stderr.contains("set network = \"proxy-only\""),
+        "the refusal names the fix: {stderr}"
+    );
+    assert!(
+        !stdout.contains("--share-net"),
+        "no argv on refusal: {stdout}"
+    );
+}
+
+#[test]
+fn allowlist_keys_on_bubblewrap_without_a_broker_pin_are_refused() {
+    // E12's gate (bd myconfig-ew9s): the pairing needs the transport —
+    // a build with no pinned broker cannot enforce a table, and the
+    // run is refused, never advisory. The message names the pin.
+    let (inv, _, sidecar) = fixture("pairing-no-broker", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\nallow-domains = [\"api.openai.com\"]\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["--dry-run"]);
+    cmd.env_remove("MYSBX_EGRESS_BROKER");
+    let (code, stdout, stderr) = run_command(cmd);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("pinned no broker"),
+        "the refusal names the missing transport: {stderr}"
+    );
+    assert!(
+        stderr.contains("MYSBX_EGRESS_BROKER"),
+        "the refusal names the pin: {stderr}"
+    );
+    assert!(
+        !stdout.contains("--clearenv"),
+        "no argv on refusal: {stdout}"
+    );
+}
+
+#[test]
+fn a_paired_run_emits_the_broker_table_and_injects_the_proxy_variables() {
+    // The lift (bd myconfig-ew9s, egress-connect.md E7/E8): keys under
+    // the profile ride the broker transport. The dry run audits BOTH
+    // halves: the broker argv carries one `--allow-domain` row per
+    // entry (plus the port filter), and the backend argv injects
+    // HTTP(S)_PROXY pointing at the relay AFTER `[env]`, with the
+    // reserved names dropped from the `[env]` segment.
+    let (inv, _repo, sidecar) = fixture("pairing-emits-table", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\nallow-domains = [\"api.openai.com\", \"github.com\"]\nconnect-ports = [443]\n",
+    )
+    .unwrap();
+    // A configured override that must NOT reach the payload: the
+    // reservation (E13) drops it, the report marks it ignored.
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "[env]\nHTTPS_PROXY = \"http://evil.example:3128\"\nKEEP_ME = \"stays\"\n",
+    )
+    .unwrap();
+    let runtime = std::env::temp_dir().join(format!("mysbx-rt-pair-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&runtime);
+    std::fs::create_dir_all(&runtime).unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["--dry-run", "--verbose"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime).env(
+        "MYSBX_EGRESS_BROKER",
+        "/synth/store/cccc-mysbx/bin/mysbx-egress-broker",
+    );
+    let (code, stdout, stderr) = run_command(cmd);
+    let _ = std::fs::remove_dir_all(&runtime);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    // The broker argv block: program, then the rows.
+    let lines: Vec<&str> = stdout.lines().collect();
+    let broker_at = lines
+        .iter()
+        .position(|l| *l == "/synth/store/cccc-mysbx/bin/mysbx-egress-broker")
+        .unwrap_or_else(|| panic!("no broker argv block: {stdout}"));
+    let broker: Vec<&str> = lines[broker_at..]
+        .iter()
+        .take_while(|l| !l.is_empty())
+        .copied()
+        .collect();
+    assert!(broker.contains(&"--allow-domain"), "{stdout}");
+    assert!(
+        broker
+            .windows(2)
+            .any(|w| w[0] == "--allow-domain" && w[1] == "api.openai.com"),
+        "the table row is verbatim: {stdout}"
+    );
+    assert!(
+        broker
+            .windows(2)
+            .any(|w| w[0] == "--allow-domain" && w[1] == "github.com"),
+        "one row per entry: {stdout}"
+    );
+    assert!(
+        broker
+            .windows(2)
+            .any(|w| w[0] == "--allow-connect-port" && w[1] == "443"),
+        "the port filter rides along: {stdout}"
+    );
+    // The proxy variables in the backend argv, set AFTER the `[env]`
+    // assignments: the injected values are the last word.
+    let env_at = lines.iter().position(|l| *l == "--setenv");
+    let _ = env_at;
+    let setenv = |key: &str, value: &str| {
+        lines
+            .windows(3)
+            .any(|w| w[0] == "--setenv" && w[1] == key && w[2] == value)
+    };
+    assert!(
+        setenv("HTTP_PROXY", "http://127.0.0.1:4000"),
+        "HTTP_PROXY points at the relay: {stdout}"
+    );
+    assert!(
+        setenv("HTTPS_PROXY", "http://127.0.0.1:4000"),
+        "HTTPS_PROXY points at the relay: {stdout}"
+    );
+    assert!(
+        setenv("NO_PROXY", "127.0.0.1,localhost"),
+        "NO_PROXY keeps the model lane direct: {stdout}"
+    );
+    // The reserved override never reaches the payload as an `[env]`
+    // assignment, and its dropped state is REPORTED (the dry run is
+    // `--verbose`-less; the report section is part of stdout here —
+    // a dry run prints the report too).
+    assert!(
+        !lines.windows(3).any(|w| w[0] == "--setenv"
+            && w[1] == "HTTPS_PROXY"
+            && w[2] == "http://evil.example:3128"),
+        "the override is dropped, not set: {stdout}"
+    );
+    assert!(
+        lines
+            .windows(3)
+            .any(|w| w[0] == "--setenv" && w[1] == "KEEP_ME" && w[2] == "stays"),
+        "an unrelated `[env]` entry still rides: {stdout}"
+    );
+    assert!(
+        stdout
+            .contains("HTTPS_PROXY=http://evil.example:3128  [config, ignored — set by the proxy]"),
+        "the dropped override is marked in the report: {stdout}"
+    );
+}
+
+#[test]
+fn a_plain_proxy_only_run_stays_byte_identical_no_table_no_proxy_variables() {
+    // Phase B is the degenerate case (E7): without the keys, no table
+    // flags and NO proxy variables — the argv must not drift for the
+    // runs that existed before the pairing. The broker argv block
+    // still prints (the channel is part of the audit), but carries
+    // no `--allow-*` rows.
+    let (inv, _repo, sidecar) = fixture("plain-proxy-only-degenerate", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    let runtime = std::env::temp_dir().join(format!("mysbx-rt-deg-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&runtime);
+    std::fs::create_dir_all(&runtime).unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["--dry-run"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime).env(
+        "MYSBX_EGRESS_BROKER",
+        "/synth/store/cccc-mysbx/bin/mysbx-egress-broker",
+    );
+    let (code, stdout, stderr) = run_command(cmd);
+    let _ = std::fs::remove_dir_all(&runtime);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        !stdout.contains("--allow-domain") && !stdout.contains("--allow-connect-port"),
+        "no table flags without the keys: {stdout}"
+    );
+    assert!(
+        !stdout.contains("--setenv")
+            || !stdout
+                .lines()
+                .any(|l| l == "HTTP_PROXY" || l == "http_proxy"),
+        "no proxy variables without the keys: {stdout}"
+    );
+}
+
+#[test]
+fn listen_ports_only_on_bubblewrap_is_refused_under_the_pairing_rules() {
+    // The generalized honesty rules (bd myconfig-ew9s, egress-connect.md
+    // E9): `listen-ports` alone does not restrict outbound — refused
+    // for EVERY enforcing backend now, bubblewrap included. The
+    // refusal text is nono's own (the shared predicate).
+    let (inv, _, sidecar) = fixture("pairing-listen-ports-only", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\nlisten-ports = [8080]\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["--dry-run"]);
+    cmd.env(
+        "MYSBX_EGRESS_BROKER",
+        "/synth/store/cccc-mysbx/bin/mysbx-egress-broker",
+    );
+    let (code, stdout, stderr) = run_command(cmd);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("listen-ports"),
+        "the refusal names the key: {stderr}"
+    );
+    assert!(
+        !stdout.contains("--clearenv"),
+        "no argv on refusal: {stdout}"
+    );
+}
+
+#[test]
+fn a_domains_only_pairing_is_refused_the_port_axis_must_be_named() {
+    // Review finding 3 on 53a6c680b3, correcting E10: a table naming
+    // only hosts promised an unrestricted port axis the Landlock
+    // fence cannot express — the fence granted only the upstream
+    // port while the listen line claimed the widening. Refused at
+    // the gate, ahead of the session clone and the dry-run return,
+    // naming the missing axis and the fix; the broker re-runs the
+    // same rule fail-closed as defense in depth.
+    let (inv, _, sidecar) = fixture("pairing-domains-only", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\nallow-domains = [\"github.com\"]\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["--dry-run"]);
+    cmd.env(
+        "MYSBX_EGRESS_BROKER",
+        "/synth/store/cccc-mysbx/bin/mysbx-egress-broker",
+    );
+    let (code, stdout, stderr) = run_command(cmd);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("no connect-ports names its PORT axis"),
+        "the refusal names the missing axis: {stderr}"
+    );
+    assert!(stderr.contains("443"), "the refusal names a fix: {stderr}");
+    assert!(
+        !stdout.contains("--clearenv"),
+        "no argv on refusal: {stdout}"
+    );
+}
+#[test]
+fn url_form_allowlist_on_bubblewrap_is_refused_under_the_pairing_rules() {
+    // E9 again: URL/path-form `allow-domains` entries would need TLS
+    // interception no enforcing backend has — refused on bubblewrap
+    // too, the shared `validate_allowlist` predicate.
+    let (inv, _, sidecar) = fixture("pairing-url-form", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\nallow-domains = [\"https://api.openai.com\"]\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["--dry-run"]);
+    cmd.env(
+        "MYSBX_EGRESS_BROKER",
+        "/synth/store/cccc-mysbx/bin/mysbx-egress-broker",
+    );
+    let (code, stdout, stderr) = run_command(cmd);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("allow-domains"),
+        "the refusal names the key: {stderr}"
+    );
+    assert!(
+        !stdout.contains("--clearenv"),
+        "no argv on refusal: {stdout}"
+    );
+}
+
+#[test]
+fn allowlist_keys_on_nono_with_proxy_only_stay_refused() {
+    // E7's explicit non-goal for this bead: the layered nono backend
+    // keeps its OWN enforcement for `shared`; `proxy-only` + keys
+    // there stays refused (the enum leaves room to extend the
+    // pairing later — extending it is not this commit).
+    let (inv, _, sidecar) = fixture("pairing-nono-still-refused", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"nono\"\nnetwork = \"proxy-only\"\nallow-domains = [\"github.com\"]\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["--dry-run"]);
+    cmd.env(
+        "MYSBX_EGRESS_BROKER",
+        "/synth/store/cccc-mysbx/bin/mysbx-egress-broker",
+    );
+    let (code, stdout, stderr) = run_command(cmd);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("contradicts it"),
+        "the cross-layer refusal still holds on nono: {stderr}"
+    );
+    assert!(
+        !stdout.contains("--clearenv"),
+        "no argv on refusal: {stdout}"
+    );
+}
+
+#[test]
 fn a_broker_backed_real_run_starts_the_broker_and_logs_to_the_sidecar() {
     // bd myconfig-n8kv.1.3, end to end with the REAL broker: a real run
     // creates the run's channel, spawns the broker, and the decision log
@@ -10479,7 +10912,12 @@ fn a_broker_backed_real_run_starts_the_broker_and_logs_to_the_sidecar() {
         .env(
             "MYSBX_EGRESS_BROKER",
             env!("CARGO_BIN_EXE_mysbx-egress-broker"),
-        );
+        )
+        // The fake keygen (q8zg precedent) lets the run REACH the
+        // broker spawn in this degraded environment — without it the
+        // uid-1000 ssh-keygen failure masks every later channel bug
+        // (review finding 2 was hidden behind exactly that).
+        .env("MYSBX_SSH_KEYGEN", fake_ssh_keygen(&inv.home));
     let (code, _stdout, stderr) = run_command(cmd);
     // The channel came up, so the run got as far as the backend spawn and
     // failed there (the unpinned bwrap binary).

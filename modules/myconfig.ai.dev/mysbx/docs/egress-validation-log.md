@@ -289,3 +289,63 @@ run — the AC's "re-validated live" item. It needs a host carrying the
 LiteLLM forwarder; the scripted probe in this file's header already
 covers the channel half, and the supervisor half is now asserted by the
 crate's `run_env_never_reaches_the_backend_supervisor` test.
+
+## 2026-11-15, nested sandbox — the CONNECT pairing, unit and integration level (bd myconfig-ew9s)
+
+Provenance: executed in the offline dev sandbox that implemented the
+pairing (commits `821ccd39f6`…`53a6c680b3`), NOT on a host with the
+LiteLLM forwarder. This entry follows the q8zg precedent: it records
+what this environment could and could not prove, and is explicit
+about the gap.
+
+### What was measured
+
+**The broker's CONNECT lane, against the real binary.** The
+`egress_broker` integration suite (19 tests, 2 `#[ignore]`d probe
+children) drives `mysbx-egress-broker` end to end over its AF_UNIX
+socket: a `CONNECT api.openai.com:443` against a table row is admitted
+(`allow`) and relayed; against an empty table or a non-matching name it
+is refused (`deny`, 403, the reason naming the rule); an address-class
+target (loopback, link-local, unspecified, multicast) is refused as
+`unreachable`, never `deny` — the admission and transport vocabularies
+stay separate. A bad table (URL forms, whitespace, port 0) makes the
+broker exit `70` BEFORE its socket exists. The model lane is asserted
+byte-equivalent: non-CONNECT bytes reach the LiteLLM row unchanged.
+
+**The rotation reasoning, under real bubblewrap 0.13.1.** The
+`#[ignore]`d probe child runs inside `bwrap --unshare-all` (the store
+bound read-only, the probe binary bound at its own path): `IP_TRANSPARENT`
+and `TCP_REPAIR` are `EPERM` at setsockopt time; `IP_FREEBIND` is
+allowed and a `bind(192.0.2.77)` on it succeeds — but every `connect`
+fails (`ENETUNREACH` inside the fence; `EADDRNOTAVAIL` for the plain
+bind). The broker's pid is invisible in the child's `/proc` (pid
+namespace). This pins E11's primitives: the empty netns and the
+absent admitted socket, not a blanket capability claim.
+
+**The gates and argv, through the real CLI binary.** Seven new cli
+tests cover every refusal path of the pairing and the audit: keys +
+shared refused with the empty-netns reason; keys + profile without a
+broker pin refused naming the pin; the paired dry run emitting the
+broker argv with one `--allow-domain` row per entry plus the port
+filter, AND the backend argv injecting `HTTP(S)_PROXY`/`NO_PROXY`
+pointing at the relay AFTER `[env]`, with a configured override
+dropped from `[env]` and marked
+`[config, ignored — set by the proxy]` in the report; the plain
+profile run byte-identical (no table flags, no proxy variables);
+`listen-ports`-only and URL forms refused under the pairing rules;
+nono + profile + keys still refused.
+
+### The gap: no end-to-end CONNECT round trip here
+
+This sandbox is offline at the OS level (the host's own route table
+is empty), and it carries no LiteLLM forwarder, so a live
+`CONNECT github.com:443` that resolves, dials and relays bytes to a
+real upstream cannot be executed here. That remains the HUMAN/host
+step, the same gap the phase-B entry records for the model lane: run
+the pairing on f13 with the forwarder up and an allowlisted host
+reachable, and confirm (a) the `allow` + `tunnel` lines in the
+sidecar log for an admitted CONNECT, (b) the `deny` line with the
+rule name for a non-admitted one, (c) `mysbx diagnose egress` counting
+both. The unit and integration layers below that round trip — request
+parsing, table validation, admission, address classes, the fence —
+are what the suites above assert.

@@ -399,6 +399,19 @@ pub struct EgressChannel<'a> {
     /// `nsswitch.conf` (`MYSBX_EGRESS_ETC`), bound over `/etc/hosts`
     /// and `/etc/nsswitch.conf`.
     pub etc_dir: &'a str,
+    /// The CONNECT-lane table's domain rows (docs/design/
+    /// egress-connect.md E7/E8, bd myconfig-ew9s): EMPTY for a plain
+    /// `proxy-only` run — no proxy variables are injected and the
+    /// argv stays byte-identical to phase B. Non-empty when the
+    /// allowlist keys ride the profile (the pairing): mysbx then
+    /// injects `HTTP_PROXY`/`HTTPS_PROXY` = `http://127.0.0.1:<port>`
+    /// (the relay, whose connections the broker's CONNECT lane
+    /// polices) after `[env]`, so no layer can repoint them, and the
+    /// reservation (E13) drops payload overrides of the same names.
+    pub allow_domains: &'a [String],
+    /// The CONNECT-lane table's port filter (`connect-ports`),
+    /// intersecting the domains when both are set (E9's conjunction).
+    pub connect_ports: &'a [u16],
 }
 
 /// Where a `proxy-only` run binds the forwarder's socket DIRECTORY
@@ -1197,12 +1210,52 @@ pub fn bwrap_argv(
             argv.push(value);
         }
     } else {
+        // The bubblewrap half of the proxy-variable reservation
+        // (docs/design/backends.md D1, implemented — bd
+        // myconfig-ew9s E13): a PAIRED run (the E7 table riding the
+        // profile) has mysbx itself inject `HTTP(S)_PROXY`/`NO_PROXY`
+        // after `[env]`, so a configured or forwarded override of
+        // those names can never win — but it would still SHOW as if
+        // it reached the payload. Dropped here instead, and marked
+        // in the report as `ignored — set by the proxy`. A plain
+        // profile run injects nothing, so nothing is reserved there;
+        // a shared run has no proxy either.
+        let reserved: Vec<String> = if let Some(egress) = egress {
+            if !egress.allow_domains.is_empty() || !egress.connect_ports.is_empty() {
+                // Exactly the names mysbx injects below (E8): reserving
+                // more (nono's control names, `NODE_USE_ENV_PROXY`)
+                // would drop `[env]` entries that change no injected
+                // value — a silent behavior change for the user who
+                // set them deliberately.
+                [
+                    "HTTP_PROXY",
+                    "HTTPS_PROXY",
+                    "http_proxy",
+                    "https_proxy",
+                    "NO_PROXY",
+                    "no_proxy",
+                ]
+                .iter()
+                .map(|n| (*n).to_owned())
+                .collect()
+            } else {
+                Vec::new()
+            }
+        } else {
+            Vec::new()
+        };
         for (key, value) in host_env {
+            if reserved.iter().any(|r| r == key) {
+                continue;
+            }
             argv.push("--setenv".into());
             argv.push(key.clone());
             argv.push(value.clone());
         }
         for (key, value) in &cfg.env {
+            if reserved.iter().any(|r| r == key) {
+                continue;
+            }
             argv.push("--setenv".into());
             argv.push(key.clone());
             argv.push(value.clone());
@@ -1245,6 +1298,39 @@ pub fn bwrap_argv(
         argv.push("--setenv".into());
         argv.push("MYSBX_MULTIPLEXER".into());
         argv.push(cfg.multiplexer.name().into());
+        // The CONNECT-lane proxy variables (docs/design/
+        // egress-connect.md E8, bd myconfig-ew9s): only a paired run
+        // (allowlist keys under the profile, `egress.allow_domains`
+        // non-empty) gets them — a plain `proxy-only` run stays
+        // byte-identical to phase B, its clients use the baked
+        // `http://127.0.0.1:<port>/v1` URLs on the model lane. The
+        // value is the relay's own listener: connections to it are
+        // what the broker's CONNECT lane polices. Set here — after
+        // `[env]`, with the infrastructure block — so no
+        // configuration layer can repoint the proxy at something
+        // else; the E13 reservation additionally drops the reserved
+        // names from `[env]`/forwarded, so an override shows up in
+        // `--dry-run` marked `ignored` instead of silently winning
+        // precedence. `NO_PROXY` keeps the model lane's baked
+        // `127.0.0.1` URLs direct (they are not proxied, they ARE
+        // the relay's listener).
+        if let Some(egress) = egress {
+            if !egress.allow_domains.is_empty() || !egress.connect_ports.is_empty() {
+                let proxy = format!("http://127.0.0.1:{}", egress.port);
+                for (key, value) in [
+                    ("HTTP_PROXY", proxy.as_str()),
+                    ("HTTPS_PROXY", proxy.as_str()),
+                    ("http_proxy", proxy.as_str()),
+                    ("https_proxy", proxy.as_str()),
+                    ("NO_PROXY", "127.0.0.1,localhost"),
+                    ("no_proxy", "127.0.0.1,localhost"),
+                ] {
+                    argv.push("--setenv".into());
+                    argv.push(key.into());
+                    argv.push(value.into());
+                }
+            }
+        }
         // `XDG_RUNTIME_DIR` of a `display = "waypipe"` run is
         // infrastructure for the same reason as `HOME` and `PATH`
         // (docs/design/config.md D18): it anchors the guest waypipe
@@ -1384,10 +1470,30 @@ pub fn bwrap_argv(
             argv.push("-u".into());
             argv.push(key.into());
         }
+        // The proxy-variable reservation (backends.md D1's caveat,
+        // implemented — bd myconfig-ew9s E13): nono injects the
+        // proxy-control names in domain-allowlist mode, and the
+        // pinned `env` applies the payload environment AFTER that
+        // injection, so a configured or forwarded HTTP_PROXY would
+        // silently overwrite the working proxy configuration. The
+        // reserved names are dropped here — the later assignment
+        // never happens — and the report marks them
+        // `[config/host, ignored — set by the proxy]`. Scope per D1:
+        // on nono an override breaks connectivity; the supervisor
+        // still denies direct remote connects, so this is a
+        // correctness and marking reservation, not a demonstrated
+        // policy bypass.
+        let reserved = crate::nono::reserved_proxy_env(cfg, host_env);
         for (key, value) in host_env {
+            if reserved.iter().any(|r| r == key) {
+                continue;
+            }
             argv.push(format!("{key}={value}"));
         }
         for (key, value) in &cfg.env {
+            if reserved.iter().any(|r| r == key) {
+                continue;
+            }
             argv.push(format!("{key}={value}"));
         }
         if let Some(nix_config) = cfg.nix_config() {
