@@ -547,8 +547,11 @@ An in-sandbox pi session does not even have to read them: the
 `/mysbx-inform` skill (bd myconfig-a2nj, deployed by the
 pi-coding-agent module's `myconfig-mysbx-inform.ts` extension)
 renders these variables into a per-run skill at session start, so
-the agent gets its backend's capabilities and its network policy as
-prose — state baked into the skill text, not looked up at runtime.
+the agent gets its backend's capabilities, its network policy and
+its persistence rules (what survives the run: the repo, the
+worktrees sibling, the `state-dirs` store; what does not: the
+tmpfs home) as prose — state baked into the skill text, not looked
+up at runtime.
 
 ## The display channel (`display`)
 

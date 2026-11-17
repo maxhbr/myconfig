@@ -1,6 +1,6 @@
 ---
 name: mysbx-inform
-description: Explain the mysbx sandbox this session runs in — its backend, confinement model and network policy. Use when the agent wants to know where it runs, why egress fails or must go through a proxy, or how to reason about its environment.
+description: Explain the mysbx sandbox this session runs in — its backend, confinement model, network policy and persistence rules. Use when the agent wants to know where it runs, why egress fails or must go through a proxy, or how to reason about its environment.
 ---
 
 # mysbx sandbox briefing
@@ -31,6 +31,33 @@ The run's policy is **`{{network}}`** (`MYSBX_NETWORK`):
 
 {{egress_section}}
 
+## Persistence
+
+Only host-backed binds survive this sandbox's exit:
+
+- **The repository** — the repo at its real path is the host's own
+  live checkout, bound read-write (config.md D13): every commit and
+  every working-tree change is host state the moment it is written.
+- **The `<repo>__worktrees` sibling** — bound rw the same way
+  (config.md D13): worktrees created inside (`git worktree add`,
+  `workmux add`) persist on the host like the repo itself.
+- **State directories** — `state-dirs` entries (config.md D15) are
+  backed by the sidecar (`<repo>.mysbx/state/<entry>`) and survive
+  across runs, so the coding agents' sessions and caches persist
+  per repository (plus the implicit `.ssh` keypair). Read-write
+  mounts and `--rw` grants write host state directly too.
+
+Everything else is **ephemeral**: the sandbox home (`/mysbx-home`)
+and any scratch directory not listed above are a tmpfs that dies
+with the run. Credentials, scratch files and unfinished notes are
+NOT expected to survive the exit — finish work by committing it to
+the repository, not by leaving files in the home. A `mysbx-once`
+run is the narrower exception: its sidecar and worktrees sibling
+are temporary as well, so only the repo (and approved mounts)
+keep your work.
+
+{{persistence_note}}
+
 ## Variables of record
 
 These were read to render this file; they stay set in the environment
@@ -45,9 +72,12 @@ as the authoritative values if this file is stale:
 The design docs of the mysbx deployment live with the myconfig
 repository this sandbox serves:
 
-- `modules/myconfig.ai.dev/mysbx/docs/design/config.md` — D14
-  (identity/infra env vars), D20 (the `network` profile), D21
-  (allowlists), D27 (nested virt)
+- `modules/myconfig.ai.dev/mysbx/docs/design/config.md` — D13
+  (the implicit repo/worktrees binds), D14 (identity/infra env
+  vars), D15 (state-dirs persistence), D20 (the `network` profile),
+  D21 (allowlists), D27 (nested virt)
+- `modules/myconfig.ai.dev/mysbx/docs/design/workspace.md` — the
+  clone-session lifecycle and its handoff verbs
 - `modules/myconfig.ai.dev/mysbx/docs/design/backends.md` — the
   backend table and per-backend contracts
 - `modules/myconfig.ai.dev/mysbx/README.md` — the sandbox's identity

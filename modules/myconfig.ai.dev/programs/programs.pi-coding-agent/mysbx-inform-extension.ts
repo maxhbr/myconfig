@@ -197,6 +197,25 @@ export default function (pi: any) {
     const multiplexer = env("MYSBX_MULTIPLEXER");
     const session = env("MYSBX_SESSION_NAME");
 
+    // A clone-session run replaces the persistence model of a live
+    // run (workspace.md D3/D4): the repo path holds the SESSION's
+    // clone, the __worktrees sibling is the session's own directory
+    // — both sidecar-backed, both removed by `session destroy` — and
+    // the state-dirs binds are off entirely. The session name is
+    // the discriminator the backend already announces
+    // (MYSBX_SESSION_NAME, set only in session mode).
+    const persistence_note = session
+      ? `**This is a clone session (\`${session}\`)**, not a live run: the
+repo path you see is the session's clone under the sidecar, the
+\`__worktrees\` sibling is the session's own — both persist between
+runs of this session but are \`session destroy\`'s to remove, and
+host repo and host worktrees are not mounted at all. No state-dirs
+are bound in a session: everything outside the clone and its
+worktrees is ephemeral. Bring work back to the host repo through the
+handoff verbs (\`mysbx fetch\` / \`merge\` / \`push\` from the
+host), not through shared state.`
+      : "";
+
     const values: Record<string, string> = {
       backend,
       host: env("MYSBX_HOST") ?? "unknown (MYSBX_HOST unset)",
@@ -215,6 +234,7 @@ export default function (pi: any) {
       egress_section: egress
         ? `**Egress endpoint** (use this for ALL model requests): \`${egress}\` — the in-sandbox relay (\`MYSBX_EGRESS_PROXY\`). A paired run (allowlist keys under the profile) additionally sets \`HTTP(S)_PROXY\`/\`NO_PROXY\` pointing at the same relay for proxy-honoring tools.`
         : "",
+      persistence_note,
       env_var_lines: RECORD_VARS.filter((name) => env(name) !== undefined)
         .map((name) => {
           const value = env(name)!;
