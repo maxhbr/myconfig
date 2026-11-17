@@ -972,53 +972,119 @@ fn connect_lane(
         }
     };
     // The tunnel is up: answer the handshake, then relay both ways.
-    // The preface (review finding 4) already CONSUMED part of the
-    // request head — consume exactly the remainder so the tunneled
-    // bytes start at the client's first payload byte, then answer.
-    read_request_head(&mut client, &head_so_far);
+    // The tail (head remainder, the 200, any payload bytes coalesced
+    // past the head's end, then the two-way copy) is `tunnel_tail` —
+    // second review finding 1 on 3cfc1bbb3e: the rewrite made
+    // `read_request_head` DISCARD everything after the head's
+    // terminator, silently swallowing a coalesced initial payload, so
+    // the byte tail is split out and pinned by a test that drives it
+    // with a socketpair (a dialed tunnel is not provable offline: the
+    // class check refuses loopback, the only routable range here).
+    tunnel_tail(
+        client,
+        upstream_stream,
+        target,
+        dialed,
+        peer,
+        log,
+        &head_so_far,
+    );
+}
+
+/// The CONNECT lane's byte tail, after the dial succeeded (second
+/// review finding 1 on 3cfc1bbb3e): consume the REST of the request
+/// head — keeping, not discarding, any bytes the client sent PAST the
+/// head's empty-line terminator — answer the handshake, forward those
+/// bytes upstream FIRST, then relay both ways. Split from
+/// `connect_lane` so the exact framing the finding probed is testable
+/// without a dialable address class (loopback is refused everywhere,
+/// and this is the seam a real host tunnel exercises unchanged).
+fn tunnel_tail(
+    mut client: UnixStream,
+    mut upstream_stream: TcpStream,
+    target: ConnectTarget,
+    dialed: SocketAddr,
+    peer: &str,
+    log: &DecisionLog,
+    head_so_far: &[u8],
+) {
+    let leftover = read_request_head(&mut client, head_so_far);
     let _ = client.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n");
     log.record(
         "tunnel",
         &format!("{peer} CONNECT {}:{} -> {dialed}", target.host, target.port),
     );
+    // A proxy client routinely coalesces its head and its first
+    // payload bytes into one write, and the in-sandbox relay preserves
+    // no write boundaries — so `leftover` is the tunnel's FIRST
+    // payload, not garbage: forward it before the two-way copy starts,
+    // in its original order, or it is silently lost (the finding's
+    // probe: a 200 that looks successful with the initial payload
+    // swallowed). The old pre-rewrite peek classifier could not lose
+    // these bytes — it never consumed the head from the stream — so
+    // the discard was a regression the finding-4 rewrite introduced
+    // while fixing the fragmentation misclassification.
+    if !leftover.is_empty() {
+        if let Err(e) = upstream_stream.write_all(&leftover) {
+            log.record(
+                "io",
+                &format!("{peer}: cannot forward the tunnel's first bytes: {e}"),
+            );
+            return;
+        }
+    }
     pipe_bidirectional(client, upstream_stream, peer, log);
 }
 
-/// Read and discard the REST of the request head, given the bytes
-/// the preface already consumed (review finding 4). The head ends at
-/// the empty line (`\r\n\r\n` or `\n\n`) — if the preface already
-/// contains it, nothing is read; otherwise bytes are consumed until
-/// it ends. Bounded: a head that never ends leaves the tunnel dead,
-/// which the client sees as a refused handshake.
-fn read_request_head(client: &mut UnixStream, head_so_far: &[u8]) {
-    if head_ends_with_terminator(head_so_far) {
-        return;
+/// Read the REST of the request head, given the bytes the preface
+/// already consumed (review finding 4), and return every byte read
+/// PAST the head's empty-line terminator (`\r\n\r\n` or `\n\n`) —
+/// the tunnel's first payload bytes when the client coalesced its
+/// head and its payload into one write (second review finding 1 on
+/// 3cfc1bbb3e: the first version of this function discarded them).
+/// The head itself is consumed and dropped: only its policy-relevant
+/// part was parsed, and the dialed upstream expects the tunnel to
+/// start at the first byte after it. Bounded: a head that never ends
+/// leaves the tunnel dead, which the client sees as a refused
+/// handshake.
+fn read_request_head(client: &mut UnixStream, head_so_far: &[u8]) -> Vec<u8> {
+    // The preface may already hold the terminator with a payload
+    // behind it — hand that payload over too; discarding it here is
+    // the same data loss the finding probed at the read boundary.
+    if let Some(suffix) = suffix_after_head(head_so_far) {
+        return suffix.to_vec();
     }
     let mut buf = head_so_far.to_vec();
     let mut chunk = [0u8; 256];
     loop {
         match client.read(&mut chunk) {
-            Ok(0) => return,
+            Ok(0) => return Vec::new(),
             Ok(n) => {
                 buf.extend_from_slice(&chunk[..n]);
-                if head_ends_with_terminator(&buf) {
-                    return;
+                if let Some(suffix) = suffix_after_head(&buf) {
+                    return suffix.to_vec();
                 }
                 if buf.len() > 8 * 1024 {
-                    return;
+                    return Vec::new();
                 }
             }
-            Err(_) => return,
+            Err(_) => return Vec::new(),
         }
     }
 }
 
-/// Whether `buf` already contains the request head's empty-line end.
-fn head_ends_with_terminator(buf: &[u8]) -> bool {
-    buf.ends_with(b"\r\n\r\n")
-        || buf.ends_with(b"\n\n")
-        || buf.windows(4).any(|w| w == b"\r\n\r\n")
-        || buf.windows(2).any(|w| w == b"\n\n")
+/// The bytes AFTER the request head's empty-line terminator —
+/// `None` when the buffer does not contain the terminator (the head
+/// is still incomplete). The FIRST terminator ends the head: bytes
+/// behind it are tunnel payload, whatever they look like.
+fn suffix_after_head(buf: &[u8]) -> Option<&[u8]> {
+    let lf = buf.windows(2).position(|w| w == b"\n\n").map(|i| i + 2);
+    let crlf = buf.windows(4).position(|w| w == b"\r\n\r\n").map(|i| i + 4);
+    let end = match (lf, crlf) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (a, b) => a.or(b),
+    };
+    end.map(|e| &buf[e..])
 }
 
 /// Split `client` and `upstream`, then copy both ways with the
@@ -1626,5 +1692,164 @@ mod tests {
                 "{gatewayish}"
             );
         }
+    }
+    // ---- second review finding 1: coalesced head + payload ------------------
+
+    /// A socketpair standing in for the broker's client stream — the
+    /// raw `socketpair(2)` idiom, the crate's zero-dependency way to
+    /// make two connected UnixStreams. Returns (client-side,
+    /// peer-side): the lane owns the first, the test speaks as the
+    /// proxy client on the second.
+    fn socketpair() -> (UnixStream, UnixStream) {
+        use std::os::unix::io::FromRawFd;
+        extern "C" {
+            fn socketpair(domain: i32, ty: i32, proto: i32, sv: *mut i32) -> i32;
+        }
+        let mut fds = [0i32; 2];
+        let rc = unsafe { socketpair(1, 1, 0, fds.as_mut_ptr()) }; // AF_UNIX, SOCK_STREAM
+        assert_eq!(rc, 0, "socketpair failed");
+        unsafe {
+            (
+                UnixStream::from_raw_fd(fds[0]),
+                UnixStream::from_raw_fd(fds[1]),
+            )
+        }
+    }
+
+    #[test]
+    fn the_tunnel_tail_forwards_a_coalesced_payload_not_just_the_copy() {
+        // Second review finding 1 on 3cfc1bbb3e: the finding-4 rewrite
+        // made `read_request_head` DISCARD the bytes after the head's
+        // terminator, so a proxy client that coalesced its head and
+        // its initial payload into one write got a 200 and a tunnel
+        // whose first payload was silently swallowed — worse than a
+        // stall, because it looks successful. This test drives the
+        // lane's byte tail with a socketpair client and a loopback TCP
+        // fixture as the dialed peer (the class check refuses
+        // loopback for real CONNECT targets, so a dialed full tunnel
+        // is not provable offline — this tail is the seam a real host
+        // tunnel runs unchanged). The `head_so_far` is the first line
+        // only, exactly what `read_preface` hands over: the rest of
+        // the head AND the coalesced payload must come out of the
+        // CLIENT's stream, with the payload forwarded upstream FIRST.
+        let (client, mut peer_client) = socketpair();
+        let dir = std::env::temp_dir().join(format!("mysbx-tail-{}-coalesced", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("create the run directory");
+        let log = std::sync::Arc::new(
+            DecisionLog::open(&dir.join("decisions.jsonl")).expect("open the log"),
+        );
+        let fixture = std::net::TcpListener::bind("127.0.0.1:0").expect("bind the fixture");
+        let fixture_addr = fixture
+            .local_addr()
+            .expect("fixture addr")
+            .to_string()
+            .parse::<SocketAddr>()
+            .expect("fixture socket addr");
+        let fixture_thread = std::thread::spawn(move || {
+            let (mut stream, _) = fixture.accept().expect("accept");
+            let mut first = [0u8; 64];
+            let n = stream.read(&mut first).expect("read the first payload");
+            let _ = stream.write_all(&first[..n]);
+            let _ = stream.flush();
+            let mut rest = Vec::new();
+            let _ = stream.read_to_end(&mut rest);
+            (first[..n].to_vec(), rest)
+        });
+        // The coalesced write: the rest of the head, its terminator,
+        // and the initial tunnel payload in ONE write — the exact
+        // shape the discard hit (the preface consumed only the first
+        // line, so headers AND payload are still in the stream).
+        peer_client
+            .write_all(b"Host: example.com\r\n\r\nINITIAL-PAYLOAD-1")
+            .expect("write the coalesced head rest and payload");
+        let _ = peer_client.flush();
+        // The tail runs on its own thread: it must read the head rest
+        // off the client and forward the payload BEFORE the follow-up
+        // lands, so `first` below can be asserted byte-for-byte.
+        let log_for_tail = log.clone();
+        let tail = std::thread::spawn(move || {
+            tunnel_tail(
+                client,
+                TcpStream::connect(fixture_addr).expect("dial the fixture"),
+                ConnectTarget {
+                    host: "example.com".to_string(),
+                    port: 443,
+                },
+                fixture_addr,
+                "pid 0 uid 0",
+                &log_for_tail,
+                &b"CONNECT example.com:443 HTTP/1.1\r\n".to_vec(),
+            );
+        });
+        std::thread::sleep(Duration::from_millis(150));
+        peer_client
+            .write_all(b"FOLLOW-UP-2")
+            .expect("write the follow-up");
+        let _ = peer_client.flush();
+        // Half-close the client so the tunnel's copy sees EOF and the
+        // fixture's read-to-end ends.
+        let _ = peer_client.shutdown(std::net::Shutdown::Both);
+        tail.join().expect("the tail finished");
+        let (first, rest) = fixture_thread.join().expect("join the fixture");
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(
+            first, b"INITIAL-PAYLOAD-1",
+            "the coalesced initial payload reaches the dialed peer, byte-for-byte, FIRST"
+        );
+        assert_eq!(rest, b"FOLLOW-UP-2", "the follow-up payload still arrives");
+    }
+
+    #[test]
+    fn the_preface_holding_a_payload_behind_the_terminator_hands_it_over() {
+        // The second shape of finding 1: the terminator — with a
+        // payload behind it — was ALREADY inside `head_so_far` when
+        // the lane ran, and the early `return` in the first version
+        // of `read_request_head` discarded that suffix the same way.
+        // In this shape nothing remains to read from the client: the
+        // head and its trailing payload arrived together with the
+        // request line the preface consumed.
+        let (client, mut peer_client) = socketpair();
+        let dir = std::env::temp_dir().join(format!("mysbx-tail-{}-behind", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("create the run directory");
+        let log = DecisionLog::open(&dir.join("decisions.jsonl")).expect("open the log");
+        let fixture = std::net::TcpListener::bind("127.0.0.1:0").expect("bind the fixture");
+        let fixture_addr = fixture
+            .local_addr()
+            .expect("fixture addr")
+            .to_string()
+            .parse::<SocketAddr>()
+            .expect("fixture socket addr");
+        let fixture_thread = std::thread::spawn(move || {
+            let (mut stream, _) = fixture.accept().expect("accept");
+            let mut all = Vec::new();
+            let _ = stream.read_to_end(&mut all);
+            all
+        });
+        // The client's stream is EMPTY and closed: in the real flow
+        // `read_preface` already consumed the whole coalesced write
+        // from it, so the bytes live ONLY in `head_so_far` — passing
+        // them in again would test the copy, not the suffix hand-over.
+        // The half-close is how the tail sees EOF on the copy.
+        let _ = peer_client.shutdown(std::net::Shutdown::Both);
+        tunnel_tail(
+            client,
+            TcpStream::connect(fixture_addr).expect("dial the fixture"),
+            ConnectTarget {
+                host: "example.com".to_string(),
+                port: 443,
+            },
+            fixture_addr,
+            "pid 0 uid 0",
+            &log,
+            &b"CONNECT example.com:443 HTTP/1.1\r\n\r\nPAYLOAD-BEHIND".to_vec(),
+        );
+        let all = fixture_thread.join().expect("join the fixture");
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(
+            all, b"PAYLOAD-BEHIND",
+            "the payload behind the terminator in the preface is forwarded, not dropped"
+        );
     }
 }
