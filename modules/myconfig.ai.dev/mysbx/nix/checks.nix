@@ -1927,32 +1927,106 @@ in
   # standalone means re-importing half of `modules/` by hand. Using the
   # reference host is the same pattern as ../../../tests/microvm.nix
   # (`self.nixosConfigurations.test-f13`).
+  #
+  # The expected dest set is DERIVED from the shared subtree list
+  # (../../programs/pi-sandbox-subtrees.nix) instead of being pinned:
+  # a pinned count only notices that the number changed, and reports
+  # nothing about which mount is wrong. bd myconfig-2xld hit exactly
+  # that: thinkrail mirrored pi's subtrees from its own list, so six
+  # dests were bound twice (14 mounts, 7 expected) and the count
+  # assertion could not say that the real defect was a DUPLICATE dest.
+  # Hence the separate no-duplicate assertion below: two binds on one
+  # dest are a real conflict, not a counting artifact — every mysbx
+  # backend keeps the LAST bind (../../mysbx-rs/src/nono.rs), so the
+  # payload silently receives a mixture of two store trees ordered by
+  # module merge order.
+  #
+  # Two configurations are asserted. The reference host covers the
+  # "pi mounted everything" case; the `thinkrail-only` variant (pi
+  # disabled, thinkrail and codex still on) covers the other legitimate
+  # owner of the same dests, where thinkrail's own integration is the
+  # only provider of the pi config. That variant is what surfaced the
+  # same class of defect on `.agents/skills` (bd myconfig-2xld).
   mysbx-pi-mounts-test =
     let
       lib = inputs.nixpkgs.lib;
+      piDestsOf =
+        cfg:
+        builtins.filter (
+          m: lib.hasPrefix "/mysbx-home/.pi" m.dest || m.dest == "/mysbx-home/.agents/skills"
+        ) cfg.myconfig.ai.dev.mysbx.config.mounts;
+      expectedDestsOf =
+        cfg:
+        map (sub: "/mysbx-home/${sub}") (
+          import ../../programs/pi-sandbox-subtrees.nix {
+            config = cfg;
+            inherit lib;
+          }
+        );
       cfg = self.nixosConfigurations.test-f13.config;
-      piMounts = builtins.filter (
-        m: lib.hasPrefix "/mysbx-home/.pi" m.dest || m.dest == "/mysbx-home/.agents/skills"
-      ) cfg.myconfig.ai.dev.mysbx.config.mounts;
+      thinkrailOnlyCfg =
+        (self.nixosConfigurations.test-f13.extendModules {
+          modules = [
+            {
+              myconfig.ai.dev.pi-coding-agent.enable = lib.mkForce false;
+            }
+          ];
+        }).config;
+      piMounts = piDestsOf cfg;
       # The store tree every pi mount binds from. Derived from the
       # extensions mount's path (NOT via `builtins.match` — that strips
       # the string context, and the tree would not become an input of
       # this check derivation, so the build could not see it).
       extMountPath = (builtins.head piMounts).path;
       sandboxTree = lib.removeSuffix "/.pi/agent/extensions" extMountPath;
-      expectedDests = [
-        "/mysbx-home/.pi/agent/extensions"
-        "/mysbx-home/.pi/agent/agents"
-        "/mysbx-home/.pi/agent/prompts"
-        "/mysbx-home/.pi/agent/themes"
-        "/mysbx-home/.pi/agent/keybindings.json"
-        "/mysbx-home/.pi/agent/AGENTS.md"
-        "/mysbx-home/.agents/skills"
-      ];
+      expectedDests = expectedDestsOf cfg;
+      actualDests = map (m: m.dest) piMounts;
+      # Dests bound more than once. Two mounts at one dest are a
+      # conflict (last bind wins), never a harmless duplicate.
+      duplicateDests = builtins.attrNames (
+        lib.filterAttrs (_: v: builtins.length v > 1) (lib.groupBy (d: d) actualDests)
+      );
+      missingDests = builtins.filter (d: !(builtins.elem d actualDests)) expectedDests;
+      unexpectedDests = builtins.filter (d: !(builtins.elem d expectedDests)) actualDests;
+      # The same three shape checks for the thinkrail-only variant.
+      trMounts = piDestsOf thinkrailOnlyCfg;
+      trExpected = expectedDestsOf thinkrailOnlyCfg;
+      trDests = map (m: m.dest) trMounts;
+      trDuplicateDests = builtins.attrNames (
+        lib.filterAttrs (_: v: builtins.length v > 1) (lib.groupBy (d: d) trDests)
+      );
+      trMissingDests = builtins.filter (d: !(builtins.elem d trDests)) trExpected;
+      trUnexpectedDests = builtins.filter (d: !(builtins.elem d trExpected)) trDests;
       evalAssertions = [
         {
-          assertion = builtins.length piMounts == builtins.length expectedDests;
-          message = "mysbx-pi-mounts-test: expected ${toString (builtins.length expectedDests)} pi mounts, got ${toString (builtins.length piMounts)}";
+          assertion = duplicateDests == [ ];
+          message = ''
+            mysbx-pi-mounts-test: two mounts share an in-sandbox dest, but only the last
+            bind wins (../../mysbx-rs/src/nono.rs), so the sandbox would see a mixture of
+            two source trees: ${lib.concatStringsSep ", " duplicateDests}
+            Mount each dest from exactly one tree (see ../../programs/pi-sandbox-subtrees.nix).'';
+        }
+        {
+          assertion = trDuplicateDests == [ ];
+          message = ''
+            mysbx-pi-mounts-test: with pi disabled (thinkrail as the sole pi-config
+            provider) two mounts share an in-sandbox dest: ${lib.concatStringsSep ", " trDuplicateDests}'';
+        }
+        {
+          assertion = missingDests == [ ];
+          message = "mysbx-pi-mounts-test: missing mounts for the shared pi subtrees: ${lib.concatStringsSep ", " missingDests}";
+        }
+        {
+          assertion = trMissingDests == [ ];
+          message = "mysbx-pi-mounts-test: (pi disabled) missing mounts for the shared pi subtrees: ${lib.concatStringsSep ", " trMissingDests}";
+        }
+        {
+          assertion = trUnexpectedDests == [ ];
+          message = "mysbx-pi-mounts-test: (pi disabled) mounts that no shared pi subtree declares: ${lib.concatStringsSep ", " trUnexpectedDests}";
+        }
+        {
+          assertion = unexpectedDests == [ ];
+          message = "mysbx-pi-mounts-test: mounts that no shared pi subtree declares: ${lib.concatStringsSep ", " unexpectedDests}";
         }
         {
           assertion = builtins.all (
@@ -1983,6 +2057,11 @@ in
     pkgs.runCommand "mysbx-pi-mounts-test"
       {
         inherit evalGate sandboxTree;
+        # The subtrees to probe in the realised tree, derived from the
+        # same shared list the expected dests come from.
+        sandboxSubtrees = lib.concatStringsSep " " (
+          map (d: lib.removePrefix "/mysbx-home/" d) expectedDests
+        );
         nativeBuildInputs = with pkgs; [
           gnugrep
           findutils
@@ -1997,7 +2076,7 @@ in
         [ "$evalGate" = ok ] || { echo "mysbx-pi-mounts-test: eval gate: $evalGate" >&2; exit 1; }
 
         # The mounted subtrees must exist in the copied tree ...
-        for sub in .pi/agent/extensions .pi/agent/agents .pi/agent/prompts .pi/agent/themes .pi/agent/keybindings.json .pi/agent/AGENTS.md .agents/skills; do
+        for sub in $sandboxSubtrees; do
           test -e "$sandboxTree/$sub" || fail "$sub is missing from the pi-sandbox-config tree"
         done
 

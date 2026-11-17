@@ -39,6 +39,11 @@ let
     runCommand = pkgs.runCommand;
   };
 
+  # The mounted pi-config subtrees, shared with the modules whose payload
+  # embeds pi's engine (programs.thinkrail.nix) so both describe ONE set
+  # — see ../pi-sandbox-subtrees.nix.
+  mysbxPiSubtrees = import ../pi-sandbox-subtrees.nix { inherit config lib; };
+
   # Jail library handle + the jail-to-host channel combinator. The combinator
   # exposes a program *inside* the jail that forwards its single argument over
   # a FIFO to a handler running *outside* the jail. We use it so the jailed pi
@@ -1567,37 +1572,6 @@ let
   # `check_symlinkable_dests` refuses
   # (../../mysbx/mysbx-rs/src/bwrap.rs) — payload-writable content must
   # never sit above a mount point.
-
-  # `~/.agents/skills/` carries the handcrafted skills (plus, when
-  # `myconfig.ai.dev.skills.enable` is on, the framework-synced selection)
-  # for pi, which discovers that directory per the Agent Skills spec. Gate
-  # the mount on the registry/framework being non-empty so a host with no
-  # skills does not bind a missing path.
-  piHasHandcraftedSkills =
-    (config.myconfig.ai.dev.skills.handcrafted or { }) != { }
-    || (config.myconfig.ai.dev.skills.enable or false);
-
-  mysbxPiSubtrees = [
-    # Generated + example extensions (myconfig-providers.ts,
-    # myconfig-jail-marker.ts, handoff.ts, subagent/) — always deployed
-    # by the `home.file` block below.
-    ".pi/agent/extensions"
-    # Sub-agent definitions (upstream samples + handcrafted ones).
-    ".pi/agent/agents"
-    # Workflow prompt templates (`/implement`, `/commit`, …).
-    ".pi/agent/prompts"
-    # Themes (`unjailed.json`).
-    ".pi/agent/themes"
-    # Keybinding overrides (./keybindings.json).
-    ".pi/agent/keybindings.json"
-  ]
-  # The global AGENTS.md (../../agentsMd), deployed through a `home.file`
-  # entry when the feature is on. Not mounted otherwise: the helper
-  # materialises an EMPTY DIRECTORY for a subtree nothing deployed into,
-  # which would shadow the file name inside the sandbox.
-  ++ lib.optional (osconfig.myconfig.ai.dev.agentsMd.enable or false) ".pi/agent/AGENTS.md"
-  # Handcrafted skills, discovered by pi from `~/.agents/skills/`.
-  ++ lib.optional piHasHandcraftedSkills ".agents/skills";
 
   # The pi-config mounts for the mysbx sandbox, built by the shared
   # helper (../../mysbx/nix/sandbox-config.nix — the dereferenced-store-
