@@ -868,6 +868,22 @@ in
         echo "$argv_nested" | grep -qx -- 'MYSBX_MICROVM_NESTED_VIRT=1' \
           || fail "a nested-virt run carries no MYSBX_MICROVM_NESTED_VIRT=1 marker — the guest init could not refuse a kvm-less host"
 
+        # 3c. the D27 boundary rule, NEGATIVE side: a key the selected
+        #     backend cannot honor is a WARNING, never a refusal (a
+        #     missing feature only removes capability; only a weakened
+        #     boundary refuses). bubblewrap has no VM to nest, so the
+        #     same sidecar key leaves the run exiting 0 with the key
+        #     dropped from the argv.
+        printf 'backend = "bubblewrap"\nnested-virt = true\n' > "$work/repo.mysbx/config.toml"
+        argv_warn=$( cd "$repo" && HOME="$work/home" "${pkgQemu}/bin/mysbx" run --dry-run -- true \
+          2>"$work/nested-warn.stderr" ) \
+          || fail "nested-virt on a backend without the feature refused the run: $(cat "$work/nested-warn.stderr")"
+        grep -q -- 'warning' "$work/nested-warn.stderr" \
+          || fail "the dropped nested-virt key printed no warning: $(cat "$work/nested-warn.stderr")"
+        if echo "$argv_warn" | grep -q -- '--nested-virt'; then
+          fail "the dropped nested-virt key still reached a launcher argv"
+        fi
+
         touch $out
       '';
 

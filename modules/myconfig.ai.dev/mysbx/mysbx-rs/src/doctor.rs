@@ -531,8 +531,8 @@ pub fn krun_store_disk_check(disk: Option<PathBuf>) -> Check {
 /// warn, never a fail: nesting gates ONE opt-in config key, and a
 /// host that never sets `nested-virt` must not see a red doctor
 /// line over it. The run path REFUSES a `nested-virt = true` run
-/// on an unsupported host; doctor names the same parameter so the
-/// refusal is diagnosable before it happens.
+/// on an unsupported host that HONORS the key; doctor names the same
+/// parameter so the refusal is diagnosable before it happens.
 pub fn nested_virt_check(intel: Option<&str>, amd: Option<&str>) -> Check {
     let supported = [intel, amd].into_iter().flatten().any(|v| {
         let v = v.trim();

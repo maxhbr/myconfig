@@ -11305,14 +11305,14 @@ fn proxy_only_refuses_nix_access_tokens_and_netrc() {
 }
 
 #[test]
-fn nested_virt_on_krun_is_refused() {
-    // D27: only `microvm-qemu` honors `nested-virt = true`; the
-    // direct krun backend refuses it (libkrun's
-    // krun_set_nested_virt is macOS-only in the pinned 1.17.4,
-    // libkrunfw 5.3.0 ships CONFIG_KVM unset) — before the session
-    // clone and before the --dry-run return, so a dry run audits
-    // the refusal too.
-    let Some((inv, _, sidecar)) = krun_fixture("nested-virt-krun-refused", &[]) else {
+fn nested_virt_on_krun_warns_and_runs() {
+    // D27's boundary rule: `nested-virt = true` is a FEATURE
+    // request, so the direct krun backend — which cannot nest
+    // (libkrun's krun_set_nested_virt is macOS-only in the pinned
+    // 1.17.4, libkrunfw 5.3.0 ships CONFIG_KVM unset) — warns and
+    // drops the key instead of refusing the run. The dry run exits
+    // 0 and its argv carries no `--nested-virt`.
+    let Some((inv, _, sidecar)) = krun_fixture("nested-virt-krun-warned", &[]) else {
         return; // no placeable krun fixture root here
     };
     std::fs::write(
@@ -11320,33 +11320,55 @@ fn nested_virt_on_krun_is_refused() {
         "backend = \"krun\"\nnested-virt = true\n",
     )
     .unwrap();
-    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
-    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    let rootfs = sidecar.join("rootfs-stub");
+    std::fs::create_dir_all(rootfs.join("bin")).unwrap();
+    std::fs::write(rootfs.join("bin/mysbx-init"), "#!/bin/sh\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["run", "--dry-run", "--", "/bin/true"]);
+    cmd.env("MYSBX_KRUN_LAUNCHER", "/does/not/matter/dry-run")
+        .env("MYSBX_KRUN_ROOTFS", rootfs.to_str().unwrap().to_string());
+    let (code, stdout, stderr) = run_command(cmd);
+    assert_eq!(
+        code, 0,
+        "a missing feature must not block the run: {stderr}"
+    );
+    assert!(stderr.contains("warning"), "{stderr}");
     assert!(stderr.contains("krun"), "{stderr}");
     assert!(stderr.contains("nested-virt"), "{stderr}");
     assert!(
-        !stdout.contains("--nested-virt"),
-        "no argv on refusal: {stdout}"
+        stderr.contains("microvm-qemu"),
+        "the warning names the backends that honor the key: {stderr}"
+    );
+    assert!(
+        !stdout.lines().any(|l| l.trim() == "--nested-virt"),
+        "the dropped key must not reach the launcher argv: {stdout}"
+    );
+    assert!(
+        !stdout.contains("MYSBX_MICROVM_NESTED_VIRT=1"),
+        "the dropped key must not reach the manifest: {stdout}"
     );
 }
 
 #[test]
-fn nested_virt_on_bubblewrap_is_refused() {
+fn nested_virt_on_bubblewrap_warns_and_runs() {
     // The container/bwrap tiers have no VM to nest at all — the
-    // same refusal, naming the one backend that honors the key.
-    let (inv, _, sidecar) = fixture("nested-virt-bwrap-refused", &[]);
+    // same warning, naming the backends that honor the key.
+    let (inv, _, sidecar) = fixture("nested-virt-bwrap-warned", &[]);
     std::fs::write(
         sidecar.join("config.toml"),
         "backend = \"bubblewrap\"\nnested-virt = true\n",
     )
     .unwrap();
     let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
-    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert_eq!(
+        code, 0,
+        "a missing feature must not block the run: {stderr}"
+    );
+    assert!(stderr.contains("warning"), "{stderr}");
     assert!(stderr.contains("nested-virt"), "{stderr}");
     assert!(stderr.contains("microvm-qemu"), "{stderr}");
     assert!(
-        !stdout.contains("--clearenv"),
-        "no argv on refusal: {stdout}"
+        stdout.contains("--clearenv"),
+        "the run proceeds to the argv: {stdout}"
     );
 }
 
@@ -11910,6 +11932,53 @@ fn the_microvm_ch_backend_dry_run_audits_the_kernel_pair() {
     assert!(
         stdout_lossy.contains("MYSBX_BACKEND=microvm-ch"),
         "the backend identity env names the run's backend: {stdout_lossy}"
+    );
+}
+
+#[test]
+fn nested_virt_is_honored_on_microvm_ch() {
+    // D27's honoring set is the two direct VM backends: CH forces
+    // `nested=off` on a plain run (its default is nested ON), so the
+    // key must reach BOTH launchers — the flag on argv and the
+    // manifest marker the guest init refuses without /dev/kvm.
+    let Some((inv, _, sidecar)) = krun_fixture("microvm-ch-nested-virt", &[]) else {
+        return; // no placeable fixture root here
+    };
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"microvm-ch\"\nnested-virt = true\n",
+    )
+    .unwrap();
+    let rootfs = sidecar.join("rootfs-stub");
+    std::fs::create_dir_all(rootfs.join("bin")).unwrap();
+    std::fs::write(rootfs.join("bin/mysbx-init"), "#!/bin/sh\n").unwrap();
+    let kernel = sidecar.join("bzImage-stub");
+    std::fs::write(&kernel, "stub\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["run", "--dry-run", "--", "/bin/true"]);
+    cmd.env("MYSBX_MICROVM_CH_LAUNCHER", "/does/not/matter/dry-run")
+        .env(
+            "MYSBX_MICROVM_CH_ROOTFS",
+            rootfs.to_str().unwrap().to_string(),
+        )
+        .env(
+            "MYSBX_MICROVM_CH_KERNEL",
+            kernel.to_str().unwrap().to_string(),
+        );
+    let (code, stdout, stderr) = run_command(cmd);
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    assert!(
+        stdout.lines().any(|l| l.trim() == "--nested-virt"),
+        "the CH launcher gets the switch: {stdout}"
+    );
+    assert!(
+        stdout
+            .lines()
+            .any(|l| l.trim() == "MYSBX_MICROVM_NESTED_VIRT=1"),
+        "the manifest marks the nested boot: {stdout}"
+    );
+    assert!(
+        !stderr.contains("cannot hand the guest nested virtualization"),
+        "CH honors the key, no drop warning: {stderr}"
     );
 }
 

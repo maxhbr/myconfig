@@ -30,11 +30,11 @@
 # connect-ports = [443, 22]
 # listen-ports = [8080]
 #
-# Nested virtualization (D27): hand a `microvm-qemu` run hardware
-# virtualization (`/dev/kvm`) so VMs can be developed inside the
-# sandbox. Only the `microvm-qemu` backend honors it; every other
-# backend refuses it. Off by default: nested VMX widens the host KVM
-# attack surface.
+# Nested virtualization (D27): hand the guest hardware virtualization
+# (`/dev/kvm`) so VMs can be developed inside the sandbox. Only the
+# `microvm-qemu` and `microvm-ch` backends honor it; every other
+# backend warns and drops the key (a missing feature never blocks a
+# run). Off by default: nested VMX widens the host KVM attack surface.
 #
 # nested-virt = true
 #

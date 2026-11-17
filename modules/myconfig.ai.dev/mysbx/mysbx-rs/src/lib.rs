@@ -2954,18 +2954,6 @@ fn sandbox_pipeline(
         }
     }
 
-    // The nested-virt backend gate (docs/design/config.md D27):
-    // `nested-virt = true` is honored ONLY by the backends whose
-    // registry row says so (today `microvm-qemu`) — every other
-    // backend refuses the key, never silently drops it. krun:
-    // libkrun 1.17.4's `krun_set_nested_virt` is macOS-only and
-    // libkrunfw 5.3.0 ships CONFIG_KVM unset, so the guest could
-    // not run a nested VM; podman-krun and the container/bwrap
-    // tiers have no virtio KVM passthrough at all.
-    // A refused run sits BEFORE the session clone and before the
-    // `--dry-run` early return, so a dry run audits it too — the
-    // same accepted-never-ignored rule the allowlist refusal
-    // follows.
     // The `network = "proxy-only"` channel (docs/design/config.md D20,
     // bd myconfig-mo3.2.6): resolve and validate the wrapper's pins in
     // step 4b — BEFORE the session clone (step 4a) and before the
@@ -3035,19 +3023,44 @@ fn sandbox_pipeline(
         }
     }
 
-    if merged.nested_virt && !backends::find(backend).is_some_and(|row| row.nested_virt) {
+    // The nested-virt backend gate (docs/design/config.md D27), the
+    // feature axis: `nested-virt = true` is a FEATURE request, and a
+    // backend that does not have the feature WARNS and drops the key
+    // — the run proceeds, exactly like the `store = "baked"`
+    // fallback and the D23 unenforced limits below. It is never a
+    // refusal: a missing feature only ever removes capability, and
+    // only a key that would weaken or widen a BOUNDARY refuses (a
+    // network narrowing, an allowlist, the merge's user-deny
+    // upgrade). The two direct VM backends honor the key; on krun the
+    // guest kernel has no KVM at all (libkrunfw 5.3.0 ships
+    // CONFIG_KVM unset, libkrun 1.17.4's krun_set_nested_virt is
+    // macOS-only), and the container/bwrap tiers have no VM to nest.
+    // A dropped key never reaches a later stage — the host's nested
+    // pre-flight below, the launcher argv and the `--verbose` report
+    // all read `merged.nested_virt`, so clearing it here is what
+    // makes "warned" mean "this run does not have the feature". The
+    // warning sits BEFORE the session clone and shows on `--dry-run`
+    // too.
+    if merged.nested_virt
+        && backends::find(backend)
+            .is_some_and(|row| row.nested_virt == backends::MissingFeature::WarnAndDrop)
+    {
         eprintln!(
-            "mysbx: nested-virt = true is not supported on the `{backend}` backend \
-             (docs/design/config.md D27)"
+            "mysbx: warning: the `{backend}` backend cannot hand the guest nested \
+             virtualization (docs/design/config.md D27); nested-virt = true is dropped"
         );
         eprintln!(
-            "  only `microvm-qemu` can hand the guest hardware virtualization \
-             (its launcher boots -cpu host, accel=kvm); the krun backends ship \
-             guests without KVM (libkrunfw 5.3.0 has CONFIG_KVM unset, and \
-             libkrun's krun_set_nested_virt is macOS-only in the pinned 1.17.4)"
+            "  the key switches the microvm-qemu / microvm-ch launcher to -cpu host with \
+             accel=kvm, so the guest gets its own /dev/kvm; the krun backends ship guests \
+             without KVM (libkrunfw 5.3.0 has CONFIG_KVM unset, and libkrun's \
+             krun_set_nested_virt is macOS-only in the pinned 1.17.4) and the \
+             container/bwrap tiers have no VM to nest"
         );
-        eprintln!("  drop the key, or switch the backend to `microvm-qemu`");
-        return EXIT_INFRASTRUCTURE;
+        eprintln!(
+            "  switch the backend to `microvm-qemu` or `microvm-ch` to get nested \
+             virtualization, or drop the key"
+        );
+        merged.nested_virt = false;
     }
 
     // 4c. the orca multiplexer's backend support (bd myconfig-2m8):
@@ -4134,7 +4147,7 @@ fn sandbox_pipeline(
             // cause belongs.
             if merged.nested_virt && !dry_run && !nested_virt_supported() {
                 eprintln!(
-                    "mysbx: microvm-qemu: nested-virt is set but the host kernel does \
+                    "mysbx: {backend}: nested-virt is set but the host kernel does \
                      not enable nested KVM"
                 );
                 eprintln!(
@@ -7870,8 +7883,9 @@ const SIDECAR_TEMPLATE_ROOT: &str = r#"# mysbx sidecar config
 #
 # Nested virtualization (D27): hand the guest hardware virtualization
 # (`/dev/kvm`) so VMs can be developed inside the sandbox. Only the
-# `microvm-qemu` backend honors it; every other backend refuses it.
-# Off by default: nested VMX widens the host KVM attack surface.
+# `microvm-qemu` and `microvm-ch` backends honor it; every other
+# backend warns and drops the key (a missing feature never blocks a
+# run). Off by default: nested VMX widens the host KVM attack surface.
 #
 # nested-virt = true
 #

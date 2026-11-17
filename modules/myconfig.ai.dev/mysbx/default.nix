@@ -1775,8 +1775,8 @@ in
               leaves the decision to the sidecar; `false` is a
               host-wide deny the sidecar cannot lift; only `true`
               with one of those two backends runs — every other
-              backend refuses the key. Off by default: nested VMX
-              widens the host KVM attack surface.
+              backend warns and drops the key. Off by default:
+              nested VMX widens the host KVM attack surface.
             '';
           };
           multiplexer = mkOption {

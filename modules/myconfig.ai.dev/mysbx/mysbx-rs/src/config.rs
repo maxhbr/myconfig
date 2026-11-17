@@ -609,9 +609,10 @@ pub struct Config {
     /// and `-cpu host` exposes the host CPU model. A user-config
     /// `false` is a host-wide deny the sidecar cannot lift (the same
     /// narrowing rule as `network`); either layer may otherwise
-    /// enable it. Only the `microvm-qemu` backend honors the key —
-    /// every other backend refuses `Some(true)`, never silently drops
-    /// it (krun: libkrun's `krun_set_nested_virt` is macOS-only in the
+    /// enable it. The two direct VM backends (`microvm-qemu`,
+    /// `microvm-ch`) honor the key — every other backend warns and
+    /// drops it, never blocking the run over a missing feature
+    /// (krun: libkrun's `krun_set_nested_virt` is macOS-only in the
     /// pinned 1.17.4, libkrunfw 5.3.0 ships CONFIG_KVM unset).
     pub nested_virt: Option<bool>,
     /// Which nix store the sandbox sees (`store`, docs/design/

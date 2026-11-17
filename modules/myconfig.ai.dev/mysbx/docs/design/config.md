@@ -1764,18 +1764,18 @@ the host-side bubblewrap still exposes the host store for launcher
 runtime dependencies. Complete baked-store live acceptance remains
 unrecorded; see [guest-store.md](./guest-store.md).
 
-### D27: `nested-virt` — opt-in nested virtualization for a `microvm-qemu` run
+### D27: `nested-virt` — opt-in nested virtualization for the direct VM runs
 
 ```toml
 nested-virt = true       # boolean, off by default
 ```
 
 One top-level boolean key, tri-state in a layer like `network`:
-`Some(true)` on a `microvm-qemu` run hands the guest hardware
-virtualization — the launcher boots `-cpu host` with `accel=kvm` (no
-TCG fallback), the guest kernel's KVM (built into the pinned
-`microvm-qemu.kernel`) exposes `/dev/kvm`, and VMs can be developed
-and tested inside the sandbox (microvm-ch, microvm-qemu,
+`Some(true)` on a `microvm-qemu` or `microvm-ch` run hands the guest
+hardware virtualization — the launcher boots `-cpu host` with
+`accel=kvm` (no TCG fallback), the guest kernel's KVM (built into the
+pinned `microvm-qemu.kernel`) exposes `/dev/kvm`, and VMs can be
+developed and tested inside the sandbox (microvm-ch, microvm-qemu,
 podman-krun).
 
 **Why a config key.** The point of the key is the development loop of
@@ -1802,10 +1802,11 @@ virtualization implementation is a new escape path), and `-cpu host`
 exposes the host CPU model to the guest — both are documented in
 backends.md D9's table.
 
-**Honored by exactly one backend.** `microvm-qemu` implements the
-key; every other backend REFUSES `nested-virt = true` (exit 70,
-before the session clone and before `--dry-run`'s early return, so a
-dry run audits the refusal too) — never accepted-and-ignored:
+**A missing feature WARNS, it never blocks.** The two direct VM
+backends implement the key. Every other backend drops it with a
+warning and the run proceeds (exit 0, no `--nested-virt` in the
+argv, no manifest marker) — never accepted-and-ignored, and never a
+refusal:
 
 - `krun`: libkrun 1.17.4's `krun_set_nested_virt` is macOS-only,
   and libkrunfw 5.3.0 ships `CONFIG_KVM` unset — the guest cannot
@@ -1815,13 +1816,45 @@ dry run audits the refusal too) — never accepted-and-ignored:
 - `bubblewrap`, `nono`, `podman-gvisor`: no VM at all, no
   virtualization to nest.
 
+The rule behind it: a run is refused when a key would WEAKEN or
+WIDEN a boundary, not when it asks for capability the backend does
+not have. A missing feature only ever removes capability, so the run
+starts without it, the same way `store = "baked"` falls back to
+`host` on a backend with no store disk and the same way D23's
+unenforced resource limits warn. Refusals stay where a boundary is at
+stake: the `network` narrowing, the merge's `NestedVirtUpgrade`, the
+allowlist keys, the credential rules of D28.
+
+The exceptions keep refusing, for their own reasons — none of them
+is the missing-feature rule:
+
+- `pids-limit` on the direct VM backends (D23): the key is an
+explicit per-invocation LIMIT, and dropping a limit is the less
+restrictive direction the boundary rule forbids. A warning covers the
+host-wide defaults of the other limits because those are set once for
+a whole host; a pin names THIS run.
+- `display = "waypipe"` and `multiplexer = "orca"`: not a missing
+feature but an unimplemented one — the guest has no channel to carry
+the socket (`display`) or none of the tools the payload needs
+(`orca`), so the run would start and die mid-session with the cause
+far from the effect. Both are first-cut refusals with live work
+outstanding (bd myconfig-6di.5.4/6di.5.7, bd myconfig-2m8); they go
+away with the implementation, not with a warning.
+
+The warning is printed BEFORE the session clone and shows on
+`--dry-run` too, and the pipeline clears the merged key so the host
+nesting pre-flight (next paragraph), the launcher argv and the
+`--verbose` report all see a run without the feature.
+
 **Host pre-flight and guest refuse-or-announce.** A
-`nested-virt = true` run requires the HOST kernel's own nesting
-enabled: `/sys/module/kvm_intel/parameters/nested` (or
-`kvm_amd`'s) must read `Y` or `1` — the run path refuses otherwise,
-naming the parameter (`boot.extraModprobeConfig = "options
-kvm-intel nested=1"` is the NixOS spelling). Inside the guest, the
-init refuses early when the manifest marks nested-virt but
+`nested-virt = true` run on a backend that HONORS the key requires
+the HOST kernel's own nesting enabled:
+`/sys/module/kvm_intel/parameters/nested` (or `kvm_amd`'s) must
+read `Y` or `1` — the run path refuses otherwise, naming the
+parameter (`boot.extraModprobeConfig = "options kvm-intel
+nested=1"` is the NixOS spelling). A backend that dropped the key
+runs on regardless: it has no nested VM to boot. Inside the guest,
+the init refuses early when the manifest marks nested-virt but
 `/dev/kvm` is missing (a TCG boot) — the store-disk marker's rule:
 fail at the boot, not at the payload's first nested VM launch.
 `mysbx doctor` reports the host's nested support as a WARN when it

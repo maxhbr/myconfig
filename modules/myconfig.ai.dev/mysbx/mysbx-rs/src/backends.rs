@@ -43,6 +43,23 @@ pub enum Allowlist {
     Broker,
 }
 
+/// How a backend treats a config key that asks for a FEATURE it does
+/// not have. The split is a boundary rule: a missing feature only
+/// ever removes capability, so the run proceeds with a warning — the
+/// same shape `store = "baked"`'s fallback and D23's unenforced
+/// limits already use. A key whose whole content is a BOUNDARY (a
+/// network narrowing, an allowlist, the merge's user-deny upgrade)
+/// is never in this table: weakening or widening a boundary is
+/// refused, not traded for a warning.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MissingFeature {
+    /// The backend has the feature; the key is honored.
+    Honored,
+    /// The backend lacks it; the key is dropped with a warning and
+    /// the run continues (the `nested-virt` case, config.md D27).
+    WarnAndDrop,
+}
+
 /// One backend's row (all fields are facts about the backend, never
 /// run state).
 pub struct Backend {
@@ -75,10 +92,15 @@ pub struct Backend {
     /// mapping); `pids-limit` is REFUSED by the direct builders
     /// either way and warned about on podman-krun.
     pub sizes_sandbox: bool,
-    /// Whether the backend honors `nested-virt = true`
-    /// (docs/design/config.md D27). Every other backend REFUSES the
-    /// key, never silently drops it.
-    pub nested_virt: bool,
+    /// What the backend does with `nested-virt = true`
+    /// (docs/design/config.md D27): `microvm-qemu` and `microvm-ch`
+    /// honor it, every other backend WARNS and drops it — a run that
+    /// starts without the feature is the point of the key, so a
+    /// missing feature never blocks the backend (the run path
+    /// pre-flights the host's `nested` parameter only for a backend
+    /// that honors the key). `krun` is a VM but its guest kernel has
+    /// no KVM, so it drops the key like the container tiers do.
+    pub nested_virt: MissingFeature,
     /// Whether `--detach`/`--detachable` are refused outright
     /// (docs/design/detach.md B9): the podman backends carry a
     /// per-repo container name and `--replace`, so a detached run
@@ -126,7 +148,7 @@ pub const REGISTRY: &[Backend] = &[
         vm: false,
         store_disk: false,
         sizes_sandbox: false,
-        nested_virt: false,
+        nested_virt: MissingFeature::WarnAndDrop,
         detach_refused: false,
         waypipe_refused: false,
         allowlist: Allowlist::Broker,
@@ -139,7 +161,7 @@ pub const REGISTRY: &[Backend] = &[
         vm: false,
         store_disk: false,
         sizes_sandbox: false,
-        nested_virt: false,
+        nested_virt: MissingFeature::WarnAndDrop,
         detach_refused: true,
         waypipe_refused: false,
         allowlist: Allowlist::Refused,
@@ -152,7 +174,7 @@ pub const REGISTRY: &[Backend] = &[
         vm: false,
         store_disk: false,
         sizes_sandbox: false,
-        nested_virt: false,
+        nested_virt: MissingFeature::WarnAndDrop,
         detach_refused: false,
         waypipe_refused: false,
         allowlist: Allowlist::NonosEgress,
@@ -165,7 +187,7 @@ pub const REGISTRY: &[Backend] = &[
         vm: false,
         store_disk: false,
         sizes_sandbox: true,
-        nested_virt: false,
+        nested_virt: MissingFeature::WarnAndDrop,
         detach_refused: true,
         waypipe_refused: true,
         allowlist: Allowlist::Refused,
@@ -178,7 +200,7 @@ pub const REGISTRY: &[Backend] = &[
         vm: true,
         store_disk: true,
         sizes_sandbox: true,
-        nested_virt: false,
+        nested_virt: MissingFeature::WarnAndDrop,
         detach_refused: false,
         waypipe_refused: true,
         allowlist: Allowlist::Refused,
@@ -191,7 +213,7 @@ pub const REGISTRY: &[Backend] = &[
         vm: true,
         store_disk: true,
         sizes_sandbox: true,
-        nested_virt: true,
+        nested_virt: MissingFeature::Honored,
         detach_refused: false,
         waypipe_refused: true,
         allowlist: Allowlist::Refused,
@@ -204,7 +226,7 @@ pub const REGISTRY: &[Backend] = &[
         vm: true,
         store_disk: true,
         sizes_sandbox: true,
-        nested_virt: true,
+        nested_virt: MissingFeature::Honored,
         detach_refused: false,
         waypipe_refused: true,
         allowlist: Allowlist::Refused,
@@ -333,6 +355,22 @@ mod tests {
             assert_eq!(
                 b.network_proxy_only, b.always_on,
                 "`{}`: network_proxy_only must match config.md D20's table",
+                b.name
+            );
+            // D27's nested-virt honoring set: a backend without a VM
+            // at all can never nest, so `Honored` implies `vm`. The
+            // converse does NOT hold — `krun` is a VM whose guest
+            // kernel has no KVM, so it drops the key with a warning
+            // (a missing feature, never a refusal).
+            assert!(
+                b.nested_virt != MissingFeature::Honored || b.vm,
+                "`{}`: a backend without a VM cannot honor nested-virt",
+                b.name
+            );
+            assert_eq!(
+                b.nested_virt == MissingFeature::Honored,
+                b.name == "microvm-qemu" || b.name == "microvm-ch",
+                "`{}`: the two direct VM backends are the honoring set",
                 b.name
             );
         }

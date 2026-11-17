@@ -79,8 +79,9 @@ pub fn microvm_qemu_argv(
     // so VMs can be developed inside the sandbox. Off by default:
     // nested VMX widens the host KVM attack surface and `-cpu host`
     // exposes the host CPU model. The krun argv is untouched —
-    // `krun::krun_argv` never sees the key (the pipeline refuses
-    // `nested-virt = true` on every other backend, lib.rs).
+    // `krun::krun_argv` never sees the key (the pipeline warns and
+    // clears it on every backend whose registry row says
+    // `WarnAndDrop`, lib.rs).
     if cfg.nested_virt {
         argv.push("--nested-virt".to_owned());
     }

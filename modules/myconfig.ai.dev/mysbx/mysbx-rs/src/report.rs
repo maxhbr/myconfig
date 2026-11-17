@@ -280,8 +280,9 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     // different machine (the host's CPU model exposed by -cpu host,
     // its own /dev/kvm, a widened host KVM attack surface), and the
     // report is where that difference must surface, not in a boot
-    // failure. Every other backend would have refused the key, so
-    // `false` needs no qualifier.
+    // failure. A backend that cannot hand the guest the feature has
+    // already CLEARED the merged key (lib.rs) and prints its own
+    // warning, so `false` needs no qualifier here.
     if r.merged.nested_virt {
         p(format!(
             "nested-virt:    on — the guest gets /dev/kvm and the host CPU model \
