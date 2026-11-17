@@ -38,26 +38,14 @@ let
   # DefaultResourceLoader with `agentDir = getAgentDir()`, i.e.
   # `~/.pi/agent`), so inside a sandbox it reads the same configuration
   # pi itself does: the generated myconfig providers/litellm extensions,
-  # skills, agents and prompts. The mount subtrees mirror pi's own
-  # (../programs.pi-coding-agent/default.nix `mysbxPiSubtrees`) minus
-  # `keybindings.json` (a TUI concern the headless engine host does not
-  # read). Themes stay: the engine's resource loader registers them.
-  piHasHandcraftedSkills =
-    (config.myconfig.ai.dev.skills.handcrafted or { }) != { }
-    || (config.myconfig.ai.dev.skills.enable or false);
-
-  mysbxThinkrailSubtrees = [
-    ".pi/agent/extensions"
-    ".pi/agent/agents"
-    ".pi/agent/prompts"
-    ".pi/agent/themes"
-    ".pi/agent/skills"
-  ]
-  # The global AGENTS.md the embedded pi engine loads as context
-  # (../../agentsMd). Only when the feature deploys it: an untracked subtree
-  # would otherwise become an empty directory in the sandbox tree.
-  ++ lib.optional (config.myconfig.ai.dev.agentsMd.enable or false) ".pi/agent/AGENTS.md"
-  ++ lib.optional piHasHandcraftedSkills ".agents/skills";
+  # skills, agents and prompts. The subtrees are the SHARED list
+  # (../pi-sandbox-subtrees.nix, also consumed by
+  # ./programs.pi-coding-agent/default.nix), never a private copy: both
+  # would bind the same in-sandbox dests, and mysbx lets a later bind
+  # win (../../mysbx/mysbx-rs/src/nono.rs), so two lists would silently
+  # hand the payload a mixture of two store trees ordered by module
+  # merge order.
+  mysbxThinkrailSubtrees = import ./pi-sandbox-subtrees.nix { inherit config lib; };
 
   # Like pi's integration: copies of the home-manager-deployed config,
   # NOT the host home (the podman-gvisor backend mounts nothing from the
@@ -89,6 +77,31 @@ let
       name = "thinkrail-sandbox-config";
       extraFiles = hmSkillsBundle;
     }).mounts;
+
+  # pi's own mysbx integration mounts the SAME subtrees (`mysbxPiMounts`
+  # in ./programs.pi-coding-agent/default.nix, built from the shared
+  # list). Both enabled means both would bind the same in-sandbox dests
+  # from two distinct store trees; mysbx keeps the LAST bind
+  # (../../../mysbx/mysbx-rs/src/nono.rs "a later bind on the same dest
+  # wins"), so the payload would get a mixture ordered by module merge
+  # order. pi owns `~/.pi` when it is enabled — its tree is the one that
+  # also carries the TUI-only `keybindings.json` and consumes
+  # `PI_JAIL_MARKER`/session state — so thinkrail then contributes NO
+  # pi-config mounts and relies on pi's. Only on a host without pi does
+  # thinkrail mount the pi config itself, or the embedded engine would
+  # start with no configuration at all.
+  piOwnsPiMounts = (osconfig.myconfig.ai.dev.pi-coding-agent.enable or false);
+
+  # The mirror image for the shared skills dest: when pi is off but codex
+  # is on, codex's integration already binds `~/.agents/skills` from its
+  # own tree (../../programs.codex/default.nix gates that mount on pi for
+  # the same single-writer reason). ThinkRail reads the dest, so it does
+  # not own a second bind of it.
+  mysbxThinkrailOwnMounts = lib.optionals (!piOwnsPiMounts) (
+    builtins.filter (
+      m: !((osconfig.myconfig.ai.dev.codex.enable or false) && m.dest == "/mysbx-home/.agents/skills")
+    ) mysbxThinkrailMounts
+  );
 in
 {
   options.myconfig = with lib; {
@@ -118,7 +131,8 @@ in
       # host-reachable on the shared-netns backends only — see the
       # module header.
       extraTools = [ pkgs.thinkrail ];
-      # ThinkRail reads pi's mounted configuration above but writes its
+      # ThinkRail reads pi's mounted configuration (see
+      # `mysbxThinkrailMounts` and `piOwnsPiMounts` above) but writes its
       # own state nowhere else: `~/.thinkrail` (persisted via the
       # state-dirs entry below and, on the host, via
       # myconfig.persistence.directories) holds the
@@ -128,7 +142,7 @@ in
       # own integration owns that entry when pi is enabled, and
       # `state-dirs` may not nest — a second declaration would be a
       # `StateDirNesting` refusal.
-      config.mounts = mysbxThinkrailMounts;
+      config.mounts = mysbxThinkrailOwnMounts;
       config.stateDirs = [ ".thinkrail" ];
       # Mute upstream analytics inside sandboxes
       # (packages/server/src/analytics/service.ts: any non-empty value
