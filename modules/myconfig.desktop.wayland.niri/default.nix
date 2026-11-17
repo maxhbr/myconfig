@@ -46,11 +46,11 @@ let
   };
   headless = cfg.headless.enable;
   headlessWindowRules = lib.optionalString headless ''
-    // headless (myconfig.headless.enable): the initial foot terminal hosts
+    // headless (myconfig.headless.enable): the initial alacritty terminal hosts
     // the main/host agent session (see myconfig.desktop.wayland.autostartCommands),
     // open it fullscreen instead of tiled.
     window-rule {
-        match app-id="^foot-host-tmux-session$|^host-tmux-session$"
+        match app-id="^host-tmux-session$"
 
         open-fullscreen true
     }

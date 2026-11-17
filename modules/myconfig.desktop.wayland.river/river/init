@@ -182,10 +182,9 @@ riverctl default-layout rivercarro
 # window rules (rule-add, replaces float-filter-add / csd-filter-add)
 ###############################################################################
 
-# headless hosts: the initial foot terminal hosts the main/host agent session
+# headless hosts: the initial alacritty terminal hosts the main/host agent session
 # (see myconfig.desktop.wayland.autostartCommands), open it fullscreen instead
 # of tiling it (niri parity, see modules/myconfig.desktop.wayland.niri).
-riverctl rule-add -app-id 'foot-host-tmux-session' fullscreen
 riverctl rule-add -app-id 'host-tmux-session' fullscreen
 
 # floating windows

@@ -100,9 +100,13 @@ in
               >/dev/null 2>&1 &
 
           ${foot}/bin/foot --server &
-          {
-            foot-host-tmux-session || foot -T host-tmux-session -a host-tmux-session
-          } >/dev/null 2>&1 &
+          # alacritty's --class sets the wayland app_id, which the niri/river
+          # fullscreen window rules match on (`host-tmux-session`)
+          ${alacritty}/bin/alacritty \
+              --title host-tmux-session \
+              --class host-tmux-session \
+              --command host-tmux-session \
+              >/dev/null 2>&1 &
 
           ${wlsunset}/bin/wlsunset &
 
