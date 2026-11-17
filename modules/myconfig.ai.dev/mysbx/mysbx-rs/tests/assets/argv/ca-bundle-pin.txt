@@ -60,6 +60,9 @@ bubblewrap
 MYSBX_MULTIPLEXER
 none
 --setenv
+MYSBX_HOST
+localhost
+--setenv
 SSL_CERT_FILE
 /nix/store/aaaa-nss-cacert/etc/ssl/certs/ca-bundle.crt
 --setenv

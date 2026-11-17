@@ -50,6 +50,9 @@ bubblewrap
 MYSBX_MULTIPLEXER
 none
 --setenv
+MYSBX_HOST
+localhost
+--setenv
 XDG_RUNTIME_DIR
 /mysbx-home
 --chdir

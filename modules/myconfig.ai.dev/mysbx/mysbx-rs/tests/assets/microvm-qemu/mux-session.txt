@@ -28,6 +28,8 @@ MYSBX_BACKEND=microvm-qemu
 --env
 MYSBX_MULTIPLEXER=tmux
 --env
+MYSBX_HOST=localhost
+--env
 XDG_CONFIG_HOME=/mysbx-home/.config
 --env
 XDG_CACHE_HOME=/mysbx-home/.cache

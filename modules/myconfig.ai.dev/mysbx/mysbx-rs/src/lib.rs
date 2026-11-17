@@ -106,6 +106,42 @@ pub fn usage() {
 pub const FORWARDED_ENV_VARS: &[&str] =
     &["TERM", "COLORTERM", "LANG", "LC_ALL", "EDITOR", "VISUAL"];
 
+/// The OUTER host's hostname, exported to the payload as `MYSBX_HOST`
+/// (bd myconfig-5wf): the sandbox's own name is per-backend and
+/// meaningless for an agent that wants to know which physical machine
+/// it runs on — bwrap keeps the host's, the podman variants pin
+/// `mysbx`, and a krun guest has the VM kernel's. Read once per run
+/// with `gethostname(3)` — the crate's zero-dependency libc pattern
+/// (doctor.rs's `landlock_abi`), no hostname crate, no std API (still
+/// unstable). Infrastructure of the same class as `MYSBX_BACKEND` /
+/// `MYSBX_MULTIPLEXER` (bd myconfig-3nn): each backend emits it AFTER
+/// the config `[env]` block, so no layer can spoof the machine's name.
+/// Unset only when the libc call fails, in which case the variable is
+/// omitted rather than set empty — an empty `MYSBX_HOST` would read as
+/// a value.
+pub fn host_hostname() -> Option<String> {
+    use std::os::raw::c_char;
+    // 256 is large enough for a Linux hostname (the kernel caps the
+    // UTS name at 64 bytes; HOST_NAME_MAX-style buffers are
+    // conventionally 256, and gethostname truncates instead of
+    // failing when the buffer is short).
+    let mut buffer = [0 as c_char; 256];
+    extern "C" {
+        fn gethostname(name: *mut c_char, len: usize) -> i32;
+    }
+    let rc = unsafe { gethostname(buffer.as_mut_ptr(), buffer.len()) };
+    if rc != 0 {
+        return None;
+    }
+    let bytes = buffer.iter().take_while(|&&c| c != 0).map(|&c| c as u8);
+    let name = String::from_utf8(bytes.collect()).ok()?;
+    if name.is_empty() {
+        None
+    } else {
+        Some(name)
+    }
+}
+
 /// Dispatch on the argument list (without argv[0]); returns the exit code.
 ///
 /// Exit codes (cli.md D8, extended by bd myconfig-0ql): `0` success,

@@ -88,4 +88,5 @@ HOME=/mysbx-home
 PATH=/synth/bin
 MYSBX_BACKEND=nono
 MYSBX_MULTIPLEXER=none
+MYSBX_HOST=localhost
 /synth/bin/bash

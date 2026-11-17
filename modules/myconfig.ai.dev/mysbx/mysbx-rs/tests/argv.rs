@@ -1243,6 +1243,7 @@ fn golden_multiplexer_interactive_sessions() {
                 "PATH",
                 "MYSBX_BACKEND",
                 "MYSBX_MULTIPLEXER",
+                "MYSBX_HOST",
                 "TMUX_TMPDIR"
             ],
             "{mux}"
@@ -1605,6 +1606,7 @@ fn forward_only_set_host_variables() {
             "PATH",
             "MYSBX_BACKEND",
             "MYSBX_MULTIPLEXER",
+            "MYSBX_HOST",
         ],
     );
 }
@@ -1631,6 +1633,7 @@ fn env_precedence_host_then_config_then_path() {
             "PATH",
             "MYSBX_BACKEND",
             "MYSBX_MULTIPLEXER",
+            "MYSBX_HOST",
         ],
     );
     // The later TERM value really is the [env] one.
@@ -1747,13 +1750,18 @@ fn config_env_cannot_repoint_home_or_path() {
             "PATH",
             "MYSBX_BACKEND",
             "MYSBX_MULTIPLEXER",
+            "MYSBX_HOST",
         ],
         "[env] entries first, the infrastructure pair and the identity pair last"
     );
-    let n = argv.len();
-    // … and the last block really carries mysbx's values.
+    // … and the last block really carries mysbx's values (through
+    // MYSBX_HOST, the block's last entry — bd myconfig-5wf). Anchored
+    // on the payload separator, not index arithmetic: the tail's
+    // shape is --chdir <repo> -- <shell>.
+    let dashdash = argv.iter().rposition(|a| a == "--").unwrap();
+    let block = &argv[dashdash - 17..dashdash - 2];
     assert_eq!(
-        &argv[n - 16..n - 4],
+        block,
         &[
             "--setenv",
             "HOME",
@@ -1767,6 +1775,9 @@ fn config_env_cannot_repoint_home_or_path() {
             "--setenv",
             "MYSBX_MULTIPLEXER",
             "none",
+            "--setenv",
+            "MYSBX_HOST",
+            &mysbx::host_hostname().expect("the test host has a name"),
         ]
     );
 }
@@ -3909,6 +3920,7 @@ fn window_mode_sets_no_session_name_env() {
             "PATH",
             "MYSBX_BACKEND",
             "MYSBX_MULTIPLEXER",
+            "MYSBX_HOST",
             "TMUX_TMPDIR"
         ]
     );
@@ -3934,6 +3946,7 @@ fn session_mode_sets_session_name_env() {
             "PATH",
             "MYSBX_BACKEND",
             "MYSBX_MULTIPLEXER",
+            "MYSBX_HOST",
             "TMUX_TMPDIR",
             "MYSBX_SESSION_NAME",
         ]
@@ -3972,6 +3985,7 @@ fn session_name_env_works_for_all_multiplexers() {
                 "PATH",
                 "MYSBX_BACKEND",
                 "MYSBX_MULTIPLEXER",
+                "MYSBX_HOST",
                 "TMUX_TMPDIR",
                 "MYSBX_SESSION_NAME",
             ],
@@ -7524,12 +7538,7 @@ fn nono_two_environments_the_env_segment_applies_the_payload_env() {
     // The payload environment, in the backend's own precedence:
     // forwarded (BTreeMap order: EDITOR, NONO_NO_UPDATE_CHECK, TERM),
     // [env] (PYTHONPATH, TERM — later TERM wins), then the pins.
-    let assignments: Vec<&str> = argv[i..]
-        .iter()
-        .take_while(|a| !a.is_empty() && a.as_str() != "/synth/bin/bash")
-        .map(|a| a.as_str())
-        .collect();
-    let expected = [
+    let expected: Vec<String> = [
         "EDITOR=nvim",
         "NONO_NO_UPDATE_CHECK=0",
         "TERM=host-val",
@@ -7540,10 +7549,24 @@ fn nono_two_environments_the_env_segment_applies_the_payload_env() {
         // The identity pair (bd myconfig-3nn) rides the payload env
         // segment like HOME/PATH: the nono backend's `--setenv` set
         // carries only nono's own infrastructure, so these must be
-        // assignments, not --setenv.
+        // assignments, not --setenv. The outer host's name (bd
+        // myconfig-5wf) follows the pair.
         "MYSBX_BACKEND=nono",
         "MYSBX_MULTIPLEXER=none",
-    ];
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect();
+    let mut expected = expected;
+    expected.push(format!(
+        "MYSBX_HOST={}",
+        mysbx::host_hostname().expect("the test host has a name")
+    ));
+    let assignments: Vec<String> = argv[i..]
+        .iter()
+        .take_while(|a| !a.is_empty() && a.as_str() != "/synth/bin/bash")
+        .map(|a| a.to_string())
+        .collect();
     assert_eq!(assignments, expected, "the payload env, in order: {argv:?}");
     assert_eq!(argv[argv.len() - 1], "/synth/bin/bash");
     // The payload never sees an XDG directory below /mysbx-nono: no
@@ -7689,6 +7712,10 @@ fn nono_no_env_binary_no_payload_env_vars_still_runs() {
             "PATH=/synth/bin",
             "MYSBX_BACKEND=nono",
             "MYSBX_MULTIPLEXER=none",
+            &format!(
+                "MYSBX_HOST={}",
+                mysbx::host_hostname().expect("the test host has a name")
+            ),
             "/synth/bin/bash",
         ],
         "the minimal env-segment: {argv:?}"

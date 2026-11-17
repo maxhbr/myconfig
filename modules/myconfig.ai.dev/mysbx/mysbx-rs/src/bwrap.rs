@@ -1298,6 +1298,16 @@ pub fn bwrap_argv(
         argv.push("--setenv".into());
         argv.push("MYSBX_MULTIPLEXER".into());
         argv.push(cfg.multiplexer.name().into());
+        // The outer host's name (bd myconfig-5wf): same infrastructure
+        // class as the identity pair above — the sandbox's own
+        // hostname is backend-specific and says nothing about the
+        // physical machine an agent runs on. Omitted (not set empty)
+        // when the libc call fails.
+        if let Some(host) = crate::host_hostname() {
+            argv.push("--setenv".into());
+            argv.push("MYSBX_HOST".into());
+            argv.push(host);
+        }
         // The CONNECT-lane proxy variables (docs/design/
         // egress-connect.md E8, bd myconfig-ew9s): only a paired run
         // (allowlist keys under the profile, `egress.allow_domains`
@@ -1510,6 +1520,13 @@ pub fn bwrap_argv(
             cfg.backend.as_deref().unwrap_or_default()
         ));
         argv.push(format!("MYSBX_MULTIPLEXER={}", cfg.multiplexer.name()));
+        // The outer host's name rides the payload env segment like
+        // the identity pair above (bd myconfig-5wf, backends.md D1:
+        // nono's own `--setenv` set carries only nono's
+        // infrastructure).
+        if let Some(host) = crate::host_hostname() {
+            argv.push(format!("MYSBX_HOST={host}"));
+        }
         if let Some(ca_bundle) = params.ca_bundle {
             for key in ["SSL_CERT_FILE", "GIT_SSL_CAINFO", "NIX_SSL_CERT_FILE"] {
                 argv.push(format!("{key}={ca_bundle}"));
@@ -2800,18 +2817,25 @@ mod tests {
         assert_eq!(argv[setenvs[5] + 1], "PATH");
         assert_eq!(argv[setenvs[5] + 2], "/synth/bin");
         // … then the identity variables (bd myconfig-3nn): MYSBX_BACKEND
-        // and MYSBX_MULTIPLEXER follow PATH, before the `--chdir` and
-        // payload sections.
+        // and MYSBX_MULTIPLEXER follow PATH, then the outer host's
+        // name (bd myconfig-5wf), before the `--chdir` and payload
+        // sections.
         assert_eq!(argv[setenvs[6]], "--setenv");
         assert_eq!(argv[setenvs[6] + 1], "MYSBX_BACKEND");
         assert_eq!(argv[setenvs[6] + 2], "bubblewrap");
         assert_eq!(argv[setenvs[7]], "--setenv");
         assert_eq!(argv[setenvs[7] + 1], "MYSBX_MULTIPLEXER");
         assert_eq!(argv[setenvs[7] + 2], "none");
+        assert_eq!(argv[setenvs[8]], "--setenv");
+        assert_eq!(argv[setenvs[8] + 1], "MYSBX_HOST");
+        // The value is the REAL machine name (bd myconfig-5wf) — a
+        // test cannot pin it, only that it is the same string the
+        // helper returns.
+        assert_eq!(argv[setenvs[8] + 2], crate::host_hostname().unwrap());
         assert_eq!(
-            argv.len() - setenvs[7] - 3,
+            argv.len() - setenvs[8] - 3,
             4, // --chdir /synth/repo -- /synth/bin/bash
-            "nothing after the identity vars but --chdir, -- and the payload"
+            "nothing after the host name but --chdir, -- and the payload"
         );
     }
 
@@ -2867,6 +2891,61 @@ mod tests {
             "spoofed",
             "the layer entry stays visible in the argv audit"
         );
+    }
+
+    #[test]
+    fn the_outer_hosts_name_is_infrastructure_not_config() {
+        // bd myconfig-5wf: MYSBX_HOST names the OUTER machine, the one
+        // every sandbox hostname hides (bwrap keeps the host's, the
+        // podman variants pin "mysbx", a krun guest has the VM
+        // kernel's). Same class as the identity pair: set after
+        // HOME/PATH inside the infrastructure block, so a config
+        // `[env]` entry can never spoof the machine's name — and the
+        // value is read from the libc UTS namespace at argv build
+        // time, never from any layer.
+        let (repo, cfg, p) = shell_repo_defaults();
+        let host = crate::host_hostname().expect("the test host has a name");
+        let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
+        let identity = |argv: &[String], key: &str| -> String {
+            argv.windows(3)
+                .find(|w| w[0] == "--setenv" && w[1] == key)
+                .map(|w| w[2].clone())
+                .unwrap_or_else(|| panic!("missing --setenv {key}"))
+        };
+        assert_eq!(identity(&argv, "MYSBX_HOST"), host);
+        // Infrastructure position: after the identity pair (and thus
+        // after HOME/PATH/[env]), before TMUX_TMPDIR — the last
+        // `--setenv` wins, so a layer's earlier entry never reaches
+        // the payload.
+        let backend = pos(&argv, "MYSBX_BACKEND");
+        let mux = pos(&argv, "MYSBX_MULTIPLEXER");
+        let host_pos = pos(&argv, "MYSBX_HOST");
+        assert!(backend < mux && mux < host_pos);
+        if let Some(tmux_dir) = argv
+            .windows(3)
+            .position(|w| w[0] == "--setenv" && w[1] == "TMUX_TMPDIR")
+        {
+            assert!(host_pos < tmux_dir);
+        }
+        // And `[env]` cannot override it: the layer's entry appears
+        // EARLIER, the infrastructure entry is the last one and
+        // carries the machine's real name.
+        let mut layered = cfg.clone();
+        layered
+            .env
+            .insert("MYSBX_HOST".to_string(), "spoofed".to_string());
+        let argv = bwrap_argv(&layered, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
+        let last = argv
+            .windows(3)
+            .rposition(|w| w[0] == "--setenv" && w[1] == "MYSBX_HOST")
+            .expect("the infrastructure entry exists");
+        assert_eq!(argv[last + 2], host);
+        let first = argv
+            .windows(3)
+            .position(|w| w[0] == "--setenv" && w[1] == "MYSBX_HOST")
+            .expect("the layer entry exists");
+        assert!(first < last, "the infrastructure entry must win");
+        assert_eq!(argv[first + 2], "spoofed");
     }
 
     #[test]

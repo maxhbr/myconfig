@@ -678,6 +678,18 @@ learns its confinement and its session payload from the environment
 instead of probing `PATH` side effects. Emitted after `[env]` on
 every backend, like `HOME` and `PATH` above.
 
+`MYSBX_HOST` joins them (bd myconfig-5wf): the OUTER host's
+hostname, read once per run from the libc UTS namespace
+(`gethostname(3)`) — never from any config layer, so a layer cannot
+spoof the machine's name. The sandbox's own hostname is backend
+cover and says nothing about the physical machine: bubblewrap keeps
+the host's name in practice, the podman variants pin `mysbx`, and a
+krun guest has the VM kernel's own. `MYSBX_HOST` lets an agent
+branch on the physical machine (host-specific runbooks, recording
+which of f13/workstation/nas a session ran on). Omitted — never set
+empty — when the libc call fails. Emitted with the identity pair,
+after `[env]`, on every backend.
+
 ### D15: `state-dirs` — persisted sandbox-home subdirectories, backed by the sidecar
 
 `state-dirs` is a list of paths **relative to the sandbox home** whose

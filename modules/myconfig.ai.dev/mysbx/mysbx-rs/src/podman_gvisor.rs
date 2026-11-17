@@ -1129,6 +1129,13 @@ pub fn podman_run_argv(
         "--env".into(),
         format!("MYSBX_MULTIPLEXER={}", cfg.multiplexer.name()),
     ]);
+    // The outer host's name (bd myconfig-5wf): the same infrastructure
+    // class as the identity pair above — podman pins the container's
+    // own hostname to "mysbx", so nothing inside would tell an agent
+    // which physical machine it runs on.
+    if let Some(host) = crate::host_hostname() {
+        argv.extend(["--env".into(), format!("MYSBX_HOST={host}")]);
+    }
     // The XDG base dirs are infrastructure like `HOME` (config.md D14):
     // they are derived FROM it, and re-anchoring them matters ONLY under
     // this backend — bubblewrap's `HOME` is already its own tmpfs,

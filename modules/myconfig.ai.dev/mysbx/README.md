@@ -496,11 +496,12 @@ binds it at the same `<repo>__worktrees` path, so a session never
 reaches the host's worktrees. A sidecar `[[mounts]]` entry is therefore
 only needed to bind a worktrees directory that lives somewhere else.
 
-## The sandbox identity variables (`MYSBX_BACKEND`, `MYSBX_MULTIPLEXER`)
+## The sandbox identity variables (`MYSBX_BACKEND`, `MYSBX_MULTIPLEXER`, `MYSBX_HOST`)
 
-Every sandbox exports two environment variables that say what it is
-(bd myconfig-3nn) — the machine-readable answer to "which backend am I
-confined by, and which multiplexer was I built for?":
+Every sandbox exports environment variables that say what it is
+(bd myconfig-3nn, bd myconfig-5wf) — the machine-readable answer to
+"which backend am I confined by, which multiplexer was I built for,
+and which physical machine am I running on?":
 
 - `MYSBX_BACKEND` — the backend selected for this run
   (`bubblewrap`, `podman-gvisor`, `podman-krun`, `nono`, `krun`), the
@@ -509,14 +510,19 @@ confined by, and which multiplexer was I built for?":
   (`tmux`, `workmux`, `herdr`, `aoe`, `orca`, `none`), the merged value
   of `multiplexer` — the CONFIG's choice, so a one-shot
   `mysbx run -- CMD` reports it even though it starts no session.
+- `MYSBX_HOST` — the OUTER host's hostname (bd myconfig-5wf), read
+  from the libc UTS namespace at run start. The sandbox's own
+  hostname is backend cover and names nothing: bubblewrap keeps the
+  host's, the podman variants pin `mysbx`, a krun guest has the VM
+  kernel's. Omitted when the outer host has no name.
 
-Both are infrastructure, set after `[env]` like `HOME` and `PATH`
+All three are infrastructure, set after `[env]` like `HOME` and `PATH`
 (`docs/design/config.md` D14): a config layer that spells them out
 shows up in the `--dry-run` audit but never reaches the payload — the
-values always match the configuration that produced the sandbox, on
-every backend (bubblewrap's `--setenv`, the podman backends'
-`--env`, the nono payload-env segment, and the krun manifest's env
-block).
+values always match the configuration and the machine that produced
+the sandbox, on every backend (bubblewrap's `--setenv`, the podman
+backends' `--env`, the nono payload-env segment, and the krun
+manifest's env block).
 
 ## The display channel (`display`)
 

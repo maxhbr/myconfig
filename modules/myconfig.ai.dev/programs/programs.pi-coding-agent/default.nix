@@ -1068,14 +1068,13 @@ let
   #   MYSBX_MULTIPLEXER which interactive payload the sandbox starts
   #                     ("tmux", "workmux", "herdr", "aoe", "orca",
   #                     "none")
+  #   MYSBX_HOST        the OUTER host's hostname — the physical
+  #                     machine the sandbox runs on (bd
+  #                     myconfig-5wf); the sandbox's own hostname is
+  #                     backend cover and names nothing
   #   MYSBX_SESSION_NAME the clone's session name — set only by
   #                     session-mode (Clone workspace) runs of a
   #                     session-starting multiplexer
-  #
-  # plus the planned `MYSBX_HOST` (not yet set by any backend): once a
-  # backend exports it, the line gains the host the sandbox runs on
-  # without an extension change — the variable is read opportunistically
-  # and the line degrades gracefully while it is absent.
   #
   # The line (e.g. "mysbx: bubblewrap via aoe") is set once at
   # `session_start` via `ctx.ui.setStatus()`, the same status-bar

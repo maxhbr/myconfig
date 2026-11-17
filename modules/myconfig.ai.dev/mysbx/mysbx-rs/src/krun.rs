@@ -1215,6 +1215,14 @@ fn sandbox_env(
     // block after every layer so no config entry can spoof them.
     set("MYSBX_BACKEND", cfg.backend.clone().unwrap_or_default());
     set("MYSBX_MULTIPLEXER", cfg.multiplexer.name().to_owned());
+    // The outer host's name (bd myconfig-5wf): the guest kernel has
+    // its own UTS namespace, so `hostname` inside the VM names the
+    // VM, never the machine it runs on — the same infrastructure
+    // class as the identity pair above, riding the manifest env to
+    // the init's environment.
+    if let Some(host) = crate::host_hostname() {
+        set("MYSBX_HOST", host);
+    }
     set(
         "XDG_CONFIG_HOME",
         format!("{}/.config", crate::bwrap::SANDBOX_HOME),

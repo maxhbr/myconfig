@@ -25,6 +25,7 @@ use crate::bwrap::{
     HostEnv, Params, Payload, Workspace, MUX_SOCKET_DIR, SANDBOX_HOME, WAYPIPE_DISPLAY,
 };
 use crate::config::{Display, Mode, Multiplexer};
+use crate::host_hostname;
 use crate::merge::Merged;
 use crate::repo::Repo;
 use crate::session::Session;
@@ -532,6 +533,12 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         "  MYSBX_MULTIPLEXER={}  [merged multiplexer]",
         r.merged.multiplexer.name()
     ));
+    // The outer host's name (bd myconfig-5wf): exported as
+    // MYSBX_HOST, reported here like the identity pair above so the
+    // operator sees the machine name the in-sandbox agent reads.
+    if let Some(host) = host_hostname() {
+        p(format!("  MYSBX_HOST={host}  [outer host]"));
+    }
     // The pinned CA bundle belongs in the report for the same reason
     // as the nix.conf and `/bin/sh` lines below: which trust anchors
     // the sandbox's TLS tools use — the wrapper's own `nss-cacert`, or
@@ -768,6 +775,7 @@ fn infrastructure(key: &str, display_on: bool) -> bool {
         || key == "PATH"
         || key == "MYSBX_BACKEND"
         || key == "MYSBX_MULTIPLEXER"
+        || key == "MYSBX_HOST"
         || key == "SSL_CERT_FILE"
         || key == "GIT_SSL_CAINFO"
         || key == "NIX_SSL_CERT_FILE"

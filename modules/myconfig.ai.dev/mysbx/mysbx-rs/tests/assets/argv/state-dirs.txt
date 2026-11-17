@@ -68,6 +68,9 @@ bubblewrap
 --setenv
 MYSBX_MULTIPLEXER
 none
+--setenv
+MYSBX_HOST
+localhost
 --chdir
 /synth/repo
 --

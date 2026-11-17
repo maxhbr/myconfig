@@ -60,6 +60,9 @@ bubblewrap
 MYSBX_MULTIPLEXER
 workmux
 --setenv
+MYSBX_HOST
+localhost
+--setenv
 TMUX_TMPDIR
 /mysbx-home/.mysbx-tmux
 --chdir
