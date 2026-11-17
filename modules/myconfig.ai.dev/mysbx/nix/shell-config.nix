@@ -129,9 +129,10 @@ let
   # The `MYSBX_*` identity variables are the same ones the pi status
   # extension reads (../../programs/programs.pi-coding-agent): a config
   # layer cannot spoof them, so a present `MYSBX_BACKEND` means a real
-  # sandbox. Every segment is added only when its variable is non-empty,
-  # so `MYSBX_HOST` and a session name need no change here once a backend
-  # exports them — and the line matches the one pi renders.
+  # sandbox. Every segment is added only when its variable is non-empty
+  # and says something beyond the built-in default (`shared` is the
+  # default network policy, like `none` is the default multiplexer),
+  # and the line matches the one pi renders.
   #
   # Gated at RUNTIME, not at build time: the same tree is rendered for the
   # host's own shell and for the sandbox, and the backend is only known
@@ -149,6 +150,9 @@ let
             set -l line "mysbx: $MYSBX_BACKEND"
             if set -q MYSBX_MULTIPLEXER; and test -n "$MYSBX_MULTIPLEXER"; and test "$MYSBX_MULTIPLEXER" != none
                 set line "$line via $MYSBX_MULTIPLEXER"
+            end
+            if set -q MYSBX_NETWORK; and test -n "$MYSBX_NETWORK"; and test "$MYSBX_NETWORK" != shared
+                set line "$line net $MYSBX_NETWORK"
             end
             set -q MYSBX_HOST; and test -n "$MYSBX_HOST"; and set line "$line on $MYSBX_HOST"
             set -q MYSBX_SESSION_NAME; and test -n "$MYSBX_SESSION_NAME"; and set line "$line as $MYSBX_SESSION_NAME"
