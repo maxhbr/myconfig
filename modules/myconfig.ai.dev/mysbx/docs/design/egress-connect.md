@@ -372,6 +372,15 @@ design ever runs.
 Not provable here: an end-to-end CONNECT round trip (no network, no
 LiteLLM forwarder). The validation-log entry must say so explicitly.
 
+> **Update, 2026-11-16:** the round trip and the `--share-net`
+attribution have since been executed in a networked sandbox — the
+fence, not the offline host, is what blocks the direct connect, and
+an admitted CONNECT carries a verified TLS exchange to a real
+upstream. See the 2026-11-16 entry in
+[`egress-validation-log.md`](../egress-validation-log.md); the
+attribution caveat above is kept as the record of what the
+implementing sandbox could prove.
+
 ## Not decided here
 
 - `listen-ports` beyond the existing refusals (listen-ports-only
