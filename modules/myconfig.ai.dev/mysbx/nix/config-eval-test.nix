@@ -805,6 +805,11 @@ let
       host = [
         {
           myconfig.ai.dev.mysbx.podman.enable = true;
+          # A VM backend plus the baked store, so the flavor's disk is
+          # exercised too: `vm.store.enable` needs one VM backend
+          # (the module asserts on it).
+          myconfig.ai.dev.mysbx.krun.enable = true;
+          myconfig.ai.dev.mysbx.vm.store.enable = true;
           myconfig.ai.dev.mysbx.profiles.assistant.extraTools = [ pkgs.hello ];
         }
       ];
@@ -834,6 +839,18 @@ let
         "podman-gvisor"
         "podman-krun"
       ];
+      # The baked-store consistency half of the bead: a flavor wrapper
+      # with `vm.store.enable` bakes its OWN store disk from its OWN
+      # toolsEnv (nix/mysbx.nix `storeRootPaths` derives from that
+      # callPackage's toolsEnv), so a `store = "baked"` VM run under
+      # the flavor resolves the profile tools — the flavor's toolsEnv
+      # store path must be among its vmStoreRoots, not the base's.
+      # (Plain list membership, not a substring match: these strings
+      # carry store-path context, which `builtins.match` rejects.)
+      flavorRoots = flavor.passthru.vmStoreRoots;
+      baseToolsRoot = toString base.passthru.toolsEnv;
+      flavorToolsRoot = toString flavor.passthru.toolsEnv;
+      baked = flavor.passthru.vmStoreBaked;
     in
     if builtins.length wrappers != 2 then
       throw "mysbx generated-config test: profiles.assistant did not add a second wrapper next to the base (${toString (builtins.length wrappers)} mysbx packages)"
@@ -849,6 +866,12 @@ let
       throw "mysbx generated-config test: the flavor once entry is not bin/mysbx-assistant-once"
     else if leaked != [ ] then
       throw "mysbx generated-config test: the flavor wrapper enables a podman backend (${builtins.concatStringsSep ", " leaked})"
+    else if !baked then
+      throw "mysbx generated-config test: the profile host scenario lost its baked store disk"
+    else if !(builtins.elem flavorToolsRoot flavorRoots) then
+      throw "mysbx generated-config test: the flavor's baked store disk does not carry the flavor's own toolsEnv"
+    else if builtins.elem baseToolsRoot flavorRoots then
+      throw "mysbx generated-config test: the flavor's baked store disk carries the BASE toolsEnv instead of its own"
     else if !(builtins.elem "bubblewrap" flavorBackends && builtins.elem "nono" flavorBackends) then
       throw "mysbx generated-config test: the flavor wrapper lost the always-on backends"
     else if

@@ -23,6 +23,10 @@
             # podman.enable = true;
             krun.enable = true;
             vm.store.enable = true;
+            # The assistant flavor (bd myconfig-xl93): a `mysbx-assistant`
+            # launcher with himalaya on the sandbox PATH, for agents that
+            # read the Maildir a repo sidecar mounts read-only.
+            profiles.assistant.extraTools = [ pkgs.himalaya ];
             microvm-qemu.enable = true;
             microvm-ch.enable = true;
           };
