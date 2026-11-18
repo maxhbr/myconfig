@@ -42,7 +42,7 @@ final: prev: {
         rev = "b1b561450fc2f05b9626b7e269c08fbc9f5029ff";
         hash = "sha256-wPivgyA8tRo5yn/U7W/aLGMzOA8EOP8TVo2Sk1k+02U=";
       };
-      vendorHash = "sha256-aUoxxXbADItHBjkyg50r087Z/NQBIIR1AtTleD3rxdY=";
+      vendorHash = "sha256-NRSkBpROIRLFT7IsbHxKRAWZL+hG37Tly5pxRh7wZdo=";
       patches = [ ];
     })).overrideAttrs
       (old: {
