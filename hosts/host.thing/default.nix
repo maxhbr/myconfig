@@ -102,6 +102,12 @@
     networking.useDHCP = false;
     system.nixos.tags = config.myconfig.hardware.gpu.variant;
 
+    nix.gc.dates = "daily";
+    myconfig.nix.gc = {
+      minFree = 20 * 1024 * 1024 * 1024;
+      maxFree = 60 * 1024 * 1024 * 1024;
+    };
+
     myconfig = {
       persistence.impermanence = {
         enable = true;

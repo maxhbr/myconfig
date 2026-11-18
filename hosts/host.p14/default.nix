@@ -77,6 +77,11 @@
     networking.interfaces.wlp0s20f3.useDHCP = true;
     # networking.interfaces.enp82s0u2u1u2.useDHCP = true;
 
+    myconfig.nix.gc = {
+      minFree = 20 * 1024 * 1024 * 1024;
+      maxFree = 60 * 1024 * 1024 * 1024;
+    };
+
     myconfig = {
       headless.enable = true;
       desktop = {

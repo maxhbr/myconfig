@@ -77,6 +77,16 @@
   config = {
     networking.hostName = "workstation";
     networking.hostId = "864d73f4";
+
+    nix.gc = {
+      dates = "daily";
+      options = "--delete-older-than 7d";
+    };
+    myconfig.nix.gc = {
+      minFree = 20 * 1024 * 1024 * 1024;
+      maxFree = 60 * 1024 * 1024 * 1024;
+    };
+
     myconfig = {
       desktop = {
         enable = true;

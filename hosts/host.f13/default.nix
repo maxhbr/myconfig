@@ -320,6 +320,12 @@ in
       #   metric 200
       #       '';
     };
+
+    myconfig.nix.gc = {
+      minFree = 20 * 1024 * 1024 * 1024;
+      maxFree = 60 * 1024 * 1024 * 1024;
+    };
+
     myconfig = {
       # f13 docks into a station whose USB-Ethernet NIC lands on the same
       # subnet as the built-in Wi-Fi; prefer the wired link to avoid
