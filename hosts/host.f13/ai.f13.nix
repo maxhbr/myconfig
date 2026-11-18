@@ -38,6 +38,8 @@
 
           thinkrail.enable = true;
 
+          defaultHugeModel = "GLM-5.3";
+
           # microvm = {
           #   enable = false;
           #   enabledAgents = [

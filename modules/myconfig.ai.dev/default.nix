@@ -20,10 +20,26 @@
 }:
 let
   callLib = file: import file { inherit lib pkgs; };
+
+  cfg = config.myconfig.ai.dev;
 in
 {
-  options.myconfig.ai.dev.enable =
-    lib.mkEnableOption "myconfig.ai.dev (AI developer tooling: agent CLIs, sandbox tiers, mysbx, workmux, skills, hermes-agent)";
+  options.myconfig.ai.dev = {
+    enable =
+      lib.mkEnableOption "myconfig.ai.dev (AI developer tooling: agent CLIs, sandbox tiers, mysbx, workmux, skills, hermes-agent)";
+
+    defaultHugeModel = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = ''
+        Model name of the default huge (hosted flagship) model routed
+        through the LiteLLM proxy. Used as the umbrella default for the
+        agent tools' model options (pi-coding-agent's `defaultModel`,
+        hermes' `model.default`). Null (default) leaves those unset, so
+        hosts that want one set it explicitly.
+      '';
+    };
+  };
 
   imports = [
     ./agentsMd
@@ -73,13 +89,15 @@ in
         pi-coding-agent = {
           enable = true;
           litellmUrl = "http://localhost:4000";
-          # pi's startup model, persisted in nix: without it a fresh session
-          # falls through pi's resolution chain to the built-in per-provider
-          # fallback table, whose first entry is anthropic's current flagship
-          # Opus. The provider id is `<hostname>-litellm` (see the module).
-          defaultModel.provider = "${config.networking.hostName}-litellm";
-          defaultModel.model = "GLM-5.3";
+          defaultModel = lib.mkIf (cfg.defaultHugeModel != null) {
+            provider = "${config.networking.hostName}-litellm";
+            model = cfg.defaultHugeModel;
+          };
           tokenSpeed.enable = true;
+        };
+        hermes = {
+          model.default =
+            lib.mkIf (cfg.defaultHugeModel != null) (lib.mkDefault cfg.defaultHugeModel);
         };
         claude-code.enable = true;
         codex.enable = true;
