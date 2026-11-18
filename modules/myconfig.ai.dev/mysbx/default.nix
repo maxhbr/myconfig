@@ -460,20 +460,26 @@ let
   // lib.optionalAttrs (cfg.config.scratchSize != null) { "scratch-size" = cfg.config.scratchSize; }
   // lib.optionalAttrs (cfg.config.cpus != null) { inherit (cfg.config) cpus; }
   // lib.optionalAttrs (cfg.config.pidsLimit != null) { pids-limit = cfg.config.pidsLimit; };
-  # The wrapper factory (`mkWrapper <extraTools> <backends> [binName]`):
-  # ONE call site of ./nix/mysbx.nix for the base `package` AND every
-  # flavor of `profiles.<name>` below — a flavor shares every backend
-  # pin with the base by construction and can never drift from it
-  # (enabled backends, CA bundle, vmStoreBaked/vmStoreExtraRoots,
-  # waypipe, mux entries). Only the three arguments vary:
+  # The wrapper factory (`mkWrapper <extraTools> <backends> <binName>
+  # <vmStoreBaked>`): ONE call site of ./nix/mysbx.nix for the base
+  # `package` AND every flavor of `profiles.<name>` below — a flavor
+  # shares every backend pin with the base by construction and can
+  # never drift from it (enabled backends, CA bundle,
+  # vmStoreExtraRoots, waypipe, mux entries). Four arguments vary:
   # `extraTools` (the sandbox `PATH` closure), `backends` (the
   # MYSBX_ENABLED_BACKENDS pin — a flavor pins the host's set WITHOUT
-  # the podman backends) and `binName` (a flavor's binary is
-  # `mysbx-<profile>`, so it does not collide in home.packages).
+  # the podman backends), `binName` (a flavor's binary is
+  # `mysbx-<profile>`, so it does not collide in home.packages) and
+  # `vmStoreBaked` — the base follows `vm.store.enable`, a FLAVOR is
+  # always `false`: a per-flavor baked store disk would multiply the
+  # ~7 GiB erofs image per profile, so a VM run under a flavor keeps
+  # the host-store share (`store` resolves to "host") and an explicit
+  # `store = "baked"` is refused at launch (no MYSBX_VM_STORE_DISK pin
+  # to resolve it through).
   mkWrapper =
-    extraTools: backends: binName:
+    extraTools: backends: binName: vmStoreBaked:
     pkgs.callPackage ./nix/mysbx.nix {
-      inherit extraTools binName;
+      inherit extraTools binName vmStoreBaked;
       enabledBackends = backends;
       inherit muxEntries;
       alacritty = cfg.terminal.package;
@@ -510,13 +516,6 @@ let
       # MYSBX_KRUN_LAUNCHER/MYSBX_KRUN_ROOTFS.
       krunLauncher = if cfg.krun.enable then cfg.krun.direct.launcher else null;
       krunRootfs = if cfg.krun.enable then cfg.krun.direct.rootfs else null;
-      # The guest-own nix store disk (docs/design/guest-store.md):
-      # baked and pinned only when the host opts in — the per-run
-      # `store = "baked"` config key consumes the pin. The disk
-      # carries the guest nix wrappers too when `krun.nix.enable`
-      # bakes them (their store paths are invisible to a baked run
-      # otherwise — no host-store share to resolve through).
-      vmStoreBaked = cfg.vm.store.enable;
       # `gitDefaultDiff` (bd myconfig-w4zc): the wrapper pins it as
       # GIT_EXTERNAL_DIFF whenever Home Manager's difftastic runs in
       # external/both git mode, so the baked disk must carry its
@@ -559,8 +558,12 @@ let
   # backend pins as the base (`mkWrapper`), with the profile's
   # `extraTools` on the sandbox PATH and the podman backends
   # REFUSED — see the `profiles` option for why the podman backends
-  # cannot have flavors. Built lazily (only when `profiles != {}`),
-  # like every other option consumer.
+  # cannot have flavors, and why a flavor never bakes a store disk
+  # (`vmStoreBaked = false`: the ~7 GiB erofs image per profile would
+  # be the one order-of-magnitude multiplier of a flavor's closure;
+  # a VM run under a flavor keeps the host-store share and an explicit
+  # `store = "baked"` is refused instead). Built lazily (only when
+  # `profiles != {}`), like every other option consumer.
   # A profile name becomes a binary name interpolated into the
   # wrapper's postBuild shell script (binName), so anything outside
   # `[a-z][a-z0-9-]*` is an eval-time error, not a build-time injection
@@ -577,7 +580,7 @@ let
       mkWrapper (cfg.extraTools ++ profile.extraTools) (lib.subtractLists [
         "podman-gvisor"
         "podman-krun"
-      ] enabledBackends) "mysbx-${name}"
+      ] enabledBackends) "mysbx-${name}" false
   ) cfg.profiles;
 in
 {
@@ -601,8 +604,8 @@ in
       # passed as `enabledBackends`). `null` pins nothing — the contract
       # nix/mysbx.nix already documents for a hand-overridden image or a
       # host that runs `bubblewrap`/`nono` only.
-      default = mkWrapper cfg.extraTools enabledBackends "mysbx";
-      defaultText = literalExpression "mkWrapper cfg.extraTools enabledBackends \"mysbx\" — the shared ./nix/mysbx.nix pin block of `mkWrapper` in this module's let";
+      default = mkWrapper cfg.extraTools enabledBackends "mysbx" cfg.vm.store.enable;
+      defaultText = literalExpression "mkWrapper cfg.extraTools enabledBackends \"mysbx\" cfg.vm.store.enable — the shared ./nix/mysbx.nix pin block of `mkWrapper` in this module's let";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -682,12 +685,16 @@ in
         per-profile image would either bake the profile tools into
         the shared image for everyone (defeating the point) or fork
         per-profile images (duplicated pinning, image loading and
-        drift). `bubblewrap`, `nono`, `krun`, `microvm-qemu` and
+        drift). For the same cost reason a flavor never builds a
+        guest-own store disk (`vm.store.enable` is honored by the
+        BASE wrapper only): the ~7 GiB erofs image per profile would
+        be the one order-of-magnitude multiplier of a flavor's
+        closure. `bubblewrap`, `nono`, `krun`, `microvm-qemu` and
         `microvm-ch` keep working: they resolve the sandbox `PATH`
-        from the launcher's own pins, and a VM run's baked store disk
-        is built from the profile's own closure
-        (`vm.store.enable`), so `store = "baked"` under a profile
-        carries the profile tools consistently.
+        from the launcher's own pins; a VM run under a profile
+        always resolves `store` to `"host"`, and an explicit
+        `store = "baked"` is refused at launch (the wrapper pins no
+        `MYSBX_VM_STORE_DISK`).
       '';
     };
 

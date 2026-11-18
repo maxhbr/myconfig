@@ -69,7 +69,9 @@ and a different tool closure — the host sets
 picks the launcher (`mysbx-assistant` for a sandbox with e.g.
 himalaya on the PATH). The sidecar is shared by all launchers, so
 per-repo mounts stay per-repo; the podman backends are refused under
-a profile (they run one shared OCI image).
+a profile (they run one shared OCI image), and a profile never builds
+a guest-own store disk — a VM run under a profile keeps the
+host-store share, an explicit `store = "baked"` is refused.
 
 `mysbx --session <name>` (global flag, run forms only) switches the
 run to the CLONE session of that name

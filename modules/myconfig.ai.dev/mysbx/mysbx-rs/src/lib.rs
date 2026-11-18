@@ -4385,8 +4385,10 @@ fn sandbox_pipeline(
                         );
                         eprintln!(
                             "  the Nix wrapper pins MYSBX_VM_STORE_DISK when the host \
-                             builds the guest-own store disk; an unwrapped build sets none — \
-                             write `store = \"host\"` for the shared store"
+                             builds the guest-own store disk; a PROFILE launcher \
+                             (mysbx-<profile>) never pins one, and an unwrapped \
+                             build sets none — write `store = \"host\"` for the \
+                             shared store"
                         );
                         return EXIT_INFRASTRUCTURE;
                     }
