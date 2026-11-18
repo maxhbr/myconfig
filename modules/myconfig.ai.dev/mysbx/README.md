@@ -62,6 +62,15 @@ exit `70`. When the teardown finds a linked worktree with
 uncommitted changes it keeps the whole temp root and names it on
 stdout (`## mysbx-once: kept <path>`), so no working tree is lost.
 
+A host may also carry PROFILE launchers `mysbx-<profile>` (bd
+myconfig-xl93): second wrappers with the same backend pins as `mysbx`
+and a different tool closure — the host sets
+`myconfig.ai.dev.mysbx.profiles.<name>.extraTools`, and the operator
+picks the launcher (`mysbx-assistant` for a sandbox with e.g.
+himalaya on the PATH). The sidecar is shared by all launchers, so
+per-repo mounts stay per-repo; the podman backends are refused under
+a profile (they run one shared OCI image).
+
 `mysbx --session <name>` (global flag, run forms only) switches the
 run to the CLONE session of that name
 ([`docs/design/workspace.md`](./docs/design/workspace.md) D1-D5): the
