@@ -460,6 +460,125 @@ let
   // lib.optionalAttrs (cfg.config.scratchSize != null) { "scratch-size" = cfg.config.scratchSize; }
   // lib.optionalAttrs (cfg.config.cpus != null) { inherit (cfg.config) cpus; }
   // lib.optionalAttrs (cfg.config.pidsLimit != null) { pids-limit = cfg.config.pidsLimit; };
+  # The wrapper factory (`mkWrapper <extraTools> <backends> [binName]`):
+  # ONE call site of ./nix/mysbx.nix for the base `package` AND every
+  # flavor of `profiles.<name>` below — a flavor shares every backend
+  # pin with the base by construction and can never drift from it
+  # (enabled backends, CA bundle, vmStoreBaked/vmStoreExtraRoots,
+  # waypipe, mux entries). Only the three arguments vary:
+  # `extraTools` (the sandbox `PATH` closure), `backends` (the
+  # MYSBX_ENABLED_BACKENDS pin — a flavor pins the host's set WITHOUT
+  # the podman backends) and `binName` (a flavor's binary is
+  # `mysbx-<profile>`, so it does not collide in home.packages).
+  mkWrapper =
+    extraTools: backends: binName:
+    pkgs.callPackage ./nix/mysbx.nix {
+      inherit extraTools binName;
+      enabledBackends = backends;
+      inherit muxEntries;
+      alacritty = cfg.terminal.package;
+      shell = cfg.shell.path;
+      podmanImage = if cfg.podman.enable then cfg.podman.image else null;
+      podmanShell = if cfg.podman.enable then cfg.podman.shell else null;
+      podmanPastaSpec = if cfg.podman.enable then cfg.podman.pastaSpec else null;
+      podmanEnv = if cfg.podman.enable then cfg.podman.env else { };
+      # The `network = "proxy-only"` channel pins (../docs/design/
+      # config.md D20, bd myconfig-mo3.2.4): the LiteLLM forwarder's
+      # Unix socket and the port the in-sandbox relay listens on.
+      # Pinned whenever the forwarder's socket half runs — that gate
+      # is `services.litellm.enable`, independent of the podman
+      # backends (the profile runs on plain bubblewrap).
+      egressSocket =
+        if litellmForwarder.unixSocket.enable then
+          "/run/mysbx-egress/${litellmForwarder.unixSocket.name}"
+        else
+          null;
+      egressPort = if litellmForwarder.unixSocket.enable then litellmForwarder.port else null;
+      # The podman-krun runtime (backends.md D2): the backend is
+      # `podman-gvisor` with the runtime swapped, so it rides the
+      # podman flag — the shared image is what makes it runnable.
+      krunRuntime = if cfg.podman.enable then cfg.krun.runtime else null;
+      # The scratch size flows through the generated user config
+      # (`config.scratchSize`, rendered as the TOML `scratch-size`)
+      # since D23 made it a config key: the crate falls back to it
+      # when the env pin is absent. `MYSBX_KRUN_SCRATCH_SIZE` stays
+      # the per-invocation override (`--set-default` semantics in
+      # the shell), never baked here anymore.
+
+      # The direct-libkrun backend (bd myconfig-dak.4): the
+      # launcher and the guest rootfs, pinned as
+      # MYSBX_KRUN_LAUNCHER/MYSBX_KRUN_ROOTFS.
+      krunLauncher = if cfg.krun.enable then cfg.krun.direct.launcher else null;
+      krunRootfs = if cfg.krun.enable then cfg.krun.direct.rootfs else null;
+      # The guest-own nix store disk (docs/design/guest-store.md):
+      # baked and pinned only when the host opts in — the per-run
+      # `store = "baked"` config key consumes the pin. The disk
+      # carries the guest nix wrappers too when `krun.nix.enable`
+      # bakes them (their store paths are invisible to a baked run
+      # otherwise — no host-store share to resolve through).
+      vmStoreBaked = cfg.vm.store.enable;
+      # `gitDefaultDiff` (bd myconfig-w4zc): the wrapper pins it as
+      # GIT_EXTERNAL_DIFF whenever Home Manager's difftastic runs in
+      # external/both git mode, so the baked disk must carry its
+      # store path too — a run with the guest-own store has no
+      # host-store share to resolve it through.
+      vmStoreExtraRoots =
+        lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages
+        ++ lib.optionals hmDifftasticExternal [ gitDefaultDiff ];
+      # The native-qemu backend (backends.md D9, bd myconfig-2l9b):
+      # the launcher, the SHARED guest rootfs and the kernel
+      # libkrun bundles, pinned as MYSBX_MICROVM_QEMU_*.
+      microvmQemuLauncher = if cfg.microvm-qemu.enable then cfg.microvm-qemu.launcher else null;
+      microvmQemuRootfs = if cfg.microvm-qemu.enable then cfg.microvm-qemu.rootfs else null;
+      # The IMAGE FILE, not the kernel package: qemu's -kernel
+      # reads a file (a directory is EISDIR), and doctor's
+      # is-file rule matches only the image (bd myconfig-q3se).
+      microvmQemuKernel = if cfg.microvm-qemu.enable then "${cfg.microvm-qemu.kernel}/bzImage" else null;
+      # Backend-specific env pins (bd myconfig-mzys): the SLiRP
+      # guest's model endpoint, the qemu twin of `podmanEnv`.
+      microvmQemuEnv = if cfg.microvm-qemu.enable then cfg.microvm-qemu.env else { };
+      # The cloud-hypervisor backend (bd myconfig-9wkp.8): the
+      # same three pins over the CH spelling; the kernel is the
+      # SAME image the qemu arm pins (one kernel, both VM
+      # backends, bd myconfig-9wkp.3).
+      microvmChLauncher = if cfg.microvm-ch.enable then cfg.microvm-ch.launcher else null;
+      microvmChRootfs = if cfg.microvm-ch.enable then cfg.microvm-ch.rootfs else null;
+      microvmChKernel = if cfg.microvm-ch.enable then "${cfg.microvm-ch.kernel}/bzImage" else null;
+      microvmChEnv = if cfg.microvm-ch.enable then cfg.microvm-ch.env else { };
+      waypipe = cfg.display.package;
+      # The dtach master of detached runs (docs/design/detach.md
+      # B10): pinned so `--detach` needs no host PATH lookup.
+      dtach = pkgs.dtach;
+      podmanWaypipe = if cfg.podman.enable then cfg.podman.waypipe else null;
+      podmanMuxEntries = if cfg.podman.enable then cfg.podman.muxEntries else { };
+      nono = cfg.nono.package;
+      ssh-keygen = pkgs.openssh;
+    };
+
+  # The flavor wrappers of `profiles.<name>`: each carries the SAME
+  # backend pins as the base (`mkWrapper`), with the profile's
+  # `extraTools` on the sandbox PATH and the podman backends
+  # REFUSED — see the `profiles` option for why the podman backends
+  # cannot have flavors. Built lazily (only when `profiles != {}`),
+  # like every other option consumer.
+  # A profile name becomes a binary name interpolated into the
+  # wrapper's postBuild shell script (binName), so anything outside
+  # `[a-z][a-z0-9-]*` is an eval-time error, not a build-time injection
+  # — `$`, backticks and quotes inside a `"…${binName}…"` would
+  # otherwise expand in the build sandbox. The hyphen cannot start a
+  # name, so `mysbx-<profile>` keeps its two-part shape.
+  validProfileName = name: builtins.match "[a-z][a-z0-9-]*" name != null;
+
+  profileWrappers = lib.mapAttrs (
+    name: profile:
+    if !(validProfileName name) then
+      throw "myconfig.ai.dev.mysbx.profiles: invalid profile name `${name}` — use a lowercase alphanumeric name with internal hyphens (it becomes the bin/mysbx-<profile> binary name)"
+    else
+      mkWrapper (cfg.extraTools ++ profile.extraTools) (lib.subtractLists [
+        "podman-gvisor"
+        "podman-krun"
+      ] enabledBackends) "mysbx-${name}"
+  ) cfg.profiles;
 in
 {
   imports = [ ./podman.nix ];
@@ -482,88 +601,8 @@ in
       # passed as `enabledBackends`). `null` pins nothing — the contract
       # nix/mysbx.nix already documents for a hand-overridden image or a
       # host that runs `bubblewrap`/`nono` only.
-      default = pkgs.callPackage ./nix/mysbx.nix {
-        inherit (cfg) extraTools;
-        inherit muxEntries enabledBackends;
-        alacritty = cfg.terminal.package;
-        shell = cfg.shell.path;
-        podmanImage = if cfg.podman.enable then cfg.podman.image else null;
-        podmanShell = if cfg.podman.enable then cfg.podman.shell else null;
-        podmanPastaSpec = if cfg.podman.enable then cfg.podman.pastaSpec else null;
-        podmanEnv = if cfg.podman.enable then cfg.podman.env else { };
-        # The `network = "proxy-only"` channel pins (../docs/design/
-        # config.md D20, bd myconfig-mo3.2.4): the LiteLLM forwarder's
-        # Unix socket and the port the in-sandbox relay listens on.
-        # Pinned whenever the forwarder's socket half runs — that gate
-        # is `services.litellm.enable`, independent of the podman
-        # backends (the profile runs on plain bubblewrap).
-        egressSocket =
-          if litellmForwarder.unixSocket.enable then
-            "/run/mysbx-egress/${litellmForwarder.unixSocket.name}"
-          else
-            null;
-        egressPort = if litellmForwarder.unixSocket.enable then litellmForwarder.port else null;
-        # The podman-krun runtime (backends.md D2): the backend is
-        # `podman-gvisor` with the runtime swapped, so it rides the
-        # podman flag — the shared image is what makes it runnable.
-        krunRuntime = if cfg.podman.enable then cfg.krun.runtime else null;
-        # The scratch size flows through the generated user config
-        # (`config.scratchSize`, rendered as the TOML `scratch-size`)
-        # since D23 made it a config key: the crate falls back to it
-        # when the env pin is absent. `MYSBX_KRUN_SCRATCH_SIZE` stays
-        # the per-invocation override (`--set-default` semantics in
-        # the shell), never baked here anymore.
-
-        # The direct-libkrun backend (bd myconfig-dak.4): the
-        # launcher and the guest rootfs, pinned as
-        # MYSBX_KRUN_LAUNCHER/MYSBX_KRUN_ROOTFS.
-        krunLauncher = if cfg.krun.enable then cfg.krun.direct.launcher else null;
-        krunRootfs = if cfg.krun.enable then cfg.krun.direct.rootfs else null;
-        # The guest-own nix store disk (docs/design/guest-store.md):
-        # baked and pinned only when the host opts in — the per-run
-        # `store = "baked"` config key consumes the pin. The disk
-        # carries the guest nix wrappers too when `krun.nix.enable`
-        # bakes them (their store paths are invisible to a baked run
-        # otherwise — no host-store share to resolve through).
-        vmStoreBaked = cfg.vm.store.enable;
-        # `gitDefaultDiff` (bd myconfig-w4zc): the wrapper pins it as
-        # GIT_EXTERNAL_DIFF whenever Home Manager's difftastic runs in
-        # external/both git mode, so the baked disk must carry its
-        # store path too — a run with the guest-own store has no
-        # host-store share to resolve it through.
-        vmStoreExtraRoots =
-          lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages
-          ++ lib.optionals hmDifftasticExternal [ gitDefaultDiff ];
-        # The native-qemu backend (backends.md D9, bd myconfig-2l9b):
-        # the launcher, the SHARED guest rootfs and the kernel
-        # libkrun bundles, pinned as MYSBX_MICROVM_QEMU_*.
-        microvmQemuLauncher = if cfg.microvm-qemu.enable then cfg.microvm-qemu.launcher else null;
-        microvmQemuRootfs = if cfg.microvm-qemu.enable then cfg.microvm-qemu.rootfs else null;
-        # The IMAGE FILE, not the kernel package: qemu's -kernel
-        # reads a file (a directory is EISDIR), and doctor's
-        # is-file rule matches only the image (bd myconfig-q3se).
-        microvmQemuKernel = if cfg.microvm-qemu.enable then "${cfg.microvm-qemu.kernel}/bzImage" else null;
-        # Backend-specific env pins (bd myconfig-mzys): the SLiRP
-        # guest's model endpoint, the qemu twin of `podmanEnv`.
-        microvmQemuEnv = if cfg.microvm-qemu.enable then cfg.microvm-qemu.env else { };
-        # The cloud-hypervisor backend (bd myconfig-9wkp.8): the
-        # same three pins over the CH spelling; the kernel is the
-        # SAME image the qemu arm pins (one kernel, both VM
-        # backends, bd myconfig-9wkp.3).
-        microvmChLauncher = if cfg.microvm-ch.enable then cfg.microvm-ch.launcher else null;
-        microvmChRootfs = if cfg.microvm-ch.enable then cfg.microvm-ch.rootfs else null;
-        microvmChKernel = if cfg.microvm-ch.enable then "${cfg.microvm-ch.kernel}/bzImage" else null;
-        microvmChEnv = if cfg.microvm-ch.enable then cfg.microvm-ch.env else { };
-        waypipe = cfg.display.package;
-        # The dtach master of detached runs (docs/design/detach.md
-        # B10): pinned so `--detach` needs no host PATH lookup.
-        dtach = pkgs.dtach;
-        podmanWaypipe = if cfg.podman.enable then cfg.podman.waypipe else null;
-        podmanMuxEntries = if cfg.podman.enable then cfg.podman.muxEntries else { };
-        nono = cfg.nono.package;
-        ssh-keygen = pkgs.openssh;
-      };
-      defaultText = literalExpression "pkgs.callPackage ./nix/mysbx.nix { inherit (cfg) extraTools; inherit muxEntries enabledBackends; alacritty = cfg.terminal.package; shell = cfg.shell.path; podmanImage = if cfg.podman.enable then cfg.podman.image else null; podmanShell = if cfg.podman.enable then cfg.podman.shell else null; podmanPastaSpec = if cfg.podman.enable then cfg.podman.pastaSpec else null; podmanEnv = if cfg.podman.enable then cfg.podman.env else { }; egressSocket = if litellmForwarder.unixSocket.enable then \"/run/mysbx-egress/\${litellmForwarder.unixSocket.name}\" else null; egressPort = if litellmForwarder.unixSocket.enable then litellmForwarder.port else null; krunRuntime = if cfg.podman.enable then cfg.krun.runtime else null; krunLauncher = if cfg.krun.enable then cfg.krun.direct.launcher else null; krunRootfs = if cfg.krun.enable then cfg.krun.direct.rootfs else null; vmStoreBaked = cfg.vm.store.enable; vmStoreExtraRoots = lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages ++ lib.optionals hmDifftasticExternal [ gitDefaultDiff ]; microvmQemuLauncher = if cfg.microvm-qemu.enable then cfg.microvm-qemu.launcher else null; microvmQemuRootfs = if cfg.microvm-qemu.enable then cfg.microvm-qemu.rootfs else null; microvmQemuKernel = if cfg.microvm-qemu.enable then \"${cfg.microvm-qemu.kernel}/bzImage\" else null; microvmQemuEnv = if cfg.microvm-qemu.enable then cfg.microvm-qemu.env else { }; microvmChLauncher = if cfg.microvm-ch.enable then cfg.microvm-ch.launcher else null; microvmChRootfs = if cfg.microvm-ch.enable then cfg.microvm-ch.rootfs else null; microvmChKernel = if cfg.microvm-ch.enable then \"${cfg.microvm-ch.kernel}/bzImage\" else null; microvmChEnv = if cfg.microvm-ch.enable then cfg.microvm-ch.env else { }; waypipe = cfg.display.package; dtach = pkgs.dtach; podmanWaypipe = if cfg.podman.enable then cfg.podman.waypipe else null; podmanMuxEntries = if cfg.podman.enable then cfg.podman.muxEntries else { }; nono = cfg.nono.package; ssh-keygen = pkgs.openssh; }";
+      default = mkWrapper cfg.extraTools enabledBackends "mysbx";
+      defaultText = literalExpression "mkWrapper cfg.extraTools enabledBackends \"mysbx\" — the shared ./nix/mysbx.nix pin block of `mkWrapper` in this module's let";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -591,6 +630,64 @@ in
         Anything listed here is on the PATH of every mysbx payload, so
         the same "security-relevant list, not packaging detail" rule as
         for the baseline closure applies.
+      '';
+    };
+
+    profiles = mkOption {
+      type = types.attrsOf (
+        types.submodule {
+          options.extraTools = mkOption {
+            type = types.listOf types.package;
+            default = [ ];
+            example = literalExpression "[ pkgs.himalaya ]";
+            description = ''
+              Packages appended ON TOP of the base `extraTools` on the
+              sandbox `PATH` of this profile's launcher only — the same
+              security rule as `extraTools` applies: whatever lands here
+              is on the `PATH` of every payload started through
+              `mysbx-<profile>`.
+            '';
+          };
+        }
+      );
+      default = { };
+      example = literalExpression ''
+        {
+          assistant.extraTools = [ pkgs.himalaya ];
+        }
+      '';
+      description = ''
+        Named tool-closure PROFILES: each attribute becomes a second
+        mysbx launcher `mysbx-<profile>` in `home.packages`, built by
+        the SAME wrapper factory as the base `package` (`mkWrapper` in
+        this module's `let`) with the profile's `extraTools` appended
+        to the sandbox `PATH` (`MYSBX_TOOLS_PATH`). The base `mysbx`
+        and its closure stay unchanged.
+
+        There is deliberately no per-run selection mechanism for this
+        (no `tools` config key, no `--profile` flag): `PATH` is
+        infrastructure — `MYSBX_TOOLS_PATH` is pinned per wrapper at
+        build time (D14, ./nix/mysbx.nix) and the sidecar schema has
+        no key for it (D4 forbids evaluated config). A profile IS the
+        launcher: the operator (or the agent harness) picks
+        `mysbx-assistant` over `mysbx`, and the sidecar
+        (`<repo>.mysbx/config.toml`) is shared by all launchers, so
+        per-repo mounts and `[env]` stay per-repo.
+
+        The podman backends (`podman-gvisor`, `podman-krun`) are NOT
+        available under a profile launcher and a selection of one is
+        refused at launch (`--backend podman-gvisor` names a backend
+        the profile wrapper does not enable): they run a SHARED OCI
+        image baked from `podman.imagePackages` for every launcher — a
+        per-profile image would either bake the profile tools into
+        the shared image for everyone (defeating the point) or fork
+        per-profile images (duplicated pinning, image loading and
+        drift). `bubblewrap`, `nono`, `krun`, `microvm-qemu` and
+        `microvm-ch` keep working: they resolve the sandbox `PATH`
+        from the launcher's own pins, and a VM run's baked store disk
+        is built from the profile's own closure
+        (`vm.store.enable`), so `store = "baked"` under a profile
+        carries the profile tools consistently.
       '';
     };
 
@@ -2424,7 +2521,14 @@ in
     );
 
     home-manager.sharedModules = [
-      { home.packages = [ cfg.package ]; }
+      {
+        # The base wrapper plus every flavor of `profiles.<name>`
+        # (bd myconfig-xl93): a flavor's derivation name is the crate's
+        # (`mysbx-0.1.0`) for both — build-pkg-for-host.sh matches on
+        # it — while the BINARIES differ (`mysbx` vs `mysbx-<profile>`),
+        # so the two symlinkJoins never collide in `bin/`.
+        home.packages = [ cfg.package ] ++ builtins.attrValues profileWrappers;
+      }
     ];
 
     # The generated user config is the host-wide layer of `mhuber`, so it

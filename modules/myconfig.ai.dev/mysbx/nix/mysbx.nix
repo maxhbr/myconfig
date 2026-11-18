@@ -263,6 +263,21 @@
   # ../../programs/programs.pi-coding-agent. Same security note as the hardcoded
   # list below: whatever lands here is on the sandbox PATH.
   extraTools ? [ ],
+  # The binary name under $out/bin: "mysbx" for the base wrapper,
+  # "mysbx-<profile>" for a flavor wrapper of `profiles.<name>` in
+  # ../default.nix. The crate builds ONE `bin/mysbx`; this symlinkJoin
+  # mirrors it under the given name so several wrappers — same crate,
+  # different `extraTools` — can sit next to each other in
+  # `home.packages` without a file collision. Everything else (the
+  # pins, the closure, the second `mysbx-once` entry) is identical
+  # shape; `mainProgram` and the fish completions follow the name.
+  #
+  # The once-mode dispatch (src/once.rs `ONCE_ARGV0`) matches the
+  # literal `mysbx-once` basename, so a flavor keeps that name for its
+  # once entry: the MYSBX_ONCE=1 marker the second wrapped program
+  # sets carries the mode without argv[0] (which a makeBinaryWrapper
+  # chain cannot — each `exec` resets it).
+  binName ? "mysbx",
   # The multiplexer entry scripts, keyed by the `multiplexer` value
   # they are the payload of (../docs/design/config.md D17): an attrset
   # like `{ tmux = <drv>; workmux = <drv>; orca = <drv>; }`, built by ../default.nix
@@ -496,6 +511,20 @@
 }:
 
 let
+  # `binName` is interpolated into the postBuild shell script inside
+  # double quotes, so a `$`/backtick/quote in it would expand at build
+  # time. The module layer validates profile names (default.nix
+  # `validProfileName`), but this file is callPackage-able from anywhere
+  # — validate here too, at the same place that interpolates, by routing
+  # every interpolation through this binding (laziness keeps the check
+  # off the unwrapped crate builds of checks.nix that never build the
+  # wrapper).
+  checkedBinName =
+    if builtins.match "[a-z][a-z0-9-]*" binName != null then
+      binName
+    else
+      throw "mysbx.nix: binName `${binName}` must match [a-z][a-z0-9-]* — it is interpolated into the build script";
+
   # The crate's backend universe, the nix-side spelling of
   # mysbx-rs/src/backends.rs's REGISTRY (bd myconfig-9wkp.2):
   # `mysbx-backends-sync-test` (nix/checks.nix) runs the BUILT
@@ -1074,7 +1103,10 @@ symlinkJoin {
   nativeBuildInputs = [ makeBinaryWrapper ];
 
   postBuild = ''
-    wrapProgram "$out/bin/mysbx" \
+    ${lib.optionalString (
+      checkedBinName != "mysbx"
+    ) "mv \"$out/bin/mysbx\" \"$out/bin/${checkedBinName}\""}
+    wrapProgram "$out/bin/${checkedBinName}" \
       --set MYSBX_BWRAP '${bubblewrap}/bin/bwrap' \
       --set MYSBX_SHELL '${if shell != null then shell else "${bash}/bin/bash"}' \
       --set MYSBX_GUI_SHELL '${bash}/bin/sh' \
@@ -1104,8 +1136,11 @@ symlinkJoin {
     # makeBinaryWrapper chain (each `exec` resets it to the literal
     # program path), so the marker is the dispatch. Everything else
     # is inherited from the wrapped `mysbx` beside it: the pins, the
-    # closure, the environment.
-    makeBinaryWrapper "$out/bin/mysbx" "$out/bin/mysbx-once" \
+    # closure, the environment. A flavor's once entry is
+    # `mysbx-<profile>-once` — the marker, not argv[0], is the
+    # dispatch, so any name works and the base wrapper's
+    # `mysbx-once` is not shadowed in home.packages.
+    makeBinaryWrapper "$out/bin/${checkedBinName}" "$out/bin/${checkedBinName}-once" \
       --set MYSBX_ONCE 1
 
     # Hand-written fish tab completion (../mysbx-rs/completions, kept in
@@ -1113,21 +1148,53 @@ symlinkJoin {
     # checks.nix). The crate stays
     # zero-dependency: this is a plain fish script, not clap-generated.
     # The vendor path is the one `installShellFiles --fish` uses and
-    # fish's NixOS integration collects.
-    install -Dm 0644 ${completions} \
-      $out/share/fish/vendor_completions.d/mysbx.fish
-    install -Dm 0644 ${./../mysbx-rs/completions/mysbx-once.fish} \
-      $out/share/fish/vendor_completions.d/mysbx-once.fish
+    # fish's NixOS integration collects. A flavor completes under its
+    # OWN command name (`complete -c <name>`): the base wrapper
+    # installs the maintained sources byte for byte (the checks.nix
+    # sync contract stays on the base spelling), a flavor installs
+    # copies with the command name rewritten (`-c mysbx` →
+    # `-c ${binName}`, the same for the once file).
+    ${
+      if checkedBinName == "mysbx" then
+        ''
+          install -Dm 0644 ${completions} \
+            $out/share/fish/vendor_completions.d/mysbx.fish
+          install -Dm 0644 ${./../mysbx-rs/completions/mysbx-once.fish} \
+            $out/share/fish/vendor_completions.d/mysbx-once.fish
+        ''
+      else
+        ''
+          mkdir -p $out/share/fish/vendor_completions.d
+          sed -e "s/complete -c mysbx\\b/complete -c ${checkedBinName}/" \
+            ${completions} \
+            > $out/share/fish/vendor_completions.d/${checkedBinName}.fish
+          sed -e "s/complete -c mysbx-once/complete -c ${checkedBinName}-once/" \
+            ${./../mysbx-rs/completions/mysbx-once.fish} \
+            > $out/share/fish/vendor_completions.d/${checkedBinName}-once.fish
+        ''
+    }
   '';
 
   meta = {
     description = "My sandboxing tool — a bubblewrap sandbox CLI for coding agents";
-    mainProgram = "mysbx";
+    mainProgram = checkedBinName;
     platforms = lib.platforms.linux;
   };
 
   passthru = {
-    inherit crate toolsEnv sandboxNixConfDir;
+    inherit
+      crate
+      toolsEnv
+      sandboxNixConfDir
+      binName
+      ;
+    # The backends the wrapper pins in MYSBX_ENABLED_BACKENDS (null
+    # for the callPackage default, which pins nothing): the module
+    # layer's `profiles.<name>` gate asserts a flavor wrapper strips
+    # the podman backends, and this is the eval-visible spelling of
+    # that pin (the wrapper binary itself is an ELF — makeBinaryWrapper
+    # embeds the assignments in it — so no check can readFile it).
+    inherit enabledBackends;
     # The nix-side backend universe (the let binding above), exposed
     # for checks.nix's sync test (bd myconfig-9wkp.2).
     inherit backendUniverse;

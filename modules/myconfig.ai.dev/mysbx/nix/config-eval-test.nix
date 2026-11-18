@@ -31,9 +31,14 @@ let
   lib = inputs.nixpkgs.lib;
 
   # The smallest NixOS + Home Manager evaluation that carries the mysbx
-  # module. Nothing here is ever built: the check reads
+  # module. Almost nothing here is ever built: the check reads
   # `xdg.configFile."mysbx/config.toml".source`, which is a
-  # `pkgs.formats.toml` derivation of the generated attrset.
+  # `pkgs.formats.toml` derivation of the generated attrset. The
+  # exceptions are the eval-time gates that `pathExists`/`readFile` a
+  # derivation (the shell-config tree, the profilesGate's wrappers) —
+  # cheap symlinkJoin/buildEnv builds of an already-built crate, forced
+  # because the property under test IS a build output (a mounted tree,
+  # a renamed bin).
   #
   # `myconfig.ai.dev.sandboxTools`
   # (../../sandboxes/myconfig.ai.sandboxTools.nix) is imported next to
@@ -781,6 +786,83 @@ let
     else
       "ok";
 
+  # The profile flavors of `profiles.<name>` (bd myconfig-xl93): a
+  # profile is a SECOND wrapper with the same backend pins and the
+  # profile's `extraTools` on the sandbox `PATH`, refused on the
+  # podman backends. Checked at eval time — the properties are
+  # packages and wrapper pins, not TOML bytes:
+  #   * a profile adds a `mysbx-<profile>` wrapper next to the base
+  #     in `home.packages`, and the base stays alone without profiles;
+  #   * the flavor's `MYSBX_TOOLS_PATH` closure CARRIES the profile
+  #     tool and the base's does not;
+  #   * the flavor's binary is `mysbx-<profile>` and its once entry
+  #     `mysbx-<profile>-once` (the base's `mysbx-once` stays unique);
+  #   * the podman backends are OUT of the flavor's
+  #     MYSBX_ENABLED_BACKENDS pin even on a host that enables them
+  #     (the base keeps them).
+  profilesGate =
+    let
+      host = [
+        {
+          myconfig.ai.dev.mysbx.podman.enable = true;
+          myconfig.ai.dev.mysbx.profiles.assistant.extraTools = [ pkgs.hello ];
+        }
+      ];
+      cfgOf = (evaluated host).myconfig.ai.dev.mysbx;
+      wrappers = builtins.filter (p: p.pname or "" == "mysbx") (
+        (evaluated host).home-manager.users.mhuber.home.packages
+      );
+      base = cfgOf.package;
+      # Matched by the wrapper's own binName, not by list order: the
+      # base is `mysbx`, the flavor `mysbx-assistant`, whichever way
+      # `home.packages` merges them.
+      assistantWrappers = builtins.filter (p: p.passthru.binName == "mysbx-assistant") wrappers;
+      flavor =
+        if builtins.length assistantWrappers == 1 then
+          builtins.head assistantWrappers
+        else
+          throw "mysbx generated-config test: no unique mysbx-assistant flavor wrapper in home.packages";
+      plainWrappers = builtins.filter (p: p.pname or "" == "mysbx") (
+        (evaluated [ ]).home-manager.users.mhuber.home.packages
+      );
+      # The MYSBX_ENABLED_BACKENDS pin, read from passthru (the
+      # wrapper binary is an ELF — makeBinaryWrapper embeds the
+      # assignments — so no check can readFile it).
+      flavorBackends = flavor.passthru.enabledBackends;
+      baseBackends = base.passthru.enabledBackends;
+      leaked = builtins.filter (b: builtins.elem b flavorBackends) [
+        "podman-gvisor"
+        "podman-krun"
+      ];
+    in
+    if builtins.length wrappers != 2 then
+      throw "mysbx generated-config test: profiles.assistant did not add a second wrapper next to the base (${toString (builtins.length wrappers)} mysbx packages)"
+    else if builtins.length plainWrappers != 1 then
+      throw "mysbx generated-config test: a host without profiles changed the wrapper count (${toString (builtins.length plainWrappers)})"
+    else if !(builtins.pathExists "${flavor.passthru.toolsEnv}/bin/hello") then
+      throw "mysbx generated-config test: the profile tool is not on the flavor's sandbox PATH"
+    else if builtins.pathExists "${base.passthru.toolsEnv}/bin/hello" then
+      throw "mysbx generated-config test: the profile tool leaked into the BASE sandbox PATH"
+    else if !(builtins.pathExists "${flavor}/bin/mysbx-assistant") then
+      throw "mysbx generated-config test: the flavor binary is not bin/mysbx-assistant"
+    else if !(builtins.pathExists "${flavor}/bin/mysbx-assistant-once") then
+      throw "mysbx generated-config test: the flavor once entry is not bin/mysbx-assistant-once"
+    else if leaked != [ ] then
+      throw "mysbx generated-config test: the flavor wrapper enables a podman backend (${builtins.concatStringsSep ", " leaked})"
+    else if !(builtins.elem "bubblewrap" flavorBackends && builtins.elem "nono" flavorBackends) then
+      throw "mysbx generated-config test: the flavor wrapper lost the always-on backends"
+    else if
+      !(builtins.all (b: builtins.elem b baseBackends) [
+        "bubblewrap"
+        "nono"
+        "podman-gvisor"
+        "podman-krun"
+      ])
+    then
+      throw "mysbx generated-config test: the BASE wrapper lost the podman backends the host enables"
+    else
+      "ok";
+
 in
 pkgs.runCommand "mysbx-generated-config-test"
   {
@@ -826,6 +908,7 @@ pkgs.runCommand "mysbx-generated-config-test"
       shellGate
       shellRuntimeGate
       shellConfigTree
+      profilesGate
       ;
     nativeBuildInputs = with pkgs; [
       fish
@@ -1006,6 +1089,9 @@ pkgs.runCommand "mysbx-generated-config-test"
 
     [ "$shellRuntimeGate" = ok ] \
       || { echo "mysbx generated-config test: shell runtime gate: $shellRuntimeGate" >&2; exit 1; }
+
+    [ "$profilesGate" = ok ] \
+      || { echo "mysbx generated-config test: profiles gate: $profilesGate" >&2; exit 1; }
 
     # 8. the sandbox identity segment of the right prompt. Run fish for
     #    real: the block is gated on a RUNTIME variable, so reading the
