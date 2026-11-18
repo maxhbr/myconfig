@@ -260,3 +260,12 @@ policy. Use a VM for guest-kernel compatibility, with explicit store,
 scratch and image/rootfs provisioning choices. Do not retire
 `podman-krun` based on the stale blanket parity or performance claims in
 the earlier comparison.
+
+For embedded development that needs serial device access (flashing,
+console observation, debug shells), see
+[design/serial-forward.md](design/serial-forward.md): ser2net on the
+host exposes any `/dev/tty*` as a TCP port, and every mysbx backend
+reaches it — bubblewrap shares the host netns directly, VMs reach it
+through SLiRP/passt at the `10.0.2.2` gateway address. Direct
+`/dev/tty*` bind (bubblewrap/nono only) is an alternative when you do
+not want the ser2net dependency.
