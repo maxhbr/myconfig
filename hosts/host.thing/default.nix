@@ -64,6 +64,7 @@
     ./services.open-webui.nix
     # ./services.qdrant.nix
     ./services.litellm.nix
+    ./services.ser2net.nix
     ./services.orca.nix
     ./specialisation.nix
     ./hardware.Radeon8060S.nix
@@ -162,6 +163,14 @@
           vm.store.enable = true;
           microvm-qemu.enable = true;
           microvm-ch.enable = true;
+          # Serial console access against the host's ser2net forwarding
+          # (host.thing.ser2net, default port 20108):
+          #   telnet 127.0.0.1 20108  (bubblewrap/nono/krun)
+          #   telnet 10.0.2.2 20108  (microvm-qemu/microvm-ch)
+          extraTools = [
+            pkgs.inetutils # telnet
+            pkgs.socat
+          ];
         };
         dev.lmstudio = {
           enable = true;
@@ -185,6 +194,15 @@
         core.enable = true;
         difftastic.enable = true;
         rust.enable = true;
+      };
+      host.thing.ser2net = {
+        enable = true;
+        ports = [
+          {
+            port = 20108;
+            device = "/dev/ttyACM0";
+          }
+        ];
       };
       virtualisation.enable = true;
     };

@@ -712,6 +712,47 @@ attack surface, so a host opts in. The `/dev/shm` tmpfs the browser
 needs is part of the base binds for every run (bubblewrap's `--dev`
 creates none), not something this option adds.
 
+## Serial device forwarding (embedded development)
+
+None of the mysbx VM backends can pass a raw `/dev/tty*` character
+device into the guest. For embedded tooling that needs serial access
+(Zephyr console output, `west flash` serial logging, OpenOCD over
+UART), run [ser2net](https://cminyard.github.io/ser2net/) on the host.
+Upstream NixOS has no `services.ser2net` module; host `thing` ships a
+local one
+(`hosts/host.thing/services.ser2net.nix`, option
+`myconfig.host.thing.ser2net`) that generates the ser2net 4.x YAML
+config:
+
+```nix
+myconfig.host.thing.ser2net = {
+  enable = true;
+  ports = [ { port = 20108; device = "/dev/ttyACM0"; } ];
+};
+```
+
+ser2net binds a TCP port on `127.0.0.1` and forwards it to the serial
+device. The sandbox dials that port as a plain TCP client — every
+backend can reach it:
+
+- **bubblewrap / nono / krun** — `127.0.0.1` is the host's loopback
+  (shared netns).
+- **microvm-qemu / microvm-ch** — dial `10.0.2.2:20108` (SLiRP/passt
+  gateway forwards to host loopback).
+- **podman-gvisor / podman-krun** — pasta/TSI maps the guest's
+  `127.0.0.1` to host loopback.
+
+Connect with `telnet 127.0.0.1 20108` (or `telnet 10.0.2.2 20108` on
+microvm backends) to observe serial output or interact with a target
+shell. The `telnet` client comes from `pkgs.inetutils` — host `thing`
+adds `inetutils` and `socat` to the sandbox `extraTools`.
+For full details see
+[docs/design/serial-forward.md](./docs/design/serial-forward.md).
+
+Direct `/dev/tty*` bind (`--bind /dev/ttyACM0 /dev/ttyACM0`) is
+available on bubblewrap and nono only and needs the user in the
+`dialout`/`uucp` group — ser2net avoids both requirements.
+
 ## Integrated coding agents
 `pi` ([`programs.pi-coding-agent`](../../programs/programs.pi-coding-agent/default.nix)) is
 the first coding agent integrated with mysbx: on hosts where both features are
