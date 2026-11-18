@@ -18,13 +18,17 @@
 #      (which bake a package's `/bin` into the shared image; nothing from the
 #      host store is mounted there).
 #   2. `bin/hermes` of that package is a launcher (`hermes-mysbx-seed-config`)
-#      that writes a credentials-free `config.yaml` into `$HERMES_HOME` when
-#      there is none, then execs the upstream CLI. Seeding from the launcher
-#      is the same mechanism `../programs/programs.claude-code/` uses: the
-#      sandbox home is a tmpfs, so a store-mounted config file would be
-#      either invisible (podman), read-only (`/model`, `config set` would
-#      fail like bd myconfig-j6i), or shown as the first-run wizard on every
-#      launch.
+#      that seeds a credentials-free `config.yaml` into `$HERMES_HOME` when
+#      there is none, and otherwise REPAIR-MERGES the LiteLLM model route
+#      back into an existing config (./seed-cli-config.nix — hermes itself
+#      (`hermes setup`/`migrate`) and the aoe hook installer rewrite the
+#      persisted config and can drop the route; a seed-only launcher could
+#      never heal that). Then it execs the upstream CLI. Seeding from the
+#      launcher is the same mechanism `../programs/programs.claude-code/`
+#      uses: the sandbox home is a tmpfs, so a store-mounted config file
+#      would be either invisible (podman), read-only (`/model`, `config
+#      set` would fail like bd myconfig-j6i), or shown as the first-run
+#      wizard on every launch.
 #   3. `.hermes` as a `state-dirs` entry (`../../mysbx/docs/design/config.md`
 #      D15): sessions, memories and the seeded config persist per repository
 #      in `<repo>.mysbx/state/.hermes/` instead of dying with the tmpfs home.
@@ -32,6 +36,8 @@
 #      write there — which is why the seed carries only a placeholder key
 #      (`local-key`, the value the host backends use for the keyless loopback
 #      proxy); the real upstream credential stays in the host LiteLLM proxy.
+#      The repair-merge never overrides a non-empty `model.default`, so a
+#      `hermes model` choice made in a sandbox survives later launches.
 #   4. the podman backends get `CUSTOM_BASE_URL` (`myconfig.ai.dev.mysbx.
 #      podman.env`), because a container's loopback is its own: hermes resolves
 #      the endpoint as `CUSTOM_BASE_URL` → `config.yaml base_url` →
@@ -50,40 +56,20 @@ let
   osconfig = config;
   cfg = config.myconfig.ai.dev.hermes;
 
-  yamlFormat = pkgs.formats.yaml { };
-
   hermesPkg = inputs.hermes-agent.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
-  # The seeded `$HERMES_HOME/config.yaml`: model route only, so every other
-  # key keeps the upstream default. `provider = "custom"` + a non-empty
-  # `base_url`/`api_key` is also what `main.py` `_has_any_provider_configured`
-  # accepts, so no first-run setup wizard appears in a fresh sandbox home.
-  seedConfig = yamlFormat.generate "hermes-mysbx-config.yaml" {
-    model = {
-      default = cfg.model.default;
-      provider = "custom";
-      base_url = cfg.model.baseUrl;
-      api_key = "local-key";
-    };
+  seeding = import ./seed-cli-config.nix {
+    inherit lib pkgs;
+    baseUrl = cfg.model.baseUrl;
+    apiKey = "local-key";
+    defaultModel = cfg.model.default;
+    # No named `providers` entry in the sandbox: the minimal `model:` route
+    # is all `_has_any_provider_configured` needs, and the picker's
+    # `providers` view would just duplicate the LiteLLM model list on every
+    # launch's merge.
+    providerEntry = null;
   };
-
-  seed = pkgs.writeShellApplication {
-    name = "hermes-mysbx-seed-config";
-    runtimeInputs = [ pkgs.coreutils ];
-    text = ''
-      hermes_home="''${HERMES_HOME:-$HOME/.hermes}"
-      config="$hermes_home/config.yaml"
-
-      # Never touch a config the payload (or an earlier run, via the
-      # `state-dirs` store) already has: only a fresh home is seeded.
-      if [ -e "$config" ]; then
-        exit 0
-      fi
-
-      mkdir -p "$hermes_home"
-      (umask 077 && cat ${seedConfig} >"$config")
-    '';
-  };
+  inherit (seeding) seed;
 
   # `bin/hermes` runs the seeder first, then execs the upstream binary with
   # the original argv0. `hermes-agent` / `hermes-acp` stay untouched: the

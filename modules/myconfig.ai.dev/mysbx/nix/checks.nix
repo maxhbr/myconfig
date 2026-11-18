@@ -2151,13 +2151,17 @@ in
   #
   #   * the launcher is on the sandbox PATH AND baked into the podman image
   #     (the container backends run the image's own `/bin`, so a PATH-only
-  #     entry would be invisible there), `.hermes` is a `state-dirs` entry, and
-  #     the podman backends carry `CUSTOM_BASE_URL` — a container's loopback is
-  #     its own, so the seeded host URL is wrong there;
+  #     entry would be invisible there), `.hermes` is a `state-dirs` entry,
+  #     and the podman backends carry `CUSTOM_BASE_URL` — a container's
+  #     loopback is its own, so the seeded host URL is wrong there;
   #   * the seed itself: a FRESH home gets a config naming the LiteLLM route
   #     and the placeholder key (so no first-run wizard appears), and an
-  #     EXISTING config is left byte-identical (the payload's own `hermes
-  #     model` must survive across runs through the `state-dirs` store).
+  #     EXISTING config is REPAIR-MERGED: the route is re-asserted (hermes
+  #     itself and the aoe hook installer rewrite the persisted config and
+  #     can drop it — the seed-only contract could never heal that, bd
+  #     myconfig-…), while a user-set `model.default` (the payload's own
+  #     `hermes model` choice, persisted through the `state-dirs` store) and
+  #     any other keys survive untouched.
   mysbx-hermes-test =
     let
       lib = inputs.nixpkgs.lib;
@@ -2209,44 +2213,61 @@ in
         ];
       }
       ''
-        fail() {
-          echo "mysbx-hermes-test: $*" >&2
-          exit 1
-        }
+                fail() {
+                  echo "mysbx-hermes-test: $*" >&2
+                  exit 1
+                }
 
-        [ "$evalGate" = ok ] || { echo "mysbx-hermes-test: eval gate: $evalGate" >&2; exit 1; }
+                [ "$evalGate" = ok ] || { echo "mysbx-hermes-test: eval gate: $evalGate" >&2; exit 1; }
 
-        # The launcher runs the seeder BEFORE the upstream binary: a static
-        # contract, the same shape the claude-code launcher check uses.
-        grep -q "$seed" "$launcher/bin/hermes" \
-          || fail "bin/hermes does not run the config seeder"
-        grep -q 'hermes-upstream' "$launcher/bin/hermes" \
-          || fail "bin/hermes does not exec the upstream binary"
+                # The launcher runs the seeder BEFORE the upstream binary: a static
+                # contract, the same shape the claude-code launcher check uses.
+                grep -q "$seed" "$launcher/bin/hermes" \
+                  || fail "bin/hermes does not run the config seeder"
+                grep -q 'hermes-upstream' "$launcher/bin/hermes" \
+                  || fail "bin/hermes does not exec the upstream binary"
 
-        # A fresh home is seeded with the LiteLLM route and the placeholder
-        # key (the value `_has_any_provider_configured` needs so no
-        # first-run wizard appears).
-        fresh="$(mktemp -d)"
-        HERMES_HOME="$fresh/.hermes" "$seed/bin/hermes-mysbx-seed-config"
-        test -f "$fresh/.hermes/config.yaml" || fail "the seeder wrote no config.yaml"
-        grep -q "base_url: $baseUrl" "$fresh/.hermes/config.yaml" \
-          || fail "the seeded config does not name the LiteLLM route"
-        grep -q 'api_key: local-key' "$fresh/.hermes/config.yaml" \
-          || fail "the seeded config does not carry the placeholder key"
-        grep -q 'default: hermes' "$fresh/.hermes/config.yaml" \
-          || fail "the seeded config does not name the default model"
+                # A fresh home is seeded with the LiteLLM route and the placeholder
+                # key (the value `_has_any_provider_configured` needs so no
+                # first-run wizard appears).
+                fresh="$(mktemp -d)"
+                HERMES_HOME="$fresh/.hermes" "$seed/bin/hermes-mysbx-seed-config"
+                test -f "$fresh/.hermes/config.yaml" || fail "the seeder wrote no config.yaml"
+                grep -q "base_url: $baseUrl" "$fresh/.hermes/config.yaml" \
+                  || fail "the seeded config does not name the LiteLLM route"
+                grep -q 'api_key: local-key' "$fresh/.hermes/config.yaml" \
+                  || fail "the seeded config does not carry the placeholder key"
+                grep -q 'default: hermes' "$fresh/.hermes/config.yaml" \
+                  || fail "the seeded config does not name the default model"
 
-        # An existing config (the payload's own, persisted in the sidecar
-        # store) is never rewritten.
-        printf 'model:\n  default: mine\n' > "$fresh/.hermes/config.yaml"
-        HERMES_HOME="$fresh/.hermes" "$seed/bin/hermes-mysbx-seed-config"
-        grep -q 'default: mine' "$fresh/.hermes/config.yaml" \
-          || fail "the seeder overwrote an existing config.yaml"
-        if grep -q 'local-key' "$fresh/.hermes/config.yaml"; then
-          fail "the seeder appended to an existing config.yaml"
-        fi
+                # An existing config (the payload's own, persisted in the sidecar
+                # store) is repair-merged: the LiteLLM route is re-asserted, a
+                # user-set `model.default` survives, and no other key is touched.
+                printf 'model:\n  default: mine\n' > "$fresh/.hermes/config.yaml"
+                HERMES_HOME="$fresh/.hermes" "$seed/bin/hermes-mysbx-seed-config"
+                grep -q 'default: mine' "$fresh/.hermes/config.yaml" \
+                  || fail "the seeder overwrote the user's model choice"
+                grep -q "base_url: $baseUrl" "$fresh/.hermes/config.yaml" \
+                  || fail "the seeder did not re-assert the LiteLLM route"
+                grep -q 'api_key: local-key' "$fresh/.hermes/config.yaml" \
+                  || fail "the seeder did not re-assert the placeholder key"
 
-        mkdir "$out"
+                # The repair also heals the real-world corruption shape: a config
+                # rewritten by hermes' own setup/migration (`model` as the plain
+                # DEFAULT_CONFIG string) with foreign keys (aoe's `hooks:`) inside —
+                # the route must come back and the other keys must stay.
+                printf 'model: ""\nproviders: {}\nhooks:\n  pre_llm_call:\n  - command: "sh -c true"
+        ' \
+                  > "$fresh/.hermes/config.yaml"
+                HERMES_HOME="$fresh/.hermes" "$seed/bin/hermes-mysbx-seed-config"
+                grep -q "base_url: $baseUrl" "$fresh/.hermes/config.yaml" \
+                  || fail "the seeder did not heal a wiped model route"
+                grep -q 'default: hermes' "$fresh/.hermes/config.yaml" \
+                  || fail "the healed config does not name the default model"
+                grep -q 'command: ' "$fresh/.hermes/config.yaml" \
+                  || fail "the repair dropped a foreign key (hooks)"
+
+                mkdir "$out"
       '';
 
   mysbx-completions =

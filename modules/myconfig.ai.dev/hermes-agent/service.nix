@@ -69,6 +69,50 @@ let
   };
   inherit (shared) hermesServiceCfg;
   cfg = config.myconfig.ai.dev.hermes;
+
+  # The host-side CLI launcher: upstream package with the seeding `bin/hermes`
+  # prepended (the same symlinkJoin trick ./mysbx.nix uses for the sandbox
+  # tier; named `hermes-agent-cli-…` to tell it from the mysbx launcher).
+  # `hermes-agent` / `hermes-acp` stay untouched.
+  hermesCliSeeded = pkgs.symlinkJoin {
+    name = "hermes-agent-cli-${lib.getVersion hermesUpstreamPkg}";
+    paths = [ hermesUpstreamPkg ];
+    inherit (hermesUpstreamPkg) meta;
+    postBuild = ''
+      mv "$out/bin/hermes" "$out/bin/.hermes-upstream"
+      cat >"$out/bin/hermes" <<EOF
+      #! ${pkgs.runtimeShell} -e
+      ${lib.getExe cliSeeding.seed} || true
+      exec -a "\$0" "$out/bin/.hermes-upstream" "\$@"
+      EOF
+      chmod +x "$out/bin/hermes"
+    '';
+    passthru.unwrapped = hermesUpstreamPkg;
+  };
+
+  hermesUpstreamPkg = inputs.hermes-agent.packages.${pkgs.stdenv.hostPlatform.system}.default;
+
+  # The host `~/.hermes/config.yaml` seeding (./seed-cli-config.nix for the
+  # merge rules). Unlike the sandbox tier the host launcher ALSO registers
+  # the local LiteLLM proxy as a NAMED provider entry, so the model picker
+  # (`/model`) knows the proxy and its model list — the host config was
+  # previously incomplete: no provider configured at all, and the picker
+  # had no litellm entry.
+  cliSeeding = import ./seed-cli-config.nix {
+    inherit lib pkgs;
+    baseUrl = cfg.model.baseUrl;
+    apiKey = "local-key";
+    defaultModel = cfg.model.default;
+    providerEntry = {
+      key = "${config.networking.hostName}-litellm";
+      name = "LiteLLM (${config.networking.hostName})";
+      models =
+        if config.services.litellm.enable then
+          (lib.unique (lib.map (m: m.model_name) config.services.litellm.settings.model_list))
+        else
+          [ cfg.model.default ];
+    };
+  };
 in
 {
   options.myconfig.ai.dev.hermes = with lib; {
@@ -281,14 +325,21 @@ in
       );
     }
 
-    # CLI tier: the binary for the invoking user, no service.
+    # CLI tier: the binary for the invoking user, no service. The package
+    # is the SEEDED launcher (the host twin of the mysbx one,
+    # ./mysbx.nix + ./seed-cli-config.nix): hermes keeps `config.yaml`,
+    # `.env`, `auth.json`, `state.db` and `sessions/` in ONE root, so the
+    # config cannot be a `home.file` entry — it would fight the CLI's own
+    # writes. Instead `bin/hermes` merges the LiteLLM route and a named
+    # `<hostname>-litellm` provider entry into `~/.hermes/config.yaml` on
+    # every launch (idempotent; a user-set `model.default` and any other
+    # provider entries survive), so a host session knows the local proxy
+    # as a provider and never drops into the first-run wizard.
     (lib.mkIf cfg.enable {
       home-manager.users."${myconfig.user}" =
         { pkgs, ... }:
         {
-          home.packages = [
-            inputs.hermes-agent.packages.${pkgs.stdenv.hostPlatform.system}.default
-          ];
+          home.packages = [ hermesCliSeeded ];
         };
     })
 
