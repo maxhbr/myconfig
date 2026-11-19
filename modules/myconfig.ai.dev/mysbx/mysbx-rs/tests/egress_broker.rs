@@ -435,8 +435,11 @@ fn the_fence_blocks_the_socket_re_aim_rotation_inside_bwrap() {
     // and splices. This test proves the kernel-side half INSIDE the
     // real bubblewrap fence, exactly the way the payload runs:
     //
-    // - IP_TRANSPARENT and TCP_REPAIR fail EPERM (no CAP_NET_ADMIN in
-    //   a bwrap payload, NoNewPrivs set);
+    // - IP_TRANSPARENT and TCP_REPAIR fail EPERM when the runner is
+    //   unprivileged (no CAP_NET_ADMIN in a bwrap payload, NoNewPrivs
+    //   set) — and are ALLOWED when a root runner carries full
+    //   capabilities (bd myconfig-6vem: the EPERM comes from the
+    //   runner, not the fence, and the claim does not rest on it);
     // - IP_FREEBIND is ALLOWED (it is not capability-gated) and the
     //   bind to a non-local source SUCCEEDS — named deliberately, so
     //   the design never rests on "no caps means every spoofing
@@ -491,8 +494,21 @@ fn the_fence_blocks_the_socket_re_aim_rotation_inside_bwrap() {
     );
     eprintln!("rotation probe report: {report}");
     assert!(out.status.success(), "the rotation probe failed: {report}");
-    assert!(report.contains("IP_TRANSPARENT: EPERM"), "{report}");
-    assert!(report.contains("TCP_REPAIR: EPERM"), "{report}");
+    // The two capability-gated setsockopts are judged by the
+    // capability fact the child reports (bd myconfig-6vem): EPERM is
+    // the unprivileged runner's outcome, ALLOWED the root runner's,
+    // and neither spelling carries the security claim — the two
+    // FAILED connects below do, in both cases.
+    if report.contains("caps: NONE") {
+        assert!(report.contains("IP_TRANSPARENT: EPERM"), "{report}");
+        assert!(report.contains("TCP_REPAIR: EPERM"), "{report}");
+    } else if report.contains("caps: PRESENT") {
+        assert!(report.contains("IP_TRANSPARENT: ALLOWED"), "{report}");
+        assert!(report.contains("TCP_REPAIR: ALLOWED"), "{report}");
+    } else {
+        eprintln!("skipping: the probe could not read CapEff: {report}");
+        return;
+    }
     assert!(report.contains("IP_FREEBIND: ALLOWED"), "{report}");
     assert!(
         report.contains("freebind-bind(192.0.2.77): OK"),
@@ -536,17 +552,58 @@ fn fence_child_rotation_probe() {
         fn connect(fd: i32, addr: *const SockaddrIn, len: u32) -> i32;
         fn close(fd: i32) -> i32;
     }
+    // The capability fact the parent conditions its expectations on
+    // (bd myconfig-6vem): read CapEff BEFORE any probe, from the
+    // same /proc the parent mounted for the child. The EPERM the old
+    // test asserted comes from the UNPRIVILEGED runner (empty CapEff
+    // in the user namespace); under a root runner (cargo test as
+    // uid 0, e.g. a container or VM) the setsockopts are allowed —
+    // the two connect outcomes below are what the claim rests on.
+    let cap_eff = std::fs::read_to_string("/proc/self/status")
+        .ok()
+        .and_then(|status| {
+            status
+                .lines()
+                .find(|line| line.starts_with("CapEff:"))
+                .and_then(|line| line.split_once(':'))
+                .map(|(_, value)| value.trim().to_owned())
+        });
+    let caps_absent = match cap_eff.as_deref() {
+        // CapEff is hex (`0000000000000000` when the namespace grants
+        // no capabilities).
+        Some(bits) if u64::from_str_radix(bits, 16).is_ok_and(|v| v == 0) => true,
+        Some(_) => false,
+        None => {
+            println!("caps: UNKNOWN (no CapEff in /proc/self/status)");
+            return;
+        }
+    };
+    if caps_absent {
+        println!("caps: NONE (CapEff {})", cap_eff.expect("read above"));
+    } else {
+        println!("caps: PRESENT (CapEff {})", cap_eff.expect("read above"));
+    }
     // IP_TRANSPARENT=19, IP_FREEBIND=15 (IPPROTO_IP); TCP_REPAIR=19
     // (IPPROTO_TCP).
     let probe = |level: i32, opt: i32, label: &str| {
         let fd = unsafe { socket(AF_INET, SOCK_STREAM, 0) };
         let one: i32 = 1;
         let rc = unsafe { setsockopt(fd, level, opt, &one as *const i32 as *const u8, 4) };
+        // Capture errno BEFORE close(2) can clobber it, and spell the
+        // EPERM the parent asserts on exactly — any other errno stays
+        // visible instead of passing under the wrong name.
+        let errno = if rc != 0 {
+            std::io::Error::last_os_error().raw_os_error().unwrap_or(0)
+        } else {
+            0
+        };
         unsafe { close(fd) };
         if rc == 0 {
             println!("{label}: ALLOWED");
-        } else {
+        } else if errno == 1 {
             println!("{label}: EPERM");
+        } else {
+            println!("{label}: errno {errno}");
         }
     };
     probe(IPPROTO_IP, 19, "IP_TRANSPARENT");
