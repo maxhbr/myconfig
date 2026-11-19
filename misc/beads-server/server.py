@@ -47,6 +47,10 @@ class Watcher:
         self.repo = repo
         self.poll_interval = poll_interval
         self.token = secrets.token_urlsafe(32)
+        # generation identifies THIS server process: a restart resets
+        # the revision counter, and clients must not treat the new
+        # process's revisions as comparable to the old ones
+        self.generation = secrets.token_urlsafe(8)
         self.cache = BdCache(bd_bin, repo)
         self.lock = threading.Lock()
         self._cycle_lock = threading.Lock()  # serializes whole refetches
@@ -65,9 +69,9 @@ class Watcher:
             return "beads-dir-fallback"
 
     def snapshot(self):
-        """Consistent (revision, issues) pair, safe against probe swaps."""
+        """Consistent (generation, revision, issues) triple."""
         with self.lock:
-            return self.cache.revision, self.cache.issues
+            return self.generation, self.cache.revision, self.cache.issues
 
     def fingerprint_changed(self):
         try:
@@ -139,11 +143,12 @@ class Watcher:
     # ------------------------------------------------------------ SSE fan-out
 
     def subscribe(self):
-        """Register an SSE listener entry {q, rev}; rev = snapshot revision."""
+        """Register an SSE listener entry {q, rev, gen}."""
         q = queue.Queue(maxsize=100)
-        entry = {"q": q, "rev": 0}
+        entry = {"q": q, "rev": 0, "gen": None}
         with self.lock:
             entry["rev"] = self.cache.revision
+            entry["gen"] = self.generation
             self.listeners.append(entry)
         return entry
 
@@ -156,12 +161,13 @@ class Watcher:
         with self.lock:
             revision = self.cache.revision
             event = {
+                "generation": self.generation,
                 "revision": revision,
                 "upserted": delta["upserted"],
                 "removed": delta["removed"],
             }
             if delta.get("error"):
-                event = {"revision": revision, "stale": True}
+                event = {"generation": self.generation, "revision": revision, "stale": True}
             else:
                 # derived fields + indices ride along so a patch keeps
                 # the client consistent without an extra round trip
@@ -244,14 +250,17 @@ def make_handler(watcher, allow_write):
                 return
             path = urlparse(self.path).path
             if path == "/api/beads":
-                revision, issues = watcher.snapshot()
-                self._send_json({"revision": revision, "issues": issues})
+                generation, revision, issues = watcher.snapshot()
+                self._send_json(
+                    {"generation": generation, "revision": revision, "issues": issues}
+                )
             elif match := re.match(r"^/api/beads/issue/([^/]+)$", path):
                 self._send_issue(unquote(match.group(1)))
             elif path == "/api/health":
                 with watcher.lock:
                     payload = {
                         "status": "ok",
+                        "generation": watcher.generation,
                         "revision": watcher.cache.revision,
                         "issues": len(watcher.cache.issues),
                         "bd_mode": watcher.bd_mode,
@@ -262,6 +271,7 @@ def make_handler(watcher, allow_write):
             elif path == "/api/indices":
                 with watcher.lock:
                     payload = watcher.cache.indices_payload()
+                    payload["generation"] = watcher.generation
                 self._send_json(payload)
             elif path == "/api/events":
                 self._send_events()
@@ -288,6 +298,7 @@ def make_handler(watcher, allow_write):
                 client_rev = int(query.get("rev", ["0"])[0])
             except ValueError:
                 client_rev = 0
+            client_gen = query.get("gen", [""])[0]
             entry = watcher.subscribe()
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
@@ -305,13 +316,16 @@ def make_handler(watcher, allow_write):
                     )
 
             try:
-                revision, issues = watcher.snapshot()
-                if client_rev and client_rev != revision:
-                    # gap (missed patches) or server restart (rewound
-                    # revision) — either way the client must refetch
-                    send("reset", {"revision": revision})
+                generation, revision, issues = watcher.snapshot()
+                if (
+                    client_gen and client_gen != generation
+                ) or (client_rev and client_rev != revision):
+                    # foreign generation (server restarted, revisions
+                    # not comparable) or revision gap (missed patches)
+                    # — either way the client must refetch
+                    send("reset", {"generation": generation, "revision": revision})
                 else:
-                    send("hello", {"revision": revision})
+                    send("hello", {"generation": generation, "revision": revision})
                 entry["rev"] = revision
                 while True:
                     try:

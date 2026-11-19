@@ -365,6 +365,40 @@ class TestSse(ServerCase):
         raw = self.read_sse("/api/events?rev=99", until="event: reset")
         self.assertIn("event: reset", raw)
 
+    def test_snapshot_and_events_carry_generation(self):
+        _, data = self.get("/api/beads")
+        self.assertTrue(data.get("generation"))
+        _, idx = self.get("/api/indices")
+        self.assertEqual(idx["generation"], data["generation"])
+        raw = self.read_sse("/api/events?rev=1", until="event: hello")
+        self.assertIn('"generation"', raw)
+
+    def test_sse_reset_on_foreign_generation(self):
+        # a restart renumbers revisions; the same number means a
+        # different state — a client presenting the OLD generation
+        # must get a reset even at a matching revision
+        _, data = self.get("/api/beads")
+        raw = self.read_sse(
+            f"/api/events?rev={data['revision']}&gen=old-process",
+            until="event: reset",
+        )
+        self.assertIn("event: reset", raw)
+        self.assertIn('"generation"', raw)
+
+    def test_restart_resets_generation_and_client_recovers(self):
+        # simulate a restart: a NEW watcher instance has a different
+        # generation and starts revisions at 1 again
+        _, before = self.get("/api/beads")
+        old_gen = before["generation"]
+        raw = self.read_sse(
+            f"/api/events?rev=1&gen={old_gen}", until="event: hello"
+        )
+        self.assertIn("event: hello", raw)
+
+        watcher2 = server.Watcher(self.bd, self.repo, poll_interval=60)
+        self.assertNotEqual(watcher2.generation, old_gen)
+        self.assertEqual(watcher2.cache.revision, 1)
+
     def test_sse_patch_on_change(self):
         # subscribe at rev=1 and wait for the server to register the
         # client, THEN change the data and refetch: the connected

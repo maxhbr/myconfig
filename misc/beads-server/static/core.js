@@ -96,8 +96,10 @@ export function applySnapshotPatch({ upserted, removed, revision }) {
 }
 
 export function applyIndices(idx) {
-  // only indices matching the snapshot's revision describe it
-  if (DATA && idx && idx.revision === DATA.revision) {
+  // only indices matching the snapshot's generation AND revision
+  // describe it (a restart renumbers revisions from zero)
+  if (DATA && idx && idx.generation === DATA.generation
+      && idx.revision === DATA.revision) {
     DATA.reverse_deps = idx.reverse_deps;
     DATA.blockers = idx.blockers;
     DATA.blocked_by = idx.blocked_by;

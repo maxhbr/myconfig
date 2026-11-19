@@ -259,10 +259,16 @@ export async function applyIndicesFor(data) {
   const rIdx = await fetch("/api/indices");
   if (!rIdx.ok) return;
   const idx = await rIdx.json();
-  if (idx.revision === data.revision) {
-    data.reverse_deps = idx.reverse_deps;
-    data.blockers = idx.blockers;
-    data.blocked_by = idx.blocked_by;
+  // same process AND same revision, or the numbers mean different things
+  if (
+    idx.generation === data.generation ||
+    (data.generation === undefined && idx.generation === undefined)
+  ) {
+    if (idx.revision === data.revision) {
+      data.reverse_deps = idx.reverse_deps;
+      data.blockers = idx.blockers;
+      data.blocked_by = idx.blocked_by;
+    }
   }
 }
 
@@ -350,7 +356,7 @@ async function load() {
   // they would otherwise stay read-only until the next redraw
   await initEdit();
   render();
-  connect(DATA.revision);
+  connect(DATA.revision, DATA.generation);
 }
 
 load();
