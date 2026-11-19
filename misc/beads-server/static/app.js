@@ -6,10 +6,10 @@ import {
   DATA, STATUS_ORDER, CLUSTER, setData, statusColor,
 } from "./core.js";
 import { connect, fetchSnapshot } from "./live.js";
-import { init as initEdit, newBeadDialog, canWrite } from "./edit.js";
+import { init as initEdit, newBeadDialog } from "./edit.js";
 import { renderBoard } from "./board.js";
 import { renderGraph, zoomBy, resetView } from "./graph.js";
-import { showDetails, refreshSelection } from "./detail.js";
+import { showDetails, refreshSelection, enableReadOnlyDetails } from "./detail.js";
 import * as filters from "./filters.js";
 const { state, matches, writeToHash, readFromHash } = filters;
 
@@ -321,9 +321,12 @@ async function load() {
   // edit capability must be known before the first render: cards and
   // the details pane decide draggability/controls from canWrite(), and
   // they would otherwise stay read-only until the next redraw
-  await initEdit();
+  await initEdit(DATA.generation);
   render();
-  connect(DATA.revision, DATA.generation, rebuildFilterOptions);
+  connect(DATA.revision, DATA.generation, () => {
+    rebuildFilterOptions();
+    enableReadOnlyDetails();
+  });
 }
 
 load();

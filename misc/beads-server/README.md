@@ -135,6 +135,11 @@ between columns to change status (with `--allow-write`); the URL
 hash (e.g. `#labels=mysbx`) is a bookmarkable filter view; presets
 (mysbx / all / mine / saved) live in the toolbar.
 
+Description edits autosave unless a conflict is shown. Ctrl-S (Cmd-S on
+macOS) confirms an overwrite of the displayed version. A server restart
+renews the edit session but never resubmits old writes: pending
+description drafts stay in the pane for explicit saving.
+
 ## API
 
 | Endpoint | Method | Purpose |
@@ -143,8 +148,8 @@ hash (e.g. `#labels=mysbx`) is a bookmarkable filter view; presets
 | `/api/beads/issue/<id>` | GET | one issue with comments |
 | `/api/indices` | GET | reverse deps, blocker counts, label counts |
 | `/api/health` | GET | revision, issue count, bd mode, error count |
-| `/api/capabilities` | GET | `{write: bool}` |
-| `/api/session` | GET | per-run token (403 unless `--allow-write`) |
+| `/api/capabilities` | GET | `{generation, write}` |
+| `/api/session` | GET | `{generation, token}` (403 unless `--allow-write`) |
 | `/api/events` | GET | SSE: `hello`/`patch`/`reset`/`stale`, `retry: 2000`, 15 s heartbeat |
 | `/api/beads/issue/<id>/update` | POST | fields map to `bd update` flags; `if_status`/`if_assignee` guards; exit 13 → 409 with the fresh issue |
 | `/api/beads/issue/<id>/comment` | POST | `bd comment --stdin` |

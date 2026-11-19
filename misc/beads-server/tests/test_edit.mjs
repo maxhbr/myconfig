@@ -5,7 +5,7 @@ import { setImmediate } from "node:timers/promises";
 import { setData, liveIssue } from "../static/core.js";
 
 globalThis.window = {};
-const { init, descriptionEditor, clearDraftProbes } = await import("../static/edit.js");
+const { init, canWrite, descriptionEditor, clearDraftProbes } = await import("../static/edit.js");
 
 function element() {
   return {
@@ -16,24 +16,27 @@ function element() {
 
 async function setup(t) {
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  globalThis.document = { createElement: element, getElementById: element };
+  const controls = [];
+  globalThis.document = { createElement: element, getElementById: element, querySelectorAll: () => controls };
   const posts = [];
+  const server = { generation: t.name, write: true };
   globalThis.fetch = async (path, req) => {
-    if (path === "/api/capabilities") return Response.json({ write: true });
-    if (path === "/api/session") return Response.json({ token: "fixture" });
+    if (path === "/api/capabilities") return Response.json(server);
+    if (path === "/api/session") return Response.json({ generation: server.generation, token: server.generation });
     const request = Promise.withResolvers();
-    posts.push({ ...JSON.parse(req.body), request });
+    posts.push({ ...JSON.parse(req.body), request, token: req.headers["X-Beads-Server-Token"] });
     return request.promise;
   };
-  await init();
+  await init(server.generation);
   clearDraftProbes();
   const issue = { id: "one", status: "open", description: "original" };
   const publish = (description) => setData({ issues: [{ ...issue, description }] });
   publish(issue.description);
   const [ta, conflict] = descriptionEditor(issue).children;
+  controls.push(ta);
   const type = (text) => { ta.value = text; ta.oninput(); };
   const confirm = () => ta.onkeydown({ key: "s", ctrlKey: true, preventDefault() {} });
-  return { ta, conflict, publish, posts, type, confirm };
+  return { ta, conflict, publish, posts, type, confirm, server };
 }
 
 test("blur and debounce cannot confirm a conflict, including an empty description", async (t) => {
@@ -100,4 +103,45 @@ test("a delayed successful save cannot undo a live revert to the old text", asyn
   posts[0].request.resolve(Response.json({}));
   await setImmediate();
   assert.equal(liveIssue("one").description, "original");
+});
+
+test("a restart preserves unsent drafts without replaying old writes with the new token", async (t) => {
+  const { ta, posts, type, confirm, server } = await setup(t);
+  type("sending");
+  ta.onblur();
+  type("draft during request");
+  server.generation = "read-only";
+  server.write = false;
+  await init(server.generation);
+  assert.equal(ta.disabled, true);
+  assert.equal(canWrite(), false);
+  posts[0].request.resolve(Response.json({}));
+  await setImmediate();
+  server.generation = "writable-again";
+  server.write = true;
+  await init(server.generation);
+  assert.equal(ta.disabled, false);
+  t.mock.timers.tick(1500);
+  ta.onblur();
+  assert.equal(posts.length, 1);
+  assert.equal(ta.value, "draft during request");
+  confirm();
+  assert.equal(posts[1].token, "writable-again");
+  assert.equal(posts[1].description, ta.value);
+});
+
+test("a delayed session reply cannot enable writes on a newer read-only server", async (t) => {
+  const { ta } = await setup(t);
+  const tokenReply = Promise.withResolvers();
+  globalThis.fetch = async (path) => path === "/api/capabilities"
+    ? Response.json({ generation: "B", write: true }) : tokenReply.promise;
+  const old = init("B");
+  await setImmediate();
+  assert.equal(ta.disabled, true);
+  globalThis.fetch = async () => Response.json({ generation: "C", write: false });
+  assert.equal(await init("C"), true);
+  tokenReply.resolve(Response.json({ generation: "B", token: "B" }));
+  assert.equal(await old, false);
+  assert.equal(canWrite(), false);
+  assert.equal(ta.disabled, true);
 });

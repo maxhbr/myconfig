@@ -12,12 +12,13 @@
 // installed current data.
 
 import { setData, applySnapshotPatch, applyIndices } from "./core.js";
+import { init as initEdit, selectSession, sessionReady } from "./edit.js";
 
 let SOURCE = null;
 let installed = 0; // revision whose full state the DOM reflects
 let generation = null; // server process the installed revision belongs to
 let renderScheduled = false;
-let rebuildFilterOptions;
+let refreshControls;
 let streamOK = false;
 let recovery = null;
 
@@ -32,6 +33,7 @@ function recover({ generation: expected, revision }) {
   const minimum = expected === generation ? Math.max(revision, installed) : revision;
   const job = { generation: expected, pending: null };
   recovery = job;
+  selectSession(expected); // invalidate old credentials before any asynchronous work
   setStale(true);
   async function attempt() {
     try {
@@ -40,6 +42,8 @@ function recover({ generation: expected, revision }) {
       if (data.generation !== expected || data.revision < minimum) {
         throw new Error("snapshot does not cover the stream position");
       }
+      if (!sessionReady() && !(await initEdit(expected))) throw new Error("session not ready");
+      if (job !== recovery) return;
       setData(data);
       installed = data.revision;
       generation = data.generation;
@@ -82,7 +86,7 @@ function scheduleRender() {
   renderScheduled = true;
   requestAnimationFrame(() => {
     renderScheduled = false;
-    rebuildFilterOptions();
+    refreshControls();
     const board = document.getElementById("board");
     const keepScroll = board.scrollTop;
     window.render();
@@ -90,10 +94,10 @@ function scheduleRender() {
   });
 }
 
-export function connect(revision, gen, rebuildOptions) {
+export function connect(revision, gen, onRender) {
   installed = revision;
   generation = gen;
-  rebuildFilterOptions = rebuildOptions;
+  refreshControls = onRender;
   window.refetchAll = refetchAll;
   if (SOURCE) SOURCE.close();
   SOURCE = new EventSource(
@@ -106,7 +110,7 @@ export function connect(revision, gen, rebuildOptions) {
     // anything else is a protocol surprise — recover rather than
     // silently claim coverage
     streamOK = true;
-    if (recovery || data.generation !== generation || data.revision !== installed) {
+    if (recovery || !sessionReady() || data.generation !== generation || data.revision !== installed) {
       recover(data);
       return;
     }

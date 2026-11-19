@@ -34,9 +34,12 @@ export function refreshSelection() {
     c.classList.toggle("selected", c.dataset.id === window.SELECTED_ID);
 }
 
+let detailRequest = 0;
 export function showDetails(issue) {
+  const request = ++detailRequest;
   window.SELECTED_ID = issue.id;
   const pane = document.getElementById("details");
+  delete pane.dataset.readOnly;
   pane.innerHTML = "";
   pane.classList.add("open");
   const loading = h("div", "kv", "loading " + issue.id + "…");
@@ -48,12 +51,22 @@ export function showDetails(issue) {
   fetch(`/api/beads/issue/${encodeURIComponent(issue.id)}`)
     .then((r) => (r.ok ? r.json() : null))
     .then((data) => {
-      if (window.SELECTED_ID !== issue.id) return; // moved on meanwhile
+      if (request !== detailRequest || window.SELECTED_ID !== issue.id) return;
       renderDetails(data ? data.issue : issue);
     })
     .catch(() => {
-      if (window.SELECTED_ID === issue.id) renderDetails(issue);
+      if (request === detailRequest && window.SELECTED_ID === issue.id) renderDetails(issue);
     });
+}
+
+// A pane first opened read-only has no edit controls to re-enable. Never
+// rebuild an editable pane here: even a focused title may contain a draft.
+export function enableReadOnlyDetails() {
+  const pane = document.getElementById("details");
+  if (canWrite() && pane.dataset.readOnly === "true" && window.SELECTED_ID) {
+    const current = DATA.issues.find(i => i.id === window.SELECTED_ID);
+    if (current) showDetails(current);
+  }
 }
 
 // ------------------------------------------------- conflict reconcile
@@ -90,6 +103,7 @@ function toastConflict(fresh) {
 
 function renderDetails(issue) {
   const pane = document.getElementById("details");
+  pane.dataset.readOnly = String(!canWrite());
   clearDraftProbes(); // the previous pane's probes die with its DOM
   pane.innerHTML = "";
   pane.classList.add("open");

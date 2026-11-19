@@ -279,9 +279,9 @@ def make_handler(watcher, allow_write):
             elif path == "/api/events":
                 self._send_events()
             elif path == "/api/capabilities":
-                self._send_json({"write": allow_write})
+                self._send_json({"generation": watcher.generation, "write": allow_write})
             elif path == "/api/session" and allow_write:
-                self._send_json({"token": watcher.token})
+                self._send_json({"generation": watcher.generation, "token": watcher.token})
             elif path == "/api/session":
                 self.send_error(403, "editing disabled: start with --allow-write")
             else:

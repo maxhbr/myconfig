@@ -139,6 +139,7 @@ class TestReadOnlyApi(ServerCase):
     def test_capabilities_advertises_off(self):
         status, data = self.get("/api/capabilities")
         self.assertEqual(data["write"], False)
+        self.assertEqual(data["generation"], self.watcher.generation)
 
     def test_writes_refused_without_allow_write(self):
         status, _ = self.post(
@@ -179,6 +180,7 @@ class TestWriteApi(ServerCase):
         super().setUp()
         watcher = self.boot(allow_write=True)
         _, data = self.get("/api/session")
+        self.assertEqual(data["generation"], watcher.generation)
         self.token = data["token"]
 
     def test_update_roundtrip(self):

@@ -7,42 +7,74 @@
 
 import { liveIssue } from "./core.js";
 
-let TOKEN = null;
-let CAPABILITIES = { write: false };
+let session = {};
 
-export async function init() {
-  try {
-    const r = await fetch("/api/capabilities");
-    CAPABILITIES = await r.json();
-  } catch {
-    CAPABILITIES = { write: false };
-  }
-  if (CAPABILITIES.write) {
-    try {
-      const r = await fetch("/api/session");
-      TOKEN = (await r.json()).token;
-    } catch {
-      CAPABILITIES.write = false;
-    }
-  }
+function showSession(message) {
   const banner = document.getElementById("edit-banner");
   banner.hidden = false;
-  banner.textContent = CAPABILITIES.write
-    ? "editing enabled — every save runs bd and may create a git commit"
-    : "read-only — start the server with --allow-write to edit";
-  banner.classList.toggle("enabled", CAPABILITIES.write);
+  banner.textContent = message;
+  banner.classList.toggle("enabled", canWrite());
+  document.getElementById("new-bead").disabled = !canWrite();
+  // Keep the existing controls and all their drafts across a restart.
+  for (const control of document.querySelectorAll("#details input, #details select, #details textarea, #details button:not(.close)")) {
+    control.disabled = !canWrite();
+  }
+}
+
+export function selectSession(generation) {
+  if (session.generation !== generation) {
+    session = { generation, ready: false, token: null };
+    showSession("checking edit permissions — drafts are kept");
+  }
+}
+
+export function sessionReady() {
+  return session.ready;
+}
+
+export async function init(generation) {
+  selectSession(generation);
+  if (session.ready) return true;
+  const owner = session;
+  const read = async (path) => {
+    const r = await fetch(path, { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const data = await r.json();
+    if (data.generation !== generation) throw new Error("server restarted");
+    return data;
+  };
+  try {
+    const { write } = await read("/api/capabilities");
+    if (owner !== session) return false;
+    const token = write ? (await read("/api/session")).token : null;
+    if (owner !== session || (write && !token)) return false;
+    session.token = token;
+    session.ready = true;
+    const message = write
+      ? "editing enabled — every save runs bd and may create a git commit"
+      : "read-only — start the server with --allow-write to edit";
+    showSession(write && window.detailsHasDraft()
+      ? message + " · Ctrl-S saves a pre-restart description draft" : message);
+    return true;
+  } catch {
+    if (owner === session) showSession("edit permissions unavailable — drafts are kept");
+    return false;
+  }
 }
 
 async function post(path, body) {
+  const owner = session;
+  if (!canWrite()) return { ok: false };
   const r = await fetch(path, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Beads-Server-Token": TOKEN || "",
+      "X-Beads-Server-Token": owner.token,
     },
     body: JSON.stringify(body),
   });
   const data = await r.json().catch(() => ({}));
+  if (session !== owner) return { ok: false }; // no replay or stale acknowledgement
   if (r.status === 409 && data.issue) {
     // reconcile: install the fresh record and tell the open pane, so
     // the same control cannot keep sending the same stale guard
@@ -61,7 +93,7 @@ async function post(path, body) {
 }
 
 export function canWrite() {
-  return !!CAPABILITIES.write;
+  return !!session.token;
 }
 
 // ---------------------------------------------------------------- toast
@@ -158,9 +190,13 @@ export function descriptionEditor(issue) {
   let saving = false;
   let queued = false;
   let conflict = null; // exact version shown to the user, including ""
+  let draftSession = session;
   let timer;
   const save = async (explicit = false) => {
     if (!canWrite() || !pending || (conflict !== null && !explicit)) return;
+    // A restart never replays a draft via an old timer, blur or queued flush.
+    if (draftSession !== session && !explicit) return;
+    draftSession = session;
     if (saving) {
       queued = true;
       return;
@@ -206,6 +242,7 @@ export function descriptionEditor(issue) {
   registerDraftProbe(() => pending || saving);
   const arm = () => {
     if (!canWrite()) return;
+    if (!pending && !saving) draftSession = session;
     pending = saving || conflict !== null || ta.value !== base;
     clearTimeout(timer);
     if (pending && conflict === null) timer = setTimeout(save, 1500);
@@ -282,10 +319,11 @@ export function labelEditor(issue) {
   input.disabled = !canWrite();
   input.onchange = async () => {
     for (const label of input.value.split(",").map((l) => l.trim()).filter(Boolean)) {
-      await post(`/api/beads/issue/${issue.id}/update`, {
+      const res = await post(`/api/beads/issue/${issue.id}/update`, {
         add_labels: [label],
         if_status: issue.status,
       });
+      if (!res.ok) return;
     }
     input.value = "";
   };
