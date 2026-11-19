@@ -241,16 +241,26 @@ class BdCache:
                         {"issue_id": issue["id"], "type": d.get("type")}
                     )
 
+        # blocked: an issue carrying a `blocks` edge is blocked BY the
+        # edge target (bd dep add A B == A blocked by B), when the
+        # target is open and the carrier is not already closed
         self.blocked = set()
-        for target, deps in self.reverse_deps.items():
-            if by_id.get(target, {}).get("status") != "open":
+        blocked_by_count = {}
+        for issue in self.issues:
+            if issue["status"] == "closed":
                 continue
-            for d in deps:
-                if d["type"] == "blocks" and by_id[d["issue_id"]]["status"] != "closed":
-                    self.blocked.add(target)
-                    break
+            count = 0
+            for d in issue.get("dependencies", []):
+                if d.get("type") != "blocks":
+                    continue
+                if by_id.get(d.get("depends_on_id"), {}).get("status") != "closed":
+                    count += 1
+            if count:
+                self.blocked.add(issue["id"])
+                blocked_by_count[issue["id"]] = count
         for issue_id in self.blocked:
             self.by_id[issue_id]["is_blocked"] = True
+            self.by_id[issue_id]["blocked_by_count"] = blocked_by_count[issue_id]
 
         # label counts for the UI badges
         self.label_counts = {}
@@ -263,6 +273,9 @@ class BdCache:
         return {
             "revision": self.revision,
             "reverse_deps": self.reverse_deps,
+            # blockers[X] = unresolved beads X blocks (bd dep add X …
+            # records the edge ON the blocked bead, so counting edges
+            # pointing at X counts what X holds up)
             "blockers": {
                 k: sum(
                     1
@@ -271,6 +284,16 @@ class BdCache:
                     and self.by_id[d["issue_id"]]["status"] != "closed"
                 )
                 for k, deps in self.reverse_deps.items()
+            },
+            "blocked_by": {
+                issue_id: sum(
+                    1
+                    for d in self.by_id[issue_id].get("dependencies", [])
+                    if d.get("type") == "blocks"
+                    and self.by_id.get(d.get("depends_on_id"), {}).get("status")
+                    != "closed"
+                )
+                for issue_id in self.blocked
             },
             "label_counts": self.label_counts,
         }

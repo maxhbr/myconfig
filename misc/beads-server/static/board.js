@@ -152,7 +152,7 @@ function card(issue) {
   mk("P" + (issue.priority ?? "—"));
   if (issue.status && !COLUMNS.some((col) => col.statuses.includes(issue.status)))
     mk(issue.status, "substatus");
-  if (issue.is_blocked) mk("⛔ " + (DATA.blockers?.[issue.id] ?? ""), "blocked-chip");
+  if (issue.is_blocked) mk("⛔ " + (DATA.blocked_by?.[issue.id] ?? ""), "blocked-chip");
   if (issue.comment_count) mk("💬 " + issue.comment_count);
   c.append(chips);
 
