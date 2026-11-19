@@ -202,4 +202,36 @@
       fi
   fi
 
+  # The krun restricted arm (bd myconfig-ild7 — n8kv.2 C3): this
+  # guest has NO net device at all — the ONLY channel out is the
+  # explicit AF_VSOCK device whose ONE port the launcher mapped
+  # onto the per-run egress broker's socket (the muxer connects
+  # the socket for every guest connection, so no host relay
+  # exists). The payload's endpoint URLs name the GUEST loopback
+  # (http://127.0.0.1:<port>): the baked static bridge makes that
+  # address real — it listens on 127.0.0.1 and pumps every
+  # accepted connection to the mapped vsock port. The bridge is
+  # PID 1's background child; the payload execs from PID 1, so
+  # the bridge (SIGCHLD=SIG_IGN: its per-connection children are
+  # kernel-reaped) keeps running for the run's whole lifetime.
+  # lo is already up (the header's proc/sys guard brings it up on
+  # every backend), so 127.0.0.1 binds without any net config.
+  # The port is parsed from MYSBX_EGRESS_PROXY — the ONE canonical
+  # spelling of the endpoint, set after every config layer, so the
+  # bridge can never drift from what the payload dials.
+  if [ "''${MYSBX_KRUN_NET:-}" = "restricted" ]; then
+      _proxy="''${MYSBX_EGRESS_PROXY:-}"
+      [ -n "$_proxy" ] \
+          || fail "MYSBX_KRUN_NET=restricted but MYSBX_EGRESS_PROXY is unset — the bridge has no port"
+      _port="''${_proxy##*:}"
+      case "$_port" in
+          '''|[!0-9]*)
+              fail "cannot parse the egress port from MYSBX_EGRESS_PROXY='$_proxy'" ;;
+      esac
+      [ -x /bin/mysbx-vsock-bridge ] \
+          || fail "MYSBX_KRUN_NET=restricted but /bin/mysbx-vsock-bridge is missing from the rootfs"
+      step "starting the egress vsock bridge (127.0.0.1:$_port <-> vsock:2:$_port)"
+      /bin/mysbx-vsock-bridge "$_port" &
+  fi
+
 ''

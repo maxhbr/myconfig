@@ -71,6 +71,10 @@
   # per registered path — ~175k paths made the boot minute-slow.
   # Same real-copy contract as busybox (nix/krun-store-scan.nix).
   storeScanStatic,
+  # The STATIC vsock bridge of the restricted mode (bd
+  # myconfig-ild7 — n8kv.2 C3): the init starts it before any store
+  # path is visible — pkgsStatic, like busybox.
+  vsockBridgeStatic,
   python3,
   bash,
 }:
@@ -160,6 +164,11 @@ runCommand "mysbx-krun-rootfs"
     # real-copy contract — the bulk getdents pass runs before the
     # store share is overlaid.
     cp ${storeScanStatic}/bin/store-scan $out/bin/store-scan
+    # The restricted mode's static vsock bridge (bd myconfig-ild7
+    # — n8kv.2 C3): same real-copy contract — the init starts it
+    # before the store share is mounted, under
+    # MYSBX_KRUN_NET=restricted.
+    cp ${vsockBridgeStatic}/bin/vsock-bridge $out/bin/mysbx-vsock-bridge
     # The payload's shells: store symlinks, valid once mysbx-init has
     # mounted the store share.
     ln -s ${bash}/bin/bash $out/bin/bash

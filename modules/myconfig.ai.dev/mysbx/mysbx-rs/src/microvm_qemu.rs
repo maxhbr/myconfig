@@ -51,19 +51,10 @@ pub fn microvm_qemu_argv(
     kernel: &str,
     backend_env: &[String],
 ) -> Result<Vec<String>, Error> {
-    // The CONNECT lane is the bubblewrap broker's (docs/design/
-    // egress-connect.md E7, C7's scope): this backend's channel
-    // serves the model endpoint only — a channel carrying table
-    // rows or the public flag would render a restricted net whose
-    // broker has no CONNECT lane to police them, so the run is
-    // refused here too (defense in depth next to step 4b, which
-    // already refuses allowlist keys next to the profile on every
-    // non-Broker row).
-    if let Some(egress) = params.egress {
-        if !egress.allow_domains.is_empty() || !egress.connect_ports.is_empty() || egress.public {
-            return Err(Error::EgressLaneUnsupported);
-        }
-    }
+    // The CONNECT lane check rides the SHARED spec (krun.rs,
+    // bd myconfig-ild7 — C3): both lifted VM twins refuse a channel
+    // carrying table rows or the public flag with the same error,
+    // so the refusal lives in spec_of, not per renderer.
     // The krun spec, verbatim: every refusal (multiplexer, pids
     // limit, share roots, hidden mounts, the limit grammar) and
     // every section (env, shares, trust overlays, scratch) is the
@@ -180,7 +171,7 @@ pub fn microvm_qemu_argv(
     // every outbound TCP except the guestfwd target and blocks
     // UDP — the fvi.3 source audit), so nothing but the model
     // port is even dialable.
-    if let Some(egress) = params.egress {
+    if let Some(egress) = &spec.egress {
         argv.push("--env".to_owned());
         argv.push("MYSBX_MICROVM_NET=restricted".to_owned());
         argv.push("--network".to_owned());
@@ -194,7 +185,7 @@ pub fn microvm_qemu_argv(
         // from them (the renderer never puts qemu's spelling in a
         // golden of ITS OWN argv — the launcher's tests pin that).
         argv.push("--egress-socket".to_owned());
-        argv.push(format!("{}/{}", egress.socket_dir, egress.socket));
+        argv.push(egress.socket.clone());
         argv.push("--egress-port".to_owned());
         argv.push(egress.port.to_string());
     } else if spec.network {
@@ -221,7 +212,7 @@ pub fn microvm_qemu_argv(
     // here only WITH the channel (spec_of's gate), so the
     // `restricted` flag above — not `none` — is the non-shared
     // spelling it carries.
-    if !spec.network && params.egress.is_none() {
+    if !spec.network && spec.egress.is_none() {
         argv.push("--network".to_owned());
         argv.push("none".to_owned());
     }

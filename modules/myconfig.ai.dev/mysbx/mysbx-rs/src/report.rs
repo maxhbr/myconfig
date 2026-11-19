@@ -184,8 +184,20 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
                 // myconfig-krab): the guest dials the SLiRP gateway,
                 // not a loopback the payload could reach — the
                 // spelling must not lie about where the fence sits.
+                // The krun VM backend's channel is the explicit
+                // vsock (bd myconfig-ild7 — C3): the guest has NO
+                // net device at all, and the baked bridge serves
+                // the payload's loopback URLs over AF_VSOCK — named
+                // so the fence's shape is visible next to qemu's.
                 Some(e) if r.backend == "microvm-qemu" => p(format!(
                     "network:        proxy-only (restricted NIC; 10.0.2.2:{} -> {}/{} via the guestfwd relay from {})",
+                    e.port,
+                    crate::bwrap::EGRESS_DIR,
+                    e.socket,
+                    e.socket_dir,
+                )),
+                Some(e) if r.backend == "krun" => p(format!(
+                    "network:        proxy-only (no net device; 127.0.0.1:{} -> {}/{} via the guest vsock bridge from {})",
                     e.port,
                     crate::bwrap::EGRESS_DIR,
                     e.socket,
@@ -1121,8 +1133,11 @@ mod tests {
         // sits: the bwrap tiers fence an unshared netns with a
         // loopback relay (127.0.0.1), microvm-qemu fences the SLiRP
         // NIC (bd myconfig-krab) whose guest dials the 10.0.2.2
-        // gateway through ONE guestfwd mapping — the same Report
-        // code renders both, the backend name picks the transport.
+        // gateway through ONE guestfwd mapping, and krun fences a
+        // guest with NO net device at all (bd myconfig-ild7 — C3)
+        // whose baked bridge serves 127.0.0.1 over the explicit
+        // vsock — the same Report code renders all of them, the
+        // backend name picks the transport.
         let (repo, mut merged, host) = fixture_report();
         merged.network = crate::config::Network::ProxyOnly;
         let socket_dir = "/run/user/1000/mysbx-egress/1234";
@@ -1153,6 +1168,7 @@ mod tests {
         for (backend, needle) in [
             ("bubblewrap", "unshared netns; 127.0.0.1:4000"),
             ("microvm-qemu", "restricted NIC; 10.0.2.2:4000"),
+            ("krun", "no net device; 127.0.0.1:4000"),
         ] {
             let joined = lines(&Report {
                 repo: &repo,
@@ -1185,7 +1201,8 @@ mod tests {
             assert!(
                 joined.contains(&format!(
                     "/run/mysbx-egress/litellm.sock via the relay from {socket_dir}"
-                )) || joined.contains(&format!("via the guestfwd relay from {socket_dir}")),
+                )) || joined.contains(&format!("via the guestfwd relay from {socket_dir}"))
+                    || joined.contains(&format!("via the guest vsock bridge from {socket_dir}")),
                 "{backend} names the channel source: {joined}"
             );
         }

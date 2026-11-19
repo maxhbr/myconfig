@@ -896,6 +896,53 @@ class InitTests(unittest.TestCase):
         self.assertIn("mysbx-test: nic=ens3", result.stdout,
                       f"the driver match: {result.stdout!r}")
 
+    def test_krun_restricted_starts_the_vsock_bridge(self):
+        # bd myconfig-ild7 (n8kv.2 C3): the krun restricted arm is a
+        # SEPARATE step from the SLiRP one — this guest has no NIC
+        # at all. The bridge must start only under the krun marker,
+        # parse its port from the ONE canonical MYSBX_EGRESS_PROXY
+        # spelling, and require the baked bridge binary. The port
+        # parse runs live under the baked busybox against both a
+        # good URL and a malformed one.
+        start = INIT.index('if [ "${MYSBX_KRUN_NET:-}" = "restricted" ]; then')
+        end = INIT.index("# The guest-own nix store disk", start)
+        block = INIT[start:end]
+        self.assertIn("mysbx-vsock-bridge", block)
+        self.assertIn("MYSBX_EGRESS_PROXY is unset", block)
+        self.assertIn("-x /bin/mysbx-vsock-bridge", block)
+        self.assertIn("vsock:2", block)
+        # The marker is krun-ONLY: the qemu restricted step above
+        # keys on MYSBX_MICROVM_NET, this one on MYSBX_KRUN_NET.
+        self.assertIn('MYSBX_MICROVM_NET:-}" = "restricted"', INIT)
+
+        # The port parse, live under the baked static busybox: a
+        # good URL yields the bare port, a malformed one fails.
+        parse = block[block.index('_proxy="${MYSBX_EGRESS_PROXY:-}"'):
+                      block.index("esac\n") + len("esac\n")]
+        script = (
+            "set -eu\n"
+            f"BB={shlex.quote(str(ROOTFS / 'bin/busybox'))}\n"
+            "fail() { echo \"mysbx-init: $*\" >&2; exit 1; }\n"
+            'MYSBX_EGRESS_PROXY=http://127.0.0.1:4000\n'
+            + parse
+            + 'printf "mysbx-test: port=%s\n" "$_port"\n'
+        )
+        result = subprocess.run(
+            [str(ROOTFS / "bin/busybox"), "sh", "-c", script],
+            capture_output=True, text=True, env={"PATH": ""}, timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("mysbx-test: port=4000", result.stdout)
+
+        script = script.replace("http://127.0.0.1:4000", "http://127.0.0.1:notaport")
+        result = subprocess.run(
+            [str(ROOTFS / "bin/busybox"), "sh", "-c", script],
+            capture_output=True, text=True, env={"PATH": ""}, timeout=20,
+        )
+        self.assertNotEqual(result.returncode, 0,
+                            "a malformed endpoint must fail the boot")
+        self.assertIn("cannot parse the egress port", result.stderr)
+
     def test_exit_channel_resolves_the_port_through_sysfs(self):
         # bd myconfig-dnmk: /dev/virtio-ports/<name> is a UDEV
         # symlink a static-busybox guest never has — the init must

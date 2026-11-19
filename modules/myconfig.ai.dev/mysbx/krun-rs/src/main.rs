@@ -131,26 +131,83 @@ const FS_ROOT_TAG: &str = "/dev/root";
 /// verbatim — mysbx's own error mapping is the backend's business.
 const EXIT_SETUP: i32 = 125;
 
-/// The network/symbol decision at VM setup (bd myconfig-dak.6, the
-///odule doc's net section): `--network none` must disable the
-/// implicit TSI vsock — possible only when the lib carries
-/// [`crate::KrunApi::krun_disable_implicit_vsock`]. A shared run
-/// NEVER consumes the symbol: the vsock is the implicit device
-/// (attached unless disabled), so a symbol-less lib keeps TSI on
-/// and the shared semantics hold unchanged.
+/// The network mode (the qemu launcher's D9 twin, bd myconfig-ild7
+/// — n8kv.2 C3): `Shared` keeps libkrun's implicit TSI vsock (the
+/// historical default), `None` disables the vsock entirely (no
+/// socket path to the host at all — bd myconfig-dak.6), and
+/// `Restricted` attaches an EXPLICIT vsock instead: no TSI, and
+/// ONE port mapped onto the per-run egress broker's socket
+/// (the proxy-only channel's transport). `Shared` is the default —
+/// an argv that names no `--network` boots TSI, unchanged.
+#[derive(Debug, Clone, PartialEq)]
+enum Network {
+    Shared,
+    None,
+    /// The proxy-only channel (a `network = "proxy-only"` profile):
+    /// the broker socket the muxer connects per guest connection,
+    /// and the vsock port the guest bridge dials.
+    Restricted(Egress),
+}
+
+/// The restricted channel's two halves (the qemu launcher's
+/// `Egress` twin): the HOST-side broker socket path (as bound in
+/// the launcher's bwrap view — `lib.rs` ro-binds the broker
+/// directory at its own path, so the path the VMM's muxer
+/// connects is the one `krun_add_vsock_port` received) and the
+/// vsock port. The PORT is guest-side state: the baked
+/// `mysbx-vsock-bridge` listens on `127.0.0.1:<port>` and bridges
+/// each accepted connection to `VSOCK-CONNECT:2:<port>` — the guest
+/// dials CID 2 (the host muxer), never an IP address, because
+/// this guest has NO net device at all.
+#[derive(Debug, Clone, PartialEq)]
+struct Egress {
+    port: u16,
+    socket: PathBuf,
+}
+
+/// The network/vsock decision at VM setup (bd myconfig-dak.6,
+/// extended by bd myconfig-ild7 — n8kv.2 C3): `--network none`
+/// must disable the implicit TSI vsock — possible only when the
+/// lib carries [`crate::KrunApi::krun_disable_implicit_vsock`].
+/// `--network restricted` replaces the implicit TSI vsock with an
+/// EXPLICIT one (`krun_add_vsock`, `tsi_features = 0`: no
+/// `tsi_hijack` on the guest cmdline — verified at libkrun source,
+/// builder.rs attaches the cmdline flag only for HIJACK_INET) whose
+/// ONE `krun_add_vsock_port` mapping sends a guest vsock port to
+/// the per-run egress broker's Unix socket — the muxer connects
+/// the socket for every guest connection, so the VMM ITSELF is the
+/// relay (no host relay binary, unlike the qemu channel).
+/// A shared run NEVER consumes the symbol: the vsock is the
+/// implicit device (attached unless disabled), so a symbol-less
+/// lib keeps TSI on and the shared semantics hold unchanged.
 ///
-/// Extracted pure so the four combinations are unit-pinned: the
+/// Extracted pure so the combinations are unit-pinned: the
 /// `--network none` WITH-symbol call, the `--network none`
 /// symbol-less REFUSAL (exit 125, the bd myconfig-rrg regression
-/// guard), and the two shared modes that proceed without touching
-/// the symbol.
-fn vsock_decision(network_shared: bool, symbol_present: bool) -> VsockDecision {
-    if network_shared {
-        VsockDecision::KeepTsi
-    } else if symbol_present {
-        VsockDecision::DisableTsi
-    } else {
-        VsockDecision::RefusedNoSymbol
+/// guard), the restricted shape's disable-then-explicit pair, and
+/// the two shared modes that proceed without touching the symbol.
+fn vsock_decision(
+    network: Network,
+    disable_symbol_present: bool,
+    add_vsock_present: bool,
+    add_port_present: bool,
+) -> VsockDecision {
+    match network {
+        Network::Shared => VsockDecision::KeepTsi,
+        Network::None => {
+            if disable_symbol_present {
+                VsockDecision::DisableTsi
+            } else {
+                VsockDecision::RefusedNoSymbol
+            }
+        }
+        Network::Restricted(_) => {
+            if disable_symbol_present && add_vsock_present && add_port_present {
+                VsockDecision::ExplicitNoTsi
+            } else {
+                VsockDecision::RefusedNoVsockApi
+            }
+        }
     }
 }
 
@@ -161,6 +218,15 @@ enum VsockDecision {
     DisableTsi,
     /// `--network none` without the symbol: the run is refused.
     RefusedNoSymbol,
+    /// `--network restricted` with the full explicit-vsock API: the
+    /// run disables the implicit vsock, adds the clean one
+    /// (`tsi_features = 0`) and maps the model port onto the
+    /// broker socket.
+    ExplicitNoTsi,
+    /// `--network restricted` without the API: the run is refused —
+    /// the only honest fallback would be the unfiltered TSI proxy,
+    /// exactly what the profile forbids.
+    RefusedNoVsockApi,
 }
 
 /// libkrun's MMIO IRQ budget: every virtio device takes one line
@@ -354,6 +420,15 @@ struct KrunApi {
     // TSI by default when no net device is configured; disabling the
     // implicit vsock is the only honest `network = false` there.
     krun_disable_implicit_vsock: Option<unsafe extern "C" fn(ctx_id: c_uint) -> c_int>,
+    // Optional (bd myconfig-ild7 — n8kv.2 C3): the explicit egress
+    // vsock pair. NOT feature-gated in the pinned lib (stock and
+    // withBlk both carry them — nm -D verified), but resolved as
+    // Option so a foreign build without them refuses the restricted
+    // mode BY NAME instead of silently falling back to TSI.
+    krun_add_vsock: Option<unsafe extern "C" fn(ctx_id: c_uint, tsi_features: u32) -> c_int>,
+    krun_add_vsock_port: Option<
+        unsafe extern "C" fn(ctx_id: c_uint, port: c_uint, c_filepath: *const c_char) -> c_int,
+    >,
     // Optional (blk-feature-gated): the scratch disk (bd
     // myconfig-dak.7). A lib WITHOUT the symbol refuses a --scratch
     // run — never a silent run without the disk.
@@ -474,6 +549,22 @@ unsafe fn load_api() -> Result<KrunApi, String> {
         krun_disable_implicit_vsock: sym(b"krun_disable_implicit_vsock").ok().map(|p| unsafe {
             std::mem::transmute::<*mut (), unsafe extern "C" fn(ctx_id: c_uint) -> c_int>(p)
         }),
+        krun_add_vsock: sym(b"krun_add_vsock").ok().map(|p| unsafe {
+            std::mem::transmute::<
+                *mut (),
+                unsafe extern "C" fn(ctx_id: c_uint, tsi_features: u32) -> c_int,
+            >(p)
+        }),
+        krun_add_vsock_port: sym(b"krun_add_vsock_port").ok().map(|p| unsafe {
+            std::mem::transmute::<
+                *mut (),
+                unsafe extern "C" fn(
+                    ctx_id: c_uint,
+                    port: c_uint,
+                    c_filepath: *const c_char,
+                ) -> c_int,
+            >(p)
+        }),
         krun_add_disk2: sym(b"krun_add_disk2").ok().map(|p| unsafe {
             std::mem::transmute::<
                 *mut (),
@@ -593,11 +684,13 @@ struct Config {
     /// krun_start_enter; the guest init reads it from the ro stage
     /// device. When set, --ro-share/--rw-share must be absent.
     manifest: Option<PathBuf>,
-    /// The network mode (bd myconfig-dak.6, backends.md D6):
-    /// `true` keeps libkrun's implicit vsock (TSI dials from this
-    /// netns), `false` disables the vsock — no socket path to the
-    /// host at all. Defaults to shared.
-    network: bool,
+    /// The network mode (bd myconfig-dak.6, backends.md D6;
+    /// extended by bd myconfig-ild7 — C3): `Shared` keeps libkrun's
+    /// implicit vsock (TSI dials from this netns), `None` disables
+    /// the vsock — no socket path to the host at all — and
+    /// `Restricted` swaps in the explicit egress vsock. Defaults
+    /// to shared.
+    network: Network,
     /// The payload's working directory, handed to krun_set_workdir
     /// (bwrap's --chdir equivalent). Defaults to `/` — the spec
     /// always carries the workspace path.
@@ -628,11 +721,13 @@ fn usage() -> ! {
     eprintln!(
         "usage: mysbx-krun [--cpus N] [--ram MIB] [--verbose] --rootfs DIR [--init PATH] \
          [--ro-device TAG=DIR] [--rw-device TAG=DIR] \
-         [--manifest FILE] [--network shared|none] \
-         [--scratch FILE] [--store-disk FILE] [--env K=V]... \
+         [--manifest FILE] [--network shared|none|restricted \
+          --egress-socket PATH --egress-port PORT] [--scratch FILE] \
+         [--store-disk FILE] [--env K=V]... \
          [--krun-overlay TAG@PATH:MODE:B64]... [--chdir DIR] -- CMD [ARGS...] \
   (the manifest FILE carries the shares; --ro-share/--rw-share remain \
-   accepted for cmdline-sized debug runs)"
+   accepted for cmdline-sized debug runs; --network restricted maps ONE \
+   vsock port onto the egress broker's socket — the proxy-only channel)"
     );
     std::process::exit(2);
 }
@@ -642,6 +737,73 @@ fn parse_args(args: impl Iterator<Item = String>) -> Config {
         eprintln!("mysbx-krun: {e}");
         usage()
     })
+}
+
+/// The `--network restricted` pair check (the qemu launcher's
+/// same-named check, bd myconfig-ild7 — C3): the pair is
+/// standalone flags validated AFTER the argv loop, so the
+/// totality is one check — restricted without the pair, or the
+/// pair without restricted, are both refused by name. The broker
+/// socket must exist and BE a Unix socket at parse time — the
+/// broker binds before the backend is spawned (lib.rs's
+/// `start_egress_broker` ordering), so a missing file here is a
+/// wiring bug, not a race; failing at parse keeps the diagnosis at
+/// the argv, before any libkrun call. The port must be a nonzero
+/// u16: 0 is reserved (VMADDR_CID_ANY_PORT semantics), the broker
+/// pins a real one.
+fn egress_of(
+    network: &Network,
+    socket: Option<&str>,
+    port: Option<&str>,
+) -> Result<Option<Egress>, String> {
+    let (socket, port) = match (socket, port) {
+        (Some(s), Some(p)) => (s, p),
+        (None, None) => {
+            return match network {
+                Network::Restricted(_) => Err(
+                    "--network restricted requires --egress-socket PATH and --egress-port PORT — \
+                     the channel IS the restricted mode's transport"
+                        .to_owned(),
+                ),
+                _ => Ok(None),
+            };
+        }
+        _ => {
+            return Err(
+                "--egress-socket and --egress-port are a pair — name both or neither".to_owned(),
+            )
+        }
+    };
+    if !matches!(network, Network::Restricted(_)) {
+        return Err(
+            "--egress-socket/--egress-port are only valid together with --network restricted — \
+             the channel is the restricted mode's, not a standalone flag"
+                .to_owned(),
+        );
+    }
+    let socket = PathBuf::from(socket);
+    if !socket.is_absolute() {
+        return Err(format!(
+            "--egress-socket expects an absolute path, got `{}`",
+            socket.display()
+        ));
+    }
+    let meta = std::fs::metadata(&socket)
+        .map_err(|e| format!("--egress-socket {} is not reachable: {e}", socket.display()))?;
+    use std::os::unix::fs::FileTypeExt;
+    if !meta.file_type().is_socket() {
+        return Err(format!(
+            "--egress-socket {} is not a Unix socket",
+            socket.display()
+        ));
+    }
+    let port: u16 = port
+        .parse()
+        .map_err(|_| format!("--egress-port expects a port number 1-65535, got `{port}`"))?;
+    if port == 0 {
+        return Err("--egress-port 0 is reserved — the channel needs a real port".to_owned());
+    }
+    Ok(Some(Egress { port, socket }))
 }
 
 fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, String> {
@@ -656,13 +818,17 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
         env: Vec::new(),
         overlays: Vec::new(),
         manifest: None,
-        network: true,
+        network: Network::Shared,
         workdir: PathBuf::from("/"),
         scratch: None,
         store_disk: None,
         payload: Vec::new(),
     };
     let mut it = args.by_ref().peekable();
+    // The egress channel flags (bd myconfig-ild7 — C3): standalone
+    // options validated against the network mode AFTER the loop.
+    let mut egress_socket: Option<String> = None;
+    let mut egress_port: Option<String> = None;
     while let Some(arg) = it.next() {
         match arg.as_str() {
             "--cpus" => {
@@ -712,12 +878,35 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
                     .next()
                     .ok_or_else(|| "missing value for --network".to_owned())?;
                 cfg.network = match value.as_str() {
-                    "shared" => true,
-                    "none" => false,
+                    "shared" => Network::Shared,
+                    "none" => Network::None,
+                    // The proxy-only channel's transport (bd
+                    // myconfig-ild7 — C3): the pair must name the
+                    // flags as standalone values (the qemu
+                    // launcher's same-named shape — the totality
+                    // check below refuses the half pair).
+                    "restricted" => Network::Restricted(Egress {
+                        port: 0,
+                        socket: PathBuf::new(),
+                    }),
                     other => {
-                        return Err(format!("network expects `shared` or `none`, got `{other}`"))
+                        return Err(format!(
+                            "network expects `shared`, `none` or `restricted`, got `{other}`"
+                        ))
                     }
                 };
+            }
+            "--egress-socket" => {
+                egress_socket = Some(
+                    it.next()
+                        .ok_or_else(|| "missing value for --egress-socket".to_owned())?,
+                );
+            }
+            "--egress-port" => {
+                egress_port = Some(
+                    it.next()
+                        .ok_or_else(|| "missing value for --egress-port".to_owned())?,
+                );
             }
             "--scratch" => {
                 cfg.scratch = Some(PathBuf::from(
@@ -766,6 +955,13 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
     }
     if cfg.rootfs.as_os_str().is_empty() || cfg.payload.is_empty() {
         return Err("--rootfs and a payload are required".to_owned());
+    }
+    if let Some(egress) = egress_of(
+        &cfg.network,
+        egress_socket.as_deref(),
+        egress_port.as_deref(),
+    )? {
+        cfg.network = Network::Restricted(egress);
     }
     Ok(cfg)
 }
@@ -1288,7 +1484,15 @@ fn main() {
         eprintln!("mysbx-krun: manifest: {:?}", cfg.manifest);
         eprintln!(
             "mysbx-krun: network: {}",
-            if cfg.network { "shared" } else { "none" }
+            match &cfg.network {
+                Network::Shared => "shared".to_owned(),
+                Network::None => "none".to_owned(),
+                Network::Restricted(egress) => format!(
+                    "restricted (vsock port {} -> {})",
+                    egress.port,
+                    egress.socket.display()
+                ),
+            }
         );
         eprintln!("mysbx-krun: scratch: {:?}", cfg.scratch);
         eprintln!("mysbx-krun: store disk: {:?}", cfg.store_disk);
@@ -1345,11 +1549,14 @@ fn main() {
         + if cfg.overlays.is_empty() { 0 } else { 1 } // the trustfs
         + cfg.devices.len();
     let block_disks = cfg.scratch.is_some() as usize + cfg.store_disk.is_some() as usize;
-    let (irq_used, irq_max) = irq_census(fs_devices, block_disks, cfg.network, pipe_ports);
+    // Restricted keeps ONE vsock slot — the explicit device replaces
+    // the implicit one (same census as shared/TSI, no netdev exists).
+    let vsock_kept = !matches!(cfg.network, Network::None);
+    let (irq_used, irq_max) = irq_census(fs_devices, block_disks, vsock_kept, pipe_ports);
     if chatty {
         eprintln!("mysbx-krun: IRQ census: {irq_used} of {irq_max} slots");
     }
-    ensure_irq_budget(fs_devices, block_disks, cfg.network, pipe_ports);
+    ensure_irq_budget(fs_devices, block_disks, vsock_kept, pipe_ports);
 
     unsafe {
         let ctx = check((api.krun_create_ctx)(), "krun_create_ctx") as c_uint;
@@ -1512,7 +1719,27 @@ fn main() {
         // disabled — so a symbol-less lib simply keeps TSI on, and the
         // shared semantics hold unchanged (bd myconfig-au2: no
         // warning here, silent is CORRECT, not fail-closed-by-accident).
-        match vsock_decision(cfg.network, api.krun_disable_implicit_vsock.is_some()) {
+        // `restricted` (bd myconfig-ild7 — n8kv.2 C3) replaces the
+        // implicit vsock with an explicit one: krun_add_vsock(0) —
+        // tsi_features 0, no tsi_hijack, verified at the pinned
+        // source (builder.rs attaches the cmdline flag only for
+        // HIJACK_INET) — and ONE krun_add_vsock_port mapping the
+        // model port onto the broker's socket. The muxer
+        // (in-process in THIS launcher, inside the bwrap view where
+        // lib.rs ro-bound the broker dir) connects the socket for
+        // every guest connection: the VMM is the relay, no host
+        // relay binary (the qemu channel execs one). A missing API
+        // symbol is refused by name — the only fallback would be
+        // the unfiltered TSI proxy, exactly what proxy-only
+        // forbids. Call ORDER is the API's contract: disable first
+        // (add_vsock on an implicit vsock returns EEXIST), then
+        // add_vsock, then add_vsock_port (ENODEV while Disabled).
+        match vsock_decision(
+            cfg.network.clone(),
+            api.krun_disable_implicit_vsock.is_some(),
+            api.krun_add_vsock.is_some(),
+            api.krun_add_vsock_port.is_some(),
+        ) {
             VsockDecision::KeepTsi => {}
             VsockDecision::DisableTsi => {
                 let disable = api
@@ -1520,9 +1747,50 @@ fn main() {
                     .expect("vsock_decision returned DisableTsi with the symbol set");
                 check((disable)(ctx), "krun_disable_implicit_vsock");
             }
+            VsockDecision::ExplicitNoTsi => {
+                let disable = api
+                    .krun_disable_implicit_vsock
+                    .expect("vsock_decision returned ExplicitNoTsi with the symbol set");
+                let add_vsock = api
+                    .krun_add_vsock
+                    .expect("vsock_decision returned ExplicitNoTsi with the symbol set");
+                let add_port = api
+                    .krun_add_vsock_port
+                    .expect("vsock_decision returned ExplicitNoTsi with the symbol set");
+                check((disable)(ctx), "krun_disable_implicit_vsock");
+                check((add_vsock)(ctx, 0), "krun_add_vsock");
+                let Egress { port, socket } = match &cfg.network {
+                    Network::Restricted(egress) => egress,
+                    _ => unreachable!("ExplicitNoTsi outside restricted mode"),
+                };
+                let path = socket.display().to_string();
+                check(
+                    (add_port)(ctx, *port as c_uint, cstr(&path).as_ptr()),
+                    "krun_add_vsock_port",
+                );
+            }
             VsockDecision::RefusedNoSymbol => {
                 eprintln!(
                     "mysbx-krun: --network none but libkrun has no krun_disable_implicit_vsock — TSI cannot be disabled"
+                );
+                std::process::exit(EXIT_SETUP);
+            }
+            VsockDecision::RefusedNoVsockApi => {
+                let missing = [
+                    (
+                        api.krun_disable_implicit_vsock.is_none(),
+                        "krun_disable_implicit_vsock",
+                    ),
+                    (api.krun_add_vsock.is_none(), "krun_add_vsock"),
+                    (api.krun_add_vsock_port.is_none(), "krun_add_vsock_port"),
+                ]
+                .into_iter()
+                .filter(|(missing, _)| *missing)
+                .map(|(_, name)| name)
+                .collect::<Vec<_>>()
+                .join(", ");
+                eprintln!(
+                    "mysbx-krun: --network restricted but libkrun is missing {missing} — the explicit egress vsock cannot be set up, and the fallback (the unfiltered TSI proxy) is what proxy-only forbids"
                 );
                 std::process::exit(EXIT_SETUP);
             }
@@ -1673,7 +1941,7 @@ mod tests {
             env: Vec::new(),
             overlays: Vec::new(),
             manifest: None,
-            network: true,
+            network: Network::Shared,
             workdir: PathBuf::from("/"),
             scratch: None,
             store_disk: None,
@@ -1682,22 +1950,51 @@ mod tests {
     }
 
     #[test]
-    fn vsock_decision_pins_all_four_combinations() {
+    fn vsock_decision_pins_every_combination() {
         // bd myconfig-ot1, the rrg regression guard: reintroducing
         // the refusal that also swallowed SHARED runs (bd
         // myconfig-rrg) would flip a shared+no-symbol case to
-        // RefusedNoSymbol — this pin catches it.
+        // RefusedNoSymbol — this pin catches it. The restricted
+        // shapes (bd myconfig-ild7 — C3): the full API pair boots
+        // the explicit vsock, ANY missing symbol refuses (the only
+        // fallback would be the unfiltered TSI proxy).
         use VsockDecision::*;
-        assert!(matches!(vsock_decision(true, true), KeepTsi));
-        assert!(
-            matches!(vsock_decision(true, false), KeepTsi),
-            "a shared run proceeds on a symbol-less lib (the rrg fix)"
-        );
-        assert!(matches!(vsock_decision(false, true), DisableTsi));
-        assert!(
-            matches!(vsock_decision(false, false), RefusedNoSymbol),
-            "none on a symbol-less lib stays refused"
-        );
+        let egress = Network::Restricted(Egress {
+            port: 4000,
+            socket: PathBuf::from("/run/mysbx-egress/1/litellm.sock"),
+        });
+        assert!(matches!(
+            vsock_decision(Network::Shared, true, true, true),
+            KeepTsi
+        ));
+        assert!(matches!(
+            vsock_decision(Network::Shared, false, false, false),
+            KeepTsi
+        ));
+        assert!(matches!(
+            vsock_decision(Network::None, true, false, false),
+            DisableTsi
+        ));
+        assert!(matches!(
+            vsock_decision(Network::None, false, true, true),
+            RefusedNoSymbol
+        ));
+        assert!(matches!(
+            vsock_decision(egress.clone(), true, true, true),
+            ExplicitNoTsi
+        ));
+        assert!(matches!(
+            vsock_decision(egress.clone(), false, true, true),
+            RefusedNoVsockApi
+        ));
+        assert!(matches!(
+            vsock_decision(egress.clone(), true, false, true),
+            RefusedNoVsockApi
+        ));
+        assert!(matches!(
+            vsock_decision(egress, true, true, false),
+            RefusedNoVsockApi
+        ));
     }
 
     #[test]
@@ -2023,17 +2320,19 @@ mod tests {
         // The default is SHARED (bd myconfig-dak.6): the implicit
         // vsock's TSI is the guest's egress; the caller names
         // `none` only to disable it.
-        assert!(
+        assert!(matches!(
             parse(&["--rootfs", "/root", "--", "/bin/true"])
                 .unwrap()
-                .network
-        );
-        assert!(
-            !parse(&["--rootfs", "/root", "--network", "none", "--", "/bin/true"])
+                .network,
+            Network::Shared
+        ));
+        assert!(matches!(
+            parse(&["--rootfs", "/root", "--network", "none", "--", "/bin/true"])
                 .unwrap()
-                .network
-        );
-        assert!(
+                .network,
+            Network::None
+        ));
+        assert!(matches!(
             parse(&[
                 "--rootfs",
                 "/root",
@@ -2043,9 +2342,152 @@ mod tests {
                 "/bin/true"
             ])
             .unwrap()
-            .network
-        );
+            .network,
+            Network::Shared
+        ));
         assert!(parse(&["--rootfs", "/root", "--network", "off", "--", "/bin/true"]).is_err());
+    }
+
+    #[test]
+    fn restricted_network_requires_the_socket_port_pair() {
+        // bd myconfig-ild7 — C3: the channel is the restricted
+        // mode's — a restricted flag without the pair, a HALF pair,
+        // or the pair on any other mode are all refused by name.
+        assert!(
+            parse(&[
+                "--rootfs",
+                "/root",
+                "--network",
+                "restricted",
+                "--",
+                "/bin/true",
+            ])
+            .is_err(),
+            "restricted without the pair is refused"
+        );
+        assert!(
+            parse(&[
+                "--rootfs",
+                "/root",
+                "--network",
+                "none",
+                "--egress-port",
+                "4000",
+                "--",
+                "/bin/true",
+            ])
+            .is_err(),
+            "a half pair is refused"
+        );
+        assert!(
+            parse(&[
+                "--rootfs",
+                "/root",
+                "--egress-socket",
+                "/x/y",
+                "--egress-port",
+                "4000",
+                "--",
+                "/bin/true",
+            ])
+            .is_err(),
+            "the pair without restricted is refused"
+        );
+        assert!(
+            parse(&[
+                "--rootfs",
+                "/root",
+                "--network",
+                "restricted",
+                "--egress-socket",
+                "sock",
+                "--egress-port",
+                "4000",
+                "--",
+                "/bin/true",
+            ])
+            .is_err(),
+            "a relative socket is refused"
+        );
+        // Port 0 is reserved, a non-number refused, a non-socket
+        // path refused — all at parse, before any libkrun call.
+        let sock = std::env::temp_dir().join("mysbx-krun-test-sock");
+        let _ = std::fs::remove_file(&sock);
+        let listener = std::os::unix::net::UnixListener::bind(&sock).unwrap();
+        assert!(
+            parse(&[
+                "--rootfs",
+                "/root",
+                "--network",
+                "restricted",
+                "--egress-socket",
+                sock.to_str().unwrap(),
+                "--egress-port",
+                "0",
+                "--",
+                "/bin/true",
+            ])
+            .is_err(),
+            "port 0 is reserved"
+        );
+        assert!(
+            parse(&[
+                "--rootfs",
+                "/root",
+                "--network",
+                "restricted",
+                "--egress-socket",
+                sock.to_str().unwrap(),
+                "--egress-port",
+                "many",
+                "--",
+                "/bin/true",
+            ])
+            .is_err(),
+            "a non-numeric port is refused"
+        );
+        let plain = std::env::temp_dir().join("mysbx-krun-test-plain");
+        std::fs::write(&plain, b"x").unwrap();
+        assert!(
+            parse(&[
+                "--rootfs",
+                "/root",
+                "--network",
+                "restricted",
+                "--egress-socket",
+                plain.to_str().unwrap(),
+                "--egress-port",
+                "4000",
+                "--",
+                "/bin/true",
+            ])
+            .is_err(),
+            "a non-socket path is refused"
+        );
+        let _ = std::fs::remove_file(&plain);
+        // The happy shape: an EXISTING Unix socket + a real port.
+        let cfg = parse(&[
+            "--rootfs",
+            "/root",
+            "--network",
+            "restricted",
+            "--egress-socket",
+            sock.to_str().unwrap(),
+            "--egress-port",
+            "4000",
+            "--",
+            "/bin/true",
+        ])
+        .unwrap();
+        match cfg.network {
+            Network::Restricted(egress) => {
+                assert_eq!(egress.port, 4000);
+                assert_eq!(egress.socket, sock);
+            }
+            _ => panic!("restricted must parse to Network::Restricted"),
+        }
+        drop(listener);
+        let _ = std::fs::remove_file(&sock);
     }
 
     #[test]

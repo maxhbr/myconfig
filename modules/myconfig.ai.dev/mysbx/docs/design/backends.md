@@ -619,10 +619,16 @@ Consequences, stated honestly:
   precedes spawn. Live-proven on runsc 20260817.0
   (`egress-validation-log.md`). microvm-qemu has since been LIFTED
   too (bd myconfig-n8kv.2 C4, bd myconfig-krab: SLiRP `restrict=on`
-  plus one `guestfwd` onto the broker socket — see D9). The
-  remaining VM backends (krun, microvm-ch) keep their
-  `not enforceable today` refusals with their possible lifts tracked
-  under bd myconfig-n8kv.2's children (C2-C3).
+  plus one `guestfwd` onto the broker socket — see D9), and so has
+  the direct krun backend (bd myconfig-n8kv.2 C3, bd
+  myconfig-ild7): the implicit TSI vsock is replaced by an explicit
+  vsock whose one `krun_add_vsock_port` maps the model port onto the
+  broker's socket — the VMM's muxer connects it per guest
+  connection, the baked guest `mysbx-vsock-bridge` serves the
+  payload's `127.0.0.1` URLs over it, and the guest has NO net
+  device at all (see D3/D6). The remaining VM backend (microvm-ch)
+  keeps its `not enforceable today` refusal with its possible lift
+  tracked under bd myconfig-n8kv.2's children (C2).
 - DNS travels the same TSI path (the VMM resolves from the netns's
   resolver) — no guest-specific resolver story is needed for the first
   cut, and none is invented here.
@@ -1083,6 +1089,35 @@ network model is the one bd myconfig-6di.5.5 verified for
   without an external route: neither VMM nor guest could dial out even if a
   future libkrun version re-introduced a path. Defense in depth,
   both layers.
+- **`network = "proxy-only"` replaces the implicit vsock with an
+  EXPLICIT one — the C3 lift (bd myconfig-n8kv.2 C3, bd
+  myconfig-ild7).** The launcher calls
+  `krun_disable_implicit_vsock` → `krun_add_vsock(ctx, 0)` —
+  `tsi_features = 0`, so NO `tsi_hijack` on the guest cmdline
+  (verified at the pinned libkrun source: the flag is attached only
+  for `HIJACK_INET`) — and `krun_add_vsock_port(ctx, <litellm
+  port>, <broker socket>)`: the ONE mapped port connects the
+  per-run egress broker's Unix socket for every guest connection
+  (the VMM muxer's `UnixProxy` — the launcher's bwrap view sees the
+  broker directory through the same ro bind qemu's channel uses).
+  NO net device exists in that guest at all — the strictest fence
+  of D20's table — and NO host relay binary either (the VMM itself
+  is the relay, unlike qemu's guestfwd-exec). The guest side has
+  the relay instead: the baked static `mysbx-vsock-bridge`
+  (rootfs `bin/`, the store-scan idiom; fork-per-connection,
+  `SIGCHLD=SIG_IGN` so the exec'd-from-PID-1 payload need not reap)
+  listens on the guest's `127.0.0.1:<litellm port>` and pumps each
+  accepted connection to `VSOCK-CONNECT:2:<port>` (CID 2 = the host
+  muxer); the init starts it under the `MYSBX_KRUN_NET=restricted`
+  marker, parsing the port from `MYSBX_EGRESS_PROXY` (the ONE
+  canonical endpoint spelling, guest-loopback `http://127.0.0.1:`
+  — unlike qemu's `10.0.2.2` gateway). A libkrun missing any of
+  the three explicit-vsock symbols is refused by name (exit 125,
+  fail-closed): the only fallback would be the unfiltered TSI
+  proxy, exactly what the profile forbids. `--unshare-net` STAYS
+  around the chain — the muxer reaches the broker by pathname,
+  connect(2) needs no net. The CONNECT-lane pairing stays refused
+  (C7's scope): a one-port map cannot express a table.
 - **`krun_set_passt_fd` is out of the first cut.** The symbol needs
   libkrun built `withNet` (nixpkgs `libkrun.override { withNet =
   true; }`), which the wrapped package does not pin. A net-enabled

@@ -1298,11 +1298,16 @@ in
             # myconfig-kid): the scan replaces the per-path stat loop
             # of a host-sized db (~90s of boot on f13).
             storeScanStatic = pkgs.callPackage ./nix/krun-store-scan.nix { };
+            # The restricted mode's static guest relay (bd
+            # myconfig-ild7 — n8kv.2 C3): the bridge the init starts
+            # under MYSBX_KRUN_NET=restricted, before any store path
+            # is visible.
+            vsockBridgeStatic = pkgs.callPackage ./nix/krun-vsock-bridge.nix { };
             # The `env` of the /usr/bin/env shebangs (the podman
             # image's usrBinEnv twin).
             coreutils = pkgs.coreutils;
           };
-          defaultText = literalExpression "pkgs.callPackage ./nix/krun-rootfs.nix { busyboxStatic = pkgs.pkgsStatic.busybox; e2fsprogsStatic = pkgs.pkgsStatic.e2fsprogs; sqliteStatic = pkgs.pkgsStatic.sqlite.bin; storeScanStatic = pkgs.callPackage ./nix/krun-store-scan.nix { }; coreutils = pkgs.coreutils; }";
+          defaultText = literalExpression "pkgs.callPackage ./nix/krun-rootfs.nix { busyboxStatic = pkgs.pkgsStatic.busybox; e2fsprogsStatic = pkgs.pkgsStatic.e2fsprogs; sqliteStatic = pkgs.pkgsStatic.sqlite.bin; storeScanStatic = pkgs.callPackage ./nix/krun-store-scan.nix { }; vsockBridgeStatic = pkgs.callPackage ./nix/krun-vsock-bridge.nix { }; coreutils = pkgs.coreutils; }";
           description = ''
             The guest rootfs of the direct-libkrun backend —
             the Nix-built plain directory (./nix/krun-rootfs.nix)

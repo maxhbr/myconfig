@@ -662,6 +662,15 @@ fn check_share_root(sandbox_path: &str) -> Result<(), Error> {
 /// (which rides as `MYSBX_VM_SHARES` in the env, section 4).
 /// Shared with the microvm-qemu backend (backends.md D9: the same
 /// spec, a different renderer).
+/// The channel's render-side record (Spec::egress): the broker
+/// socket path (launcher-view — lib.rs ro-binds the broker dir at
+/// its own path) and the model port. Shared by both lifted VM
+/// twins' renderers.
+pub(crate) struct EgressSpec {
+    pub(crate) socket: String,
+    pub(crate) port: u16,
+}
+
 pub(crate) struct Spec {
     pub(crate) cpus: u32,
     pub(crate) ram_mib: u32,
@@ -680,6 +689,15 @@ pub(crate) struct Spec {
     /// dials from the launcher's netns), `false` disables it — no
     /// socket path to the host at all.
     pub(crate) network: bool,
+    /// The proxy-only channel's transport record (bd myconfig-krab
+    /// C4 / bd myconfig-ild7 C3): the broker socket PATH as the
+    /// launcher's bwrap view sees it and the model PORT. `Some`
+    /// renders `--network restricted` + the pair — the qemu twin
+    /// maps it to SLiRP restrict=on + guestfwd, the krun twin to
+    /// the explicit egress vsock. `None` is every non-brokered
+    /// run; a brokered profile never reaches here with `None`
+    /// (spec_of's ProxyOnlyRefused gate).
+    pub(crate) egress: Option<EgressSpec>,
     /// The scratch disk's launcher-view path (bd myconfig-dak.7):
     /// the launcher attaches the file with krun_add_disk2 and
     /// announces the disk in the manifest env so the init finds it.
@@ -1035,22 +1053,38 @@ pub(crate) fn spec_of(
     // egress channel gets SLiRP's `restrict=on` + a `guestfwd` of
     // the model port — the forwards-only shape that IS the profile
     // (the fvi.3 source audit: restricted mode drops ALL outbound
-    // TCP except guestfwd targets and blocks UDP) — so the refusal
-    // fires only when the channel is ABSENT: krun and microvm-ch
-    // never set it, and a qemu run that lost its pins fails closed
-    // here instead of sharing the network.
+    // TCP except guestfwd targets and blocks UDP). LIFTED for the
+    // krun twin (bd myconfig-ild7 — n8kv.2 C3): the channel maps
+    // the explicit vsock's ONE port onto the broker socket — the
+    // guest has NO net device at all, which is the strictest
+    // possible fence. The refusal therefore fires only when the
+    // channel is ABSENT: microvm-ch never sets it (its passt lift
+    // is C2's own bead), and a qemu/krun run that lost its pins
+    // fails closed here instead of sharing the network.
     if cfg.network.is_brokered() && params.egress.is_none() {
         return Err(Error::ProxyOnlyRefused);
     }
     // The inverse gate (bd myconfig-krab): a channel on a
-    // non-brokered run is a contradiction — the qemu arm below
-    // renders `--network restricted` from the merged profile, so a
-    // channel without the profile would miswire the fence. The
-    // refusal is builder-level because both twin renderers share
-    // this spec: krun/CH never set the field, so the arm is
-    // qemu-only in practice.
+    // non-brokered run is a contradiction — the qemu arm renders
+    // `--network restricted` (and the krun arm its explicit-vsock
+    // spelling) from the merged profile, so a channel without the
+    // profile would miswire the fence. The refusal is builder-level
+    // because all twin renderers share this spec.
     if params.egress.is_some() && !cfg.network.is_brokered() {
         return Err(Error::EgressChannelWithoutProfile);
+    }
+    // The CONNECT lane stays the bubblewrap broker's (docs/design/
+    // egress-connect.md E7, C7's scope): BOTH lifted VM channels
+    // serve the model endpoint only — a channel carrying table
+    // rows or the public flag would render a restricted net whose
+    // broker has no CONNECT lane to police them, so the run is
+    // refused here once for both twins (defense in depth next to
+    // step 4b, which already refuses allowlist keys next to the
+    // profile on every non-Broker row).
+    if let Some(egress) = params.egress {
+        if !egress.allow_domains.is_empty() || !egress.connect_ports.is_empty() || egress.public {
+            return Err(Error::EgressLaneUnsupported);
+        }
     }
     // The multiplexer applies to the INTERACTIVE payload only (cli.md
     // D11), like on every backend: a one-shot `run -- CMD` is never
@@ -1162,6 +1196,10 @@ pub(crate) fn spec_of(
         // until the krun transport lands (refused at pipeline step 4b
         // anyway).
         network: cfg.network.is_shared(),
+        egress: params.egress.map(|e| EgressSpec {
+            socket: format!("{}/{}", e.socket_dir, e.socket),
+            port: e.port,
+        }),
         scratch: params.scratch.map(str::to_owned),
         // The store disk rides the same route as the scratch: the
         // flag names the image, the env announces it, the init mounts
@@ -1290,20 +1328,30 @@ fn sandbox_env(
     // refused upstream (`spec_of`), and with it the value spells
     // `proxy-only`, whose guest-side endpoint rides the next entry.
     set("MYSBX_NETWORK", cfg.network.name().to_owned());
-    // The proxy-only endpoint (bd myconfig-krab — n8kv.2 C4): the
-    // GUEST-side spelling of the channel. The bwrap/podman lanes
-    // serve `127.0.0.1:<port>` — their relay listens on the
-    // sandbox's own loopback. This backend's channel is SLiRP's
-    // `guestfwd`: the guest dials the FIXED SLiRP gateway address
-    // (`10.0.2.2`), which restricted mode admits for exactly the
-    // forwarded port — so `MYSBX_EGRESS_PROXY` names the gateway
-    // spelling, never `127.0.0.1` (the guest's loopback is its
-    // own; nothing would listen there). Set only with the channel,
-    // inside the infrastructure block, so no layer can spoof it.
+    // The proxy-only endpoint (bd myconfig-krab — n8kv.2 C4, bd
+    // myconfig-ild7 — C3): the GUEST-side spelling of the channel,
+    // per backend. The bwrap/podman lanes serve `127.0.0.1:<port>`
+    // — their relay listens on the sandbox's own loopback. The
+    // qemu channel is SLiRP's `guestfwd`: the guest dials the
+    // FIXED SLiRP gateway (`10.0.2.2`), which restricted mode
+    // admits for exactly the forwarded port — never `127.0.0.1`
+    // (the guest's loopback is its own; nothing would listen
+    // there). The krun channel is the guest bridge: the baked
+    // static relay listens on the GUEST's own loopback, so
+    // `127.0.0.1` is the honest spelling there — the vsock hop
+    // behind it is the init's business, not the payload's. Set
+    // only with the channel, inside the infrastructure block, so
+    // no layer can spoof it.
     if let Some(egress) = params.egress {
+        let host = match cfg.backend.as_deref() {
+            Some("microvm-qemu") => "10.0.2.2",
+            // The krun bridge and the bwrap/podman relays: the
+            // sandbox's own loopback.
+            _ => "127.0.0.1",
+        };
         set(
             "MYSBX_EGRESS_PROXY",
-            format!("http://10.0.2.2:{}", egress.port),
+            format!("http://{host}:{}", egress.port),
         );
     }
     set(
@@ -1549,10 +1597,31 @@ fn render(spec: &Spec) -> Vec<String> {
     // implicit vsock's TSI). `none` disables the vsock in the
     // launcher AND unshares the net around the whole chain (lib.rs's
     // bwrap --unshare-net): neither the VMM nor the guest could
-    // dial out.
-    if !spec.network {
-        argv.push("--network".to_owned());
-        argv.push("none".to_owned());
+    // dial out. The RESTRICTED spelling (bd myconfig-ild7 — C3):
+    // the proxy-only channel replaces the implicit TSI vsock with
+    // the explicit egress one — the launcher maps the model port
+    // onto the broker's socket (the muxer connects it per guest
+    // connection), and the init starts the baked guest bridge
+    // under the MYSBX_KRUN_NET=restricted marker. lib.rs's
+    // --unshare-net STAYS: the muxer reaches the broker by
+    // pathname (connect(2) needs no net), and the guest has no
+    // route out regardless — no net device exists at all.
+    match (!spec.network, &spec.egress) {
+        (false, _) => {}
+        (true, Some(egress)) => {
+            argv.push("--env".to_owned());
+            argv.push("MYSBX_KRUN_NET=restricted".to_owned());
+            argv.push("--network".to_owned());
+            argv.push("restricted".to_owned());
+            argv.push("--egress-socket".to_owned());
+            argv.push(egress.socket.clone());
+            argv.push("--egress-port".to_owned());
+            argv.push(egress.port.to_string());
+        }
+        (true, None) => {
+            argv.push("--network".to_owned());
+            argv.push("none".to_owned());
+        }
     }
     // 4c. the scratch disk (bd myconfig-dak.7, backends.md D7): the
     // launcher attaches the file krun_add_disk2 (a REAL virtio-blk

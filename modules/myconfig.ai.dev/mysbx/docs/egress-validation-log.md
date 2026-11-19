@@ -3,7 +3,7 @@
 > **Scope / current status:** the dated entries below are host-run evidence
 > for the configuration named in each entry, not acceptance of every later
 > backend or policy. The enforcing backends today are `bubblewrap`, the
-> layered `nono` backend, `podman-gvisor` and `microvm-qemu`; every
+> layered `nono` backend, `podman-gvisor`, `microvm-qemu` and `krun`; every
 > other backend refuses `network = "proxy-only"`. See
 > [`backend-comparison.md`](./backend-comparison.md) for the current backend
 > guide and [D20](./design/config.md) for the decision the runs verify.
@@ -717,3 +717,64 @@ forwards-only net IS the profile — no second policy layer needed.
 - The stand-in upstream replaces LiteLLM (offline host); the
   bubblewrap entries above prove the broker's model-lane protocol
   against the real stack, this entry proves the qemu transport.
+
+## 2026-11-19 · krun explicit vsock, live KVM probe (bd myconfig-ild7, n8kv.2 C3)
+
+Host: the offline dev sandbox, KVM present. Guest: libkrunfw 6.12.91,
+`backend = "krun"`, `network = "proxy-only"`, host-store mode. The
+channel: `krun_disable_implicit_vsock` → `krun_add_vsock(0)` →
+`krun_add_vsock_port(4000, <per-run broker socket>)` (pinned libkrun
+1.19.7, symbols verified with `nm -D` against the stock and withBlk
+builds), the baked static `mysbx-vsock-bridge` in the guest rootfs,
+started by the init under `MYSBX_KRUN_NET=restricted`. A python
+echo upstream on host `127.0.0.1:4000` stands in for LiteLLM.
+
+### §1 The guest has no net device at all
+
+`ip link` shows only `lo` (up — the init's header brings it up) and
+the kernel's own `dummy0` (down, no driver); `ip route` is empty;
+there is no `/etc/resolv.conf` — `MYSBX_VM_RESOLV` rides only a
+shared run, so a lookup falls through to nothing and fails. The
+bridge is listening on `127.0.0.1:4000` (guest netstat).
+
+### §2 The one mapped port answers end to end
+
+`nc 127.0.0.1 4000` → `UPSTREAM-REPLY: MODEL-PROBE` (rc 0): the
+guest bridge → AF_VSOCK CID 2:4000 → the VMM muxer's `UnixProxy` →
+the broker's socket → the Landlock-confined upstream. The broker's
+`decisions.jsonl` records the `listen` (the per-run socket → the
+one port, Landlock-confined) and the `allow` (the connection
+through the muxer's own process). No host relay binary exists —
+the VMM itself is the relay, the design difference from C4's
+guestfwd.
+
+### §3 Everything else fails
+
+- A second loopback port (`127.0.0.1:80`): refused instantly (rc 1).
+- An outside address (`1.1.1.1:80`): refused instantly (rc 1) — no
+  net device exists, no TSI (`krun_add_vsock(0)`: no `tsi_hijack` on
+  the guest cmdline, verified at the pinned libkrun source before
+  the run).
+- An UNMAPPED vsock port (a second bridge on 4001, connecting
+  `VSOCK-CONNECT:2:4001`): times out — the muxer drops requests for
+  ports with no map entry, no data path is created; the mapped
+  port still answers afterwards.
+- DNS (`nslookup api.openai.com`): instant failure (no resolver
+  file, nothing listens on the guest's loopback :53).
+
+### Notes
+
+- The first probe attempt failed with `connect vsock: Invalid
+  argument`: the locally-spelled `struct sockaddr_vm` missed the
+  trailing `svm_flags` byte, making the sockaddr 12 bytes where the
+  guest kernel's `vsock_addr_cast` requires 16 — connect(2) EINVAL
+  before the CID is even read. Fixed in `krun-vsock-bridge.c`
+  (recorded so a future relay author does not re-derive it).
+- The inherited outer-sandbox `MYSBX_VM_STORE_DISK=1` pin attached
+  the store disk and pushed the IRQ census to 12 of 11 slots with
+  piped stdio — the launcher's census refused the run by name
+  before any libkrun call (the bd myconfig-rn4e guard working as
+  designed); unsetting the inherited markers fixed the probe.
+- The stand-in upstream replaces LiteLLM (offline host); the
+  bubblewrap entries prove the broker's model-lane protocol against
+  the real stack, this entry proves the krun transport.

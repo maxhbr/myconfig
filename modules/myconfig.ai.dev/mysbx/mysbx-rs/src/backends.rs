@@ -223,7 +223,14 @@ pub const REGISTRY: &[Backend] = &[
         detach_refused: false,
         waypipe_refused: true,
         allowlist: Allowlist::Refused,
-        network_proxy_only: false,
+        // Enforced since bd myconfig-ild7 (n8kv.2 C3): the implicit
+        // TSI vsock is replaced by an EXPLICIT one (`krun_add_vsock`,
+        // tsi_features 0 — no tsi_hijack, no net device at all) whose
+        // ONE `krun_add_vsock_port` mapping sends the model port to
+        // the per-run broker's socket — the VMM's muxer connects it
+        // per guest connection, and the baked guest bridge serves
+        // the payload's 127.0.0.1:<port> endpoint URLs over vsock.
+        network_proxy_only: true,
         network_public: false,
     },
     Backend {
@@ -387,9 +394,14 @@ mod tests {
             // microvm-qemu joins since bd myconfig-krab (n8kv.2 C4):
             // SLiRP's `restrict=on` drops every outbound TCP except
             // the ONE guestfwd-mapped port — a default-deny transport
-            // of its own.
-            let proxy_only_expected =
-                b.always_on || b.name == "podman-gvisor" || b.name == "microvm-qemu";
+            // of its own. krun joins since bd myconfig-ild7
+            // (n8kv.2 C3): the explicit vsock carries exactly ONE
+            // mapped port onto the broker — no net device exists at
+            // all, the strictest fence of the table.
+            let proxy_only_expected = b.always_on
+                || b.name == "podman-gvisor"
+                || b.name == "microvm-qemu"
+                || b.name == "krun";
             assert_eq!(
                 b.network_proxy_only, proxy_only_expected,
                 "`{}`: network_proxy_only must match config.md D20's table",

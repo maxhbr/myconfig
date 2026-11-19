@@ -2891,8 +2891,14 @@ fn sandbox_pipeline(
                 "podman-krun" => {
                     "libkrun's TSI is an UNFILTERED proxy: the VMM dials whatever the guest connects to, from a netns with a default route — and AF_UNIX sockets do not cross virtio-fs, so no default-deny transport exists (a permanent refusal)"
                 }
+                // The krun profile is ENFORCED since bd
+                // myconfig-ild7 (n8kv.2 C3); this arm is unreachable
+                // for it — the registry row admits it upstream and
+                // `spec_of` fails closed when the channel is absent
+                // (a run that lost its broker pins never reaches
+                // the explicit-vsock argv).
                 "krun" => {
-                    "libkrun's TSI is an UNFILTERED proxy: the VMM dials whatever the guest connects to, from a netns with a default route"
+                    "the egress channel did not resolve (the broker pins); the refusal is fail-closed, never a shared network"
                 }
                 // The microvm-qemu profile is ENFORCED since bd
                 // myconfig-krab (n8kv.2 C4); this arm is unreachable
@@ -4547,21 +4553,25 @@ fn sandbox_pipeline(
             // every other store binary.
             // The egress channel of the microvm-qemu proxy-only lift
             // (bd myconfig-krab — n8kv.2 C4): the SAME per-run broker
-            // the bwrap/podman lanes serve, re-expressed for SLiRP —
-            // `restrict=on` plus a `guestfwd` of the model port, the
-            // relay connecting the broker socket per guest
-            // connection. QEMU-ONLY: krun's TSI and CH's passt keep
-            // their refusals (`spec_of` enforces the pair on both
-            // sides), so a channel here never reaches their
-            // builders. The HOST relay pin (`MYSBX_EGRESS_RELAY`)
-            // serves: qemu execs it inside the launcher's bwrap
-            // view, where the ro /nix/store bind already carries
-            // the store path — the same pin the bwrap channel uses,
-            // no qemu-specific wrapper variable. A brokered run
-            // that reaches this arm WITHOUT a channel fails closed
-            // in `spec_of` (`ProxyOnlyRefused`), never a shared net.
-            let qemu_egress_params: Option<bwrap::EgressChannel<'_>> =
-                if backend == "microvm-qemu" && egress.is_some() {
+            // the bwrap/podman lanes serve, re-expressed per VM
+            // twin: qemu maps the model port onto SLiRP's
+            // `restrict=on` + a `guestfwd` (the relay connecting
+            // the broker socket per guest connection); krun maps it
+            // onto the EXPLICIT vsock's one port (bd myconfig-ild7
+            // — n8kv.2 C3) — the muxer itself connects the
+            // socket, no relay binary. MICROVM-CH KEEPS ITS
+            // REFUSAL (C2's own bead): a channel here never reaches
+            // the CH builder (`spec_of` enforces the pair on both
+            // sides). The HOST relay pin (`MYSBX_EGRESS_RELAY`)
+            // serves the qemu twin: its libslirp execs the relay
+            // inside the launcher's bwrap view, where the ro
+            // /nix/store bind already carries the store path — the
+            // same pin the bwrap channel uses, no qemu-specific
+            // wrapper variable. A brokered run that reaches this
+            // arm WITHOUT a channel fails closed in `spec_of`
+            // (`ProxyOnlyRefused`), never a shared net.
+            let vm_egress_params: Option<bwrap::EgressChannel<'_>> =
+                if (backend == "microvm-qemu" || backend == "krun") && egress.is_some() {
                     egress_params.clone()
                 } else {
                     None
@@ -4579,7 +4589,7 @@ fn sandbox_pipeline(
                 scratch: krun_scratch_params_direct.as_deref(),
                 store_disk: krun_store_disk.as_deref(),
                 detachable,
-                egress: qemu_egress_params.as_ref(),
+                egress: vm_egress_params.as_ref(),
                 // The caller's `--verbose` rides through to the
                 // launcher: its `--verbose` flag makes the boot log
                 // its phase timings and setup detail (the dlopen'd
@@ -4766,13 +4776,15 @@ fn sandbox_pipeline(
             if backend == "microvm-ch" {
                 argv.extend(["--ro-bind".into(), "/sys".into(), "/sys".into()]);
             }
-            // The broker directory of a restricted qemu run (bd
-            // myconfig-krab — n8kv.2 C4): qemu's libslirp spawns
-            // the egress relay INSIDE this view (the guestfwd
-            // `-cmd:`), and the relay connects the broker's socket
-            // by PATHNAME — read-only, the waypipe-socket-dir
-            // idiom: connect(2) needs no write on the socket path,
-            // and the broker (running OUTSIDE this view) owns the
+            // The broker directory of a restricted qemu/krun run
+            // (bd myconfig-krab C4 / bd myconfig-ild7 C3): qemu's
+            // libslirp spawns the egress relay INSIDE this view
+            // (the guestfwd `-cmd:`), and krun's VMM muxer
+            // connects the broker's socket from ITS process — this
+            // same launcher-view process — per guest connection.
+            // Read-only either way, the waypipe-socket-dir idiom:
+            // connect(2) needs no write on the socket path, and
+            // the broker (running OUTSIDE this view) owns the
             // directory's lifecycle.
             if let Some(pinned) = egress.as_ref() {
                 let dir = pinned.broker_dir.to_string_lossy().into_owned();
