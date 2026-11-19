@@ -59,14 +59,12 @@ export function showDetails(issue) {
 // ------------------------------------------------- conflict reconcile
 
 function reconcileConflict(fresh) {
-  // install the fresh record the server sent with the 409 so every
-  // subsequent guard (and the board) uses current values
-  const idx = DATA.issues.findIndex((i) => i.id === fresh.id);
-  if (idx >= 0) {
-    const merged = { ...DATA.issues[idx], ...fresh };
-    DATA.issues[idx] = merged;
-    window.render();
-  }
+  // NOTE: the board is NOT touched here. The 409's record may lag a
+  // newer live patch that already arrived (or is arriving via SSE —
+  // the server's forced refetch publishes it); merging it into DATA
+  // would roll the board back. The pane alone reconciles, hydrating
+  // from the server (current truth) so guards stop repeating the
+  // same stale value.
   if (window.SELECTED_ID === fresh.id) {
     if (window.detailsHasDraft && window.detailsHasDraft()) {
       // a draft is in flight: keep the editor, but warn — the next

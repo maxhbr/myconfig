@@ -150,18 +150,27 @@ export function descriptionEditor(issue) {
   ta.value = base;
   ta.disabled = !canWrite();
   ta.placeholder = "description (markdown)";
+  // `pending` = the textarea holds text that is not saved yet — the
+  // draft probe reads THIS, not the autosave flag, so a save that is
+  // rejected (409) or still in flight keeps reporting a draft and
+  // the pane is never rebuilt out from under the user.
+  let pending = false;
+  let saving = false;
   const save = async () => {
-    if (!dirty) return;
+    if (saving) return; // one bd run at a time
+    if (!pending) return;
     const live = liveIssueById();
     if ((live.description || "") !== base) {
       // the record changed underneath: keep the draft and surface
-      // both versions — never silently overwrite a concurrent edit
-      dirty = false;
+      // both versions — never silently overwrite a concurrent edit.
+      // pending STAYS true: the text is still unsaved, Ctrl-S must
+      // still work (the conflict hint re-based `base`, so the next
+      // save proceeds instead of tripping the same check).
       clearTimeout(timer);
       showConflict(live);
       return;
     }
-    dirty = false;
+    saving = true;
     const value = ta.value;
     try {
       const res = await post(`/api/beads/issue/${issue.id}/update`, {
@@ -169,25 +178,37 @@ export function descriptionEditor(issue) {
         if_status: live.status,
       });
       if (res.ok) {
+        const baseOld = base;
         base = value;
-        // advance the live record too: the next edit in the same
-        // pane must not read as a false conflict
-        liveIssueById().description = value;
+        // advance the live record ONLY if nothing replaced it since
+        // the pre-save check (rec still holds baseOld) — otherwise
+        // this response is stale and writing into the current record
+        // would roll a newer patch back. The SSE patch from the
+        // server's own refetch brings the authoritative record.
+        const rec = liveIssueById();
+        if ((rec.description || "") === baseOld || rec === live) {
+          rec.description = value;
+        }
+        // saved — unless the user typed while the request was flying
+        pending = ta.value !== value;
       } else {
-        dirty = true; // 409/4xx: the draft is still pending
+        // 409/4xx: nothing was saved, the text is still pending.
+        // reconcileConflict runs inside post() BEFORE this line and
+        // sees pending=true → the pane survives with the draft.
       }
     } catch {
-      dirty = true; // network error: the edit is still pending
+      // network error: the edit is still pending
+    } finally {
+      saving = false;
     }
   };
   // debounce: description edits arrive one keystroke at a time, and
   // each save is a bd run (potentially a git commit)
   let timer = null;
-  let dirty = false;
-  registerDraftProbe(() => dirty);
+  registerDraftProbe(() => pending || saving);
   const arm = () => {
     if (!canWrite()) return;
-    dirty = true;
+    pending = true;
     clearTimeout(timer);
     timer = setTimeout(save, 1500);
   };
