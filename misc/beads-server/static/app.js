@@ -53,9 +53,16 @@ function render() {
   }
 
   if (isBoard) renderBoard();
-  else renderGraph(NODES);
+  else renderGraph(FOCUS !== null ? focusNodes() : NODES);
 }
 window.render = render;
+
+function focusNodes() {
+  // the visible set under focus = the neighbourhood intersected with
+  // the filter, so the banner and the drawn graph agree
+  const ids = neighbourhood(FOCUS, 2);
+  return NODES.filter((n) => ids.has(n.id));
+}
 
 function neighbourhood(centerId, hops) {
   const ids = new Set([centerId]);
@@ -337,9 +344,12 @@ async function load() {
   document.getElementById("zoom-out").onclick = () => zoomBy(0.8);
   document.getElementById("zoom-fit").onclick = resetView;
   document.getElementById("new-bead").onclick = () => newBeadDialog();
+  // edit capability must be known before the first render: cards and
+  // the details pane decide draggability/controls from canWrite(), and
+  // they would otherwise stay read-only until the next redraw
+  await initEdit();
   render();
   connect(DATA.revision);
-  initEdit();
 }
 
 load();
