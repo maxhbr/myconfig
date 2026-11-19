@@ -3,7 +3,7 @@
 // App shell: data load, toolbar wiring, filtering, render dispatch.
 
 import {
-  DATA, STATUS_ORDER, CLUSTER, setData, statusColor,
+  DATA, STATUS_ORDER, CLUSTER, setData, statusColor, applyIndices,
 } from "./core.js";
 import { connect } from "./live.js";
 import { init as initEdit, newBeadDialog, canWrite } from "./edit.js";
@@ -246,7 +246,7 @@ function buildPresets() {
   sel.append(save);
 }
 
-export async function applyIndices(data) {
+export async function applyIndicesFor(data) {
   // attach reverse_deps/blockers only when they match the issues'
   // revision, so indices never describe a different snapshot
   const rIdx = await fetch("/api/indices");
@@ -263,7 +263,7 @@ export async function fetchSnapshot() {
   if (!rBeads.ok) throw new Error("HTTP " + rBeads.status);
   const data = await rBeads.json();
   for (let attempt = 0; attempt < 5; attempt++) {
-    await applyIndices(data);
+    await applyIndicesFor(data);
     if (data.reverse_deps) return data;
     const fresh = await (await fetch("/api/beads")).json();
     if (fresh.revision === data.revision) return data;

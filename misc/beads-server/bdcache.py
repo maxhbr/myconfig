@@ -82,6 +82,8 @@ class BdCache:
         self.error_count = 0
         self._prev_state = {}  # id -> rendered-field tuple of last snapshot
         self._pending = None  # refetched-but-uncommitted snapshot (dict)
+        self._pending_delta = None  # diff of the pending snapshot
+        self._prev_derived = {}  # id -> (cluster_root, blocked) of last commit
         self.refresh()
 
     def refresh(self):
@@ -115,6 +117,7 @@ class BdCache:
             return {"upserted": [], "removed": [], "error": True}
         delta = self._diff(issues)
         self._pending = issues
+        self._pending_delta = delta
         return delta
 
     def commit_refetch(self):
@@ -127,6 +130,32 @@ class BdCache:
         self.by_id = {i["id"]: i for i in issues}
         self.revision += 1
         self._derive()
+        # a dependency edit re-derives blocked-ness/lane of issues it
+        # never touched, so the delta is completed after derivation:
+        # every issue whose derived state changed joins the upserts
+        if self._pending_delta is not None:
+            self._complete_delta(self._pending_delta)
+            self._pending_delta = None
+
+    def _complete_delta(self, delta):
+        """After _derive(): add issues whose DERIVED state changed.
+
+        The rendered-field diff sees direct edits only; a dependency
+        change re-derives blocked-ness and lane membership of issues
+        that never changed themselves, and those must reach the
+        client too or its cards strand outside their lane with stale
+        blocker chips."""
+        upserted = {i["id"]: i for i in delta["upserted"]}
+        for issue_id, root in self.cluster_root.items():
+            derived = (root, issue_id in self.blocked)
+            if self._prev_derived.get(issue_id) == derived:
+                continue
+            if issue_id not in upserted and issue_id in self.by_id:
+                delta["upserted"].append(copy.deepcopy(self.by_id[issue_id]))
+            self._prev_derived[issue_id] = derived
+        for issue_id in list(self._prev_derived):
+            if issue_id not in self.by_id:
+                del self._prev_derived[issue_id]
 
     def _diff(self, issues):
         """Diff by `id -> (updated_at, status, priority, assignee, title,
@@ -245,6 +274,17 @@ class BdCache:
             },
             "label_counts": self.label_counts,
         }
+
+    def enrich_delta(self, delta):
+        """Attach derived fields and matching indices to a delta so a
+        patch alone is enough to keep the client's view consistent
+        (raw records would strand cards outside their lane and stale
+        blocker chips). Caller holds the lock and has already committed."""
+        for issue in delta.get("upserted", []):
+            issue["cluster_root"] = self.cluster_root.get(issue["id"], issue["id"])
+            issue["is_blocked"] = issue["id"] in self.blocked
+        delta["indices"] = self.indices_payload()
+        return delta
 
     def issue(self, issue_id, with_comments=False):
         """Full `bd show` record, lazily fetched and cached on the dict.

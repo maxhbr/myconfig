@@ -255,6 +255,11 @@ class TestSse(ServerCase):
         raw = result.get("raw", "")
         self.assertIn("event: patch", raw)
         self.assertIn('"upserted"', raw)
+        self.assertIn("indices", raw)  # derived indices ride with patches
+        # the upserted record must carry the derived fields, or the
+        # client's card strands outside its lane with a stale chip
+        self.assertIn("cluster_root", raw)
+        self.assertIn("is_blocked", raw)
 
 
 if __name__ == "__main__":

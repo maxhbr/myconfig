@@ -154,6 +154,11 @@ class Watcher:
             }
             if delta.get("error"):
                 event = {"revision": revision, "stale": True}
+            else:
+                # derived fields + indices ride along so a patch keeps
+                # the client consistent without an extra round trip
+                self.cache.enrich_delta(delta)
+                event["indices"] = delta["indices"]
             for entry in list(self.listeners):
                 try:
                     entry["q"].put_nowait(event)

@@ -91,6 +91,20 @@ class TestSnapshot(FakeBdCase):
         self.assertEqual(payload["revision"], 1)
         self.assertEqual(payload["blockers"]["t-1"], 0)  # blocker closed
 
+    def test_enrich_delta_carries_derived_fields(self):
+        cache = BdCache(self.bd, self.repo)
+        issues = json.loads(json.dumps(ISSUES))
+        issues[1]["status"] = "open"  # t-2 reopens → t-1 becomes blocked
+        issues[1]["updated_at"] = "2026-01-02T00:00:00Z"
+        self.write_issues(issues)
+        delta = cache.refresh()
+        cache.enrich_delta(delta)
+        upserted = {i["id"]: i for i in delta["upserted"]}
+        self.assertIn("t-1", upserted)  # blocked-ness of t-1 changed
+        self.assertTrue(upserted["t-1"]["is_blocked"])
+        self.assertEqual(upserted["t-1"]["cluster_root"], "t-1")
+        self.assertEqual(delta["indices"]["revision"], cache.revision)
+
 
 class TestDelta(FakeBdCase):
     def test_delta_upsert_and_remove(self):

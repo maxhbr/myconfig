@@ -78,6 +78,14 @@ export function applySnapshotPatch({ upserted, removed, revision }) {
   if (revision !== undefined) DATA.revision = revision;
 }
 
+export function applyIndices(idx) {
+  // only indices matching the snapshot's revision describe it
+  if (DATA && idx && idx.revision === DATA.revision) {
+    DATA.reverse_deps = idx.reverse_deps;
+    DATA.blockers = idx.blockers;
+  }
+}
+
 export function select(id) {
   SELECTED = id;
 }

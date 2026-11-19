@@ -2,19 +2,24 @@
 // SPDX-License-Identifier: MIT
 // Live updates: SSE client, patch application, coalesced render.
 
-import { setData, applySnapshotPatch } from "./core.js";
+import { setData, applySnapshotPatch, applyIndices } from "./core.js";
 import { fetchSnapshot, rebuildFilterOptions } from "./app.js";
 
 let SOURCE = null;
 let lastRevision = 0;
 let renderScheduled = false;
+let refetchSeq = 0; // a fetch started before a patch must not apply over it
 
 async function refetchAll() {
+  const seq = ++refetchSeq;
   const data = await fetchSnapshot();
+  if (seq !== refetchSeq) return; // a newer fetch or patch superseded this one
+  if (data.revision < lastRevision) return; // patch arrived meanwhile: keep it
   setData(data);
   lastRevision = data.revision;
   scheduleRender();
 }
+window.refetchAll = refetchAll;
 
 function scheduleRender() {
   if (renderScheduled) return;
@@ -42,7 +47,9 @@ export function connect(revision) {
   SOURCE.addEventListener("patch", (ev) => {
     const data = JSON.parse(ev.data);
     lastRevision = data.revision;
+    refetchSeq++; // invalidate any in-flight full fetch from before this patch
     applySnapshotPatch(data);
+    if (data.indices) applyIndices(data.indices);
     scheduleRender();
     setStale(false);
   });
