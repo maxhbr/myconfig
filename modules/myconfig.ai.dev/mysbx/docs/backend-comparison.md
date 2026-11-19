@@ -88,8 +88,9 @@ A nonempty nono allowlist with `"none"` is refused.
 the sandbox reaches ONLY the host LiteLLM endpoint plus an in-sandbox
 loopback relay to the forwarder's Unix socket. **bubblewrap** and the
 layered **nono** backend enforce it (nono adds `--block-net` and one
-`--allow-connect-port` for the relay, so UDP and raw sockets are
-denied too); the podman, krun and VM backends REFUSE it (exit 70)
+`--allow-connect-port` for the relay, so UDP, raw sockets and
+io_uring are denied too — the pinned nono 0.82.0's own baselines,
+audited in backends.md D1; bd myconfig-n8kv.4); the podman, krun and VM backends REFUSE it (exit 70)
 because their net device always keeps a gateway route. Under the
 profile the forwarded environment narrows to the technical base, a
 credential-shaped `[env]`/`[nix]` name is refused, and a dropped

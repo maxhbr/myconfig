@@ -115,6 +115,27 @@ conflict needs **live acceptance of the exact policy** before recommending
 mixed profiles; inspecting Landlock grants alone does not establish an
 effective bypass.
 
+**UDP, raw sockets and io_uring under the restricted paths (bd
+myconfig-n8kv.4, the omac stage2 precedent): ruled out as a gap —
+the pinned nono already covers exactly that shape.** Source audit
+of the build's actual pin (nixos-unstable 0490633, nono 0.82.0,
+`crates/nono/src/sandbox/linux.rs` + its own
+`execution_strategy_run.rs` test), no mysbx-side filter needed:
+
+| mysbx path | nono network mode | seccomp the child gets |
+| --- | --- | --- |
+| `network = false` (`--block-net`) | Blocked, no port grants | block-all static baseline: `socket()`/`socketpair()` AF_UNIX only, `io_uring_setup()` EPERM (no ring, no queued socket I/O) |
+| `network = "proxy-only"` (`--block-net` + one `--allow-connect-port`) | Blocked, one TCP connect grant | TCP-only static baseline: Internet sockets only as `SOCK_STREAM` with protocol 0/`IPPROTO_TCP` — UDP, raw, SCTP, netlink all EPERM; `io_uring_setup()` EPERM; connect/bind under Landlock port rules |
+| `network = "shared"` + allowlist (`--allow-domain`, D21) | ProxyOnly (proxy mode) | TCP-only static baseline PLUS the proxy notify filter: `connect()`/`bind()`/`sendto()`/`sendmsg()`/`sendmmsg()` to the supervisor (destination-checked), `socket()` AF_UNIX-any / Internet-TCP-stream only, all three io_uring syscalls EPERM |
+| `network = "shared"`, no allowlist | AllowAll, no ports | none — by design: there is no policy to bypass |
+
+The broker paths on the plain bubblewrap backend need no seccomp
+either: `proxy-only`/`public` run in an EMPTY netns (no route, E11's
+probes), so UDP/raw sockets have nowhere to go, and io_uring can only
+drive fds the payload already has — the deny set lives host-side in
+the broker. A live UDP/QUIC probe on a networked host stays the
+follow-up entry's job (the 2026-11-16 template).
+
 Rules for the allowlist case:
 
 - An allowlist must restrict outbound traffic. `listen-ports` alone
