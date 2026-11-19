@@ -167,6 +167,7 @@ Locally:
 ```
 python3 misc/beads-server/tests/test_bdcache.py
 python3 misc/beads-server/tests/test_http.py
+node --test misc/beads-server/tests/test_*.mjs
 ```
 
 ## Troubleshooting

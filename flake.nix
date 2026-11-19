@@ -710,11 +710,13 @@
                   pkgs.python3
                   pkgs.jq.bin
                   pkgs.bash.out
+                  pkgs.nodejs
                 ];
                 checkPhase = ''
                   patchShebangs tests/fake-bd.sh
                   python3 tests/test_bdcache.py
                   python3 tests/test_http.py
+                  node --test tests/test_*.mjs
                 '';
                 installPhase = ''
                   mkdir "$out"

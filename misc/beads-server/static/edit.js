@@ -156,21 +156,23 @@ export function descriptionEditor(issue) {
   // the pane is never rebuilt out from under the user.
   let pending = false;
   let saving = false;
-  const save = async () => {
-    if (saving) return; // one bd run at a time
-    if (!pending) return;
+  let queued = false;
+  let conflict = null; // exact version shown to the user, including ""
+  let timer;
+  const save = async (explicit = false) => {
+    if (!canWrite() || !pending || (conflict !== null && !explicit)) return;
+    if (saving) {
+      queued = true;
+      return;
+    }
     const live = liveIssueById();
-    if ((live.description || "") !== base) {
-      // the record changed underneath: keep the draft and surface
-      // both versions — never silently overwrite a concurrent edit.
-      // pending STAYS true: the text is still unsaved, Ctrl-S must
-      // still work (the conflict hint re-based `base`, so the next
-      // save proceeds instead of tripping the same check).
-      clearTimeout(timer);
-      showConflict(live);
+    const theirs = live.description || "";
+    if (theirs !== (conflict ?? base)) {
+      showConflict(theirs);
       return;
     }
     saving = true;
+    queued = false;
     const value = ta.value;
     try {
       const res = await post(`/api/beads/issue/${issue.id}/update`, {
@@ -178,39 +180,35 @@ export function descriptionEditor(issue) {
         if_status: live.status,
       });
       if (res.ok) {
-        const baseOld = base;
         base = value;
-        // advance the live record ONLY if nothing replaced it since
-        // the pre-save check (rec still holds baseOld) — otherwise
-        // this response is stale and writing into the current record
-        // would roll a newer patch back. The SSE patch from the
-        // server's own refetch brings the authoritative record.
-        const rec = liveIssueById();
-        if ((rec.description || "") === baseOld || rec === live) {
-          rec.description = value;
-        }
-        // saved — unless the user typed while the request was flying
+        // A replaced record belongs to SSE, even if its text was reverted
+        // to the old value while this response was in flight.
+        if (liveIssueById() === live) live.description = value;
+        conflict = null;
+        conflictBox.hidden = true;
         pending = ta.value !== value;
-      } else {
-        // 409/4xx: nothing was saved, the text is still pending.
-        // reconcileConflict runs inside post() BEFORE this line and
-        // sees pending=true → the pane survives with the draft.
+      } else if (res.status === 409 && res.data.issue) {
+        showConflict(res.data.issue.description || "");
       }
+      if (!res.ok) return; // never replay a rejected write
     } catch {
-      // network error: the edit is still pending
+      toast("save failed — draft kept");
+      return;
     } finally {
       saving = false;
     }
+    // A debounce, blur or Ctrl-S may have already fired during the POST.
+    // Flush the latest text once, but only after a successful write.
+    if (queued && pending) return save();
   };
   // debounce: description edits arrive one keystroke at a time, and
   // each save is a bd run (potentially a git commit)
-  let timer = null;
   registerDraftProbe(() => pending || saving);
   const arm = () => {
     if (!canWrite()) return;
-    pending = true;
+    pending = saving || conflict !== null || ta.value !== base;
     clearTimeout(timer);
-    timer = setTimeout(save, 1500);
+    if (pending && conflict === null) timer = setTimeout(save, 1500);
   };
   ta.oninput = arm;
   ta.onblur = () => {
@@ -224,7 +222,7 @@ export function descriptionEditor(issue) {
     if (ev.key === "s" && (ev.ctrlKey || ev.metaKey)) {
       ev.preventDefault();
       clearTimeout(timer);
-      save();
+      save(true);
     }
   };
   const hint = document.createElement("div");
@@ -232,22 +230,18 @@ export function descriptionEditor(issue) {
   hint.textContent = canWrite()
     ? "autosaves 1.5 s after typing stops · Ctrl-S saves now"
     : "";
-  wrap.append(ta, hint);
-  // a concurrent writer beat us: show their version next to the
-  // draft (kept intact above) instead of discarding either side
-  const showConflict = (live) => {
-    const box = document.createElement("div");
-    box.className = "edit-hint conflict-hint";
-    const theirs = document.createElement("pre");
-    theirs.textContent = live.description || "(empty)";
-    const label = document.createElement("div");
-    label.textContent =
-      "description changed elsewhere — their version (draft kept above, " +
-      "Ctrl-S overwrites):";
-    box.append(label, theirs);
-    wrap.insertBefore(box, hint);
-    base = live.description || ""; // next save overwrites consciously
-    toast("description changed elsewhere — draft kept");
+  const conflictBox = document.createElement("div");
+  conflictBox.className = "edit-hint conflict-hint";
+  conflictBox.hidden = true;
+  const remoteText = document.createElement("pre");
+  conflictBox.append("Changed elsewhere. Autosave paused; Ctrl-S overwrites this version:", remoteText);
+  wrap.append(ta, conflictBox, hint);
+  const showConflict = (description) => {
+    clearTimeout(timer);
+    conflict = description;
+    remoteText.textContent = description || "(empty)";
+    conflictBox.hidden = false;
+    toast("conflict — draft kept");
   };
   return wrap;
 }
