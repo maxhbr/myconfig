@@ -97,6 +97,7 @@ fn params<'a>(
         store_disk: None,
         verbose: false,
         detachable: false,
+        egress: None,
     }
 }
 
@@ -132,10 +133,12 @@ fn run(cfg: &Merged, repo: &Repo, payload: &Payload, params: &Params<'_>) -> Vec
 }
 
 #[test]
-fn proxy_only_is_refused_by_the_builder() {
-    // D20 (bd myconfig-6di.3): the qemu builder refuses
-    // `network = "proxy-only"` itself — the SLiRP net device always
-    // has a gateway route.
+fn proxy_only_without_a_channel_is_refused_by_the_builder() {
+    // D20 (bd myconfig-krab): a `network = "proxy-only"` run whose
+    // params carry NO channel is refused — the fail-closed half of
+    // the lift. A channel-less brokered run would have no forward
+    // to render, and the refusal fires in `spec_of` before any
+    // argv exists, never a silent shared network.
     let mut cfg = base(true);
     cfg.network = mysbx::config::Network::ProxyOnly;
     let p = params("/synth/rootfs", "/synth/shell", None, Workspace::Live);
@@ -149,8 +152,194 @@ fn proxy_only_is_refused_by_the_builder() {
         KERNEL,
         &[],
     )
-    .expect_err("a proxy-only qemu run must be refused");
+    .expect_err("a channel-less proxy-only qemu run must be refused");
     assert!(matches!(err, mysbx::krun::Error::ProxyOnlyRefused), "{err}");
+}
+
+#[test]
+fn a_channel_without_the_profile_is_refused_by_the_builder() {
+    // The inverse gate (bd myconfig-krab): the channel renders only
+    // under its profile — a shared run carrying one is a wiring
+    // error the builder refuses, not a restricted net silently
+    // attached to a shared config.
+    let mut cfg = base(true);
+    let channel = mysbx::bwrap::EgressChannel {
+        socket_dir: "/run/user/1000/mysbx-egress/1234",
+        socket: "litellm.sock",
+        port: 4000,
+        relay_bin: "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
+        etc_dir: "/synth/store/bbbb-mysbx-egress-etc",
+        allow_domains: &[],
+        connect_ports: &[],
+        public: false,
+    };
+    let p = mysbx::krun::Params {
+        egress: Some(&channel),
+        ..params("/synth/rootfs", "/synth/shell", None, Workspace::Live)
+    };
+    let host_env = BTreeMap::new();
+    let err = microvm_qemu_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env,
+        &p,
+        KERNEL,
+        &[],
+    )
+    .expect_err("a channel on a shared qemu run must be refused");
+    assert!(
+        matches!(err, mysbx::krun::Error::EgressChannelWithoutProfile),
+        "{err}"
+    );
+}
+
+#[test]
+fn a_channel_with_connect_lane_state_is_refused_by_the_builder() {
+    // The CONNECT lane is the bubblewrap broker's (bd myconfig-krab;
+    // C7 owns the table work): a channel carrying table rows or the
+    // public flag renders a restricted net whose guestfwd forwards
+    // only the model port — the rows would be a lie. Refused at the
+    // builder, defense in depth next to step 4b's registry gate.
+    for (domains, ports, public) in [
+        (vec!["api.openai.com".to_string()], vec![], false),
+        (vec![], vec![443], false),
+        (vec![], vec![], true),
+    ] {
+        let mut cfg = base(true);
+        cfg.network = mysbx::config::Network::ProxyOnly;
+        let channel = mysbx::bwrap::EgressChannel {
+            socket_dir: "/run/user/1000/mysbx-egress/1234",
+            socket: "litellm.sock",
+            port: 4000,
+            relay_bin: "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
+            etc_dir: "/synth/store/bbbb-mysbx-egress-etc",
+            allow_domains: &domains,
+            connect_ports: &ports,
+            public,
+        };
+        let p = mysbx::krun::Params {
+            egress: Some(&channel),
+            ..params("/synth/rootfs", "/synth/shell", None, Workspace::Live)
+        };
+        let host_env = BTreeMap::new();
+        let err = microvm_qemu_argv(
+            &cfg,
+            &synth_repo(),
+            &Payload::Shell,
+            &host_env,
+            &p,
+            KERNEL,
+            &[],
+        )
+        .expect_err("a CONNECT-lane channel must be refused on qemu");
+        assert!(
+            matches!(err, mysbx::krun::Error::EgressLaneUnsupported),
+            "{err}"
+        );
+    }
+}
+
+#[test]
+fn proxy_only_golden_renders_the_restricted_channel() {
+    // The lift's argv shape (bd myconfig-krab — n8kv.2 C4): the
+    // launcher gets `--network restricted` plus the channel pair —
+    // the broker socket qemu's guestfwd relay connects, and the
+    // port the guest dials on the SLiRP gateway. The guest env
+    // carries the restricted NIC marker (no default route, no DNS
+    // proxy — the init's restricted arm) and the guest-side
+    // `MYSBX_EGRESS_PROXY` spelling (the 10.0.2.2 gateway, never
+    // `127.0.0.1`: the guest's loopback is its own). No
+    // `--network none` — the restricted netdev IS the fence.
+    let mut cfg = base(false);
+    cfg.network = mysbx::config::Network::ProxyOnly;
+    let channel = mysbx::bwrap::EgressChannel {
+        socket_dir: "/run/user/1000/mysbx-egress/1234",
+        socket: "litellm.sock",
+        port: 4000,
+        relay_bin: "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
+        etc_dir: "/synth/store/bbbb-mysbx-egress-etc",
+        allow_domains: &[],
+        connect_ports: &[],
+        public: false,
+    };
+    let p = mysbx::krun::Params {
+        egress: Some(&channel),
+        ..params("/synth/rootfs", "/synth/shell", None, Workspace::Live)
+    };
+    let host_env = BTreeMap::new();
+    let argv = microvm_qemu_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env,
+        &p,
+        KERNEL,
+        &[],
+    )
+    .unwrap_or_else(|e| panic!("the restricted argv builds: {e}"));
+    assert!(argv
+        .windows(2)
+        .any(|w| w[0] == "--network" && w[1] == "restricted"));
+    assert!(
+        argv.windows(2).any(|w| w[0] == "--egress-socket"
+            && w[1] == "/run/user/1000/mysbx-egress/1234/litellm.sock"),
+        "the socket is the broker dir plus the pinned name: {argv:?}"
+    );
+    assert!(argv
+        .windows(2)
+        .any(|w| w[0] == "--egress-port" && w[1] == "4000"));
+    assert!(argv
+        .windows(2)
+        .any(|w| w[0] == "--env" && w[1] == "MYSBX_MICROVM_NET=restricted"));
+    assert!(argv
+        .windows(2)
+        .any(|w| w[0] == "--env" && w[1] == "MYSBX_EGRESS_PROXY=http://10.0.2.2:4000"));
+    assert!(!argv.iter().any(|a| a == "none"));
+    assert_golden("egress-proxy-only.txt", &argv);
+}
+
+#[test]
+fn proxy_only_golden_matches_the_krun_env_parity() {
+    // The guest env parity: the restricted run's `MYSBX_NETWORK` is
+    // `proxy-only` (the merged profile, not a `none` lie) and the
+    // relay binary rides NO argv piece — the launcher reads the
+    // wrapper's pin (`MYSBX_MICROVM_QEMU_EGRESS_RELAY`), so the
+    // builder's argv names only paths inside the views it builds.
+    let mut cfg = base(false);
+    cfg.network = mysbx::config::Network::ProxyOnly;
+    let channel = mysbx::bwrap::EgressChannel {
+        socket_dir: "/run/user/1000/mysbx-egress/1234",
+        socket: "litellm.sock",
+        port: 4000,
+        relay_bin: "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
+        etc_dir: "/synth/store/bbbb-mysbx-egress-etc",
+        allow_domains: &[],
+        connect_ports: &[],
+        public: false,
+    };
+    let p = mysbx::krun::Params {
+        egress: Some(&channel),
+        ..params("/synth/rootfs", "/synth/shell", None, Workspace::Live)
+    };
+    let host_env = BTreeMap::new();
+    let argv = microvm_qemu_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env,
+        &p,
+        KERNEL,
+        &[],
+    )
+    .unwrap_or_else(|e| panic!("the argv builds: {e}"));
+    assert!(argv
+        .windows(2)
+        .any(|w| w[0] == "--env" && w[1] == "MYSBX_NETWORK=proxy-only"));
+    assert!(
+        !argv.iter().any(|a| a.contains("aaaa-mysbx")),
+        "the relay pin never rides the builder argv: {argv:?}"
+    );
 }
 
 #[test]

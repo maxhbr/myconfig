@@ -112,7 +112,26 @@
   # .2 gateway; the resolver written above is therefore REWRITTEN
   # to the proxy (the krun arm never runs this — TSI dials from
   # the HOST netns, where the host's addresses are exactly right).
-  if [ "''${MYSBX_MICROVM_NET:-}" = "1" ]; then
+  #
+  # The RESTRICTED spelling (bd myconfig-krab — n8kv.2 C4): the
+  # same NIC, the same SLiRP address — but the netdev ran with
+  # `restrict=on` (all outbound TCP dropped except the ONE
+  # guestfwd target, outbound UDP blocked entirely — the fvi.3
+  # libslirp source audit), so the default route and the
+  # DNS-proxy rewrite would only produce dead dials and resolver
+  # timeouts. The address stays (10.0.2.2 must be ON-LINK for the
+  # forwarded gateway address to be reachable), the route is
+  # skipped, and the resolver is EMPTIED instead: a resolv.conf
+  # with no nameserver fails a lookup AT ONCE (the bwrap
+  # channel's `nsswitch hosts: files` fail-fast story, spelled
+  # for a guest whose hosts file is init-written) — the payload
+  # never waits out a DNS timeout on the one address it cannot
+  # resolve anyway.
+  _restricted=""
+  if [ "''${MYSBX_MICROVM_NET:-}" = "restricted" ]; then
+      _restricted="yes"
+  fi
+  if [ "''${MYSBX_MICROVM_NET:-}" = "1" ] || [ -n "$_restricted" ]; then
       _nic=""
       for _if in /sys/class/net/*; do
           # -e, never -f: a sysfs driver bind is a symlink to a
@@ -130,8 +149,15 @@
               || fail "cannot address the NIC $_nic"
           "$BB" ip link set "$_nic" up \
               || fail "cannot bring the NIC $_nic up"
-          "$BB" ip route add default via 10.0.2.2 \
-              || fail "cannot add the default route via 10.0.2.2"
+          # The default route is SHARED-ONLY: restricted mode drops
+          # every outbound dial at the netdev (the fvi.3 audit),
+          # so a route would only lengthen the failure path. The
+          # forwarded 10.0.2.2 is ON-LINK (the same /24),
+          # reachable with no route entry at all.
+          if [ -z "$_restricted" ]; then
+              "$BB" ip route add default via 10.0.2.2 \
+                  || fail "cannot add the default route via 10.0.2.2"
+          fi
           # The SLiRP DNS proxy — the host's resolver addresses
           # are unreachable from behind the NAT (bd
           # myconfig-m0to). A fresh tmpfs (no /etc shares) keeps
@@ -159,10 +185,20 @@
           ensure_uid_files
           [ -f /etc/hosts ] || "$BB" printf '%s\n' \
               '127.0.0.1 localhost' > /etc/hosts
-          "$BB" printf 'nameserver 10.0.2.3\n' > /etc/resolv.conf \
-              || fail "cannot write the SLiRP resolver"
+          # The resolver: the DNS proxy (10.0.2.3) under shared,
+          # EMPTY under restricted (bd myconfig-krab) — restricted
+          # mode blocks outbound UDP, so the proxy is dead weight;
+          # a resolv.conf with no nameserver fails lookups at
+          # once instead of timing out.
+          if [ -n "$_restricted" ]; then
+              "$BB" printf '%s\n' '# no nameserver: restricted (mysbx proxy-only)' > /etc/resolv.conf \
+                  || fail "cannot write the restricted resolver"
+          else
+              "$BB" printf 'nameserver 10.0.2.3\n' > /etc/resolv.conf \
+                  || fail "cannot write the SLiRP resolver"
+          fi
       else
-          fail "MYSBX_MICROVM_NET=1 but no virtio_net interface exists — the NIC did not attach"
+          fail "MYSBX_MICROVM_NET set but no virtio_net interface exists — the NIC did not attach"
       fi
   fi
 

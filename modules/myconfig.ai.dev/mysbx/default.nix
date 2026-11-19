@@ -1536,8 +1536,18 @@ in
           # backend (no PATH lookup under bwrap).
           qemu = pkgs.qemu_test;
           virtiofsd = pkgs.virtiofsd;
+          # The guestfwd relay of the restricted channel (bd
+          # myconfig-krab): the SAME crate derivation the bwrap
+          # channel's relay pin uses, pinned into the launcher's
+          # OWN wrapper — under bwrap's --clearenv the mysbx
+          # wrapper's env pins never reach the launcher, so the
+          # pin rides the launcher wrapper (the QEMU/VIRTIOFSD
+          # idiom). Null (the standalone default) keeps the
+          # wrapper pinless: a --network restricted run then
+          # fails closed naming the pin.
+          egressRelay = egressRelayCrate;
         };
-        defaultText = literalExpression "pkgs.callPackage ./nix/microvm-qemu-launcher.nix { qemu = pkgs.qemu_test; virtiofsd = pkgs.virtiofsd; }";
+        defaultText = literalExpression "pkgs.callPackage ./nix/microvm-qemu-launcher.nix { qemu = pkgs.qemu_test; virtiofsd = pkgs.virtiofsd; egressRelay = null; }";
         description = ''
           The mysbx-microvm-qemu launcher of the native-qemu
           backend — the zero-dependency Rust binary

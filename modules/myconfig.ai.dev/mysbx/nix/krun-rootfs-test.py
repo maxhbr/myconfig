@@ -269,7 +269,7 @@ class InitTests(unittest.TestCase):
         # files as the resolver step, and re-ensures after its own
         # tmpfs — the share-loop tmpfs the earlier step could not
         # see is the case the re-ensure covers (bd myconfig-v3fk).
-        start = INIT.index('if [ "${MYSBX_MICROVM_NET:-}" = "1" ]; then')
+        start = INIT.index('if [ "${MYSBX_MICROVM_NET:-}" = "1" ] || [ -n "$_restricted" ]; then')
         end = INIT.index("# The scratch disk", start)
         block = INIT[start:end]
         self.assertIn("for _f in hosts passwd group; do", block)
@@ -831,12 +831,19 @@ class InitTests(unittest.TestCase):
         # configures qemu's fixed user-netdev defaults. The shape is
         # pinned on the generated text; the driver match runs live
         # under the baked busybox against a synthetic sysfs tree.
-        start = INIT.index('if [ "${MYSBX_MICROVM_NET:-}" = "1" ]; then')
+        # The restricted spelling (bd myconfig-krab): the SAME step
+        # serves the proxy-only netdev — the address stays (the
+        # forwarded gateway must be on-link), the route and the
+        # DNS-proxy rewrite are gated off (restricted mode drops
+        # every outbound dial), and the resolver is emptied so a
+        # lookup fails at once instead of timing out.
+        start = INIT.index('if [ "${MYSBX_MICROVM_NET:-}" = "1" ] || [ -n "$_restricted" ]; then')
         end = INIT.index("# The scratch disk", start)
         block = INIT[start:end]
         self.assertIn("*virtio_net)", block)
         self.assertIn("ip addr add 10.0.2.15/24", block)
         self.assertIn("ip route add default via 10.0.2.2", block)
+        self.assertIn('if [ -z "$_restricted" ]; then', block)
         self.assertIn("the NIC did not attach", block)
         # The resolver rewrite (bd myconfig-m0to): the host's own
         # nameservers are host-local — behind the SLiRP NAT they
@@ -846,6 +853,9 @@ class InitTests(unittest.TestCase):
         self.assertIn("nameserver 10.0.2.3", block)
         self.assertIn("> /etc/resolv.conf", block)
         self.assertIn("127.0.0.1 localhost", block)
+        # The restricted resolver (bd myconfig-krab): empty, with a
+        # marker comment — never the dead DNS proxy.
+        self.assertIn("no nameserver: restricted", block)
         # `ip link set` — never a bare interface name assumption.
         self.assertNotIn("eth0", block)
 

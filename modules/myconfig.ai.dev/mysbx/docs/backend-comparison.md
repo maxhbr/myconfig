@@ -24,7 +24,7 @@ snapshots; use this page for the current seven-backend comparison.
 | `podman-gvisor` | Rootless Podman with the gVisor userspace kernel | Image-owned store; no implicit host-store bind | Podman networking, normally pasta |
 | `podman-krun` | Rootless Podman with crun's libkrun VM handler; payload is guest root | Image-owned store; no implicit host-store bind | Guest socket proxy through the container network namespace |
 | `krun` | Host bubblewrap, then an in-process libkrun VM and file server; payload is guest root | Host or baked store, as selected below | libkrun TSI socket proxy through the launcher's namespace |
-| `microvm-qemu` | Host bubblewrap, QEMU and separate virtiofsd file servers; payload is guest root | The same host/baked choice and guest init as direct krun | SLiRP user-mode NAT |
+| `microvm-qemu` | Host bubblewrap, QEMU and separate virtiofsd file servers; payload is guest root | The same host/baked choice and guest init as direct krun | SLiRP user-mode NAT; under `proxy-only`: `restrict=on` plus one `guestfwd` (forwards-only) |
 | `microvm-ch` | Host bubblewrap, cloud-hypervisor and separate virtiofsd file servers; payload is guest root | The same host/baked choice and guest init as direct krun | passt over vhost-user, on SLiRP's address plan |
 
 These are different boundaries, not a proven security ranking. VM host
@@ -85,14 +85,16 @@ device, and nono also gets `--block-net`. `"shared"` is the default.
 A nonempty nono allowlist with `"none"` is refused.
 
 `network = "proxy-only"` is the no-key profile (`config.md` D20/D28):
-the sandbox reaches ONLY the host LiteLLM endpoint plus an in-sandbox
-loopback relay to the forwarder's Unix socket. **bubblewrap** and the
+the sandbox reaches ONLY the host LiteLLM endpoint plus a relay to
+the broker's Unix socket. **bubblewrap** and the
 layered **nono** backend enforce it (nono adds `--block-net` and one
 `--allow-connect-port` for the relay, so UDP, raw sockets and
 io_uring are denied too — the pinned nono 0.82.0's own baselines,
-audited in backends.md D1; bd myconfig-n8kv.4); the podman, krun and VM backends REFUSE it (exit 70)
-because their net device always keeps a gateway route — with two
-PERMANENT refusals and one lift: `podman-krun`'s refusal is PERMANENT
+audited in backends.md D1; bd myconfig-n8kv.4); **podman-gvisor**
+and **microvm-qemu** enforce it too (their transports below); the
+podman-krun, krun and microvm-ch backends REFUSE it (exit 70)
+because their net device always keeps a gateway route — with one
+PERMANENT refusal and two lifts: `podman-krun`'s refusal is PERMANENT
 (bd myconfig-n8kv.2 C6: libkrun's TSI is an unfiltered proxy and
 AF_UNIX sockets do not cross virtio-fs, so no default-deny transport
 exists there), **podman-gvisor no longer refuses it** (bd
@@ -104,8 +106,19 @@ socket; an in-image relay (`mysbx-egress-relay`) bridges the baked
 `127.0.0.1:<litellm port>` URLs onto that socket; a recursive
 no-symlink-follow audit of every bind source runs before spawn, so
 no other host socket rides along; live-proven on runsc 20260817.0 in
-`egress-validation-log.md`)); the remaining backends' possible lifts
-are tracked as bd myconfig-n8kv.2's children. Under the
+`egress-validation-log.md`)); **microvm-qemu no longer refuses it
+either** (bd myconfig-n8kv.2 C4, bd myconfig-krab: the SLiRP netdev
+is created with `restrict=on`, which drops every outbound TCP except
+the ONE `guestfwd`-mapped port and blocks outbound UDP entirely —
+libslirp's own semantics, audited at source — plus a single
+`guestfwd` mapping of `10.0.2.2:<litellm port>` onto the per-run
+broker's socket: qemu's libslirp execs the crate's
+`mysbx-egress-relay` per guest connection to bridge the mapping,
+the guest init configures the NIC with no default route and no DNS
+under the `restricted` marker, and the guest's endpoint spelling is
+`MYSBX_EGRESS_PROXY=http://10.0.2.2:<litellm port>`); the remaining
+backends' possible lifts are tracked as bd myconfig-n8kv.2's
+children. Under the
 profile the forwarded environment narrows to the technical base, a
 credential-shaped `[env]`/`[nix]` name is refused, and a dropped
 credential name gets the fixed `mysbx-proxy-only` placeholder.

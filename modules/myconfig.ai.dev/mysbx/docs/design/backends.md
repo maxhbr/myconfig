@@ -617,9 +617,12 @@ Consequences, stated honestly:
   bridges the baked `127.0.0.1:<litellm port>` URLs onto the bound
   socket; a recursive no-symlink-follow audit of every bind source
   precedes spawn. Live-proven on runsc 20260817.0
-  (`egress-validation-log.md`). The direct VM backends keep their
+  (`egress-validation-log.md`). microvm-qemu has since been LIFTED
+  too (bd myconfig-n8kv.2 C4, bd myconfig-krab: SLiRP `restrict=on`
+  plus one `guestfwd` onto the broker socket — see D9). The
+  remaining VM backends (krun, microvm-ch) keep their
   `not enforceable today` refusals with their possible lifts tracked
-  under bd myconfig-n8kv.2's children (C2-C4).
+  under bd myconfig-n8kv.2's children (C2-C3).
 - DNS travels the same TSI path (the VMM resolves from the netns's
   resolver) — no guest-specific resolver story is needed for the first
   cut, and none is invented here.
@@ -1332,8 +1335,27 @@ measurement. virtiofsd's `--sandbox none` trusts the bwrap view, which
 still includes the whole host store even for a narrowed baked guest.
 The payload is guest root; host VMM/file servers run as the invoking
 uid. `network = false` is the same two-layer kill (no netdev +
-`--unshare-net`). Allowlists stay refused (config.md D21): SLiRP, NOT
-passt, supplies no per-domain/port policy hook here.
+`--unshare-net`). `network = "proxy-only"` is ENFORCED since bd
+myconfig-n8kv.2 C4 (bd myconfig-krab): the SLiRP netdev runs with
+`restrict=on` — libslirp drops every outbound TCP SYN except the ONE
+`guestfwd`-mapped address:port and blocks outbound UDP entirely
+(the fvi.3 source audit) — plus a single
+`guestfwd=tcp:10.0.2.2:<litellm port>-cmd:<relay> --guestfwd
+<broker socket>` mapping: the guest's only reach is the model port,
+and qemu's libslirp execs the crate's `mysbx-egress-relay` (its
+`--guestfwd <socket>` mode: fd 0 is the accepted connection) per
+guest connection to bridge it onto the per-run broker's Unix socket,
+whose directory the run binds read-only into the launcher's bwrap
+view (the waypipe-dir idiom; `--unshare-net` STAYS — the relay
+reaches the socket by pathname). The guest init configures the NIC
+address without a default route under the `MYSBX_MICROVM_NET=restricted`
+marker (10.0.2.2 is on-link) and empties resolv.conf — no DNS proxy:
+the profile grants the endpoint, not the name. The relay pin rides
+the launcher's OWN wrapper (`MYSBX_MICROVM_QEMU_EGRESS_RELAY`),
+because the launcher runs inside bwrap's `--clearenv` and the mysbx
+wrapper's env pins never reach it. Allowlists stay refused
+(config.md D21): the forwards-only netdev cannot express a table —
+the C7 lift owns that question.
 
 Cleanup is implemented with `Drop` for ordinary return/error paths,
 including daemon termination and runtime-directory removal. It is not

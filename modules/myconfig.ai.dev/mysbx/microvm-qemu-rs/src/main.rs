@@ -211,6 +211,70 @@ struct OverlayFile {
     data: Vec<u8>,
 }
 
+/// The run's network mode (the tri-state of bd myconfig-krab over
+/// the original bool): `Shared` keeps the plain SLiRP user netdev,
+/// `None` attaches no NIC at all, `Restricted` is the proxy-only
+/// channel — SLiRP `restrict=on` plus ONE `guestfwd` of the model
+/// port onto the host relay.
+#[derive(Debug, Clone, PartialEq)]
+enum Network {
+    Shared,
+    None,
+    /// The `--egress-port`/`--egress-socket` pair, filled in by the
+    /// post-parse validation (the flags may arrive in any order).
+    Restricted(Option<Egress>),
+}
+
+/// The restricted netdev's one forward (bd myconfig-krab): the
+/// guest-visible port on the FIXED SLiRP gateway (the guest dials
+/// `10.0.2.2:<port>`, the address the baked endpoint URLs already
+/// carry on this backend) and the HOST-side socket of the per-run
+/// egress broker — the relay (below) connects it for every guest
+/// connection.
+#[derive(Debug, Clone, PartialEq)]
+struct Egress {
+    port: u16,
+    socket: PathBuf,
+}
+
+/// The relay binary qemu's libslirp `fork_exec` execs per guest
+/// connection (the `guestfwd=…-cmd:` half of the netdev string).
+/// PINNED, no PATH fallback — the run path's own rule: the
+/// mysbx wrapper sets it from the SAME crate closure the bwrap
+/// channel's relay pin uses (`MYSBX_EGRESS_RELAY`), so both
+/// channels always name one build. A missing pin is a 125 with a
+/// diagnosis, never a silent guess that would render a netdev
+/// whose first guest connection dies ENOENT.
+fn egress_relay_bin() -> PathBuf {
+    std::env::var_os("MYSBX_MICROVM_QEMU_EGRESS_RELAY")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            eprintln!(
+                "mysbx-microvm-qemu: --network restricted needs the egress relay \
+                 (MYSBX_MICROVM_QEMU_EGRESS_RELAY), but this build pinned none"
+            );
+            std::process::exit(125);
+        })
+}
+
+/// The comma-free guarantee for the `guestfwd` option value: qemu
+/// splits netdev options on commas, so a path with a comma would
+/// silently truncate the mapping. Whitespace is fine (libslirp's
+/// `g_shell_parse_argv` splits the value like a shell), but a
+/// path the builder never quotes is safer rejected than guessed.
+fn egress_option_safe(path: &Path, what: &str) -> Result<(), String> {
+    let text = path.to_string_lossy();
+    if text.contains(',') {
+        Err(format!("--egress-{what} path `{text}` contains a comma — qemu's netdev option parser would split it"))
+    } else if text.split_whitespace().count() != 1 {
+        Err(format!(
+            "--egress-{what} path `{text}` contains whitespace — the guestfwd argv split would misread it"
+        ))
+    } else {
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 struct Config {
     cpus: u8,
@@ -231,7 +295,7 @@ struct Config {
     env: Vec<(String, String)>,
     overlays: Vec<OverlayFile>,
     manifest: Option<PathBuf>,
-    network: bool,
+    network: Network,
     workdir: PathBuf,
     scratch: Option<PathBuf>,
     store_disk: Option<PathBuf>,
@@ -244,7 +308,8 @@ fn usage() -> ! {
          --kernel BZIMAGE [--exit-channel] [--nested-virt] [--init PATH] \
          [--ro-device TAG=DIR] [--rw-device TAG=DIR] \
          [--ro-share TAG:SLOT@DEST] [--rw-share TAG:SLOT@DEST] \
-         [--manifest FILE] [--network shared|none] \
+         [--manifest FILE] [--network shared|none|restricted \
+          (--egress-port PORT --egress-socket PATH)] \
          [--scratch FILE] [--store-disk FILE] [--env K=V]... \
          [--krun-overlay TAG@PATH:MODE:B64]... [--chdir DIR] -- CMD [ARGS...]"
     );
@@ -329,7 +394,7 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
         env: Vec::new(),
         overlays: Vec::new(),
         manifest: None,
-        network: true,
+        network: Network::Shared,
         workdir: PathBuf::from("/"),
         scratch: None,
         store_disk: None,
@@ -338,6 +403,8 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
     // The `--` split first: everything after it is the payload, never
     // a flag — the same rule krun-rs applies.
     let payload: Vec<String>;
+    let mut egress_port: Option<u16> = None;
+    let mut egress_socket: Option<PathBuf> = None;
     loop {
         match args.next() {
             None => return Err("no `--` and no payload".to_owned()),
@@ -386,10 +453,31 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
                     "--krun-overlay" => add_overlay(&mut cfg, &value_of("--krun-overlay")?)?,
                     "--manifest" => cfg.manifest = Some(PathBuf::from(value_of("--manifest")?)),
                     "--network" => match value_of("--network")?.as_str() {
-                        "shared" => cfg.network = true,
-                        "none" => cfg.network = false,
-                        other => return Err(format!("--network `{other}` is not shared|none")),
+                        "shared" => cfg.network = Network::Shared,
+                        "none" => cfg.network = Network::None,
+                        // The proxy-only channel (bd myconfig-krab): the
+                        // port the guest dials on the SLiRP gateway and
+                        // the broker's socket land on the FLAG PAIR
+                        // below (`--egress-port`/`--egress-socket`),
+                        // which must accompany it — validated after the
+                        // argv is fully parsed.
+                        "restricted" => cfg.network = Network::Restricted(None),
+                        other => {
+                            return Err(format!(
+                                "--network `{other}` is not shared|none|restricted"
+                            ))
+                        }
                     },
+                    "--egress-port" => {
+                        let v = value_of("--egress-port")?;
+                        egress_port = Some(
+                            v.parse()
+                                .map_err(|_| format!("--egress-port `{v}` is not a number"))?,
+                        );
+                    }
+                    "--egress-socket" => {
+                        egress_socket = Some(PathBuf::from(value_of("--egress-socket")?));
+                    }
                     "--scratch" => cfg.scratch = Some(PathBuf::from(value_of("--scratch")?)),
                     "--store-disk" => {
                         cfg.store_disk = Some(PathBuf::from(value_of("--store-disk")?))
@@ -402,6 +490,33 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
     }
     if cfg.rootfs.as_os_str().is_empty() {
         return Err("no --rootfs".to_owned());
+    }
+    // The restricted channel's pair must be total (bd myconfig-krab):
+    // a restricted netdev without the port or the socket has no
+    // forward to render — and a stray pair without `restricted`
+    // is argv noise the launcher never honors, refused like any
+    // other unknown combination. The paths are comma-free and
+    // whitespace-free or the run is refused (qemu splits netdev
+    // options on commas; libslirp splits the `-cmd:` value like a
+    // shell — a path that could shift the argv would silently
+    // miswire the fence).
+    match (&mut cfg.network, egress_port, egress_socket) {
+        (Network::Restricted(slot), Some(port), Some(socket)) => {
+            egress_option_safe(&socket, "socket")?;
+            let relay = egress_relay_bin();
+            egress_option_safe(&relay, "relay")?;
+            *slot = Some(Egress { port, socket });
+        }
+        (Network::Restricted(_), _, _) => {
+            return Err(
+                "--network restricted needs --egress-port <port> and --egress-socket <path>"
+                    .to_owned(),
+            );
+        }
+        (_, Some(_), _) | (_, _, Some(_)) => {
+            return Err("--egress-port/--egress-socket need --network restricted".to_owned());
+        }
+        _ => {}
     }
     if cfg.kernel.as_os_str().is_empty() {
         return Err("no --kernel".to_owned());
@@ -709,12 +824,46 @@ fn qemu_argv(
     // The network (bd myconfig-dak.6's spelling, the qemu tier's
     // model): SLiRP user mode when shared, NO netdev at all when
     // `none` (bwrap additionally unshare-nets the chain — the
-    // shared arm of the run pipeline).
-    if cfg.network {
-        argv.push("-netdev".to_owned());
-        argv.push("user,id=net0".to_owned());
-        argv.push("-device".to_owned());
-        argv.push("virtio-net-pci,netdev=net0".to_owned());
+    // shared arm of the run pipeline). The RESTRICTED arm (bd
+    // myconfig-krab — n8kv.2 C4): SLiRP with `restrict=on` —
+    // restricted mode drops ALL outbound TCP except the
+    // guestfwd-listed target and blocks outbound UDP entirely (the
+    // fvi.3 libslirp source audit: tcp_input.c drops an inbound
+    // SYN unless it targets a guestfwd addr:port; udp.c bails
+    // before any socket work) — plus ONE `guestfwd` mapping the
+    // guest's `10.0.2.2:<litellm port>` onto the HOST-side egress
+    // relay, which qemu's libslirp `fork_exec` (src/misc.c)
+    // spawns per guest connection with the stream as the child's
+    // fd 0/1/2 — direct exec of the parsed argv, no `/bin/sh`.
+    // That is the whole profile: the forwards-only net. The
+    // `-cmd:` value must be comma-free (qemu's option parser
+    // splits on commas) — validated at parse time below.
+    match &cfg.network {
+        Network::Shared => {
+            argv.push("-netdev".to_owned());
+            argv.push("user,id=net0".to_owned());
+            argv.push("-device".to_owned());
+            argv.push("virtio-net-pci,netdev=net0".to_owned());
+        }
+        Network::Restricted(egress) => {
+            // The pair is total here (parse-time validation): a
+            // `None` slot cannot reach the renderer.
+            let egress = egress
+                .as_ref()
+                .expect("parse validated the --egress pair before rendering");
+            let relay = egress_relay_bin();
+            let fwd = format!(
+                "user,id=net0,restrict=on,guestfwd=tcp:10.0.2.2:{}-cmd:{} --guestfwd {}",
+                egress.port,
+                relay.display(),
+                egress.socket.display()
+            );
+            argv.push("-netdev".to_owned());
+            argv.push(fwd);
+            argv.push("-device".to_owned());
+            argv.push("virtio-net-pci,netdev=net0".to_owned());
+        }
+        Network::None => {}
     }
     // The scratch disk (bd myconfig-dak.7): the per-run sparse raw
     // file as a real virtio-blk drive, the same block id the init
@@ -946,10 +1095,18 @@ fn run(cfg: Config, boot_started: Instant) -> i32 {
     if cfg.verbose {
         eprintln!("mysbx-microvm-qemu: payload: {:?}", cfg.payload);
         eprintln!("mysbx-microvm-qemu: manifest: {:?}", cfg.manifest);
-        eprintln!(
-            "mysbx-microvm-qemu: network: {}",
-            if cfg.network { "shared" } else { "none" }
-        );
+        let network_name = match &cfg.network {
+            Network::Shared => "shared".to_owned(),
+            Network::None => "none".to_owned(),
+            Network::Restricted(egress) => format!(
+                "restricted (guestfwd 10.0.2.2:{})",
+                egress
+                    .as_ref()
+                    .expect("parse validated the --egress pair before logging")
+                    .port
+            ),
+        };
+        eprintln!("mysbx-microvm-qemu: network: {network_name}");
         eprintln!("mysbx-microvm-qemu: scratch: {:?}", cfg.scratch);
         eprintln!("mysbx-microvm-qemu: store-disk: {:?}", cfg.store_disk);
         eprintln!(
@@ -1280,7 +1437,7 @@ mod tests {
             env: Vec::new(),
             overlays: Vec::new(),
             manifest: Some(PathBuf::from("/stage/ro/manifest")),
-            network: true,
+            network: Network::Shared,
             workdir: PathBuf::from("/home/synth/repo"),
             scratch: None,
             store_disk: None,
@@ -1574,7 +1731,7 @@ mod tests {
     #[test]
     fn network_none_means_no_netdev_at_all() {
         let mut cfg = test_cfg();
-        cfg.network = false;
+        cfg.network = Network::None;
         let sockets =
             |tag: &str| PathBuf::from(format!("/run/sock/{}.sock", tag.replace('/', "-")));
         let argv = qemu_argv(
@@ -1585,6 +1742,64 @@ mod tests {
         );
         assert!(!argv.iter().any(|a| a.starts_with("user,id=")));
         assert!(!argv.iter().any(|a| a.contains("virtio-net")));
+    }
+
+    /// The restricted netdev (bd myconfig-krab): ONE option carries
+    /// the fence and the forward — `restrict=on` (all outbound TCP
+    /// dropped except the guestfwd target, UDP blocked) plus the
+    /// `guestfwd` mapping `10.0.2.2:<port>` onto the pinned relay,
+    /// which the guestfwd connection runs with the socket
+    /// argument. The netdev option must be comma-free apart from
+    /// qemu's own separators, and the relay/store paths come from
+    /// the pin the wrapper sets.
+    #[test]
+    fn network_restricted_is_the_forwards_only_netdev() {
+        // The relay pin this renderer reads.
+        std::env::set_var(
+            "MYSBX_MICROVM_QEMU_EGRESS_RELAY",
+            "/nix/store/synth-relay/bin/mysbx-egress-relay",
+        );
+        let mut cfg = test_cfg();
+        cfg.network = Network::Restricted(Some(Egress {
+            port: 4000,
+            socket: PathBuf::from("/run/user/1000/mysbx-egress/1234/litellm.sock"),
+        }));
+        let sockets =
+            |tag: &str| PathBuf::from(format!("/run/sock/{}.sock", tag.replace('/', "-")));
+        let argv = qemu_argv(
+            Path::new("/synth/qemu"),
+            &cfg,
+            &sockets,
+            Some(Path::new("/run/sock/exit.sock")),
+        );
+        let netdev = argv
+            .iter()
+            .find(|a| a.starts_with("user,id=net0"))
+            .expect("the restricted netdev");
+        assert!(netdev.contains("restrict=on"));
+        assert!(netdev.contains(
+            "guestfwd=tcp:10.0.2.2:4000-cmd:/nix/store/synth-relay/bin/mysbx-egress-relay --guestfwd /run/user/1000/mysbx-egress/1234/litellm.sock"
+        ));
+        // The device stays the same NIC either way.
+        assert!(argv.iter().any(|a| a == "virtio-net-pci,netdev=net0"));
+        std::env::remove_var("MYSBX_MICROVM_QEMU_EGRESS_RELAY");
+    }
+
+    /// The comma/whitespace gate (bd myconfig-krab): a broker
+    /// socket path carrying a comma or whitespace would split the
+    /// netdev option or the libslirp argv, silently miswiring the
+    /// forward — refused at parse validation, before qemu ever
+    /// sees it.
+    #[test]
+    fn egress_paths_with_commas_or_whitespace_are_refused() {
+        for bad in ["/run/so,cket", "/run/so cket"] {
+            let path = PathBuf::from(bad);
+            assert!(
+                egress_option_safe(&path, "socket").is_err(),
+                "{bad} must be refused"
+            );
+        }
+        assert!(egress_option_safe(Path::new("/run/ok.sock"), "socket").is_ok());
     }
 
     #[test]

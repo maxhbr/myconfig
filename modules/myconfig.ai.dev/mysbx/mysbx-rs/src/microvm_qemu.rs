@@ -51,6 +51,19 @@ pub fn microvm_qemu_argv(
     kernel: &str,
     backend_env: &[String],
 ) -> Result<Vec<String>, Error> {
+    // The CONNECT lane is the bubblewrap broker's (docs/design/
+    // egress-connect.md E7, C7's scope): this backend's channel
+    // serves the model endpoint only — a channel carrying table
+    // rows or the public flag would render a restricted net whose
+    // broker has no CONNECT lane to police them, so the run is
+    // refused here too (defense in depth next to step 4b, which
+    // already refuses allowlist keys next to the profile on every
+    // non-Broker row).
+    if let Some(egress) = params.egress {
+        if !egress.allow_domains.is_empty() || !egress.connect_ports.is_empty() || egress.public {
+            return Err(Error::EgressLaneUnsupported);
+        }
+    }
     // The krun spec, verbatim: every refusal (multiplexer, pids
     // limit, share roots, hidden mounts, the limit grammar) and
     // every section (env, shares, trust overlays, scratch) is the
@@ -159,8 +172,32 @@ pub fn microvm_qemu_argv(
     // The SLiRP NIC marker (bd myconfig-k106): the guest init
     // configures the user-netdev NIC only when this env rides the
     // manifest — the krun backend sets none (its network is TSI,
-    // no ethernet device exists in that guest).
-    if spec.network {
+    // no ethernet device exists in that guest). The restricted
+    // spelling (bd myconfig-krab): the proxy-only channel's guest
+    // arm — the NIC still gets its SLiRP address (the forwarded
+    // gateway must be on-link), but the init skips the default
+    // route and the DNS-proxy rewrite (restricted mode drops
+    // every outbound TCP except the guestfwd target and blocks
+    // UDP — the fvi.3 source audit), so nothing but the model
+    // port is even dialable.
+    if let Some(egress) = params.egress {
+        argv.push("--env".to_owned());
+        argv.push("MYSBX_MICROVM_NET=restricted".to_owned());
+        argv.push("--network".to_owned());
+        argv.push("restricted".to_owned());
+        // The channel: the broker's socket (a HOST path — qemu's
+        // libslirp spawns the relay per guest connection INSIDE the
+        // launcher's bwrap view, where lib.rs binds the broker
+        // directory read-only) and the port the guest dials on the
+        // SLiRP gateway. The launcher renders
+        // `restrict=on,guestfwd=tcp:10.0.2.2:<port>-cmd:<relay …>`
+        // from them (the renderer never puts qemu's spelling in a
+        // golden of ITS OWN argv — the launcher's tests pin that).
+        argv.push("--egress-socket".to_owned());
+        argv.push(format!("{}/{}", egress.socket_dir, egress.socket));
+        argv.push("--egress-port".to_owned());
+        argv.push(egress.port.to_string());
+    } else if spec.network {
         argv.push("--env".to_owned());
         argv.push("MYSBX_MICROVM_NET=1".to_owned());
     }
@@ -180,8 +217,11 @@ pub fn microvm_qemu_argv(
     // untouched (its launcher registers them on the root device).
     // `network = false` (D9): NO netdev at all — the same silent
     // shared default as krun's (SLiRP there, TSI here), the same
-    // explicit refusal of the denied mode.
-    if !spec.network {
+    // explicit refusal of the denied mode. A brokered run reached
+    // here only WITH the channel (spec_of's gate), so the
+    // `restricted` flag above — not `none` — is the non-shared
+    // spelling it carries.
+    if !spec.network && params.egress.is_none() {
         argv.push("--network".to_owned());
         argv.push("none".to_owned());
     }

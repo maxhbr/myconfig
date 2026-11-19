@@ -1291,7 +1291,8 @@ network, whose whole point is that a host-wide decision holds).
 reachable, and no model credential exists inside the sandbox — the
 proxy holds it (D28 records the credential rules, including the
 residual risks the profile does NOT remove). On every backend except
-the enforcing `bubblewrap` and `podman-gvisor` the profile is mutually exclusive with D21's
+the enforcing `bubblewrap`, `podman-gvisor` and `microvm-qemu` the
+profile is mutually exclusive with D21's
 hostname/port allowlists: those keys describe what a sandbox with a
 *shared* network may reach, so next to `network = "proxy-only"` they
 are a refused run (exit `70`) — decided at MERGE time, where the
@@ -1322,8 +1323,8 @@ as D21. The bwrap-built tiers enforce it (bubblewrap, and the layered
 | `podman-gvisor` | the second enforcing backend (bd myconfig-n8kv.2 C5, bd myconfig-eov2): `--network none` — no net device, no route, pasta not involved — the per-run broker's socket directory bound read-only at the fixed `/run/mysbx-egress` (the same directory bubblewrap binds, the same pin), and runsc's `--host-uds=open` so connect(2) to the bound socket inode is allowed — the gate is real: runsc's default `host-uds=none` refuses it. The reachable host-socket set is exactly the declared binds (the gofer tree; live-proven in `egress-validation-log.md`), and a recursive no-symlink-follow audit of every bind source runs before spawn. The in-image `mysbx-egress-relay` (`MYSBX_PODMAN_EGRESS_RELAY`, baked into the image only when the host's LiteLLM is enabled) listens on `127.0.0.1:<litellm port>` and forwards to the bound socket — the baked store's own binary, not a host bind |
 | `podman-krun` | refused, PERMANENTLY (bd myconfig-n8kv.2 C6) — libkrun's TSI is an unfiltered proxy from the container netns, and AF_UNIX sockets do not cross virtio-fs, so no default-deny transport exists |
 | `krun` | refused — direct libkrun TSI has no default-deny network mode |
-| `microvm-qemu` | refused — the SLiRP net device always has a gateway route |
-| `microvm-ch` | refused — passt's vhost-user net device always has a gateway route |
+| `microvm-qemu` | the third enforcing backend (bd myconfig-n8kv.2 C4, bd myconfig-krab): SLiRP's `restrict=on` — libslirp drops every outbound TCP SYN except the ONE `guestfwd`-mapped address:port and blocks outbound UDP entirely (the fvi.3 libslirp source audit) — plus a single `guestfwd=tcp:10.0.2.2:<litellm port>-cmd:<relay> --guestfwd <broker socket>` mapping: the guest's ONLY reach is the model port, and qemu's libslirp execs the crate's `mysbx-egress-relay` per guest connection (`--guestfwd <socket>` mode: fd 0 is the accepted connection) to carry it to the per-run broker's Unix socket, visible in the launcher's bwrap view through the ro broker-directory bind (the waypipe-dir idiom). The guest init configures the NIC address without a default route under the `MYSBX_MICROVM_NET=restricted` marker (10.0.2.2 is on-link) and empties resolv.conf (no DNS proxy — the profile grants the endpoint, not the name), and the guest-side endpoint spelling is `MYSBX_EGRESS_PROXY=http://10.0.2.2:<litellm port>`. The relay pin rides the launcher's OWN wrapper (`MYSBX_MICROVM_QEMU_EGRESS_RELAY`), not the mysbx wrapper — the launcher runs inside bwrap's `--clearenv`. The CONNECT-lane pairing (D21 keys, `public`) is still refused here — the forwards-only netdev cannot express a table |
+| `microvm-ch` | refused — passt's vhost-user net device always has a gateway route (the C2 vsock lift would change this) |
 
 **The socket name is pinned, and the channel is the per-run broker.**
 `MYSBX_EGRESS_SOCKET_NAME` must be one plain file name

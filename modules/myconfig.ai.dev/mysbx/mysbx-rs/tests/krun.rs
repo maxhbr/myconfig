@@ -90,6 +90,7 @@ fn params<'a>(
         store_disk: None,
         verbose: false,
         detachable: false,
+        egress: None,
     }
 }
 
@@ -1145,6 +1146,7 @@ fn params_owned<'a>(
         store_disk: None,
         verbose: false,
         detachable: false,
+        egress: None,
     }
 }
 

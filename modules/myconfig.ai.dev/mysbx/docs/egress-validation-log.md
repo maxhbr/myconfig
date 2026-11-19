@@ -2,7 +2,8 @@
 
 > **Scope / current status:** the dated entries below are host-run evidence
 > for the configuration named in each entry, not acceptance of every later
-> backend or policy. The enforcing backend today is `bubblewrap`; every
+> backend or policy. The enforcing backends today are `bubblewrap`, the
+> layered `nono` backend, `podman-gvisor` and `microvm-qemu`; every
 > other backend refuses `network = "proxy-only"`. See
 > [`backend-comparison.md`](./backend-comparison.md) for the current backend
 > guide and [D20](./design/config.md) for the decision the runs verify.
@@ -633,3 +634,86 @@ no-symlink-follow audit of every bind source before spawn).
 - `runsc do` (test-only, whole host mounted ro) showed the same gate
   (`none` -> refused, `open` -> connects), confirming the flag's
   semantics independent of the bundle shape.
+
+
+## 2026-11-19 · microvm-qemu restricted NIC, live KVM probe (bd myconfig-krab, n8kv.2 C4)
+
+Host: the offline dev sandbox (kernel 6.12.117, /dev/kvm rw, rootless
+user, no networked upstreams). Stack: the `nix/mysbx.nix`-wrapped
+`mysbx` with the real microvm-qemu pins — launcher
+(`nix/microvm-qemu-launcher.nix`, its own wrapper carrying
+`MYSBX_MICROVM_QEMU_EGRESS_RELAY` from the same crate closure as the
+bwrap channel's `MYSBX_EGRESS_RELAY`), the shared `mysbx-krun-rootfs`,
+the pinned 6.12.117 bzImage, qemu 11.1.2 — against a broker pinning
+`litellm.sock` at `127.0.0.1:4000`. The "upstream" is a stand-in echo
+server on host port 4000 (started in the background and verified from
+the host before every probe — the sandbox has no LiteLLM); the guest
+payload is busybox over the shared init. The scratch repo's sidecar
+sets `backend = "microvm-qemu"`, `network = "proxy-only"`.
+
+The launcher's netdev (pinned by the `egress-proxy-only.txt` argv
+golden and the launcher test):
+`-netdev user,id=net0,restrict=on,guestfwd=tcp:10.0.2.2:4000-cmd:<relay> --guestfwd <broker sock>`.
+
+### §1 the restricted guest NIC — PASS
+
+```
+guest: ip addr show eth0      -> inet 10.0.2.15/24 scope global eth0
+guest: ip route | grep default -> NOTHING (no default route)
+guest: cat /etc/resolv.conf   -> "# no nameserver: restricted (mysbx proxy-only)"
+```
+
+The init's restricted arm did its three jobs: the address stays
+(10.0.2.2 is on-link), the default route is gone, the resolver is
+empty — every non-forwarded dial fails at connect, not at resolve.
+
+### §2 the guestfwd channel round-trips to the broker — PASS
+
+```
+guest: echo MODEL-PROBE | nc -w 5 10.0.2.2 4000
+  -> UPSTREAM-REPLY: MODEL-PROBE          (nc rc=0)
+broker decisions.jsonl:
+  listen ... /tmp/.../mysbx-egress/<pid>/litellm.sock -> 127.0.0.1:4000, confined by Landlock to that one port
+  allow  ... pid <relay> uid 0 -> 127.0.0.1:4000
+```
+
+The FULL chain in one round trip: guest -> SLiRP guestfwd (the only
+mapped address:port) -> qemu's libslirp execs the crate's
+`mysbx-egress-relay --guestfwd <socket>` per connection -> the relay
+connects the per-run broker's Unix socket from the launcher's bwrap
+view (the ro broker-dir bind) -> the broker's model lane dials its
+Landlock-confined upstream -> the stand-in echo answered. The broker
+LOGGED the admission — the decision log is the host-side record of a
+guest's model traffic, exactly as on bubblewrap.
+
+### §3 the deny side: forwards-only reach — PASS
+
+```
+guest: nc 10.0.2.2 80     -> rc=1 (connect refused: restrict=on drops every unmapped outbound SYN)
+guest: nc 1.1.1.1 80      -> rc=1 (no default route; nothing to forward)
+guest: nc -u 1.1.1.1 53   -> rc=1
+guest: nslookup example.com 1.1.1.1 -> "Network unreachable"
+```
+
+SLiRP's `restrict=on` semantics (the fvi.3 libslirp source audit:
+tcp_input.c drops every outbound SYN whose addr:port is not a guestfwd
+target; udp.c bails before any socket work) hold live: the ONE mapped
+port answers, every other TCP and all outbound UDP fail. The
+forwards-only net IS the profile — no second policy layer needed.
+
+### Notes
+
+- The kernel panic after the payload's clean exit
+  ("Attempted to kill init", `exitcode=0x00000000`) is the KNOWN
+  PID-1-exit noise the exit channel exists for (backends.md D9):
+  the launcher read the payload's code from `mysbx-exit` and reported
+  `payload exited with 0`; the panic is the guest kernel observing
+  its init exiting after reaping the payload.
+- The probe used the wrapped mysbx with real store-pinned binaries;
+  an unwrapped run of the same crate had `PATH=/usr/bin` inside the
+  guest and could not exec `sh` — the wrapper pins are load-bearing
+  for any live probe (recorded so a future probe does not re-derive
+  it).
+- The stand-in upstream replaces LiteLLM (offline host); the
+  bubblewrap entries above prove the broker's model-lane protocol
+  against the real stack, this entry proves the qemu transport.

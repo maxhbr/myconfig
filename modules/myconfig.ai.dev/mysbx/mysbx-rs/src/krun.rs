@@ -82,7 +82,7 @@
 //! same rule as every backend. The builder is pure (no canonicalization,
 //! no existence checks — the merge already did them, config.md D8).
 
-use crate::bwrap::{Payload, Workspace};
+use crate::bwrap::{EgressChannel, Payload, Workspace};
 use crate::config::Multiplexer;
 use crate::merge::Merged;
 use crate::podman_gvisor::{parse_krun_cpus, parse_krun_ram_mib};
@@ -304,6 +304,22 @@ pub struct Params<'a> {
     /// bwrap::Params::detachable. Foreground runs pass `false` and
     /// their argv stays byte-identical.
     pub detachable: bool,
+    /// The `network = "proxy-only"` channel, MICROVM-QEMU ONLY (bd
+    /// myconfig-krab — n8kv.2 C4): `Some` carries the per-run
+    /// broker's socket directory/name/port and the HOST relay binary
+    /// into the spec, which the qemu renderer maps to SLiRP's
+    /// `restrict=on` + a `guestfwd` of the model port onto the
+    /// broker socket. The krun and microvm-ch builders never set
+    /// it: krun's TSI cannot express the profile, and CH's passt
+    /// lift is its own bead (C2) — `spec_of` refuses a brokered
+    /// profile without this field ([`Error::ProxyOnlyRefused`])
+    /// and a channel without the profile
+    /// ([`Error::EgressChannelWithoutProfile`]), so the pair is
+    /// total on both sides. The socket PATH is host-side: qemu's
+    /// libslirp spawns the relay with the guestfwd connection on
+    /// stdio INSIDE the launcher's bwrap view, where lib.rs binds
+    /// the broker directory read-only.
+    pub egress: Option<&'a EgressChannel<'a>>,
 }
 
 impl<'a> Params<'a> {
@@ -347,8 +363,23 @@ pub enum Error {
     /// backends: their net device (libkrun TSI, SLiRP, passt's
     /// vhost-user) always has a gateway route, so the profile is
     /// not enforceable here (bd myconfig-6di.3, mo3.2.6); the run is
-    /// refused, never weakened to a shared network.
+    /// refused, never weakened to a shared network. The
+    /// microvm-qemu twin lifts it for the SLiRP `restrict=on` +
+    /// `guestfwd` channel (bd myconfig-krab): this error then means
+    /// the channel was absent — a pin failure, still fail-closed.
     ProxyOnlyRefused,
+    /// An egress channel on a run whose merged network is NOT a
+    /// brokered profile (bd myconfig-krab): the qemu renderer maps
+    /// the channel to `--network restricted`, so the pair only
+    /// makes sense together — a channel without the profile would
+    /// render a restricted net for a shared run.
+    EgressChannelWithoutProfile,
+    /// A qemu channel carrying CONNECT-lane state (allowlist rows,
+    /// the public flag — bd myconfig-krab): the backend's broker
+    /// table work is C7's scope; a restricted netdev whose guestfwd
+    /// forwards only the model port cannot police a table, so the
+    /// run is refused, never a lane that silently admits nothing.
+    EgressLaneUnsupported,
     /// A `pids-limit` a whole-VM run cannot express: the VM is the
     /// boundary, no pids controller is wired for it — the same
     /// refusal as the podman-krun variant (backends.md D2).
@@ -427,6 +458,17 @@ impl std::fmt::Display for Error {
                  device (libkrun TSI, SLiRP, passt's vhost-user) always has a gateway \
                  route (docs/design/config.md D20, bd myconfig-6di.3, myconfig-fvi); \
                  the run is refused, never weakened to a shared network"
+            ),
+            Error::EgressChannelWithoutProfile => write!(
+                f,
+                "an egress channel without a brokered network profile is a contradiction: \
+                 the restricted netdev renders only for `proxy-only` (bd myconfig-krab)"
+            ),
+            Error::EgressLaneUnsupported => write!(
+                f,
+                "the microvm-qemu egress channel serves the model endpoint only — \
+                 allowlist rows and the public lane are the bubblewrap broker's CONNECT \
+                 table (docs/design/egress-connect.md E7, bd myconfig-n8kv.2 C7)"
             ),
             Error::PidsLimit { pids } => write!(
                 f,
@@ -988,9 +1030,27 @@ pub(crate) fn spec_of(
     // myconfig-6di.3): refused on every VM backend — the net device
     // always has a gateway route (libkrun TSI, SLiRP, passt), so the
     // profile is not enforceable. Defense in depth next to the
-    // pipeline's step-4b refusal.
-    if cfg.network.is_brokered() {
+    // pipeline's step-4b refusal. LIFTED for the microvm-qemu twin
+    // (bd myconfig-krab — n8kv.2 C4): a run whose Params carry the
+    // egress channel gets SLiRP's `restrict=on` + a `guestfwd` of
+    // the model port — the forwards-only shape that IS the profile
+    // (the fvi.3 source audit: restricted mode drops ALL outbound
+    // TCP except guestfwd targets and blocks UDP) — so the refusal
+    // fires only when the channel is ABSENT: krun and microvm-ch
+    // never set it, and a qemu run that lost its pins fails closed
+    // here instead of sharing the network.
+    if cfg.network.is_brokered() && params.egress.is_none() {
         return Err(Error::ProxyOnlyRefused);
+    }
+    // The inverse gate (bd myconfig-krab): a channel on a
+    // non-brokered run is a contradiction — the qemu arm below
+    // renders `--network restricted` from the merged profile, so a
+    // channel without the profile would miswire the fence. The
+    // refusal is builder-level because both twin renderers share
+    // this spec: krun/CH never set the field, so the arm is
+    // qemu-only in practice.
+    if params.egress.is_some() && !cfg.network.is_brokered() {
+        return Err(Error::EgressChannelWithoutProfile);
     }
     // The multiplexer applies to the INTERACTIVE payload only (cli.md
     // D11), like on every backend: a one-shot `run -- CMD` is never
@@ -1226,10 +1286,26 @@ fn sandbox_env(
     }
     // The merged network policy (bd myconfig-w44l), the same
     // infrastructure class as the identity pair: `none` or
-    // `shared` here — `proxy-only` is refused on this backend (D20's
-    // table), and an agent inside the guest reads the variable to
-    // know whether the implicit vsock's TSI carries a route out.
+    // `shared` here — a brokered profile without the channel is
+    // refused upstream (`spec_of`), and with it the value spells
+    // `proxy-only`, whose guest-side endpoint rides the next entry.
     set("MYSBX_NETWORK", cfg.network.name().to_owned());
+    // The proxy-only endpoint (bd myconfig-krab — n8kv.2 C4): the
+    // GUEST-side spelling of the channel. The bwrap/podman lanes
+    // serve `127.0.0.1:<port>` — their relay listens on the
+    // sandbox's own loopback. This backend's channel is SLiRP's
+    // `guestfwd`: the guest dials the FIXED SLiRP gateway address
+    // (`10.0.2.2`), which restricted mode admits for exactly the
+    // forwarded port — so `MYSBX_EGRESS_PROXY` names the gateway
+    // spelling, never `127.0.0.1` (the guest's loopback is its
+    // own; nothing would listen there). Set only with the channel,
+    // inside the infrastructure block, so no layer can spoof it.
+    if let Some(egress) = params.egress {
+        set(
+            "MYSBX_EGRESS_PROXY",
+            format!("http://10.0.2.2:{}", egress.port),
+        );
+    }
     set(
         "XDG_CONFIG_HOME",
         format!("{}/.config", crate::bwrap::SANDBOX_HOME),

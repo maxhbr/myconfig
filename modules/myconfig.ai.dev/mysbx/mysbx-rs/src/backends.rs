@@ -237,7 +237,15 @@ pub const REGISTRY: &[Backend] = &[
         detach_refused: false,
         waypipe_refused: true,
         allowlist: Allowlist::Refused,
-        network_proxy_only: false,
+        // Enforced since bd myconfig-krab (n8kv.2 C4): SLiRP's
+        // `restrict=on` drops every outbound TCP except the ONE
+        // guestfwd-mapped model port and blocks UDP (the fvi.3
+        // libslirp source audit) — the forwards-only net IS the
+        // profile. The channel: the per-run broker's socket, the
+        // guest dials `10.0.2.2:<litellm port>` and qemu's libslirp
+        // execs the egress relay per connection to carry it to
+        // the socket.
+        network_proxy_only: true,
         network_public: false,
     },
     Backend {
@@ -376,7 +384,12 @@ mod tests {
             // the bound broker socket and runsc's `host-uds=open` is
             // the same fence. Every other backend still refuses the
             // profile.
-            let proxy_only_expected = b.always_on || b.name == "podman-gvisor";
+            // microvm-qemu joins since bd myconfig-krab (n8kv.2 C4):
+            // SLiRP's `restrict=on` drops every outbound TCP except
+            // the ONE guestfwd-mapped port — a default-deny transport
+            // of its own.
+            let proxy_only_expected =
+                b.always_on || b.name == "podman-gvisor" || b.name == "microvm-qemu";
             assert_eq!(
                 b.network_proxy_only, proxy_only_expected,
                 "`{}`: network_proxy_only must match config.md D20's table",

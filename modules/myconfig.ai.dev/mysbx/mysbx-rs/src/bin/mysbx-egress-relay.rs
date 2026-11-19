@@ -71,7 +71,7 @@ fn main() {
     // Argument parsing happens HERE, so the two classes of failure are
     // distinct: a usage error is exit 2 (cli.md D8), `-h`/`--help`
     // prints to stdout and exits 0, and every failure AFTER a valid
-    // parse (bind, spawn, wait) is a runtime failure, exit 70.
+    // parse (bind, spawn, wait, connect) is a runtime failure, exit 70.
     let inv = match Invocation::parse(&args) {
         Ok(inv) => inv,
         Err(e) if e == HELP_REQUESTED => {
@@ -83,7 +83,15 @@ fn main() {
             std::process::exit(2);
         }
     };
-    match run(&inv) {
+    let outcome = match &inv {
+        Invocation::Listen {
+            listen,
+            connect,
+            payload,
+        } => run(listen, connect, payload),
+        Invocation::GuestFwd { connect } => run_guestfwd(connect),
+    };
+    match outcome {
         Ok(code) => std::process::exit(code),
         Err(e) => {
             eprintln!("mysbx-egress-relay: {e}");
@@ -97,22 +105,42 @@ fn main() {
 /// not an error); every real parse error exits 2 (cli.md D8).
 const HELP_REQUESTED: &str = "__help__";
 
-/// The parsed invocation: where to listen, what host socket to forward
-/// to, and the payload to run while forwarding.
+/// The parsed invocation: either the listener form (where to
+/// listen, what host socket to forward to, and the payload to run
+/// while forwarding) or the guestfwd form (the already-connected
+/// socket on stdio, the host socket to forward to, no payload —
+/// one process per guest connection, spawned by qemu's
+/// `guestfwd=…-cmd:` and exited at stream end).
 #[derive(Debug, PartialEq, Eq)]
-struct Invocation {
-    listen: String,
-    connect: String,
-    payload: Vec<String>,
+enum Invocation {
+    /// `--listen <addr> --connect <path> -- <cmd...>`: bind the
+    /// loopback listener, run the payload while forwarding.
+    Listen {
+        listen: String,
+        connect: String,
+        payload: Vec<String>,
+    },
+    /// `--guestfwd <path>` (bd myconfig-krab — n8kv.2 C4): the
+    /// connection is ALREADY on file descriptors 0/1/2 (qemu's
+    /// libslirp `fork_exec` hands the guest's TCP stream over as
+    /// the child's stdio), so this process only connects the host
+    /// Unix socket and copies both ways until EOF — no listener, no
+    /// child, nothing to supervise.
+    GuestFwd { connect: String },
 }
 
 impl Invocation {
-    /// Parse `--listen <addr> --connect <path> -- <cmd...>`. The `--`
-    /// separator is required so a payload argument can never be
-    /// mistaken for a relay flag; `--listen`/`--connect` are required.
+    /// Parse `--listen <addr> --connect <path> -- <cmd...>` or
+    /// `--guestfwd <path>`. The `--` separator (listener form) is
+    /// required so a payload argument can never be mistaken for a
+    /// relay flag; the two forms share `--connect`'s spelling but
+    /// never coexist (a `--guestfwd` run takes no `--listen` and no
+    /// payload).
     fn parse(args: &[String]) -> Result<Invocation, String> {
         let mut listen = None;
         let mut connect = None;
+        let mut guestfwd = false;
+        let mut connect_spelled = false;
         let mut i = 0;
         let mut payload = Vec::new();
         while i < args.len() {
@@ -130,11 +158,40 @@ impl Invocation {
                     i += 2;
                 }
                 "--connect" => {
+                    // One socket, one spelling: `--connect` and
+                    // `--guestfwd` agree on what the value names, so
+                    // both appearing is a contradiction (a
+                    // silent-pick would let a typo'd pair of paths
+                    // through as if they were one).
+                    if connect_spelled {
+                        return Err(format!(
+                            "`--connect`/`--guestfwd` may name the socket only once\n{USAGE}"
+                        ));
+                    }
+                    connect_spelled = true;
                     connect = Some(
                         args.get(i + 1)
                             .ok_or_else(|| "`--connect` needs a Unix-socket path".to_owned())?
                             .clone(),
                     );
+                    i += 2;
+                }
+                "--guestfwd" => {
+                    // The value IS `--connect`'s: the same "what host
+                    // socket to forward to" spelling, a different
+                    // transport (stdio, not a listener).
+                    if connect_spelled {
+                        return Err(format!(
+                            "`--connect`/`--guestfwd` may name the socket only once\n{USAGE}"
+                        ));
+                    }
+                    connect_spelled = true;
+                    connect = Some(
+                        args.get(i + 1)
+                            .ok_or_else(|| "`--guestfwd` needs a Unix-socket path".to_owned())?
+                            .clone(),
+                    );
+                    guestfwd = true;
                     i += 2;
                 }
                 "-h" | "--help" => {
@@ -143,12 +200,20 @@ impl Invocation {
                 other => return Err(format!("unknown argument `{other}`\n{USAGE}")),
             }
         }
-        let listen = listen.ok_or_else(|| format!("missing `--listen`\n{USAGE}"))?;
         let connect = connect.ok_or_else(|| format!("missing `--connect`\n{USAGE}"))?;
+        if guestfwd {
+            if listen.is_some() || !payload.is_empty() {
+                return Err(format!(
+                    "`--guestfwd` takes no `--listen` and no payload\n{USAGE}"
+                ));
+            }
+            return Ok(Invocation::GuestFwd { connect });
+        }
+        let listen = listen.ok_or_else(|| format!("missing `--listen`\n{USAGE}"))?;
         if payload.is_empty() {
             return Err(format!("missing the payload after `--`\n{USAGE}"));
         }
-        Ok(Invocation {
+        Ok(Invocation::Listen {
             listen,
             connect,
             payload,
@@ -158,17 +223,17 @@ impl Invocation {
 
 /// The usage text (`-h`/`--help` and every parse error prints it).
 const USAGE: &str =
-    "usage: mysbx-egress-relay --listen 127.0.0.1:<port> --connect <unix-socket> -- <cmd...>";
+    "usage: mysbx-egress-relay --listen 127.0.0.1:<port> --connect <unix-socket> -- <cmd...>\n\
+       or:    mysbx-egress-relay --guestfwd <unix-socket>";
 
-fn run(inv: &Invocation) -> Result<i32, String> {
+fn run(listen: &str, connect: &str, payload: &[String]) -> Result<i32, String> {
     // Every fallible setup step happens BEFORE the payload is spawned: a
     // relay that cannot listen must fail visibly, never start the payload
     // and then die around it.
-    let listener =
-        TcpListener::bind(&inv.listen).map_err(|e| format!("cannot bind {}: {e}", inv.listen))?;
+    let listener = TcpListener::bind(listen).map_err(|e| format!("cannot bind {listen}: {e}"))?;
     listener
         .set_nonblocking(true)
-        .map_err(|e| format!("cannot poll {}: {e}", inv.listen))?;
+        .map_err(|e| format!("cannot poll {listen}: {e}"))?;
 
     // A `^C` (or a supervisor's SIGTERM/SIGHUP) must stop the PAYLOAD,
     // not leave it orphaned while the relay dies. The three signals are
@@ -193,8 +258,8 @@ fn run(inv: &Invocation) -> Result<i32, String> {
     // arrives before exec — and only then restore the mask from before
     // the block. `sigaction` and `pthread_sigmask` are async-signal-safe.
     let child_mask = saved;
-    let mut command = Command::new(&inv.payload[0]);
-    command.args(&inv.payload[1..]);
+    let mut command = Command::new(&payload[0]);
+    command.args(&payload[1..]);
     unsafe {
         command.pre_exec(move || {
             for sig in [mysbx::sig::HUP, mysbx::sig::INT, mysbx::sig::TERM] {
@@ -206,7 +271,7 @@ fn run(inv: &Invocation) -> Result<i32, String> {
     }
     let child = command
         .spawn()
-        .map_err(|e| format!("cannot start `{}`: {e}", inv.payload[0]));
+        .map_err(|e| format!("cannot start `{}`: {e}", payload[0]));
     let mut child = match child {
         Ok(child) => {
             set_child_pid(child.id());
@@ -222,7 +287,7 @@ fn run(inv: &Invocation) -> Result<i32, String> {
     };
 
     let stop = Arc::new(AtomicBool::new(false));
-    let connect = inv.connect.clone();
+    let connect = connect.to_owned();
     let accept_stop = Arc::clone(&stop);
     let acceptor = std::thread::spawn(move || {
         accept_loop(listener, &connect, &accept_stop);
@@ -238,7 +303,7 @@ fn run(inv: &Invocation) -> Result<i32, String> {
             let _ = child.kill();
             let _ = child.wait();
             let _ = acceptor.join();
-            return Err(format!("cannot wait for `{}`: {e}", inv.payload[0]));
+            return Err(format!("cannot wait for `{}`: {e}", payload[0]));
         }
     };
     stop.store(true, Ordering::SeqCst);
@@ -249,6 +314,31 @@ fn run(inv: &Invocation) -> Result<i32, String> {
     // no in-flight copy keeps the process alive past the payload.
     let _ = acceptor.join();
     Ok(exit_code(status))
+}
+
+/// The guestfwd form (bd myconfig-krab — n8kv.2 C4): the connection is
+/// ALREADY on stdio — qemu's libslirp `fork_exec` (src/misc.c) hands
+/// the guest's stream over as the child's fd 0/1/2, one child per
+/// guest connection — so this process connects the host Unix socket
+/// and copies both ways until EOF, then exits 0.
+///
+/// Fd 0 is a `TcpStream` in everything but its birth: `from_raw_fd`
+/// RE-WRAPS the descriptor (no new fd, and `relay_one`'s `try_clone`
+/// dups before any close, so the stdio aliases 1/2 never hit a
+/// double close). `relay_one` then does the copy exactly as for a
+/// listener-accepted client: each direction half-closes at EOF so an
+/// HTTP/1.1 `Connection: close` client sees end-of-stream. The
+/// lifetime is the connection's — the process exits when the copy
+/// ends, no listener, no child, nothing supervised.
+fn run_guestfwd(connect: &str) -> Result<i32, String> {
+    use std::os::fd::FromRawFd;
+    // SAFETY: fd 0 is the socket libslirp's fork_exec passed us — the
+    // child's stdio is a socketpair end, not a file. Taking it re-wraps
+    // the descriptor; the wrapper's eventual Drop is the exit-time
+    // close of a descriptor exit would close anyway.
+    let client = unsafe { TcpStream::from_raw_fd(0) };
+    relay_one(client, connect);
+    Ok(0)
 }
 
 /// Accept connections until the payload exits, forwarding each one.
@@ -458,9 +548,90 @@ mod tests {
             "true",
         ]))
         .unwrap();
-        assert_eq!(inv.listen, "127.0.0.1:4000");
-        assert_eq!(inv.connect, "/run/mysbx-egress/litellm.sock");
-        assert_eq!(inv.payload, vec!["/bin/bash", "-lc", "true"]);
+        assert_eq!(
+            inv,
+            Invocation::Listen {
+                listen: "127.0.0.1:4000".to_owned(),
+                connect: "/run/mysbx-egress/litellm.sock".to_owned(),
+                payload: vec!["/bin/bash".to_owned(), "-lc".to_owned(), "true".to_owned()],
+            }
+        );
+    }
+
+    /// The guestfwd form (bd myconfig-krab): `--guestfwd <socket>`
+    /// parses to the stdio-transport variant, and mixes with neither
+    /// `--listen` nor a payload.
+    #[test]
+    fn parses_the_guestfwd_invocation() {
+        assert_eq!(
+            Invocation::parse(&s(&["--guestfwd", "/run/mysbx-egress/litellm.sock"])).unwrap(),
+            Invocation::GuestFwd {
+                connect: "/run/mysbx-egress/litellm.sock".to_owned()
+            }
+        );
+        assert!(Invocation::parse(&s(&["--guestfwd", "/x", "--", "true"])).is_err());
+        assert!(Invocation::parse(&s(&["--guestfwd", "/x", "--listen", "127.0.0.1:1"])).is_err());
+        assert!(Invocation::parse(&s(&["--guestfwd"])).is_err());
+        // `--connect` and `--guestfwd` agree on the socket only when
+        // spelled once: both naming it is a parse error, not a silent
+        // pick.
+        assert!(Invocation::parse(&s(&["--guestfwd", "/x", "--connect", "/x"])).is_err());
+    }
+
+    /// The guestfwd copy path: a `TcpStream` re-wrapped from a raw fd
+    /// (the fork_exec stdio shape) round-trips through `relay_one` —
+    /// the same copy both transports share, proven on the descriptor
+    /// path the guestfwd form actually runs (fd 0, dup'd aliases).
+    #[test]
+    fn guestfwd_round_trips_over_a_stdio_socketpair() {
+        use std::os::fd::{FromRawFd, IntoRawFd};
+        use std::os::unix::net::UnixListener;
+
+        let dir = std::env::temp_dir().join(format!("mysbx-relay-gf-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let sock = dir.join("up.sock");
+        let _ = std::fs::remove_file(&sock);
+        let up = UnixListener::bind(&sock).unwrap();
+
+        // The guest side of a socketpair plays qemu's fork_exec stdio.
+        let (guest, relay_side) = std::os::unix::net::UnixStream::pair().unwrap();
+        let relay_fd = relay_side.into_raw_fd();
+        let sock_str = sock.to_string_lossy().into_owned();
+        let relay_handle = std::thread::spawn(move || {
+            // SAFETY: relay_fd is the socketpair end `into_raw_fd`
+            // handed over above — the same ownership handoff
+            // fork_exec's stdio setup performs.
+            let client = unsafe { TcpStream::from_raw_fd(relay_fd) };
+            relay_one(client, &sock_str);
+        });
+
+        // Upstream: read, echo back — ON ITS OWN THREAD, like the
+        // listener test's `up_handle`: the guest (below, main thread)
+        // can only write after this accept loop drains the relay, so
+        // an inline accept+read would deadlock the handshake by
+        // construction (the relay's c2u waits for the guest, the
+        // guest waits for the echo the upstream must first read).
+        let up_handle = std::thread::spawn(move || {
+            let (mut conn, _) = up.accept().unwrap();
+            let mut buf = [0u8; 5];
+            conn.read_exact(&mut buf).unwrap();
+            conn.write_all(&buf).unwrap();
+            buf
+        });
+
+        // The guest writes and reads the echo.
+        let mut guest = guest;
+        guest.write_all(b"hello").unwrap();
+        let mut got = [0u8; 5];
+        guest.read_exact(&mut got).unwrap();
+        assert_eq!(&got, b"hello");
+
+        drop(guest);
+        relay_handle.join().unwrap();
+        let echoed = up_handle.join().unwrap();
+        assert_eq!(&echoed, b"hello");
+        let _ = std::fs::remove_file(&sock);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

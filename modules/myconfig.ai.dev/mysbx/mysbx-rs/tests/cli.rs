@@ -10110,16 +10110,19 @@ fn allowlist_on_microvm_ch_is_refused() {
 #[test]
 fn proxy_only_is_refused_on_every_backend_but_the_enforcing_tiers() {
     // D20 (bd myconfig-mo3.2.3, mo3.2.6, myconfig-vpi9.1, and
-    // myconfig-eov2 — n8kv.2 C5 lifting podman-gvisor):
+    // myconfig-eov2/myconfig-krab — n8kv.2 C5 lifting podman-gvisor
+    // and C4 lifting microvm-qemu):
     // `network = "proxy-only"` is enforced by bubblewrap, the
-    // layered nono backend and podman-gvisor (with its pins — the
+    // layered nono backend, podman-gvisor (with its pins — the
     // bwrap tiers' own missing-pins fail-closed refusal is
     // `proxy_only_on_bubblewrap_without_pins_is_refused`, the
-    // podman one `proxy_only_on_podman_gvisor_without_the_image_relay_is_refused`);
+    // podman one `proxy_only_on_podman_gvisor_without_the_image_relay_is_refused`)
+    // and microvm-qemu (SLiRP `restrict=on` + guestfwd — its
+    // missing-pins refusal is `spec_of`'s, tested in krun.rs);
     // every other backend refuses it (exit 70) with a
     // backend-specific reason, before the session clone and before
     // the --dry-run return, so a dry run audits it.
-    for backend in ["podman-krun", "krun", "microvm-qemu", "microvm-ch"] {
+    for backend in ["podman-krun", "krun", "microvm-ch"] {
         let base = match backend {
             // The VM backends need a fixture root the guest can place a
             // share under; the refusal fires before any share is made,
@@ -10436,6 +10439,117 @@ fn proxy_only_on_podman_gvisor_refuses_a_socket_in_another_bind() {
         "no argv on refusal: {stdout}"
     );
     let _ = std::fs::remove_file(&planted);
+}
+
+#[test]
+fn proxy_only_on_microvm_qemu_without_pins_is_refused() {
+    // The fail-closed half of the C4 lift (bd myconfig-krab): a
+    // `network = "proxy-only"` qemu run with the backend's own pins
+    // (launcher, rootfs, kernel) but NO broker pins is refused — the
+    // registry admits the profile, and `spec_of` fails closed when
+    // the channel is absent, never a silent SLiRP shared network.
+    let Some((inv, _, sidecar)) = krun_fixture("proxy-only-qemu-no-pins", &[]) else {
+        return; // no placeable fixture root here
+    };
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"microvm-qemu\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    let rootfs = sidecar.join("rootfs-stub");
+    std::fs::create_dir_all(rootfs.join("bin")).unwrap();
+    std::fs::write(rootfs.join("bin/mysbx-init"), "#!/bin/sh\n").unwrap();
+    let kernel = sidecar.join("kernel-stub.bzImage");
+    std::fs::write(&kernel, "stub\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["run", "--dry-run", "--", "/bin/true"]);
+    // The broker-pin helper vars are NOT set: the base spawn helper
+    // removes host-set ones, so only the backend pins ride.
+    cmd.env("MYSBX_MICROVM_QEMU_LAUNCHER", "/does/not/matter/dry-run")
+        .env("MYSBX_MICROVM_QEMU_ROOTFS", rootfs.to_str().unwrap())
+        .env("MYSBX_MICROVM_QEMU_KERNEL", kernel.to_str().unwrap());
+    let (code, stdout, stderr) = run_command(cmd);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("network = \"proxy-only\" needs the per-run egress broker")
+            && stderr.contains("MYSBX_EGRESS_BROKER"),
+        "the refusal names the required broker (the same gate the bwrap tier's pinless run hits): {stderr}"
+    );
+    assert!(
+        !stdout.contains("--egress-socket"),
+        "no argv on refusal: {stdout}"
+    );
+}
+
+#[test]
+fn proxy_only_on_microvm_qemu_is_accepted_with_the_channel() {
+    // The C4 lift (bd myconfig-krab): with the broker pins the
+    // pipeline admits the profile on microvm-qemu, and the dry run
+    // audits the restricted shape — the launcher flags (`--network
+    // restricted`, the `--egress-socket`/`--egress-port` pair), the
+    // guest env markers (`MYSBX_MICROVM_NET=restricted`, the
+    // guest-side `10.0.2.2` spelling of `MYSBX_EGRESS_PROXY`) and
+    // the ro bind of the broker directory into the launcher's
+    // bwrap view. The argv itself is locked by the
+    // `microvm-qemu/egress-proxy-only.txt` golden; what only a CLI
+    // run can show is the pipeline letting the run through.
+    let Some((inv, _, sidecar)) = krun_fixture("proxy-only-qemu-accepted", &[]) else {
+        return; // no placeable fixture root here
+    };
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"microvm-qemu\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    let rootfs = sidecar.join("rootfs-stub");
+    std::fs::create_dir_all(rootfs.join("bin")).unwrap();
+    std::fs::write(rootfs.join("bin/mysbx-init"), "#!/bin/sh\n").unwrap();
+    let kernel = sidecar.join("kernel-stub.bzImage");
+    std::fs::write(&kernel, "stub\n").unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["run", "--dry-run", "--", "/bin/true"]);
+    cmd.env("MYSBX_MICROVM_QEMU_LAUNCHER", "/does/not/matter/dry-run")
+        .env("MYSBX_MICROVM_QEMU_ROOTFS", rootfs.to_str().unwrap())
+        .env("MYSBX_MICROVM_QEMU_KERNEL", kernel.to_str().unwrap());
+    let (code, stdout, stderr) = run_command(cmd);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stdout.contains("\n--network\nrestricted\n"),
+        "the launcher learns the restricted netdev: {stdout}"
+    );
+    assert!(
+        stdout.contains("\n--egress-socket\n"),
+        "the broker socket is handed to the launcher: {stdout}"
+    );
+    assert!(
+        stdout.contains("\n--egress-port\n4000\n"),
+        "the model port is handed to the launcher: {stdout}"
+    );
+    assert!(
+        stdout.contains("MYSBX_EGRESS_PROXY=http://10.0.2.2:4000"),
+        "the guest-side gateway spelling is announced: {stdout}"
+    );
+    assert!(
+        stdout.contains("MYSBX_MICROVM_NET=restricted"),
+        "the init's restricted NIC marker is announced: {stdout}"
+    );
+    // The launcher-view bind of the broker directory: ro, the
+    // waypipe-dir idiom (connect(2) needs no write on the path).
+    // The per-run directory is pid-named, so match the bind by its
+    // trailing components, not the whole path.
+    let lines: Vec<&str> = stdout.lines().collect();
+    let bind_at = lines
+        .windows(2)
+        .find(|w| w[0] == "--ro-bind" && w[1].contains("mysbx-egress"))
+        .map(|w| w[1])
+        .expect("the broker directory is ro-bound into the launcher view");
+    let pid_named = bind_at
+        .rsplit('/')
+        .next()
+        .map(|last| last.chars().all(|c| c.is_ascii_digit()) && !last.is_empty())
+        .unwrap_or(false);
+    assert!(
+        bind_at.contains("mysbx-egress-test-rt") && bind_at.contains("mysbx-egress") && pid_named,
+        "the broker directory is ro-bound into the launcher view: {bind_at} (argv: {stdout})"
+    );
 }
 
 #[test]

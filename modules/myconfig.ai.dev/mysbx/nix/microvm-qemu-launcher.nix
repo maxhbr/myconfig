@@ -26,6 +26,14 @@
   qemu,
   # The virtiofsd the RUN should invoke (rust-virtiofsd of nixpkgs).
   virtiofsd,
+  # The egress relay of the restricted `network = "proxy-only"`
+  # channel (bd myconfig-krab): the crate's `bin/mysbx-egress-relay`,
+  # which qemu's libslirp execs per guest connection (the
+  # `guestfwd=…-cmd:` half of the netdev string). Optional — the
+  # module default passes it, a standalone callPackage may omit it,
+  # and a launcher without the pin fails a `--network restricted`
+  # run closed, naming the variable.
+  egressRelay ? null,
 }:
 rustPlatform.buildRustPackage {
   pname = "mysbx-microvm-qemu";
@@ -46,7 +54,10 @@ rustPlatform.buildRustPackage {
   postInstall = ''
     wrapProgram $out/bin/mysbx-microvm-qemu \
       --set MYSBX_MICROVM_QEMU_QEMU '${lib.getExe qemu}' \
-      --set MYSBX_MICROVM_QEMU_VIRTIOFSD '${lib.getExe virtiofsd}'
+      --set MYSBX_MICROVM_QEMU_VIRTIOFSD '${lib.getExe virtiofsd}' \
+      ${lib.optionalString (
+        egressRelay != null
+      ) "--set MYSBX_MICROVM_QEMU_EGRESS_RELAY '${egressRelay}/bin/mysbx-egress-relay'"}
   '';
 
   meta = {

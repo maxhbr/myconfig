@@ -69,6 +69,7 @@ fn params() -> Params<'static> {
         store_disk: None,
         verbose: false,
         detachable: false,
+        egress: None,
     }
 }
 

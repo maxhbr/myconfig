@@ -180,6 +180,17 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
                 // run's own directory under a broker (docs/design/egress.md
                 // E3/E4), the host's static forwarder directory without
                 // one. The in-sandbox destination is fixed either way.
+                // The qemu VM backend's channel is guestfwd (bd
+                // myconfig-krab): the guest dials the SLiRP gateway,
+                // not a loopback the payload could reach — the
+                // spelling must not lie about where the fence sits.
+                Some(e) if r.backend == "microvm-qemu" => p(format!(
+                    "network:        proxy-only (restricted NIC; 10.0.2.2:{} -> {}/{} via the guestfwd relay from {})",
+                    e.port,
+                    crate::bwrap::EGRESS_DIR,
+                    e.socket,
+                    e.socket_dir,
+                )),
                 Some(e) => p(format!(
                     "network:        proxy-only (unshared netns; 127.0.0.1:{} -> {}/{} via the relay from {})",
                     e.port,
@@ -1102,6 +1113,82 @@ mod tests {
             joined.contains(&format!("  HOME={SANDBOX_HOME}  [sandbox home]")),
             "{joined}"
         );
+    }
+
+    #[test]
+    fn the_proxy_only_channel_line_names_the_backend_transport() {
+        // The channel's spelling must not lie about where the fence
+        // sits: the bwrap tiers fence an unshared netns with a
+        // loopback relay (127.0.0.1), microvm-qemu fences the SLiRP
+        // NIC (bd myconfig-krab) whose guest dials the 10.0.2.2
+        // gateway through ONE guestfwd mapping — the same Report
+        // code renders both, the backend name picks the transport.
+        let (repo, mut merged, host) = fixture_report();
+        merged.network = crate::config::Network::ProxyOnly;
+        let socket_dir = "/run/user/1000/mysbx-egress/1234";
+        let channel = crate::bwrap::EgressChannel {
+            socket_dir,
+            socket: "litellm.sock",
+            port: 4000,
+            relay_bin: "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
+            etc_dir: "/synth/store/bbbb-mysbx-egress-etc",
+            allow_domains: &[],
+            connect_ports: &[],
+            public: false,
+        };
+        let params = Params {
+            shell: "/synth/bin/bash",
+            tools_path: "/synth/bin",
+            bin_sh: None,
+            nix_conf: None,
+            ca_bundle: None,
+            policy_paths: &[],
+            mux_entry: None,
+            waypipe: None,
+            workspace: Workspace::Live,
+            inner: None,
+            detachable: false,
+            egress: Some(channel.clone()),
+        };
+        for (backend, needle) in [
+            ("bubblewrap", "unshared netns; 127.0.0.1:4000"),
+            ("microvm-qemu", "restricted NIC; 10.0.2.2:4000"),
+        ] {
+            let joined = lines(&Report {
+                repo: &repo,
+                sidecar_exists: true,
+                user_config: Path::new("/synth/xdg/mysbx/config.toml"),
+                user_config_exists: true,
+                sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
+                sidecar_config_exists: false,
+                merged: &merged,
+                backend_from_cli: false,
+                user_mount_count: 1,
+                cli_mount_count: 0,
+                host_env: &host,
+                dropped_env: &[],
+                placeholder_env: &[],
+                reserved_env: &[],
+                params: &params,
+                bwrap_bin: "bwrap",
+                backend,
+                image: None,
+                payload: &Payload::Shell,
+                dry_run: true,
+                result: false,
+            })
+            .join("\n");
+            assert!(
+                joined.contains(needle),
+                "{backend} must name its own transport ({needle}): {joined}"
+            );
+            assert!(
+                joined.contains(&format!(
+                    "/run/mysbx-egress/litellm.sock via the relay from {socket_dir}"
+                )) || joined.contains(&format!("via the guestfwd relay from {socket_dir}")),
+                "{backend} names the channel source: {joined}"
+            );
+        }
     }
 
     #[test]
