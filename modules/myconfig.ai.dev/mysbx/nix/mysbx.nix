@@ -263,6 +263,22 @@
   # ../../programs/programs.pi-coding-agent. Same security note as the hardcoded
   # list below: whatever lands here is on the sandbox PATH.
   extraTools ? [ ],
+  # C7b (n8kv idea 13, bd myconfig-f23e): the declared major version
+  # of the nodejs the toolchain closure carries, or null when the
+  # host declares none. Pinned as `MYSBX_NODE_MAJOR`; the argv
+  # builders gate the `NODE_USE_ENV_PROXY` injection on it (a
+  # WRAPPER-SIDE fact — the builders are pure and `node` is not on
+  # the sandbox PATH).
+  nodeMajor ? null,
+  # The generated credential-free `.npmrc` (the module builds it —
+  # never the host's): pinned as `MYSBX_NPMRC`, bound read-only at
+  # `$HOME/.npmrc` inside the sandbox. Null pins nothing.
+  npmrc ? null,
+  # The podman spelling of the npmrc pin: the same host store
+  # path, which resolves inside the image because
+  # `podman.imagePackages` bakes the package into the image
+  # layers (the egress-relay pin's rule). Null pins nothing.
+  podmanNpmrc ? null,
   # The binary name under $out/bin: "mysbx" for the base wrapper,
   # "mysbx-<profile>" for a flavor wrapper of `profiles.<name>` in
   # ../default.nix. The crate builds ONE `bin/mysbx`; this symlinkJoin
@@ -847,6 +863,13 @@ let
   # caller passes no alacritty — the fallback PATH lookup of the
   # unwrapped crate applies then.
   terminalPin = if alacritty != null then "--set MYSBX_TERMINAL '${lib.getExe alacritty}'" else "";
+  # C7b (n8kv idea 13, bd myconfig-f23e): the declared nodejs major
+  # of the tools closure and the generated credential-free `.npmrc`.
+  # The null arm is the empty string like `terminalPin`, so a blank
+  # slot on the continued wrapProgram line stays a blank argument —
+  # never a stray `--set` command.
+  nodeMajorPin = if nodeMajor != null then "--set MYSBX_NODE_MAJOR '${toString nodeMajor}'" else "";
+  npmrcPin = if npmrc != null then "--set MYSBX_NPMRC '${npmrc}'" else "";
   # The pinned CA bundle (bd myconfig-938): the `cacert` package's
   # (nss-cacert's) own `ca-bundle.crt`, at the in-package path the argv
   # sets the three TLS env variables to. An absolute store path from
@@ -955,15 +978,19 @@ let
   # The display-channel pins (D18): the host-side client binary and
   # the in-image server binary. Both optional, both absolute store
   # paths — the wrapper idiom of every other pin.
-  waypipePins =
-    lib.optionalString (waypipe != null) "--set MYSBX_WAYPIPE '${lib.getExe waypipe}' "
-    + lib.optionalString (podmanWaypipe != null) "--set MYSBX_PODMAN_WAYPIPE '${podmanWaypipe}'"
-    # The in-image relay of the podman-gvisor channel (bd
-    # myconfig-eov2): a closure path like the waypipe pin — `--set`,
-    # it must match the image this build serves.
-    + lib.optionalString (
+  # The in-image relay of the podman-gvisor channel (bd
+  # myconfig-eov2) and C7b's npmrc in-image path (bd
+  # myconfig-f23e, baked via podman.imagePackages) join the same
+  # expression: the podman binds name in-image paths, never host
+  # store paths.
+  waypipePins = lib.concatStrings (
+    lib.optional (waypipe != null) "--set MYSBX_WAYPIPE '${lib.getExe waypipe}' "
+    ++ lib.optional (podmanWaypipe != null) "--set MYSBX_PODMAN_WAYPIPE '${podmanWaypipe}' "
+    ++ lib.optional (
       podmanEgressRelay != null
-    ) "--set MYSBX_PODMAN_EGRESS_RELAY '${podmanEgressRelay}'";
+    ) "--set MYSBX_PODMAN_EGRESS_RELAY '${podmanEgressRelay}' "
+    ++ lib.optional (podmanNpmrc != null) "--set MYSBX_PODMAN_NPMRC '${podmanNpmrc}'"
+  );
   # The dtach master pin of detached runs (detach.md B10): an
   # absolute store path like every other closure pin. `--set`, not
   # `--set-default`: the pin is infrastructure, not an operator
@@ -1118,6 +1145,8 @@ symlinkJoin {
       --set MYSBX_TOOLS_PATH '${toolsEnv}/bin' \
       --set MYSBX_NIX_CONF '${sandboxNixConf}' \
       --set MYSBX_CA_BUNDLE '${caBundle}' \
+      ${nodeMajorPin} \
+      ${npmrcPin} \
       ${muxEntryPins} \
       ${podmanMuxEntryPins} \
       ${terminalPin} \

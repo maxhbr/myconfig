@@ -930,6 +930,8 @@ mod tests {
             inner: None,
             detachable: false,
             egress: None,
+            npmrc: None,
+            node_major: None,
         };
         lines(&Report {
             repo: &repo,
@@ -1046,6 +1048,8 @@ mod tests {
             inner: None,
             detachable: false,
             egress: None,
+            npmrc: None,
+            node_major: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -1101,6 +1105,8 @@ mod tests {
             inner: None,
             detachable: false,
             egress: None,
+            npmrc: None,
+            node_major: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -1176,6 +1182,8 @@ mod tests {
             mux_entry: None,
             waypipe: None,
             workspace: Workspace::Live,
+            npmrc: None,
+            node_major: None,
             inner: None,
             detachable: false,
             egress: Some(channel.clone()),
@@ -1259,6 +1267,8 @@ mod tests {
             inner: None,
             detachable: false,
             egress: None,
+            npmrc: None,
+            node_major: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -1315,6 +1325,8 @@ mod tests {
             inner: None,
             detachable: false,
             egress: None,
+            npmrc: None,
+            node_major: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -1377,6 +1389,8 @@ mod tests {
             inner: None,
             detachable: false,
             egress: None,
+            npmrc: None,
+            node_major: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -1436,6 +1450,8 @@ mod tests {
             inner: None,
             detachable: false,
             egress: None,
+            npmrc: None,
+            node_major: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -1497,6 +1513,8 @@ mod tests {
                 mux_entry: Some("/synth/bin/mysbx-mux-entry"),
                 waypipe: None,
                 workspace: Workspace::Live,
+                npmrc: None,
+                node_major: None,
                 inner: None,
                 detachable: false,
                 egress: None,
@@ -1588,6 +1606,8 @@ mod tests {
                 mux_entry: Some("/synth/bin/mysbx-herdr-entry"),
                 waypipe: None,
                 workspace,
+                npmrc: None,
+                node_major: None,
                 inner: None,
                 detachable: false,
                 egress: None,
@@ -1688,6 +1708,8 @@ mod tests {
             inner: None,
             detachable: false,
             egress: None,
+            npmrc: None,
+            node_major: None,
         };
         let report_of = |payload: &Payload| {
             lines(&Report {
@@ -1843,6 +1865,8 @@ mod tests {
             inner: None,
             detachable: false,
             egress: None,
+            npmrc: None,
+            node_major: None,
         };
         let payload = Payload::Shell;
         let out = lines(&Report {
@@ -1903,6 +1927,8 @@ mod tests {
             inner: None,
             detachable: false,
             egress: None,
+            npmrc: None,
+            node_major: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -1965,6 +1991,8 @@ mod tests {
             inner: None,
             detachable: false,
             egress: None,
+            npmrc: None,
+            node_major: None,
         };
         let joined = lines(&Report {
             repo: &repo,
@@ -2055,6 +2083,8 @@ mod tests {
             inner: None,
             detachable: false,
             egress: None,
+            npmrc: None,
+            node_major: None,
         };
         let joined = lines(&Report {
             repo: &repo,

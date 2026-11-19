@@ -120,6 +120,26 @@ port>`, `NO_PROXY` = `127.0.0.1,localhost`, plus the lower-case forms
 overrides them by precedence; and the reservation (E13) drops payload
 overrides instead of trusting that precedence at all.
 
+The toolchain half (n8kv idea 13, bd myconfig-f23e — C7b): proxy-
+unaware toolchains need more than the standard names. Node ignores
+`HTTP(S)_PROXY` unless told otherwise, so a paired run additionally
+injects `NODE_USE_ENV_PROXY=1` — GATED on a wrapper-side version
+check: the Nix wrapper pins `MYSBX_NODE_MAJOR` (the declared major
+of the nodejs the tools closure carries — never a runtime probe;
+the builders are pure and `node` is not on the sandbox PATH), and
+only a major that understands the variable (≥ 24, npm's env-proxy
+support) gets the injection. The E13 reservation couples to the
+same gate: the name is dropped from `[env]`/forwarded exactly where
+it is injected, nowhere else. Alongside, the wrapper generates a
+credential-free `.npmrc` (registry URL only, never the host's file —
+`.npmrc` is on every tier's credential denylist) pinned as
+`MYSBX_NPMRC` and bound read-only at `$HOME/.npmrc`, so an npm never
+needs the real credential file. The podman backends resolve the same
+store path inside the image (`podman.imagePackages` bakes the package
+— the egress-relay pin's rule, pinned as `MYSBX_PODMAN_NPMRC`):
+the container mounts nothing from the host, but the image IS the
+store slice.
+
 A `--dry-run` today never prints the broker argv (the broker is
 spawned after the dry-run return). Because E7 makes the table part of
 what an operator audits, the dry run gains the broker argv block after
@@ -326,6 +346,15 @@ on bubblewrap an override breaks the payload's own egress (the fence
 holds — nothing else is reachable); on nono it breaks connectivity (the
 supervisor still denies direct remote connects). The reservation is
 correctness and marking, not the fix of a demonstrated policy bypass.
+
+C7b (n8kv idea 13, bd myconfig-f23e) extends the same rule to the
+toolchain name: `NODE_USE_ENV_PROXY` is injected (E8) exactly when
+the wrapper-side node-major pin says the closure's nodejs understands
+it, and it is reserved exactly there too — gate-coupled on every
+broker-lane backend (bwrap, the VM transports, podman-gvisor), while
+nono keeps reserving it for its own lane as before. A closure whose
+node is older (or absent) neither injects nor reserves it: an
+override there would be honest noise, not an attack.
 
 ## Decomposition (verified ordering)
 

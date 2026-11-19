@@ -501,6 +501,19 @@ pub struct Params<'a> {
     pub pids_limit: Option<Cow<'a, str>>,
     pub memory: Option<Cow<'a, str>>,
     pub cpus: Option<Cow<'a, str>>,
+    /// C7b: credential-free `.npmrc` (n8kv idea 13, bd
+    /// myconfig-f23e): a GENERATED file (registry URL only — the
+    /// host's `.npmrc` is never read, it is on the credential
+    /// denylist), bound read-only at `$HOME/.npmrc`. The pin names
+    /// the package's store path, which resolves inside the image
+    /// because `imagePackages` bakes the package (the egress-relay
+    /// pin's rule — the container mounts NOTHING from the host
+    /// `/nix/store`). `None` means no npmrc is bound.
+    pub npmrc: Option<&'a str>,
+    /// The major version of the nodejs the agent image carries (the
+    /// same WRAPPER-SIDE pin rule as bwrap's, C7b): gates the
+    /// `NODE_USE_ENV_PROXY` injection in the container env.
+    pub node_major: Option<u32>,
 }
 
 /// Build the complete `podman run` argv for `cfg` / `repo` / `payload`.
@@ -1138,6 +1151,21 @@ pub fn podman_run_argv(
             false,
         );
     }
+    // C7b: credential-free `.npmrc` (n8kv idea 13, bd
+    // myconfig-f23e): the generated store-path file bound at the
+    // container home (see [`Params::npmrc`]).
+    if let Some(npmrc) = params.npmrc {
+        // read-only, like every other config bind: the generated
+        // file is infrastructure, the payload must not rewrite it
+        // (a rw bind over the store would fail EROFS anyway, but
+        // the argv states the intent).
+        bind_mount(
+            &mut argv,
+            npmrc,
+            format!("{CONTAINER_HOME}/.npmrc").as_str(),
+            false,
+        );
+    }
 
     // 6c. the per-run scratch disk (bd myconfig-0pi): the sparse host
     // file bound rw at the fixed infrastructure path — a per-RUN
@@ -1166,7 +1194,11 @@ pub fn podman_run_argv(
     // (lib.rs `reserved_env` names them for every Broker row).
     let reserved: Vec<String> = if let Some(channel) = egress {
         if !channel.allow_domains.is_empty() || !channel.connect_ports.is_empty() {
-            [
+            // Exactly the names the injection below sets — with C7b
+            // (bd myconfig-f23e) GATE-COUPLED: NODE_USE_ENV_PROXY
+            // joins exactly when the node-major pin makes its
+            // injection real (the bwrap twin's rule).
+            let mut names: Vec<String> = [
                 "HTTP_PROXY",
                 "HTTPS_PROXY",
                 "http_proxy",
@@ -1176,7 +1208,13 @@ pub fn podman_run_argv(
             ]
             .iter()
             .map(|n| (*n).to_owned())
-            .collect()
+            .collect();
+            if let Some(major) = params.node_major {
+                if major >= crate::bwrap::NODE_ENV_PROXY_MIN_MAJOR {
+                    names.push("NODE_USE_ENV_PROXY".to_owned());
+                }
+            }
+            names
         } else {
             Vec::new()
         }
@@ -1278,6 +1316,19 @@ pub fn podman_run_argv(
                 ("no_proxy", "127.0.0.1,localhost"),
             ] {
                 argv.extend(["--env".into(), format!("{key}={value}")]);
+            }
+            // C7b: the toolchain proxy variables (n8kv idea 13, bd
+            // myconfig-f23e): the podman-gvisor container inherits
+            // the same infrastructure — a table-carrying channel
+            // gets NODE_USE_ENV_PROXY injected so proxy-unaware
+            // Node honours the lane. Version-gated on the
+            // WRAPPER-SIDE pin (the builder is pure), exactly like
+            // the bwrap twin; the E13 drop above couples to the
+            // same gate.
+            if let Some(major) = params.node_major {
+                if major >= crate::bwrap::NODE_ENV_PROXY_MIN_MAJOR {
+                    argv.extend(["--env".into(), "NODE_USE_ENV_PROXY=1".into()]);
+                }
             }
         }
     }

@@ -98,6 +98,8 @@ fn params<'a>(
         verbose: false,
         detachable: false,
         egress: None,
+        npmrc: None,
+        node_major: None,
     }
 }
 

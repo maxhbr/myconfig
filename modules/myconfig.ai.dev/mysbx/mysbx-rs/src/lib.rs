@@ -3420,6 +3420,25 @@ fn sandbox_pipeline(
         .cloned()
         .collect();
     let mut host_env = collect_host_env(&merged);
+    // C7b: the tools closure's nodejs MAJOR version, pinned by the
+    // Nix wrapper as `MYSBX_NODE_MAJOR` (n8kv idea 13, bd
+    // myconfig-f23e). A WRAPPER-SIDE fact — the builders never
+    // probe the binary (they are pure, and `node` is not on the
+    // sandbox PATH anyway; the pi wrapper execs a store-path
+    // node). Unset means the closure carries no nodejs and no
+    // injection happens; a set-but-invalid pin is refused, never
+    // silently treated as absent.
+    let node_major: Option<u32> = match env_opt("MYSBX_NODE_MAJOR") {
+        None => None,
+        Some(raw) => match raw.trim().parse::<u32>() {
+            Ok(major) => Some(major),
+            Err(_) => {
+                eprintln!("mysbx: MYSBX_NODE_MAJOR = `{raw}` is not a valid nodejs major version");
+                return EXIT_INFRASTRUCTURE;
+            }
+        },
+    };
+
     // The proxy-variable reservation (backends.md D1's caveat,
     // implemented — bd myconfig-ew9s E13), both halves: the nono
     // domain-allowlist run (nono injects the names, the pinned `env`
@@ -3451,6 +3470,21 @@ fn sandbox_pipeline(
             ] {
                 if !names.iter().any(|n| n == name) {
                     names.push(name.to_owned());
+                }
+            }
+            // C7b: the toolchain proxy variable rides the same
+            // reservation (n8kv idea 13, bd myconfig-f23e) — but
+            // only where it is INJECTED: the builder gates the
+            // `NODE_USE_ENV_PROXY=1` injection on the wrapper-side
+            // nodejs major pin (`MYSBX_NODE_MAJOR`), so a closure
+            // whose node is older (or absent) does not reserve the
+            // name — an override would be honest there, exactly
+            // like nono's control names are not reserved under
+            // bubblewrap. The nono backend reserves the name itself
+            // (nono::RESERVED_PROXY_NAMES) for its own lane.
+            if node_major.is_some_and(|m| m >= bwrap::NODE_ENV_PROXY_MIN_MAJOR) {
+                if !names.iter().any(|n| n == "NODE_USE_ENV_PROXY") {
+                    names.push("NODE_USE_ENV_PROXY".to_owned());
                 }
             }
         }
@@ -3529,6 +3563,17 @@ fn sandbox_pipeline(
     // trust anchors are reproducible and independent of the host's
     // `/etc` layout.
     let ca_bundle = env_opt("MYSBX_CA_BUNDLE");
+    // C7b: credential-free `.npmrc` (n8kv idea 13, bd myconfig-f23e):
+    // the file the Nix wrapper GENERATES (registry URL only — the
+    // host's `.npmrc` is on the credential denylist and is never
+    // read, stripped or whole). Unset means "no npmrc pin", never
+    // "point at the host's".
+    let npmrc = env_opt("MYSBX_NPMRC");
+    // The podman spelling of the same pin: the same store path,
+    // which resolves inside the image because imagePackages bakes
+    // the package (the egress-relay pin's rule — the container
+    // mounts nothing from the host /nix/store).
+    let podman_npmrc = env_opt("MYSBX_PODMAN_NPMRC");
     // The podman-gvisor backend's own payload pins (bd
     // myconfig-wao): the container mounts NOTHING from the host
     // `/nix/store`, so the host pins above cannot serve as its
@@ -3783,6 +3828,15 @@ fn sandbox_pipeline(
         mux_entry: report_mux_entry.as_deref(),
         waypipe: report_waypipe.clone(),
         workspace: workspace.clone(),
+        // C7b: credential-free .npmrc on this path (C7b, bd
+        // myconfig-f23e): podman has no npmrc pin; bubblewrap
+        // carries the wrapper's sanitized copy.
+        npmrc: if backends::find(backend).is_some_and(|row| row.podman()) {
+            None
+        } else {
+            npmrc.as_deref()
+        },
+        node_major,
         // The same `Params` the argv builder takes: the report reads
         // the fields it shows (shell, tools PATH, workspace, …) and
         // leaves `detachable` alone — the verbose report does NOT
@@ -3821,6 +3875,11 @@ fn sandbox_pipeline(
                 mux_entry: mux_entry.as_deref(),
                 waypipe: waypipe_params.clone(),
                 workspace: workspace.clone(),
+                // C7b: credential-free .npmrc on this path (C7b, bd
+                // myconfig-f23e): the Nix wrapper generates and pins
+                // a sanitized copy when one is needed.
+                npmrc: npmrc.as_deref(),
+                node_major,
                 detachable,
                 inner: None,
                 egress: egress_params.clone(),
@@ -3975,6 +4034,9 @@ fn sandbox_pipeline(
                     // the detached mark has nothing to reach.
                     detachable: false,
                     egress: None,
+                    // C7b: dummy params don't need npmrc.
+                    npmrc: None,
+                    node_major: None,
                 };
                 let backing = match krun::backing_paths(&merged, &repo, &trust_params) {
                     Ok(map) => map,
@@ -4229,6 +4291,13 @@ fn sandbox_pipeline(
                 pids_limit,
                 memory,
                 cpus,
+                // C7b: credential-free .npmrc on the podman-gvisor
+                // path (bd myconfig-f23e): the store path resolves
+                // inside the image because imagePackages bakes the
+                // package (the egress-relay pin's rule — the
+                // container mounts nothing from the host).
+                npmrc: podman_npmrc.as_deref(),
+                node_major,
             };
             let argv = match podman_gvisor::podman_run_argv(
                 &merged, &repo, &payload, &host_env, &params,
@@ -4450,6 +4519,9 @@ fn sandbox_pipeline(
                     // the detached mark has nothing to reach.
                     detachable: false,
                     egress: None,
+                    // C7b: dummy params don't need npmrc.
+                    npmrc: None,
+                    node_major: None,
                 };
                 let backing = match krun::backing_paths(&merged, &repo, &trust_params) {
                     Ok(map) => map,
@@ -4607,6 +4679,11 @@ fn sandbox_pipeline(
                 // its phase timings and setup detail (the dlopen'd
                 // lib, the manifest, the fd limits).
                 verbose: flags.verbose,
+                // C7b: credential-free .npmrc on the VM path (C7b,
+                // bd myconfig-f23e): the Nix wrapper generates the
+                // sanitized copy and pins it here.
+                npmrc: npmrc.as_deref(),
+                node_major,
             };
             let krun_argv = if backend == "microvm-ch" {
                 // Backend-specific env pins (MYSBX_MICROVM_CH_ENV, the
@@ -4994,6 +5071,11 @@ fn sandbox_pipeline(
                 mux_entry: mux_entry.as_deref(),
                 waypipe: waypipe_params.clone(),
                 workspace: workspace.clone(),
+                // C7b: credential-free .npmrc on the layered nono path
+                // too (C7b, bd myconfig-f23e): the wrapper pins a
+                // sanitized copy that the nono backend inherits.
+                npmrc: npmrc.as_deref(),
+                node_major,
                 detachable,
                 inner: Some(bwrap::Inner {
                     argv: &inner_argv,

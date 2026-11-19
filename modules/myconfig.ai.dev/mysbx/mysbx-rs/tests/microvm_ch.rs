@@ -70,6 +70,8 @@ fn params() -> Params<'static> {
         verbose: false,
         detachable: false,
         egress: None,
+        npmrc: None,
+        node_major: None,
     }
 }
 

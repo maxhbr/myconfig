@@ -91,6 +91,8 @@ fn params<'a>(
         verbose: false,
         detachable: false,
         egress: None,
+        npmrc: None,
+        node_major: None,
     }
 }
 
@@ -287,6 +289,99 @@ fn proxy_only_golden_renders_the_restricted_vsock_channel() {
         "the relay pin never rides the krun argv — the VMM's muxer is the relay: {argv:?}"
     );
     assert_golden("egress-proxy-only.txt", &argv);
+}
+
+#[test]
+fn node_env_proxy_injects_on_a_paired_channel_with_a_new_enough_node() {
+    // C7b (n8kv idea 13, bd myconfig-f23e): a table-carrying channel
+    // gets NODE_USE_ENV_PROXY in the guest env when the wrapper-side
+    // node major pin says the nodejs understands it — the krun twin
+    // of the bwrap test.
+    let mut cfg = base(false);
+    cfg.network = mysbx::config::Network::ProxyOnly;
+    let channel = mysbx::bwrap::EgressChannel {
+        socket_dir: "/run/user/1000/mysbx-egress/1234",
+        socket: "litellm.sock",
+        port: 4000,
+        relay_bin: "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
+        etc_dir: "/synth/store/bbbb-mysbx-egress-etc",
+        allow_domains: &[],
+        connect_ports: &[443],
+        public: false,
+    };
+    let p = mysbx::krun::Params {
+        egress: Some(&channel),
+        node_major: Some(mysbx::bwrap::NODE_ENV_PROXY_MIN_MAJOR),
+        ..params("/synth/rootfs", "/synth/shell", None, Workspace::Live)
+    };
+    let argv = krun_argv(&cfg, &synth_repo(), &Payload::Shell, &BTreeMap::new(), &p).unwrap();
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--env" && w[1] == "NODE_USE_ENV_PROXY=1"),
+        "a paired channel with node >= {} carries NODE_USE_ENV_PROXY=1: {argv:?}",
+        mysbx::bwrap::NODE_ENV_PROXY_MIN_MAJOR
+    );
+}
+
+#[test]
+fn node_env_proxy_absent_without_a_node_pin_or_a_table() {
+    // No pin (or no table): nothing injected — the same honesty rule
+    // as the bwrap twin.
+    let mut cfg = base(false);
+    cfg.network = mysbx::config::Network::ProxyOnly;
+    let channel = mysbx::bwrap::EgressChannel {
+        socket_dir: "/run/user/1000/mysbx-egress/1234",
+        socket: "litellm.sock",
+        port: 4000,
+        relay_bin: "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
+        etc_dir: "/synth/store/bbbb-mysbx-egress-etc",
+        allow_domains: &[],
+        connect_ports: &[443],
+        public: false,
+    };
+    let mut p = params("/synth/rootfs", "/synth/shell", None, Workspace::Live);
+    p.egress = Some(&channel);
+    let argv = krun_argv(&cfg, &synth_repo(), &Payload::Shell, &BTreeMap::new(), &p).unwrap();
+    assert!(
+        !argv.iter().any(|a| a.contains("NODE_USE_ENV_PROXY")),
+        "no node pin means no NODE_USE_ENV_PROXY: {argv:?}"
+    );
+    // And a plain proxy-only run (no table) injects it with a pin
+    // either — there is no lane to honor.
+    let channel_plain = mysbx::bwrap::EgressChannel {
+        connect_ports: &[],
+        ..channel
+    };
+    let p2 = mysbx::krun::Params {
+        egress: Some(&channel_plain),
+        node_major: Some(mysbx::bwrap::NODE_ENV_PROXY_MIN_MAJOR),
+        ..params("/synth/rootfs", "/synth/shell", None, Workspace::Live)
+    };
+    let argv2 = krun_argv(&cfg, &synth_repo(), &Payload::Shell, &BTreeMap::new(), &p2).unwrap();
+    assert!(
+        !argv2.iter().any(|a| a.contains("NODE_USE_ENV_PROXY")),
+        "no table means no NODE_USE_ENV_PROXY: {argv2:?}"
+    );
+}
+
+#[test]
+fn the_npmrc_pin_shares_ro_and_stages_a_slot() {
+    // C7b: the generated credential-free `.npmrc` rides the ro staging tree under the
+    // `npmrc` slot and is placed at the sandbox home by the guest
+    // init's share loop — the two lists (stage_binds / krun_shares)
+    // stay in lockstep.
+    let cfg = base(false);
+    let p = mysbx::krun::Params {
+        npmrc: Some("/synth/store/npmrc-mysbx"),
+        ..params("/synth/rootfs", "/synth/shell", None, Workspace::Live)
+    };
+    let binds = mysbx::krun::stage_binds(&cfg, &synth_repo(), &p).unwrap();
+    assert!(
+        binds.iter().any(|(host, ro, slot)| {
+            host == "/synth/store/npmrc-mysbx" && *ro && slot == "npmrc"
+        }),
+        "the npmrc is staged ro under its slot: {binds:?}"
+    );
 }
 
 #[test]
@@ -1298,6 +1393,8 @@ fn params_owned<'a>(
         verbose: false,
         detachable: false,
         egress: None,
+        npmrc: None,
+        node_major: None,
     }
 }
 

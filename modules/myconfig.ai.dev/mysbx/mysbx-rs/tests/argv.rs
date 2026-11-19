@@ -114,6 +114,8 @@ fn params() -> Params<'static> {
         mux_entry: None,
         waypipe: None,
         workspace: Workspace::Live,
+        npmrc: None,
+        node_major: None,
         inner: None,
         detachable: false,
         egress: None,
@@ -158,6 +160,115 @@ fn proxy_only_params() -> Params<'static> {
         egress: Some(egress_channel()),
         ..params()
     }
+}
+
+/// [`egress_channel`] carrying a CONNECT-lane table (the C7a pairing:
+/// non-empty `connect_ports`, the shape `allow_domains` rides too).
+fn paired_channel() -> mysbx::bwrap::EgressChannel<'static> {
+    mysbx::bwrap::EgressChannel {
+        connect_ports: &[443],
+        ..egress_channel()
+    }
+}
+
+// ---- C7b: the toolchain proxy variable (n8kv idea 13, bd
+// myconfig-f23e) ----------------------------------------------
+//
+// NODE_USE_ENV_PROXY is injected on a table-carrying channel when the
+// WRAPPER-SIDE node major pin says the closure's nodejs understands
+// it (>= NODE_ENV_PROXY_MIN_MAJOR), never by probing: the builders
+// stay pure, and `node` is not on the sandbox PATH anyway.
+
+#[test]
+fn node_env_proxy_injects_on_a_paired_run_with_a_new_enough_node() {
+    let mut cfg = proxy_only_base();
+    cfg.connect_ports = vec![443];
+    let mut params = proxy_only_params();
+    params.egress = Some(paired_channel());
+    params.node_major = Some(mysbx::bwrap::NODE_ENV_PROXY_MIN_MAJOR);
+    let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params).unwrap();
+    assert!(
+        argv.windows(3).any(|w| w[0] == "--setenv" && w[1] == "NODE_USE_ENV_PROXY" && w[2] == "1"),
+        "a paired run with node >= {} carries NODE_USE_ENV_PROXY=1: {argv:?}",
+        mysbx::bwrap::NODE_ENV_PROXY_MIN_MAJOR
+    );
+}
+
+#[test]
+fn node_env_proxy_absent_without_a_node_pin() {
+    // No `MYSBX_NODE_MAJOR` pin — the closure declares no nodejs, so
+    // no variable an unknown binary may not understand is injected.
+    // (The honest-noise rule: absent, never a guess.)
+    let mut cfg = proxy_only_base();
+    cfg.connect_ports = vec![443];
+    let mut params = proxy_only_params();
+    params.egress = Some(paired_channel());
+    let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params).unwrap();
+    assert!(
+        !argv.contains(&"NODE_USE_ENV_PROXY".to_string()),
+        "no node pin means no NODE_USE_ENV_PROXY: {argv:?}"
+    );
+}
+
+#[test]
+fn node_env_proxy_absent_on_an_old_node() {
+    // Below the env-proxy support: the variable would be ignored or
+    // (worse) repurposed by a different major, so it is not injected.
+    let mut cfg = proxy_only_base();
+    cfg.connect_ports = vec![443];
+    let mut params = proxy_only_params();
+    params.egress = Some(paired_channel());
+    params.node_major = Some(mysbx::bwrap::NODE_ENV_PROXY_MIN_MAJOR - 1);
+    let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params).unwrap();
+    assert!(
+        !argv.contains(&"NODE_USE_ENV_PROXY".to_string()),
+        "an old node major gets no NODE_USE_ENV_PROXY: {argv:?}"
+    );
+}
+
+#[test]
+fn node_env_proxy_absent_without_a_table() {
+    // A plain `proxy-only` run (model lane only, no CONNECT table)
+    // injects no toolchain variable: there is no lane for the
+    // toolchain to honor, exactly like the E8 names.
+    let params = proxy_only_params();
+    let argv = bwrap_argv(
+        &proxy_only_base(),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    assert!(
+        !argv.contains(&"NODE_USE_ENV_PROXY".to_string()),
+        "no table means no NODE_USE_ENV_PROXY: {argv:?}"
+    );
+}
+
+#[test]
+fn the_npmrc_pin_binds_read_only_at_the_sandbox_home() {
+    // The generated credential-free `.npmrc` (MYSBX_NPMRC) binds at
+    // the sandbox home — a `--ro-bind`, never `--bind`: the payload
+    // must not rewrite its own package-manager config.
+    let params = Params {
+        npmrc: Some("/synth/store/npmrc-mysbx"),
+        ..params()
+    };
+    let argv = bwrap_argv(
+        &base(false),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    assert!(
+        argv.windows(3).any(|w| {
+            w[0] == "--ro-bind" && w[1] == "/synth/store/npmrc-mysbx" && w[2] == "/mysbx-home/.npmrc"
+        }),
+        "the npmrc pin binds ro at $HOME/.npmrc: {argv:?}"
+    );
 }
 
 /// The argv, one argument per line (the intended `--dry-run` format of
@@ -2332,6 +2443,8 @@ fn a_pinned_sanitized_nix_conf_is_bound_read_only() {
         mux_entry: None,
         waypipe: None,
         workspace: Workspace::Live,
+        npmrc: None,
+        node_major: None,
         inner: None,
         detachable: false,
         egress: None,
@@ -2374,6 +2487,8 @@ fn a_pinned_bin_sh_is_bound_read_only_into_the_empty_root() {
         mux_entry: None,
         waypipe: None,
         workspace: Workspace::Live,
+        npmrc: None,
+        node_major: None,
         inner: None,
         detachable: false,
         egress: None,
@@ -3243,6 +3358,8 @@ fn a_relocated_writable_parent_of_the_sidecar_is_refused() {
         mux_entry: None,
         waypipe: None,
         workspace: Workspace::Live,
+        npmrc: None,
+        node_major: None,
         inner: None,
         detachable: false,
         egress: None,
@@ -3276,6 +3393,8 @@ fn a_writable_mount_of_the_sidecar_directory_itself_is_refused() {
         mux_entry: None,
         waypipe: None,
         workspace: Workspace::Live,
+        npmrc: None,
+        node_major: None,
         inner: None,
         detachable: false,
         egress: None,
@@ -3311,6 +3430,8 @@ fn a_read_only_mount_of_the_sidecar_stays_allowed() {
         mux_entry: None,
         waypipe: None,
         workspace: Workspace::Live,
+        npmrc: None,
+        node_major: None,
         inner: None,
         detachable: false,
         egress: None,
@@ -3339,6 +3460,8 @@ fn a_writable_mount_unrelated_to_the_policy_files_stays_allowed() {
         mux_entry: None,
         waypipe: None,
         workspace: Workspace::Live,
+        npmrc: None,
+        node_major: None,
         inner: None,
         detachable: false,
         egress: None,
@@ -3368,6 +3491,8 @@ fn the_implicit_repo_bind_exposing_a_policy_file_is_refused() {
         mux_entry: None,
         waypipe: None,
         workspace: Workspace::Live,
+        npmrc: None,
+        node_major: None,
         inner: None,
         detachable: false,
         egress: None,
@@ -3399,6 +3524,8 @@ fn a_git_dir_exposing_a_policy_file_is_refused() {
         mux_entry: None,
         waypipe: None,
         workspace: Workspace::Live,
+        npmrc: None,
+        node_major: None,
         inner: None,
         detachable: false,
         egress: None,
@@ -3434,6 +3561,8 @@ fn an_absent_policy_file_does_not_forbid_its_would_be_parent() {
         mux_entry: None,
         waypipe: None,
         workspace: Workspace::Live,
+        npmrc: None,
+        node_major: None,
         inner: None,
         detachable: false,
         egress: None,
@@ -3468,6 +3597,8 @@ fn params_with(policy: &[mysbx::bwrap::PolicyPath]) -> Params<'_> {
         mux_entry: None,
         waypipe: None,
         workspace: Workspace::Live,
+        npmrc: None,
+        node_major: None,
         inner: None,
         detachable: false,
         egress: None,
@@ -3676,6 +3807,8 @@ fn clone_params() -> Params<'static> {
             clone: Path::new(SYNTH_CLONE),
             worktrees: Path::new(SYNTH_CLONE_WORKTREES),
         },
+        npmrc: None,
+        node_major: None,
         inner: None,
         detachable: false,
         egress: None,
@@ -4065,6 +4198,8 @@ fn podman_params() -> PodmanParams<'static> {
         mux_entry: None,
         waypipe: None,
         workspace: Workspace::Live,
+        npmrc: None,
+        node_major: None,
         // (podman_gvisor::Params has no `inner` field — the layered
         // wrapper is a bwrap-layout concern.)
         // The exec'd backend keeps mysbx's stdio, so the container is

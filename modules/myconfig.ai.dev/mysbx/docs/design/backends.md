@@ -183,7 +183,11 @@ In domain-allowlist mode nono injects its proxy variables:
 these names are reserved — a configured or forwarded override is
 dropped from the payload env segment and marked in the report as
 `[config/host, ignored — set by the proxy]`, so an operator sees why
-the entry did not reach the payload. The scope stays what it was:
+the entry did not reach the payload. On the broker-lane backends
+`NODE_USE_ENV_PROXY` follows C7b's gate (bd myconfig-f23e): it is
+injected — and therefore reserved — only when the wrapper-side
+nodejs-major pin says the closure's node understands the variable.
+The scope stays what it was:
 an override breaks the payload's own egress (connectivity), while
 the supervisor still denies direct remote connects — a correctness
 and marking reservation, not the fix of a demonstrated policy

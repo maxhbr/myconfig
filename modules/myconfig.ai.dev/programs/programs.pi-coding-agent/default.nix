@@ -918,6 +918,12 @@ let
   # into the jailed session (both wrappers share `~/.pi`). The extension also
   # self-heals that legacy corruption once (see its header comment).
   pi-coding-agent-pkg = pkgs.nixos-unstable.pi-coding-agent;
+  # The nodejs pi's wrapper execs by store path (the package's one
+  # buildInput) — the version fact the mysbx `nodeMajor` derivation
+  # below reads.
+  piNodeJs = lib.findSingle (
+    x: lib.hasPrefix "nodejs-" (x.name or "")
+  ) null null pi-coding-agent-pkg.buildInputs;
 
   baseTheme = builtins.fromJSON (
     builtins.readFile "${pi-coding-agent-pkg}/lib/node_modules/pi-monorepo/dist/modes/interactive/theme/light.json"
@@ -1847,6 +1853,12 @@ in
     # genuinely un-sandboxed sessions (plain `pi`/`piBwrap`).
     myconfig.ai.dev.mysbx = lib.mkIf config.myconfig.ai.dev.mysbx.enable {
       extraTools = [ pi-coding-agent-pkg ];
+      # C7b (bd myconfig-f23e): pi's own nodejs, by major — pi execs
+      # `node` by store path (never on the sandbox PATH, so no probe
+      # could find it), and the mysbx wrapper needs the declared
+      # major to gate the NODE_USE_ENV_PROXY injection. mkDefault: a
+      # host that pins `nodeMajor` itself wins over this derivation.
+      nodeMajor = lib.mkDefault (lib.toInt (lib.versions.major piNodeJs.version));
       defaultAgent = lib.mkDefault {
         kind = "pi";
         command = "pi";

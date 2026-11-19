@@ -938,3 +938,46 @@ connecting process.
   nono keeps its own allowlist enforcement for `shared`, and
   `proxy-only` + keys stays refused on it (bd myconfig-zzmj
   holds the open decision).
+
+
+## C7b: toolchain proxy variables + credential-free npmrc (bd myconfig-f23e)
+
+Offline validation of n8kv idea 13 (goldens + unit tests + a
+`--dry-run` audit through the real binary; the KVM live probes of
+C7a already prove the lane the variables point at, and the
+credential-free `.npmrc` carries no credential to probe):
+
+- The version check is a WRAPPER-SIDE fact, not a probe:
+  `MYSBX_NODE_MAJOR` is the declared major of the closure's nodejs
+  (the module option `myconfig.ai.dev.mysbx.nodeMajor`, pinned by
+  the Nix wrapper). The builders stay pure — `tests/argv.rs`
+  `node_env_proxy_*` (bwrap) and `tests/krun.rs`
+  `node_env_proxy_*` (the VM twin) assert the injection happens with
+  the pin at `NODE_ENV_PROXY_MIN_MAJOR`, and NOT without a pin, with
+  an old major, or without a table.
+- The reservation couples to the injection gate:
+  `tests/cli.rs` `node_env_proxy_is_injected_and_reserved_on_a_paired_run`
+  drives the real binary — a paired run with `MYSBX_NODE_MAJOR=24`
+  injects `NODE_USE_ENV_PROXY=1` after `[env]`, a configured
+  `=0` override is dropped and marked
+  `[config, ignored — set by the proxy]` in the verbose report;
+  `node_env_proxy_stays_absent_without_the_pin_or_below_the_threshold`
+  proves the override RIDES (unreserved) without the pin or below
+  the threshold.
+- The credential-free `.npmrc` is GENERATED (registry URL only),
+  never copied from the host: `.npmrc` is on every tier's credential
+  denylist (fns/seed-agent-config.nix, the microvm config-seed), and
+  the generated file's acceptance test is
+  `tests/argv.rs` `the_npmrc_pin_binds_read_only_at_the_sandbox_home`
+  (a `--ro-bind` at `$HOME/.npmrc`) and
+  `tests/krun.rs` `the_npmrc_pin_shares_ro_and_stages_a_slot`
+  (the ro staging slot, in lockstep with the guest-side share).
+  The podman spelling is `MYSBX_PODMAN_NPMRC`, the same store
+  path resolving inside the image (`imagePackages` bakes the
+  package — the egress-relay precedent).
+- No credential content reaches the payload: the generated file has
+  no `_authToken`/`_auth`/`_password`/`_token` lines by
+  construction (it IS the two-line generated text), and the host's
+  own `~/.npmrc` stays unbound — the same reasoning as the
+  generated nix.conf (review-2 item 3).
+

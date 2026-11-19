@@ -320,6 +320,17 @@ pub struct Params<'a> {
     /// stdio INSIDE the launcher's bwrap view, where lib.rs binds
     /// the broker directory read-only.
     pub egress: Option<&'a EgressChannel<'a>>,
+    /// C7b: credential-free `.npmrc` to share into the guest (n8kv
+    /// idea 13, bd myconfig-f23e): the wrapper-GENERATED file
+    /// (registry URL only — the host's `.npmrc` is on the
+    /// credential denylist and never read), staged ro under the
+    /// `npmrc` slot and placed at `$HOME/.npmrc` by the guest
+    /// init's share loop. `None` means no npmrc is shared.
+    pub npmrc: Option<&'a str>,
+    /// The major version of the nodejs the tools closure carries
+    /// (the same WRAPPER-SIDE pin as bwrap's, C7b): gates the
+    /// `NODE_USE_ENV_PROXY` injection in the guest env.
+    pub node_major: Option<u32>,
 }
 
 impl<'a> Params<'a> {
@@ -811,6 +822,16 @@ pub fn stage_binds(
     if cfg.network.is_shared() && params.scratch.is_some() && !params.baked() {
         binds.push(("/nix/var/nix".to_owned(), true, "nix-var".to_owned()));
     }
+    // C7b: the credential-free `.npmrc` (n8kv idea 13, bd
+    // myconfig-f23e) — staged ro under the `npmrc` slot, in
+    // lockstep with the `krun_shares` entry (the two lists must
+    // stay in lockstep: the init bind-mounts the share's sandbox
+    // path from THIS slot's staging dir). The wrapper-GENERATED
+    // store path — never the host's `~/.npmrc` (credential
+    // denylist).
+    if let Some(npmrc) = params.npmrc {
+        binds.push((npmrc.to_owned(), true, "npmrc".to_owned()));
+    }
     Ok(binds)
 }
 
@@ -951,6 +972,16 @@ fn krun_shares(cfg: &Merged, repo: &Repo, params: &Params<'_>) -> Result<Vec<Sha
         shares.push(Share {
             slot: "gittrust-system".to_owned(),
             sandbox_path: GIT_TRUST_SYSTEM_DEST.to_owned(),
+            read_only: true,
+        });
+    }
+    // C7b: credential-free `.npmrc` (n8kv idea 13, bd myconfig-f23e):
+    // the generated store-path file bound at the sandbox home; the
+    // guest init script bind-mounts it at `$HOME/.npmrc`.
+    if params.npmrc.is_some() {
+        shares.push(Share {
+            slot: "npmrc".to_owned(),
+            sandbox_path: format!("{}/.npmrc", crate::bwrap::SANDBOX_HOME),
             read_only: true,
         });
     }
@@ -1273,7 +1304,11 @@ fn sandbox_env(
     // Broker row).
     let reserved: Vec<String> = if let Some(egress) = params.egress {
         if !egress.allow_domains.is_empty() || !egress.connect_ports.is_empty() {
-            [
+            // Exactly the names the injection below sets — with C7b
+            // (bd myconfig-f23e) GATE-COUPLED: NODE_USE_ENV_PROXY
+            // joins exactly when the node-major pin makes its
+            // injection real (the bwrap twin's rule).
+            let mut names: Vec<String> = [
                 "HTTP_PROXY",
                 "HTTPS_PROXY",
                 "http_proxy",
@@ -1283,7 +1318,13 @@ fn sandbox_env(
             ]
             .iter()
             .map(|n| (*n).to_owned())
-            .collect()
+            .collect();
+            if let Some(major) = params.node_major {
+                if major >= crate::bwrap::NODE_ENV_PROXY_MIN_MAJOR {
+                    names.push("NODE_USE_ENV_PROXY".to_owned());
+                }
+            }
+            names
         } else {
             Vec::new()
         }
@@ -1384,6 +1425,18 @@ fn sandbox_env(
                 ("no_proxy", "127.0.0.1,localhost"),
             ] {
                 set(key, value.to_owned());
+            }
+            // C7b: the toolchain proxy variables (n8kv idea 13, bd
+            // myconfig-f23e): the krun guest inherits the same
+            // infrastructure — a table-carrying channel gets
+            // NODE_USE_ENV_PROXY injected so proxy-unaware Node
+            // honours the lane. Version-gated on the WRAPPER-SIDE
+            // pin (the builder is pure), exactly like the bwrap
+            // twin; the E13 drop above couples to the same gate.
+            if let Some(major) = params.node_major {
+                if major >= crate::bwrap::NODE_ENV_PROXY_MIN_MAJOR {
+                    set("NODE_USE_ENV_PROXY", "1".to_owned());
+                }
             }
         }
     }

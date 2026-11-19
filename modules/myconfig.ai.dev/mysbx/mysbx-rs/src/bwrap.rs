@@ -174,6 +174,13 @@ pub const WAYPIPE_DISPLAY_PATH: &str = "/mysbx-home/wayland-0";
 /// configuration layer: the shell binary and the dev-tool `PATH` closure
 /// root, both host paths the MVP carries in its own closure
 /// (docs/plan.md: "Payload shell", "dev-tool closure on `PATH`").
+///
+/// The first nodejs major that understands `NODE_USE_ENV_PROXY`
+/// (npm's env-proxy support). Used by the bwrap/krun/podman builders'
+/// injection gate and by lib.rs's E13 reservation, so the two can
+/// never disagree.
+pub const NODE_ENV_PROXY_MIN_MAJOR: u32 = 24;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Params<'a> {
     /// Path of the shell used for [`Payload::Shell`].
@@ -305,6 +312,27 @@ pub struct Params<'a> {
     /// not come from a configuration layer, and no TOML key can name
     /// it (workspace.md D1).
     pub workspace: Workspace<'a>,
+    /// The credential-free `.npmrc` to bind at `$HOME/.npmrc` inside
+    /// the sandbox (C7b, n8kv idea 13, bd myconfig-f23e), or `None`
+    /// when no pin exists.
+    ///
+    /// The host's own `.npmrc` is deliberately never bound: it may
+    /// carry `//registry.npmjs.org/:_authToken=…` or similar
+    /// credential lines (it is on every tier's credential denylist).
+    /// The Nix wrapper GENERATES the pinned file — registry URL only,
+    /// nothing else — so an npm needs no credential file to reach
+    /// the public registry through the E8 proxy lane. An unwrapped
+    /// build passes `None` and binds nothing.
+    pub npmrc: Option<&'a str>,
+    /// The **major version of the nodejs** this build's tools
+    /// closure carries (C7b, n8kv idea 13, bd myconfig-f23e), or
+    /// `None` when it carries none. A WRAPPER-SIDE fact pinned as
+    /// `MYSBX_NODE_MAJOR` — the builder never probes the binary
+    /// (it is pure, and `node` is not on the sandbox PATH anyway);
+    /// a closure whose node understands `NODE_USE_ENV_PROXY`
+    /// (>= [`NODE_ENV_PROXY_MIN_MAJOR`]) gets the variable
+    /// injected on a table-carrying channel.
+    pub node_major: Option<u32>,
     /// The **inner wrapper** of a layered run (docs/design/
     /// backends.md D1), or `None` for a plain bwrap payload: the nono
     /// backend pins the `nono run` argv — built by [`crate::nono`]
@@ -802,6 +830,16 @@ pub fn bwrap_argv(
             argv.push("/etc/nix/nix.conf".into());
         }
     }
+    // C7b: credential-free `.npmrc` (n8kv idea 13, bd myconfig-f23e):
+    // the wrapper-GENERATED file (registry URL only), bound at
+    // `$HOME/.npmrc`. Proxy-unaware toolchains (npm, yarn, pnpm) read
+    // the registry from this file and reach it through the E8 proxy
+    // variables already injected in the infrastructure block.
+    if let Some(npmrc) = params.npmrc {
+        argv.push("--ro-bind".into());
+        argv.push(npmrc.into());
+        argv.push(format!("{SANDBOX_HOME}/.npmrc"));
+    }
 
     // 4. the workspace bind — the repo, rw, at its real host path
     // (D13), plus the git metadata directories a `.git` FILE points
@@ -1233,12 +1271,14 @@ pub fn bwrap_argv(
         let reserved: Vec<String> = if let Some(egress) = egress {
             if egress.public || !egress.allow_domains.is_empty() || !egress.connect_ports.is_empty()
             {
-                // Exactly the names mysbx injects below (E8): reserving
-                // more (nono's control names, `NODE_USE_ENV_PROXY`)
-                // would drop `[env]` entries that change no injected
-                // value — a silent behavior change for the user who
-                // set them deliberately.
-                [
+                // Exactly the names mysbx injects below (E8); with
+                // C7b (bd myconfig-f23e) the list is GATE-COUPLED, not
+                // fixed: `NODE_USE_ENV_PROXY` joins it exactly when
+                // the wrapper-side node major pin says the closure's
+                // nodejs understands the variable and the injection
+                // below will happen — the same rule nono's control
+                // names already follow (reserved where injected).
+                let mut names: Vec<String> = [
                     "HTTP_PROXY",
                     "HTTPS_PROXY",
                     "http_proxy",
@@ -1248,7 +1288,13 @@ pub fn bwrap_argv(
                 ]
                 .iter()
                 .map(|n| (*n).to_owned())
-                .collect()
+                .collect();
+                if let Some(major) = params.node_major {
+                    if major >= NODE_ENV_PROXY_MIN_MAJOR {
+                        names.push("NODE_USE_ENV_PROXY".to_owned());
+                    }
+                }
+                names
             } else {
                 Vec::new()
             }
@@ -1373,6 +1419,32 @@ pub fn bwrap_argv(
                     argv.push("--setenv".into());
                     argv.push(key.into());
                     argv.push(value.into());
+                }
+            }
+        }
+        // C7b: the toolchain proxy variables (n8kv idea 13, bd
+        // myconfig-f23e): proxy-unaware toolchains that read their
+        // own env for proxy settings (Node's NODE_USE_ENV_PROXY)
+        // must be told to honor the lane. The builder stays PURE —
+        // the version check is a WRAPPER-SIDE fact, not a probe:
+        // the Nix wrapper knows which nodejs the tools closure
+        // carries and pins `MYSBX_NODE_MAJOR` (empty when the
+        // closure carries none — `node` is NOT on the sandbox PATH,
+        // the pi wrapper execs a store-path node, so a runtime
+        // probe would find nothing and the injection would
+        // silently never happen). Only a pinned major that
+        // understands the variable (>= 24, npm's env-proxy support)
+        // gets `NODE_USE_ENV_PROXY=1`; the E13 reservation above
+        // couples to the same gate, so the name is reserved
+        // exactly where it is injected.
+        if let Some(egress) = egress {
+            if !egress.allow_domains.is_empty() || !egress.connect_ports.is_empty() {
+                if let Some(major) = params.node_major {
+                    if major >= NODE_ENV_PROXY_MIN_MAJOR {
+                        argv.push("--setenv".into());
+                        argv.push("NODE_USE_ENV_PROXY".into());
+                        argv.push("1".into());
+                    }
                 }
             }
         }
@@ -2688,6 +2760,8 @@ mod tests {
             inner: None,
             detachable: false,
             egress: None,
+            npmrc: None,
+            node_major: None,
         }
     }
 

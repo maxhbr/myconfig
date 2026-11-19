@@ -11492,6 +11492,117 @@ fn a_paired_run_emits_the_broker_table_and_injects_the_proxy_variables() {
 }
 
 #[test]
+fn node_env_proxy_is_injected_and_reserved_on_a_paired_run() {
+    // C7b (n8kv idea 13, bd myconfig-f23e), end to end through the real
+    // binary: a paired run (table under proxy-only) with the
+    // wrapper-side node major pin set injects NODE_USE_ENV_PROXY=1
+    // in the backend argv, and a configured override of the name is
+    // dropped and REPORTED as ignored (the E13 reservation couples
+    // to the injection gate).
+    let (inv, _repo, sidecar) = fixture("node-env-proxy", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\nconnect-ports = [443]\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "[env]\nNODE_USE_ENV_PROXY = \"0\"\nKEEP_ME = \"stays\"\n",
+    )
+    .unwrap();
+    let runtime = std::env::temp_dir().join(format!("mysbx-rt-node-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&runtime);
+    std::fs::create_dir_all(&runtime).unwrap();
+    // `--verbose`: the dry run prints the report too, whose ignored
+    // marking is what this test audits.
+    let mut cmd = spawn_proxy_only(&inv, &["--dry-run", "--verbose"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime)
+        .env(
+            "MYSBX_EGRESS_BROKER",
+            "/synth/store/cccc-mysbx/bin/mysbx-egress-broker",
+        )
+        // The wrapper-side version check (C7b): the pin says the
+        // closure's nodejs understands the variable.
+        .env("MYSBX_NODE_MAJOR", "24");
+    let (code, stdout, stderr) = run_command(cmd);
+    let _ = std::fs::remove_dir_all(&runtime);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert!(
+        lines
+            .windows(3)
+            .any(|w| w[0] == "--setenv" && w[1] == "NODE_USE_ENV_PROXY" && w[2] == "1"),
+        "the injected value is 1, after [env]: {stdout}"
+    );
+    assert!(
+        !lines.windows(3).any(|w| w[0] == "--setenv"
+            && w[1] == "NODE_USE_ENV_PROXY" && w[2] == "0"),
+        "the configured override never reaches the payload: {stdout}"
+    );
+    assert!(
+        stdout.contains(
+            "NODE_USE_ENV_PROXY=0  [config, ignored — set by the proxy]"
+        ),
+        "the dropped override is marked in the report: {stdout}"
+    );
+    assert!(
+        lines
+            .windows(3)
+            .any(|w| w[0] == "--setenv" && w[1] == "KEEP_ME" && w[2] == "stays"),
+        "an unrelated [env] entry still rides: {stdout}"
+    );
+}
+
+#[test]
+fn node_env_proxy_stays_absent_without_the_pin_or_below_the_threshold() {
+    // The honesty rule, end to end: without MYSBX_NODE_MAJOR (or with
+    // a major below npm's env-proxy support) nothing is injected and
+    // nothing is reserved — an override would be honest noise.
+    let (inv, _repo, sidecar) = fixture("node-env-proxy-absent", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\nconnect-ports = [443]\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "[env]\nNODE_USE_ENV_PROXY = \"0\"\n",
+    )
+    .unwrap();
+    let runtime = std::env::temp_dir().join(format!("mysbx-rt-node-absent-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&runtime);
+    std::fs::create_dir_all(&runtime).unwrap();
+    for (label, pin) in [("no pin", None), ("old major", Some("20"))] {
+        let mut cmd = spawn_proxy_only(&inv, &["--dry-run"]);
+        cmd.env("XDG_RUNTIME_DIR", &runtime).env(
+            "MYSBX_EGRESS_BROKER",
+            "/synth/store/cccc-mysbx/bin/mysbx-egress-broker",
+        );
+        if let Some(value) = pin {
+            cmd.env("MYSBX_NODE_MAJOR", value);
+        }
+        let (code, stdout, stderr) = run_command(cmd);
+        assert_eq!(code, 0, "{label}: stderr: {stderr}");
+        let lines: Vec<&str> = stdout.lines().collect();
+        assert!(
+            !stdout.contains("NODE_USE_ENV_PROXY=1"),
+            "{label}: no injection: {stdout}"
+        );
+        // Not reserved, so the configured value RIDES the [env]
+        // segment — an honest entry, not a dropped one.
+        assert!(
+            lines
+                .windows(3)
+                .any(|w| w[0] == "--setenv" && w[1] == "NODE_USE_ENV_PROXY" && w[2] == "0"),
+            "{label}: the unreserved override rides the argv: {stdout}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&runtime);
+}
+
+#[test]
 fn a_plain_proxy_only_run_stays_byte_identical_no_table_no_proxy_variables() {
     // Phase B is the degenerate case (E7): without the keys, no table
     // flags and NO proxy variables — the argv must not drift for the
