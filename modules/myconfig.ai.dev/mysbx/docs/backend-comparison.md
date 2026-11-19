@@ -52,13 +52,13 @@ kernel support still matter.
 
 | Backend | Domain/port allowlists | Waypipe display | Detached interactive run | Multiplexers |
 | --- | --- | --- | --- | --- |
-| `bubblewrap` | Refused | Supported with host pin | Accepted | Configured entries, including Orca |
+| `bubblewrap` | Through the broker's CONNECT lane, with `network = "proxy-only"` and a pinned broker (bd myconfig-ew9s) | Supported with host pin | Accepted | Configured entries, including Orca |
 | `nono` | Supported; see policy caveats below | Supported with socket grants | Accepted | Orca refused |
-| `podman-gvisor` | Refused | Requires host client and image server | Refused | Image entries; Orca refused |
+| `podman-gvisor` | Through the same broker CONNECT lane since bd myconfig-ger7 (n8kv.2 C7a) | Requires host client and image server | Refused | Image entries; Orca refused |
 | `podman-krun` | Refused | Refused | Refused | Image entries; Orca refused |
-| `krun` | Refused | **Not implemented, but currently accepted in error** | Accepted; no recorded live detach matrix | Direct guest entries; Orca refused |
-| `microvm-qemu` | Refused | Refused | Accepted; no recorded live detach matrix | Direct guest entries; Orca refused |
-| `microvm-ch` | Refused | Refused | Accepted; no recorded live detach matrix | Direct guest entries; Orca refused |
+| `krun` | Through the same broker CONNECT lane since bd myconfig-ger7 (n8kv.2 C7a) | **Not implemented, but currently accepted in error** | Accepted; no recorded live detach matrix | Direct guest entries; Orca refused |
+| `microvm-qemu` | Through the same broker CONNECT lane since bd myconfig-ger7 (n8kv.2 C7a) | Refused | Accepted; no recorded live detach matrix | Direct guest entries; Orca refused |
+| `microvm-ch` | Through the same broker CONNECT lane since bd myconfig-ger7 (n8kv.2 C7a) | Refused | Accepted; no recorded live detach matrix | Direct guest entries; Orca refused |
 
 Direct krun's waypipe acceptance is a known implementation gap: it can
 start the host client without a guest server or transport. Do not select

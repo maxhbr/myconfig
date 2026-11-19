@@ -3,9 +3,11 @@ Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 SPDX-License-Identifier: MIT
 -->
 
-# Design: the broker's CONNECT mode — the D21 allowlist on the bubblewrap backend
+# Design: the broker's CONNECT mode — the D21 allowlist on the broker-channel backends
 
-Status: IMPLEMENTED (bd myconfig-ew9s, phase C of bd myconfig-n8kv.2) —
+Status: IMPLEMENTED (bd myconfig-ew9s, phase C of bd myconfig-n8kv.2;
+extended from bubblewrap-only to podman-gvisor/krun/microvm-qemu/
+microvm-ch by bd myconfig-ger7, n8kv.2 C7a) —
 the design record of what now ships, in the 4-commit order its own
 E-decomposition lists (broker lane, nono reservation half, registry
 enum, the lift). Every code anchor below was verified against
@@ -61,6 +63,19 @@ The decision:
   LiteLLM row PLUS one row per merged allowlist entry. The
   mutual-exclusion refusal is lifted for this backend only, and its
   message flips from "contradicts it" to naming the pairing.
+- The SAME pairing holds on every backend whose profile channel
+  terminates at the per-run broker (bd myconfig-ger7 — n8kv.2
+  C7a): **podman-gvisor** (the `--network none` + in-image-relay
+  channel), **krun** (the explicit vsock), **microvm-qemu**
+  (`restrict=on` + guestfwd) and **microvm-ch** (the hybrid
+  vsock). The transports are transparent byte pipes — the table
+  never rides the VM's own channel argv, only the broker's; the
+  E8 proxy names are injected with each backend's guest-side
+  endpoint spelling (the bridge/relay loopback `127.0.0.1:<port>`
+  on krun/ch/podman, the guestfwd gateway `10.0.2.2:<port>` on
+  qemu), and the E13 reservation applies on every one of them.
+  The shared-network and missing-pin refusals are the same
+  Broker-row refusals as bubblewrap's.
 - keys + `network = "shared"` on **bubblewrap** stays REFUSED, with
   the new reason: the keys select broker policy; set
   `network = "proxy-only"` to get the transport. Never `--share-net`

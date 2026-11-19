@@ -170,17 +170,20 @@ fn a_channel_without_the_profile_is_refused_by_the_krun_builder() {
 }
 
 #[test]
-fn a_channel_with_connect_lane_state_is_refused_by_the_krun_builder() {
-    // The CONNECT lane is the bubblewrap broker's (C7 owns the
-    // table work): a channel carrying table rows or the public
-    // flag renders a restricted net whose vsock maps only the
-    // model port — the rows would be a lie. Refused in the shared
-    // spec (spec_of), defense in depth next to step 4b's registry
-    // gate.
-    for (domains, ports, public) in [
-        (vec!["api.openai.com".to_string()], vec![], false),
-        (vec![], vec![443], false),
-        (vec![], vec![], true),
+fn a_channel_with_a_table_renders_like_a_plain_brokered_run_on_the_krun_builder() {
+    // The CONNECT table rides the SAME channel the model lane uses
+    // (bd myconfig-ger7 — n8kv.2 C7a): the VM transports are
+    // transparent byte pipes to the per-run broker, which polices
+    // the table on every backend — so a channel with rows renders
+    // exactly like a plain brokered one at the argv level; the
+    // table itself lives in the broker's argv and the injected
+    // proxy names, not the launcher's. The public flag stays a
+    // bubblewrap-only lane (network_public: false, the fvi gate
+    // refuses it upstream), so it must not reach this builder —
+    // asserted by never carrying it here.
+    for (domains, ports) in [
+        (vec!["api.openai.com".to_string()], vec![443]),
+        (vec![], vec![443]),
     ] {
         let mut cfg = base(true);
         cfg.network = mysbx::config::Network::ProxyOnly;
@@ -192,19 +195,38 @@ fn a_channel_with_connect_lane_state_is_refused_by_the_krun_builder() {
             etc_dir: "/synth/store/bbbb-mysbx-egress-etc",
             allow_domains: &domains,
             connect_ports: &ports,
-            public,
+            public: false,
         };
         let p = mysbx::krun::Params {
             egress: Some(&channel),
             ..params("/synth/rootfs", "/synth/shell", None, Workspace::Live)
         };
         let host_env = BTreeMap::new();
-        let err = krun_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env, &p)
-            .expect_err("a CONNECT-lane channel must be refused on krun");
-        assert!(
-            matches!(err, mysbx::krun::Error::EgressLaneUnsupported),
-            "{err}"
-        );
+        let argv = krun_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env, &p)
+            .expect("a table-carrying channel renders on krun");
+        let plain = {
+            let plain_channel = mysbx::bwrap::EgressChannel {
+                allow_domains: &[],
+                connect_ports: &[],
+                ..channel
+            };
+            let plain_p = mysbx::krun::Params {
+                egress: Some(&plain_channel),
+                ..params("/synth/rootfs", "/synth/shell", None, Workspace::Live)
+            };
+            krun_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env, &plain_p)
+                .expect("the plain brokered channel renders on krun")
+        };
+        // The launcher argv is byte-identical: the table rides the
+        // broker's own argv (spawned host-side), not the VM's.
+        // The guest env differs ONLY by the E8 injection below.
+        let strip = |argv: &[String]| -> Vec<String> {
+            argv.iter()
+                .filter(|a| !a.starts_with("HTTP_PROXY") && !a.starts_with("http_proxy"))
+                .cloned()
+                .collect()
+        };
+        assert_eq!(strip(&argv), strip(&plain));
     }
 }
 

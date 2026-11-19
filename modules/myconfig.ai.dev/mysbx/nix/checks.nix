@@ -884,6 +884,32 @@ in
           fail "the dropped nested-virt key still reached a launcher argv"
         fi
 
+        # 3d. the CONNECT-lane pairing (bd myconfig-ger7 — n8kv.2
+        #     C7a), end to end through the real wrapped binary: a
+        #     sidecar table next to the profile keeps the run
+        #     ADMITTED, the table rides the broker argv block, and
+        #     the E8 proxy names point at the GUESTFWD GATEWAY
+        #     spelling (10.0.2.2 — the qemu channel's endpoint, not
+        #     the krun/ch loopback one).
+        printf 'backend = "microvm-qemu"\nnetwork = "proxy-only"\nconnect-ports = [443]\n' > "$work/repo.mysbx/config.toml"
+        pairing_argv=$( \
+          cd "$repo" && HOME="$work/home" \
+          MYSBX_EGRESS_SOCKET_NAME=litellm.sock MYSBX_EGRESS_PORT=4000 \
+          MYSBX_EGRESS_ETC=/nix/store/synth-egress-etc \
+          MYSBX_EGRESS_RELAY=/nix/store/synth-relay/bin/mysbx-egress-relay \
+          MYSBX_EGRESS_BROKER=/nix/store/synth-broker/bin/mysbx-egress-broker \
+          XDG_RUNTIME_DIR="$work/rt" \
+          "${pkgQemu}/bin/mysbx" run --dry-run -- true \
+        ) || fail "the pairing dry run refused — run it verbosely for the diagnosis"
+        echo "$pairing_argv" | grep -qx -- '--allow-connect-port' \
+          || fail "the pairing dry run carries no --allow-connect-port row (the broker argv block)"
+        echo "$pairing_argv" | grep -qx -- '443' \
+          || fail "the pairing dry run does not name the allowed port 443"
+        echo "$pairing_argv" | grep -qx -- 'HTTP_PROXY=http://10.0.2.2:4000' \
+          || fail "the pairing dry run injects no HTTP_PROXY at the guestfwd gateway spelling"
+        echo "$pairing_argv" | grep -qx -- 'MYSBX_EGRESS_PROXY=http://10.0.2.2:4000' \
+          || fail "the model-lane endpoint keeps the gateway spelling"
+
         touch $out
       '';
 
@@ -1057,6 +1083,35 @@ in
           || fail "the restricted endpoint must spell the guest loopback (the bridge serves it)"
         if grep -n -q -- 'MYSBX_MICROVM_NET=1' <<<"$egress_argv"; then
           fail "the restricted dry run carries the passt NIC marker — the channel replaces the NIC"
+        fi
+
+        # 3c. the CONNECT-lane pairing (bd myconfig-ger7 — n8kv.2
+        #     C7a), end to end: a sidecar table next to the profile
+        #     must keep the run ADMITTED, carry the table in the
+        #     broker argv block, inject the E8 proxy names pointing
+        #     at the bridge's loopback spelling, and drop a
+        #     configured HTTP_PROXY from the layers (E13) instead of
+        #     letting it override the injection.
+        printf 'backend = "microvm-ch"\nnetwork = "proxy-only"\nconnect-ports = [443]\n[env]\nHTTP_PROXY = "http://evil.example:1"\n' > "$work/repo.mysbx/config.toml"
+        pairing_argv=$( \
+          cd "$repo" && HOME="$work/home" \
+          MYSBX_EGRESS_SOCKET_NAME=litellm.sock MYSBX_EGRESS_PORT=4000 \
+          MYSBX_EGRESS_ETC=/nix/store/synth-egress-etc \
+          MYSBX_EGRESS_RELAY=/nix/store/synth-relay/bin/mysbx-egress-relay \
+          MYSBX_EGRESS_BROKER=/nix/store/synth-broker/bin/mysbx-egress-broker \
+          XDG_RUNTIME_DIR="$work/rt" \
+          "${pkgCh}/bin/mysbx" run --dry-run -- true \
+        ) || fail "the pairing dry run refused — run it verbosely for the diagnosis"
+        echo "$pairing_argv" | grep -qx -- '--allow-connect-port' \
+          || fail "the pairing dry run carries no --allow-connect-port row (the broker argv block)"
+        echo "$pairing_argv" | grep -qx -- '443' \
+          || fail "the pairing dry run does not name the allowed port 443"
+        echo "$pairing_argv" | grep -qx -- 'HTTP_PROXY=http://127.0.0.1:4000' \
+          || fail "the pairing dry run injects no HTTP_PROXY at the bridge's loopback spelling"
+        echo "$pairing_argv" | grep -qx -- 'HTTPS_PROXY=http://127.0.0.1:4000' \
+          || fail "the pairing dry run injects no HTTPS_PROXY"
+        if grep -n -q -- 'evil.example' <<<"$pairing_argv"; then
+          fail "a configured HTTP_PROXY rode the layers past the E13 reservation"
         fi
 
         touch $out

@@ -191,16 +191,17 @@ fn proxy_only_is_accepted_by_the_builder_with_the_vsock_channel() {
 }
 
 #[test]
-fn a_channel_with_connect_lane_state_is_refused_by_the_builder() {
-    // The CONNECT lane is the bubblewrap broker's (C7 owns the
-    // table work): a channel carrying table rows or the public
-    // flag renders a restricted vsock guest whose ONE mapped port
-    // cannot express them — refused in the SHARED spec (spec_of),
-    // the same three shapes the krun/qemu twins pin.
-    for (domains, ports, public) in [
-        (vec!["api.openai.com".to_string()], vec![], false),
-        (vec![], vec![443], false),
-        (vec![], vec![], true),
+fn a_channel_with_a_table_renders_like_a_plain_brokered_run_on_the_builder() {
+    // The CONNECT table rides the SAME channel the model lane uses
+    // (bd myconfig-ger7 — n8kv.2 C7a): the hybrid-vsock transport is
+    // a transparent byte pipe to the per-run broker, which polices
+    // the table on every backend — so a channel with rows renders
+    // exactly like a plain brokered one at the argv level. The
+    // public flag stays a bubblewrap-only lane (network_public:
+    // false, the fvi gate refuses it upstream).
+    for (domains, ports) in [
+        (vec!["api.openai.com".to_string()], vec![443]),
+        (vec![], vec![443]),
     ] {
         let mut cfg = base();
         cfg.network = mysbx::config::Network::ProxyOnly;
@@ -212,14 +213,14 @@ fn a_channel_with_connect_lane_state_is_refused_by_the_builder() {
             etc_dir: "/synth/store/bbbb-mysbx-egress-etc",
             allow_domains: &domains,
             connect_ports: &ports,
-            public,
+            public: false,
         };
         let p = Params {
             egress: Some(&channel),
             ..params()
         };
         let host_env = BTreeMap::new();
-        let err = microvm_ch_argv(
+        let argv = microvm_ch_argv(
             &cfg,
             &synth_repo(),
             &Payload::Shell,
@@ -228,11 +229,35 @@ fn a_channel_with_connect_lane_state_is_refused_by_the_builder() {
             KERNEL,
             &[],
         )
-        .expect_err("a CONNECT-lane channel must be refused on microvm-ch");
-        assert!(
-            matches!(err, mysbx::krun::Error::EgressLaneUnsupported),
-            "{err}"
-        );
+        .expect("a table-carrying channel renders on microvm-ch");
+        let plain = {
+            let plain_channel = mysbx::bwrap::EgressChannel {
+                allow_domains: &[],
+                connect_ports: &[],
+                ..channel
+            };
+            let plain_p = Params {
+                egress: Some(&plain_channel),
+                ..params()
+            };
+            microvm_ch_argv(
+                &cfg,
+                &synth_repo(),
+                &Payload::Shell,
+                &host_env,
+                &plain_p,
+                KERNEL,
+                &[],
+            )
+            .expect("the plain brokered channel renders on microvm-ch")
+        };
+        let strip = |argv: &[String]| -> Vec<String> {
+            argv.iter()
+                .filter(|a| !a.starts_with("HTTP_PROXY") && !a.starts_with("http_proxy"))
+                .cloned()
+                .collect()
+        };
+        assert_eq!(strip(&argv), strip(&plain));
     }
 }
 

@@ -374,12 +374,6 @@ pub enum Error {
     /// makes sense together — a channel without the profile would
     /// render a restricted net for a shared run.
     EgressChannelWithoutProfile,
-    /// A qemu channel carrying CONNECT-lane state (allowlist rows,
-    /// the public flag — bd myconfig-krab): the backend's broker
-    /// table work is C7's scope; a restricted netdev whose guestfwd
-    /// forwards only the model port cannot police a table, so the
-    /// run is refused, never a lane that silently admits nothing.
-    EgressLaneUnsupported,
     /// A `pids-limit` a whole-VM run cannot express: the VM is the
     /// boundary, no pids controller is wired for it — the same
     /// refusal as the podman-krun variant (backends.md D2).
@@ -463,12 +457,6 @@ impl std::fmt::Display for Error {
                 f,
                 "an egress channel without a brokered network profile is a contradiction: \
                  the restricted netdev renders only for `proxy-only` (bd myconfig-krab)"
-            ),
-            Error::EgressLaneUnsupported => write!(
-                f,
-                "the microvm-qemu egress channel serves the model endpoint only — \
-                 allowlist rows and the public lane are the bubblewrap broker's CONNECT \
-                 table (docs/design/egress-connect.md E7, bd myconfig-n8kv.2 C7)"
             ),
             Error::PidsLimit { pids } => write!(
                 f,
@@ -1073,19 +1061,6 @@ pub(crate) fn spec_of(
     if params.egress.is_some() && !cfg.network.is_brokered() {
         return Err(Error::EgressChannelWithoutProfile);
     }
-    // The CONNECT lane stays the bubblewrap broker's (docs/design/
-    // egress-connect.md E7, C7's scope): BOTH lifted VM channels
-    // serve the model endpoint only — a channel carrying table
-    // rows or the public flag would render a restricted net whose
-    // broker has no CONNECT lane to police them, so the run is
-    // refused here once for both twins (defense in depth next to
-    // step 4b, which already refuses allowlist keys next to the
-    // profile on every non-Broker row).
-    if let Some(egress) = params.egress {
-        if !egress.allow_domains.is_empty() || !egress.connect_ports.is_empty() || egress.public {
-            return Err(Error::EgressLaneUnsupported);
-        }
-    }
     // The multiplexer applies to the INTERACTIVE payload only (cli.md
     // D11), like on every backend: a one-shot `run -- CMD` is never
     // wrapped. A session multiplexer without a pinned entry is
@@ -1287,10 +1262,44 @@ fn sandbox_env(
             env.push((key.to_owned(), value));
         }
     };
+    // The E13 reserved-name drop (docs/design/egress-connect.md
+    // E13, on the VM transports since bd myconfig-ger7 — n8kv.2
+    // C7a): a table-carrying channel names a broker whose proxy
+    // variables the infrastructure block below injects, so a
+    // configured or forwarded HTTP_PROXY must not ride the layers
+    // — dropped here (the injection would overwrite it anyway, but
+    // the drop is what the report's `ignored` marking describes;
+    // lib.rs `reserved_env` computes the same names for every
+    // Broker row).
+    let reserved: Vec<String> = if let Some(egress) = params.egress {
+        if !egress.allow_domains.is_empty() || !egress.connect_ports.is_empty() {
+            [
+                "HTTP_PROXY",
+                "HTTPS_PROXY",
+                "http_proxy",
+                "https_proxy",
+                "NO_PROXY",
+                "no_proxy",
+            ]
+            .iter()
+            .map(|n| (*n).to_owned())
+            .collect()
+        } else {
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    };
     for (k, v) in host_env {
+        if reserved.iter().any(|r| r == k) {
+            continue;
+        }
         set(k, v.clone());
     }
     for (k, v) in &cfg.env {
+        if reserved.iter().any(|r| r == k) {
+            continue;
+        }
         set(k, v.clone());
     }
     // The `[nix]` table as NIX_CONFIG (bd myconfig-j23): the direct
@@ -1353,6 +1362,30 @@ fn sandbox_env(
             "MYSBX_EGRESS_PROXY",
             format!("http://{host}:{}", egress.port),
         );
+        // The E8 proxy-variable injection (docs/design/
+        // egress-connect.md E8, on the VM transports since bd
+        // myconfig-ger7 — n8kv.2 C7a): a table-carrying channel
+        // names a broker whose CONNECT lane serves the table, so
+        // proxy-aware clients reach it through the SAME endpoint
+        // spelling as the model lane. Set in the infrastructure
+        // block, after every layer, like the bwrap twin — and the
+        // E13 reservation below drops the names from the layers
+        // first, so nothing silently overrides the injection.
+        // `NO_PROXY` keeps the model lane's baked `127.0.0.1`
+        // URLs direct (they are not proxied, they ARE the channel).
+        if !egress.allow_domains.is_empty() || !egress.connect_ports.is_empty() {
+            let proxy = format!("http://{host}:{}", egress.port);
+            for (key, value) in [
+                ("HTTP_PROXY", proxy.as_str()),
+                ("HTTPS_PROXY", proxy.as_str()),
+                ("http_proxy", proxy.as_str()),
+                ("https_proxy", proxy.as_str()),
+                ("NO_PROXY", "127.0.0.1,localhost"),
+                ("no_proxy", "127.0.0.1,localhost"),
+            ] {
+                set(key, value.to_owned());
+            }
+        }
     }
     set(
         "XDG_CONFIG_HOME",

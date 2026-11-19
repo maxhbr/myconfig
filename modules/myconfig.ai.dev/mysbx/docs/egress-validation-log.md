@@ -4,7 +4,9 @@
 > for the configuration named in each entry, not acceptance of every later
 > backend or policy. The enforcing backends today are `bubblewrap`, the
 > layered `nono` backend, `podman-gvisor`, `microvm-qemu`, `krun` and
-> `microvm-ch`; every other backend refuses `network = "proxy-only"`. See
+> `microvm-ch`; every other backend refuses `network = "proxy-only"`.
+The CONNECT-lane allowlist pairing (egress-connect.md E7) is
+enforced on every one of those broker-channel backends. See
 > [`backend-comparison.md`](./backend-comparison.md) for the current backend
 > guide and [D20](./design/config.md) for the decision the runs verify.
 > Podman-gVisor's endpoint reachability is a separate item (bd
@@ -844,3 +846,95 @@ the path — the device list IS the fence.
 - The stand-in upstream replaces LiteLLM (offline host); the
   bubblewrap entries prove the broker's model-lane protocol
   against the real stack, this entry proves the ch transport.
+
+## 2026-11-19 · the CONNECT-lane pairing on every broker-channel backend, live probes (bd myconfig-ger7, n8kv.2 C7a)
+
+Host: the offline dev sandbox, KVM present. The C7a lift: the
+E7 pairing (`network = "proxy-only"` + `connect-ports`) is
+admitted on podman-gvisor and all three VM backends — their
+channels were already byte pipes to the SAME per-run broker, so
+the lift is registry rows, the `EgressLaneUnsupported` refusal's
+removal, the E8 proxy-name injection (per endpoint spelling) and
+the E13 reserved-name drop. The table never rides a VM/podman
+argv — only the broker's own argv, audited in every dry run.
+
+A fresh crate build (`/nix/store/d8aa83…-mysbx-0.1.0`, the C7a
+registry) drove all four transports against ONE stand-in pair: a
+line-reading python echo on host `127.0.0.1:4000` (the model row)
+and a one-shot echo on `10.0.2.15:4100` (a non-loopback address —
+E9 refuses loopback CONNECT targets, so the CONNECT row needs a
+host address outside the refused classes), table
+`connect-ports = [4100]`.
+
+### §1 microvm-ch (the hybrid vsock), live KVM — PASS
+
+Guest: only `lo`, no routes, the baked bridge on `127.0.0.1:4000`,
+marker `MYSBX_KRUN_NET=restricted`. All probes through
+`nc 127.0.0.1 4000`:
+
+- the MODEL lane (no CONNECT): `UPSTREAM-REPLY: MODEL-PROBE`.
+- `CONNECT 10.0.2.15:4100` → `HTTP/1.1 200 Connection Established`
+  and the tunneled payload answered through the connect-echo.
+- `CONNECT 10.0.2.15:9999` → `HTTP/1.1 403 Forbidden`.
+- `CONNECT 127.0.0.1:4100` → `HTTP/1.1 502 Bad Gateway` (the E9
+  class rule).
+
+The broker's decisions.jsonl records `allow` + `tunnel` for the
+CONNECT row, `deny` for 9999 ("port 9999 is not in the allowed
+connect-ports (4100)") and `unreachable` for the loopback class.
+
+### §2 krun (the explicit vsock), live KVM — PASS
+
+Same probe set over the krun bridge (the libkrun muxer's
+"deferring proxy removal" WARN lines are its known teardown
+noise): model lane answers, CONNECT 4100 → 200 + tunneled reply,
+9999 → 403, loopback → 502; the decision log carries the same
+allow/tunnel/deny/unreachable set.
+
+### §3 microvm-qemu (SLiRP guestfwd), live KVM — PASS
+
+Same probe set through the `10.0.2.2:4000` guestfwd endpoint
+spelling — the E8 injection names `HTTP_PROXY=http://10.0.2.2:4000`
+there, unlike the loopback spelling of the vsock twins: model
+lane answers, CONNECT 4100 → 200, 9999 → 403, loopback → 502;
+same decision records.
+
+### §4 podman-gvisor (runsc layer), live OCI-bundle probe — PASS
+
+No podman in this sandbox (the same limit as the C5 entry): a
+hand-built OCI bundle (bash + the NEW crate's
+`mysbx-egress-relay` in the image, the broker dir bind
+`brokerdir -> /run/mysbx-egress`, `--host-uds=open
+--network=none --ignore-cgroups`, platform systrap, runsc
+20260817.0) against a host-side table-carrying broker
+(`--allow-connect-port 4100`):
+
+- model lane through the in-image relay: `UPSTREAM-REPLY:
+  MODEL-PROBE`.
+- `CONNECT 10.0.2.15:4100` → `200 Connection Established` and the
+  tunnel passed the payload line.
+- `CONNECT 10.0.2.15:9999` → `403 Forbidden`.
+- `CONNECT 127.0.0.1:4100` → `502 Bad Gateway` (E9).
+- the empty-netns direct dial was already proven in the C5 entry
+  (§1 there); the relay+CONNECT probes above ride the same
+  default-deny netns.
+
+The broker's decisions.jsonl records the same
+allow/tunnel/deny/unreachable set, with the relay's pid as the
+connecting process.
+
+### Notes
+
+- One table, four transports: the decision-log records of §1-§4
+  are byte-shape-identical — the policy lives in the broker, the
+  backends only carry bytes to it. That is the C7a design claim,
+  now with a record per transport.
+- The 200/403/502 statuses come from the broker's CONNECT lane
+  itself (egress-connect.md E8/E9); the guest probes used busybox
+  nc raw CONNECT lines, the gVisor probe used bash /dev/tcp —
+  no proxy-aware client was needed to prove the lane, matching
+  the "relay is a dumb pipe" contract.
+- The nono lane question (decision 12) is NOT answered here:
+  nono keeps its own allowlist enforcement for `shared`, and
+  `proxy-only` + keys stays refused on it (bd myconfig-zzmj
+  holds the open decision).

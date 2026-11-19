@@ -1157,10 +1157,42 @@ pub fn podman_run_argv(
     }
 
     // 7. environment
+    // The E13 reserved-name drop (docs/design/egress-connect.md E13,
+    // on this transport since bd myconfig-ger7 — n8kv.2 C7a): a
+    // table-carrying channel names a broker whose proxy variables
+    // THIS builder injects below, so a configured or forwarded
+    // HTTP_PROXY must not ride the layers — dropped here like on
+    // bwrap, marked `ignored — set by the proxy` in the report
+    // (lib.rs `reserved_env` names them for every Broker row).
+    let reserved: Vec<String> = if let Some(channel) = egress {
+        if !channel.allow_domains.is_empty() || !channel.connect_ports.is_empty() {
+            [
+                "HTTP_PROXY",
+                "HTTPS_PROXY",
+                "http_proxy",
+                "https_proxy",
+                "NO_PROXY",
+                "no_proxy",
+            ]
+            .iter()
+            .map(|n| (*n).to_owned())
+            .collect()
+        } else {
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    };
     for (key, value) in host_env {
+        if reserved.iter().any(|r| r == key) {
+            continue;
+        }
         argv.extend(["--env".into(), format!("{key}={value}")]);
     }
     for (key, value) in &cfg.env {
+        if reserved.iter().any(|r| r == key) {
+            continue;
+        }
         argv.extend(["--env".into(), format!("{key}={value}")]);
     }
     // The `[nix]` table as NIX_CONFIG (bd myconfig-j23): after
@@ -1226,6 +1258,28 @@ pub fn podman_run_argv(
             "--env".into(),
             format!("MYSBX_EGRESS_PROXY=http://127.0.0.1:{}", channel.port),
         ]);
+        // The E8 proxy-variable injection (docs/design/
+        // egress-connect.md E8, on this transport since bd
+        // myconfig-ger7 — n8kv.2 C7a): a table-carrying channel
+        // names a broker whose CONNECT lane serves the table,
+        // through the in-image relay's loopback listener — the
+        // same endpoint spelling as the model lane. Announced
+        // with the identity entries, after `[env]`, and the
+        // reserved-name drop below keeps any layer from silently
+        // overriding them.
+        if !channel.allow_domains.is_empty() || !channel.connect_ports.is_empty() {
+            let proxy = format!("http://127.0.0.1:{}", channel.port);
+            for (key, value) in [
+                ("HTTP_PROXY", proxy.as_str()),
+                ("HTTPS_PROXY", proxy.as_str()),
+                ("http_proxy", proxy.as_str()),
+                ("https_proxy", proxy.as_str()),
+                ("NO_PROXY", "127.0.0.1,localhost"),
+                ("no_proxy", "127.0.0.1,localhost"),
+            ] {
+                argv.extend(["--env".into(), format!("{key}={value}")]);
+            }
+        }
     }
     // The XDG base dirs are infrastructure like `HOME` (config.md D14):
     // they are derived FROM it, and re-anchoring them matters ONLY under

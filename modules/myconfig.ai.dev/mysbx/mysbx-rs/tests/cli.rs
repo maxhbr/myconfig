@@ -10045,11 +10045,13 @@ fn allowlist_on_podman_krun_is_refused() {
 }
 
 #[test]
-fn allowlist_on_krun_is_refused() {
-    // Direct libkrun's TSI has no allowlist hook (config.md D21's
-    // table): an allowlist is refused on the direct `krun` backend
-    // too — the registry predicate (bd myconfig-mo3.2.1), never a
-    // name match. The refusal sits before the --dry-run return, so
+fn allowlist_on_krun_needs_the_pairing() {
+    // The E7 pairing rides the krun channel since bd
+    // myconfig-ger7 (n8kv.2 C7a): the keys are honored under
+    // network = "proxy-only" with a pinned broker, and next to a
+    // SHARED network they take the Broker row's own refusal —
+    // the transport exists, a proxy next to a shared network is
+    // advisory. The refusal sits before the --dry-run return, so
     // no launcher pins are needed.
     let Some((inv, _, sidecar)) = krun_fixture("nono-allowlist-krun", &[]) else {
         return; // no placeable krun fixture root here
@@ -10064,16 +10066,17 @@ fn allowlist_on_krun_is_refused() {
     assert!(stderr.contains("krun"), "{stderr}");
     assert!(stderr.contains("connect-ports"), "{stderr}");
     assert!(
-        stderr.contains("the `nono` backend enforces them itself"),
-        "{stderr}"
+        stderr.contains("needs the empty netns of network = \"proxy-only\""),
+        "the Broker row's pairing refusal names the fix: {stderr}"
     );
 }
 
 #[test]
-fn allowlist_on_microvm_qemu_is_refused() {
-    // The SLiRP net device has no per-domain/per-port hook either
-    // (config.md D21's table): an allowlist is refused on
-    // `microvm-qemu` exactly like on the other non-nono backends.
+fn allowlist_on_microvm_qemu_needs_the_pairing() {
+    // The E7 pairing rides the qemu channel since bd
+    // myconfig-ger7 (n8kv.2 C7a): the keys are honored under
+    // network = "proxy-only" with a pinned broker, and next to a
+    // SHARED network they take the Broker row's own refusal.
     let Some((inv, _, sidecar)) = krun_fixture("nono-allowlist-microvm-qemu", &[]) else {
         return; // no placeable fixture root here
     };
@@ -10086,13 +10089,19 @@ fn allowlist_on_microvm_qemu_is_refused() {
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
     assert!(stderr.contains("microvm-qemu"), "{stderr}");
     assert!(stderr.contains("allow-domains"), "{stderr}");
+    assert!(
+        stderr.contains("needs the empty netns of network = \"proxy-only\""),
+        "the Broker row's pairing refusal names the fix: {stderr}"
+    );
 }
 
 #[test]
-fn allowlist_on_microvm_ch_is_refused() {
-    // The passt child of the SLiRP-compatible address plan (backends.md
-    // D11) has no allowlist hook either: an allowlist is refused on
-    // `microvm-ch`, closing the D21 test gap (bd myconfig-mo3.2.1).
+fn allowlist_on_microvm_ch_needs_the_pairing() {
+    // The E7 pairing rides the hybrid-vsock channel since bd
+    // myconfig-ger7 (n8kv.2 C7a): the keys are honored under
+    // network = "proxy-only" with a pinned broker. `listen-ports`
+    // alone stays refused everywhere (the E9 gate: an allowlist
+    // that does not restrict outbound traffic is a lie).
     let Some((inv, _, sidecar)) = krun_fixture("nono-allowlist-microvm-ch", &[]) else {
         return; // no placeable fixture root here
     };
@@ -10105,6 +10114,10 @@ fn allowlist_on_microvm_ch_is_refused() {
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
     assert!(stderr.contains("microvm-ch"), "{stderr}");
     assert!(stderr.contains("listen-ports"), "{stderr}");
+    assert!(
+        stderr.contains("needs the empty netns of network = \"proxy-only\""),
+        "the Broker row's pairing refusal names the fix: {stderr}"
+    );
 }
 
 #[test]
@@ -10364,6 +10377,42 @@ fn proxy_only_on_podman_gvisor_is_accepted_with_the_image_relay() {
 }
 
 #[test]
+fn the_connect_lane_pairing_is_accepted_on_podman_gvisor_with_the_image_relay() {
+    // The C7a lift (bd myconfig-ger7) on the podman transport: the
+    // table rides the broker argv, and the injected proxy names
+    // point at the in-image relay's loopback listener — the same
+    // `127.0.0.1` spelling as bwrap. The E13 reservation is
+    // asserted by the drop: a configured HTTP_PROXY must NOT ride
+    // the layer argv.
+    let (inv, _, sidecar) = fixture("pairing-podman-gvisor", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"podman-gvisor\"\nnetwork = \"proxy-only\"\nconnect-ports = [443]\n[env]\nHTTP_PROXY = \"http://evil.example:1\"\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/agent-gvisor:latest")
+        .env(
+            "MYSBX_PODMAN_EGRESS_RELAY",
+            "/nix/store/synth-image-mysbx/bin/mysbx-egress-relay",
+        );
+    let (code, stdout, stderr) = run_command(cmd);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stdout.contains("--allow-connect-port") && stdout.contains("\n443\n"),
+        "the broker argv carries the table (E8): {stdout}"
+    );
+    assert!(
+        stdout.contains("HTTP_PROXY=http://127.0.0.1:4000"),
+        "the E8 proxy names point at the in-image relay: {stdout}"
+    );
+    assert!(
+        !stdout.contains("evil.example"),
+        "a configured HTTP_PROXY never rides the layers (E13): {stdout}"
+    );
+}
+
+#[test]
 fn proxy_only_on_podman_gvisor_without_the_image_relay_is_refused() {
     // Fail-closed (bd myconfig-eov2): the broker pins alone are not
     // enough on podman-gvisor — the payload wrap needs the IN-IMAGE
@@ -10592,6 +10641,45 @@ fn proxy_only_on_krun_without_pins_is_refused() {
 }
 
 #[test]
+fn the_connect_lane_pairing_is_accepted_on_microvm_qemu_with_the_channel() {
+    // The C7a lift (bd myconfig-ger7) on the SLiRP twin: the
+    // table rides the broker argv, and the injected proxy names
+    // point at the GUEST-SIDE gateway spelling (10.0.2.2 — the
+    // guestfwd listener), NOT the krun/ch loopback one.
+    let Some((inv, _, sidecar)) = krun_fixture("pairing-microvm-qemu-accepted", &[]) else {
+        return; // no placeable fixture root here
+    };
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"microvm-qemu\"\nnetwork = \"proxy-only\"\nconnect-ports = [443]\n",
+    )
+    .unwrap();
+    let rootfs = sidecar.join("rootfs-stub");
+    std::fs::create_dir_all(rootfs.join("bin")).unwrap();
+    std::fs::write(rootfs.join("bin/mysbx-init"), "#!/bin/sh\n").unwrap();
+    let kernel = sidecar.join("kernel-stub.bzImage");
+    std::fs::write(&kernel, "stub\n").unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["run", "--dry-run", "--", "/bin/true"]);
+    cmd.env("MYSBX_MICROVM_QEMU_LAUNCHER", "/does/not/matter/dry-run")
+        .env("MYSBX_MICROVM_QEMU_ROOTFS", rootfs.to_str().unwrap())
+        .env("MYSBX_MICROVM_QEMU_KERNEL", kernel.to_str().unwrap());
+    let (code, stdout, stderr) = run_command(cmd);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stdout.contains("--allow-connect-port") && stdout.contains("\n443\n"),
+        "the broker argv carries the table (E8): {stdout}"
+    );
+    assert!(
+        stdout.contains("HTTP_PROXY=http://10.0.2.2:4000"),
+        "the E8 proxy names point at the guestfwd gateway spelling: {stdout}"
+    );
+    assert!(
+        stdout.contains("MYSBX_EGRESS_PROXY=http://10.0.2.2:4000"),
+        "the model-lane endpoint is unchanged: {stdout}"
+    );
+}
+
+#[test]
 fn proxy_only_on_krun_is_accepted_with_the_channel() {
     // The C3 lift (bd myconfig-ild7): with the broker pins the
     // pipeline admits the profile on krun, and the dry run audits
@@ -10657,6 +10745,96 @@ fn proxy_only_on_krun_is_accepted_with_the_channel() {
     assert!(
         bind_at.contains("mysbx-egress-test-rt") && bind_at.contains("mysbx-egress") && pid_named,
         "the broker directory is ro-bound into the launcher view: {bind_at} (argv: {stdout})"
+    );
+}
+
+#[test]
+fn the_connect_lane_pairing_is_accepted_on_krun_with_the_channel() {
+    // The C7a lift (bd myconfig-ger7): a table next to the profile
+    // is ADMITTED on krun — the same channel, the same pins, plus
+    // the keys. The dry run audits the three additions the pairing
+    // makes over the plain profile: the broker's argv carries the
+    // table (E8: the dry run prints it), the guest env carries the
+    // injected proxy names pointing at the bridge's loopback
+    // spelling, and the launcher argv is otherwise UNCHANGED (the
+    // table never rides the VM's own transport).
+    let Some((inv, _, sidecar)) = krun_fixture("pairing-krun-accepted", &[]) else {
+        return; // no placeable fixture root here
+    };
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"krun\"\nnetwork = \"proxy-only\"\nconnect-ports = [443]\n",
+    )
+    .unwrap();
+    let rootfs = sidecar.join("rootfs-stub");
+    std::fs::create_dir_all(rootfs.join("bin")).unwrap();
+    std::fs::write(rootfs.join("bin/mysbx-init"), "#!/bin/sh\n").unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["run", "--dry-run", "--", "/bin/true"]);
+    cmd.env("MYSBX_KRUN_LAUNCHER", "/does/not/matter/dry-run")
+        .env("MYSBX_KRUN_ROOTFS", rootfs.to_str().unwrap());
+    let (code, stdout, stderr) = run_command(cmd);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stdout.contains("--allow-connect-port") && stdout.contains("\n443\n"),
+        "the broker argv carries the table (E8): {stdout}"
+    );
+    assert!(
+        stdout.contains("HTTP_PROXY=http://127.0.0.1:4000"),
+        "the E8 proxy names point at the bridge's loopback: {stdout}"
+    );
+    assert!(
+        stdout.contains("HTTPS_PROXY=http://127.0.0.1:4000"),
+        "both spellings are injected: {stdout}"
+    );
+    assert!(
+        stdout.contains("MYSBX_EGRESS_PROXY=http://127.0.0.1:4000"),
+        "the model-lane endpoint is unchanged: {stdout}"
+    );
+}
+
+#[test]
+fn the_connect_lane_pairing_is_accepted_on_microvm_ch_with_the_channel() {
+    // The C7a lift (bd myconfig-ger7) on the hybrid-vsock twin:
+    // same assertions as the krun variant — the table rides the
+    // broker argv, the proxy names point at the guest bridge's
+    // loopback spelling, the launcher argv stays the plain
+    // restricted shape.
+    let Some((inv, _, sidecar)) = krun_fixture("pairing-microvm-ch-accepted", &[]) else {
+        return; // no placeable fixture root here
+    };
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"microvm-ch\"\nnetwork = \"proxy-only\"\nconnect-ports = [443]\n",
+    )
+    .unwrap();
+    let rootfs = sidecar.join("rootfs-stub");
+    std::fs::create_dir_all(rootfs.join("bin")).unwrap();
+    std::fs::write(rootfs.join("bin/mysbx-init"), "#!/bin/sh\n").unwrap();
+    let kernel = sidecar.join("bzImage-stub");
+    std::fs::write(&kernel, "stub\n").unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["run", "--dry-run", "--", "/bin/true"]);
+    cmd.env("MYSBX_MICROVM_CH_LAUNCHER", "/does/not/matter/dry-run")
+        .env(
+            "MYSBX_MICROVM_CH_ROOTFS",
+            rootfs.to_str().unwrap().to_string(),
+        )
+        .env(
+            "MYSBX_MICROVM_CH_KERNEL",
+            kernel.to_str().unwrap().to_string(),
+        );
+    let (code, stdout, stderr) = run_command(cmd);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stdout.contains("--allow-connect-port") && stdout.contains("\n443\n"),
+        "the broker argv carries the table (E8): {stdout}"
+    );
+    assert!(
+        stdout.contains("HTTP_PROXY=http://127.0.0.1:4000"),
+        "the E8 proxy names point at the bridge's loopback: {stdout}"
+    );
+    assert!(
+        stdout.contains("MYSBX_EGRESS_PROXY=http://127.0.0.1:4000"),
+        "the model-lane endpoint is unchanged: {stdout}"
     );
 }
 

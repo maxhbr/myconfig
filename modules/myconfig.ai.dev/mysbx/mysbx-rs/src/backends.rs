@@ -36,10 +36,12 @@ pub enum Allowlist {
     /// nono enforces them itself: its per-domain hostname proxy,
     /// Landlock and seccomp port grants (bd myconfig-6di.2).
     NonosEgress,
-    /// The bwrap-built tiers enforce them through the per-run
-    /// egress broker, and only when the wrapper pinned one
-    /// (`MYSBX_EGRESS_BROKER`); without the pin the run is refused,
-    /// never advisory (docs/design/egress-connect.md E7/E10).
+    /// The bwrap-built tiers and every backend whose proxy-only
+    /// channel terminates at the per-run egress broker enforce
+    /// them through its CONNECT lane, and only when the wrapper
+    /// pinned one (`MYSBX_EGRESS_BROKER`); without the pin the run
+    /// is refused, never advisory (docs/design/egress-connect.md
+    /// E7/E10; the podman/VM rows since bd myconfig-ger7, C7a).
     Broker,
 }
 
@@ -175,7 +177,11 @@ pub const REGISTRY: &[Backend] = &[
         nested_virt: MissingFeature::WarnAndDrop,
         detach_refused: true,
         waypipe_refused: false,
-        allowlist: Allowlist::Refused,
+        // The E7 pairing rides the broker lane here too (bd
+        // myconfig-ger7 — n8kv.2 C7a): the in-image relay's channel
+        // terminates at the same per-run broker whose CONNECT table
+        // polices the keys.
+        allowlist: Allowlist::Broker,
         // Enforced since bd myconfig-eov2 (n8kv.2 C5): `--network none`
         // plus the per-run broker's socket directory bound into the
         // container with runsc's `--host-uds=open` — the gofer's UDS
@@ -222,7 +228,11 @@ pub const REGISTRY: &[Backend] = &[
         nested_virt: MissingFeature::WarnAndDrop,
         detach_refused: false,
         waypipe_refused: true,
-        allowlist: Allowlist::Refused,
+        // The E7 pairing rides the broker lane here too (bd
+        // myconfig-ger7 — n8kv.2 C7a): the explicit vsock's byte
+        // pipe terminates at the same per-run broker whose CONNECT
+        // table polices the keys.
+        allowlist: Allowlist::Broker,
         // Enforced since bd myconfig-ild7 (n8kv.2 C3): the implicit
         // TSI vsock is replaced by an EXPLICIT one (`krun_add_vsock`,
         // tsi_features 0 — no tsi_hijack, no net device at all) whose
@@ -243,7 +253,11 @@ pub const REGISTRY: &[Backend] = &[
         nested_virt: MissingFeature::Honored,
         detach_refused: false,
         waypipe_refused: true,
-        allowlist: Allowlist::Refused,
+        // The E7 pairing rides the broker lane here too (bd
+        // myconfig-ger7 — n8kv.2 C7a): the guestfwd byte pipe
+        // terminates at the same per-run broker whose CONNECT
+        // table polices the keys.
+        allowlist: Allowlist::Broker,
         // Enforced since bd myconfig-krab (n8kv.2 C4): SLiRP's
         // `restrict=on` drops every outbound TCP except the ONE
         // guestfwd-mapped model port and blocks UDP (the fvi.3
@@ -265,7 +279,11 @@ pub const REGISTRY: &[Backend] = &[
         nested_virt: MissingFeature::Honored,
         detach_refused: false,
         waypipe_refused: true,
-        allowlist: Allowlist::Refused,
+        // The E7 pairing rides the broker lane here too (bd
+        // myconfig-ger7 — n8kv.2 C7a): the hybrid-vsock byte pipe
+        // terminates at the same per-run broker whose CONNECT
+        // table polices the keys.
+        allowlist: Allowlist::Broker,
         // Enforced since bd myconfig-fo1r (n8kv.2 C2): the passt
         // NIC is dropped entirely — the guest gets NO net device,
         // only a virtio-vsock whose ONE mapped port the VMM
@@ -379,9 +397,13 @@ mod tests {
             // says something else about the same backends), which is
             // why this is an enum. The D20/D21 distinction stays:
             // the proxy-only profile remains its own bool below.
+            // nono enforces the keys itself; every backend with a
+            // broker channel (bwrap-built or a C2-C5 VM/podman
+            // transport) through the broker's CONNECT lane (C7a);
+            // podman-krun alone still refuses (no transport, C6).
             let expect = if b.name == "nono" {
                 Allowlist::NonosEgress
-            } else if b.name == "bubblewrap" {
+            } else if b.network_proxy_only && b.name != "podman-krun" {
                 Allowlist::Broker
             } else {
                 Allowlist::Refused

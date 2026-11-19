@@ -1123,8 +1123,11 @@ network model is the one bd myconfig-6di.5.5 verified for
   fail-closed): the only fallback would be the unfiltered TSI
   proxy, exactly what the profile forbids. `--unshare-net` STAYS
   around the chain — the muxer reaches the broker by pathname,
-  connect(2) needs no net. The CONNECT-lane pairing stays refused
-  (C7's scope): a one-port map cannot express a table.
+  connect(2) needs no net. The CONNECT-lane pairing rides the SAME
+  channel since bd myconfig-ger7 (n8kv.2 C7a): the byte pipe is
+  transparent, the broker's table polices it exactly as on
+  bubblewrap — the one-port map never needs to express the table
+  itself.
 - **`krun_set_passt_fd` is out of the first cut.** The symbol needs
   libkrun built `withNet` (nixpkgs `libkrun.override { withNet =
   true; }`), which the wrapped package does not pin. A net-enabled
@@ -1395,9 +1398,10 @@ marker (10.0.2.2 is on-link) and empties resolv.conf — no DNS proxy:
 the profile grants the endpoint, not the name. The relay pin rides
 the launcher's OWN wrapper (`MYSBX_MICROVM_QEMU_EGRESS_RELAY`),
 because the launcher runs inside bwrap's `--clearenv` and the mysbx
-wrapper's env pins never reach it. Allowlists stay refused
-(config.md D21): the forwards-only netdev cannot express a table —
-the C7 lift owns that question.
+wrapper's env pins never reach it. Allowlists ride the broker's
+CONNECT lane since bd myconfig-ger7 (n8kv.2 C7a): the guestfwd
+byte pipe is transparent, the broker's table polices it — the
+forwards-only netdev never needs to express the table itself.
 
 Cleanup is implemented with `Drop` for ordinary return/error paths,
 including daemon termination and runtime-directory removal. It is not
@@ -1498,7 +1502,8 @@ myconfig-hq7k), the trust-shares-on-stage-ro rule (no
 virtio-blk devices, the fd-ceiling raise/gate (bd myconfig-qq3i's
 virtiofsd accounting applies identically), the Daemons-guard
 cleanup, `network = false` (no net device + `--unshare-net`), the
-refusals (pids-limit, waypipe, allowlists, share roots), and the
+refusals (pids-limit, waypipe, share roots; allowlists ride the
+broker's CONNECT lane since bd myconfig-ger7, n8kv.2 C7a), and the
 threat model — a guest escape reaches the CH, virtiofsd and passt
 processes, the invoking user's uid, the same single security
 context D9 states. passt adds one more file server to that context;
