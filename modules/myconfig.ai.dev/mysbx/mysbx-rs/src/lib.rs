@@ -2872,7 +2872,15 @@ fn sandbox_pipeline(
                 "podman-gvisor" => {
                     "pasta's --map-guest-addr ADDS a route to the LiteLLM forwarder, it does not remove the container's default route (bd myconfig-6di.3)"
                 }
-                "podman-krun" | "krun" => {
+                // bd myconfig-n8kv.2 C6: the podman-krun refusal is
+                // PERMANENT — not a "not yet" like the direct-VM
+                // transports (whose C2-C4/C5 beads may still lift
+                // theirs). TSI has no per-domain/port hook, and a
+                // broker socket cannot cross virtio-fs.
+                "podman-krun" => {
+                    "libkrun's TSI is an UNFILTERED proxy: the VMM dials whatever the guest connects to, from a netns with a default route — and AF_UNIX sockets do not cross virtio-fs, so no default-deny transport exists (a permanent refusal)"
+                }
+                "krun" => {
                     "libkrun's TSI is an UNFILTERED proxy: the VMM dials whatever the guest connects to, from a netns with a default route"
                 }
                 "microvm-qemu" => {

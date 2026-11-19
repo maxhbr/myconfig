@@ -1823,10 +1823,14 @@ impl fmt::Display for Error {
             Error::ProxyOnlyRefused => write!(
                 f,
                 "a brokered network profile is not enforceable on the podman \
-                 backends: pasta's --map-guest-addr ADDS a route to the LiteLLM \
-                 forwarder, it does not remove the container's default route \
-                 (docs/design/config.md D20, bd myconfig-6di.3, myconfig-fvi); the \
-                 run is refused, never weakened to a shared network"
+                 backends (bd myconfig-n8kv.2 C6, a PERMANENT refusal): \
+                 podman-gvisor's pasta --map-guest-addr ADDS a route to the \
+                 LiteLLM forwarder without removing the container's default \
+                 route; podman-krun's TSI is an UNFILTERED proxy and AF_UNIX \
+                 sockets do not cross virtio-fs, so no default-deny transport \
+                 exists (docs/design/config.md D20, bd myconfig-6di.3, \
+                 myconfig-fvi); the run is refused, never weakened to a shared \
+                 network"
             ),
             Error::DisplayUnavailable => write!(
                 f,

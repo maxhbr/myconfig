@@ -603,11 +603,14 @@ Consequences, stated honestly:
   the D21 refusal fires (pipeline step 4b) with krun's mechanism named.
 - `egress = "proxy-only"` is not a schema key yet (config.md D20), so
   the strict parser refuses the config on EVERY backend before any
-  backend question; when D20 lands, krun shares the podman-gvisor
-  gap (pasta's `--map-guest-addr` ADDS a forwarder path, it does not
-  remove the default route), so krun will refuse it too unless the
-  guest netns can be made default-deny — same shared fix to track
-  under bd myconfig-6di.3 / myconfig-jq2.
+  backend question; D20 has since landed and with it the
+  `network = "proxy-only"` refusal — which for podman-krun is
+  PERMANENT (bd myconfig-n8kv.2 C6, decided 2026-11-19): TSI has no
+  per-domain/port hook, and AF_UNIX sockets do not cross virtio-fs,
+  so no default-deny transport exists on this backend. podman-gvisor
+  and the direct VM backends keep their `not enforceable today`
+  refusals with their possible lifts tracked under bd
+  myconfig-n8kv.2's children (C3-C5).
 - DNS travels the same TSI path (the VMM resolves from the netns's
   resolver) — no guest-specific resolver story is needed for the first
   cut, and none is invented here.

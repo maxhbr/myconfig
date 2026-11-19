@@ -91,7 +91,12 @@ layered **nono** backend enforce it (nono adds `--block-net` and one
 `--allow-connect-port` for the relay, so UDP, raw sockets and
 io_uring are denied too — the pinned nono 0.82.0's own baselines,
 audited in backends.md D1; bd myconfig-n8kv.4); the podman, krun and VM backends REFUSE it (exit 70)
-because their net device always keeps a gateway route. Under the
+because their net device always keeps a gateway route — except
+`podman-krun`, whose refusal is PERMANENT (bd myconfig-n8kv.2 C6:
+libkrun's TSI is an unfiltered proxy and AF_UNIX sockets do not
+cross virtio-fs, so no default-deny transport exists there); the
+other backends' possible lifts are tracked as bd myconfig-n8kv.2's
+children. Under the
 profile the forwarded environment narrows to the technical base, a
 credential-shaped `[env]`/`[nix]` name is refused, and a dropped
 credential name gets the fixed `mysbx-proxy-only` placeholder.
