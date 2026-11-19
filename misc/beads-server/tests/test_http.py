@@ -173,6 +173,24 @@ class TestWriteApi(ServerCase):
         )
         self.assertEqual(status, 409)
         self.assertEqual(data["issue"]["status"], "open")
+        # a lost guard must leave the DB untouched
+        _, fresh = self.get("/api/beads/issue/t-1")
+        self.assertEqual(fresh["issue"]["status"], "open")
+
+    def test_409_carries_data_changed_by_external_writer(self):
+        # external writer changes the issue behind the server's back;
+        # the guard loss must surface THAT value, not the stale cache
+        issues = json.loads(json.dumps(ISSUES))
+        issues[0]["status"] = "in_progress"
+        issues[0]["updated_at"] = "2026-01-02T00:00:00Z"
+        (self.repo / ".beads" / "issues.json").write_text(json.dumps(issues))
+        status, data = self.post(
+            "/api/beads/issue/t-1/update",
+            {"status": "closed", "if_status": "open"},
+            headers={"X-Beads-Server-Token": self.token},
+        )
+        self.assertEqual(status, 409)
+        self.assertEqual(data["issue"]["status"], "in_progress")
 
     def test_missing_token_is_403(self):
         status, _ = self.post("/api/beads/issue/t-1/update", {"status": "closed"})

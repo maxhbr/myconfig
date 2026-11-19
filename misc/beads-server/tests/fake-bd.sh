@@ -61,34 +61,32 @@ case $cmd in
     update)
         id=$1
         shift
+        # parse everything first, then guard, then apply: like real bd,
+        # a lost --if-status must leave the record untouched
+        sets=()
+        body=""
         if_status=""
-        nsets=0
         while [ $# -gt 0 ]; do
             case $1 in
                 --status)
-                    apply "$id" status text "$2"
-                    nsets=$((nsets + 1))
+                    sets+=("status|text|$2")
                     shift 2
                     ;;
                 --priority)
-                    apply "$id" priority json "$2"
-                    nsets=$((nsets + 1))
+                    sets+=("priority|json|$2")
                     shift 2
                     ;;
                 --assignee)
-                    apply "$id" assignee text "$2"
-                    nsets=$((nsets + 1))
+                    sets+=("assignee|text|$2")
                     shift 2
                     ;;
                 --title)
-                    apply "$id" title text "$2"
-                    nsets=$((nsets + 1))
+                    sets+=("title|text|$2")
                     shift 2
                     ;;
                 --body-file)
                     body=$(cat)
-                    apply "$id" description text "$body"
-                    nsets=$((nsets + 1))
+                    sets+=("description|text|$body")
                     shift
                     if [ "${1:-}" = "-" ]; then shift; fi
                     ;;
@@ -96,9 +94,7 @@ case $cmd in
                     if_status=$2
                     shift 2
                     ;;
-                *)
-                    shift
-                    ;;
+                *) shift ;;
             esac
         done
         if [ -n "$if_status" ]; then
@@ -109,10 +105,17 @@ case $cmd in
                 exit 13
             fi
         fi
-        if [ "$nsets" -eq 0 ]; then
+        if [ "${#sets[@]}" -eq 0 ]; then
             echo "no updates specified" >&2
             exit 1
         fi
+        for spec in "${sets[@]}"; do
+            field=${spec%%|*}
+            rest=${spec#*|}
+            kind=${rest%%|*}
+            value=${rest#*|}
+            apply "$id" "$field" "$kind" "$value"
+        done
         echo "✓ Updated issue: $id"
         ;;
     comment)
