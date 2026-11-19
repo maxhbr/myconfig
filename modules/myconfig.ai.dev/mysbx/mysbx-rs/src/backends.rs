@@ -124,6 +124,16 @@ pub struct Backend {
     /// in-sandbox relay is the shipped transport (bd myconfig-mo3.2.6,
     /// myconfig-vpi9.1). Every other backend refuses the profile.
     pub network_proxy_only: bool,
+    /// Whether the backend enforces the fvi public profile
+    /// (`network = "public"`, bd myconfig-fvi): the SAME empty-netns
+    /// transport as `proxy-only`, with the broker's `--public`
+    /// CONNECT lane (every target admitted, the hard-deny set the
+    /// rule). `true` for the plain `bubblewrap` backend only: the
+    /// layered nono tier maps its OWN grant model over the netns
+    /// (its argv builder cannot express the deny set), and the VM and
+    /// podman transports share or fully route. Every other backend
+    /// refuses the value (D21: never accepted-and-ignored).
+    pub network_public: bool,
 }
 
 impl Backend {
@@ -153,6 +163,7 @@ pub const REGISTRY: &[Backend] = &[
         waypipe_refused: false,
         allowlist: Allowlist::Broker,
         network_proxy_only: true,
+        network_public: true,
     },
     Backend {
         name: "podman-gvisor",
@@ -166,6 +177,7 @@ pub const REGISTRY: &[Backend] = &[
         waypipe_refused: false,
         allowlist: Allowlist::Refused,
         network_proxy_only: false,
+        network_public: false,
     },
     Backend {
         name: "nono",
@@ -179,6 +191,7 @@ pub const REGISTRY: &[Backend] = &[
         waypipe_refused: false,
         allowlist: Allowlist::NonosEgress,
         network_proxy_only: true,
+        network_public: false,
     },
     Backend {
         name: "podman-krun",
@@ -192,6 +205,7 @@ pub const REGISTRY: &[Backend] = &[
         waypipe_refused: true,
         allowlist: Allowlist::Refused,
         network_proxy_only: false,
+        network_public: false,
     },
     Backend {
         name: "krun",
@@ -205,6 +219,7 @@ pub const REGISTRY: &[Backend] = &[
         waypipe_refused: true,
         allowlist: Allowlist::Refused,
         network_proxy_only: false,
+        network_public: false,
     },
     Backend {
         name: "microvm-qemu",
@@ -218,6 +233,7 @@ pub const REGISTRY: &[Backend] = &[
         waypipe_refused: true,
         allowlist: Allowlist::Refused,
         network_proxy_only: false,
+        network_public: false,
     },
     Backend {
         name: "microvm-ch",
@@ -231,6 +247,7 @@ pub const REGISTRY: &[Backend] = &[
         waypipe_refused: true,
         allowlist: Allowlist::Refused,
         network_proxy_only: false,
+        network_public: false,
     },
 ];
 

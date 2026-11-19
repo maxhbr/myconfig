@@ -599,8 +599,9 @@ pub fn merge(
         check_home_exposure(canon, &home_canon)?;
     }
 
-    // network (docs/design/config.md D20): ONE key with three values
-    // ordered `none < proxy-only < shared`. The merge takes the
+    // network (docs/design/config.md D20; the `public` value, bd
+    // myconfig-fvi, sits in the order's middle): ONE key with four
+    // values ordered `none < proxy-only < public < shared`. The merge takes the
     // STRICTER explicit value — a layer may tighten, never widen. A
     // sidecar wider than the user layer is the `NetworkUpgrade` hard
     // error (the same shape the old bool's re-enable was). A layer

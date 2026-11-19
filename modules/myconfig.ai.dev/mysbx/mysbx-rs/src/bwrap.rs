@@ -412,6 +412,11 @@ pub struct EgressChannel<'a> {
     /// The CONNECT-lane table's port filter (`connect-ports`),
     /// intersecting the domains when both are set (E9's conjunction).
     pub connect_ports: &'a [u16],
+    /// The fvi public lane (bd myconfig-fvi): the broker runs
+    /// `--public`; the proxy variables below are injected for it too
+    /// (the lane serves CONNECT — that is its point), so an agent's
+    /// HTTPS client reaches the public internet through the broker.
+    pub public: bool,
 }
 
 /// Where a `proxy-only` run binds the forwarder's socket DIRECTORY
@@ -588,7 +593,12 @@ pub fn bwrap_argv(
     // (no channel is a refused run, never a silent fallback to a
     // shared network), and NOTHING may mount or persist over the
     // directory the channel binds.
-    let egress: Option<&EgressChannel<'_>> = if cfg.network == crate::config::Network::ProxyOnly {
+    // The proxy-only profile (D20) and the public profile
+    // (bd myconfig-fvi) share the transport: the empty netns plus the
+    // per-run broker's socket directory, bound read-only, with the
+    // relay listening on the loopback port. The lane differs inside
+    // the broker (a table vs `--public`), never in the binds.
+    let egress: Option<&EgressChannel<'_>> = if cfg.network.is_brokered() {
         let channel = params.egress.as_ref().ok_or(Error::EgressChannelMissing)?;
         check_egress_dir(&cfg.mounts, &effective_state_dirs)?;
         Some(channel)
@@ -1221,7 +1231,8 @@ pub fn bwrap_argv(
         // profile run injects nothing, so nothing is reserved there;
         // a shared run has no proxy either.
         let reserved: Vec<String> = if let Some(egress) = egress {
-            if !egress.allow_domains.is_empty() || !egress.connect_ports.is_empty() {
+            if egress.public || !egress.allow_domains.is_empty() || !egress.connect_ports.is_empty()
+            {
                 // Exactly the names mysbx injects below (E8): reserving
                 // more (nono's control names, `NODE_USE_ENV_PROXY`)
                 // would drop `[env]` entries that change no injected
@@ -1348,7 +1359,8 @@ pub fn bwrap_argv(
         // `127.0.0.1` URLs direct (they are not proxied, they ARE
         // the relay's listener).
         if let Some(egress) = egress {
-            if !egress.allow_domains.is_empty() || !egress.connect_ports.is_empty() {
+            if egress.public || !egress.allow_domains.is_empty() || !egress.connect_ports.is_empty()
+            {
                 let proxy = format!("http://127.0.0.1:{}", egress.port);
                 for (key, value) in [
                     ("HTTP_PROXY", proxy.as_str()),
@@ -3057,6 +3069,7 @@ mod tests {
             etc_dir: "/synth/etc",
             allow_domains: &[],
             connect_ports: &[],
+            public: false,
         });
         let argv = bwrap_argv(&cfg, &repo, &Payload::Shell, &HostEnv::new(), &p).unwrap();
         let identity = |argv: &[String], key: &str| -> String {

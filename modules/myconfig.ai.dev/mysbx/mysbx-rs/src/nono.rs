@@ -518,6 +518,15 @@ pub fn nono_run_argv(
     if !cfg.network.is_shared() && has_allowlist {
         return Err(Error::AllowlistUnderDeniedNetwork);
     }
+    // Defense in depth for the fvi public profile (bd
+    // myconfig-fvi): the pipeline's registry gate refuses it on the
+    // layered tier (its argv builder cannot express the deny set),
+    // and this builder refuses it too rather than fall into the
+    // deny-all arm below (an ungranted deny is a silently different
+    // profile).
+    if cfg.network == crate::config::Network::Public {
+        return Err(Error::PublicRefused);
+    }
     if cfg.network == crate::config::Network::ProxyOnly {
         // The no-key profile (docs/design/config.md D20, bd
         // myconfig-vpi9.1): deny everything, then grant the one
@@ -604,6 +613,11 @@ pub enum Error {
     /// `network = "proxy-only"` (docs/design/config.md D20) but this
     /// run carries no loopback port to grant.
     EgressChannelMissing,
+    /// `network = "public"` (bd myconfig-fvi) is refused on the
+    /// layered tier: the registry's gate (`network_public: false`)
+    /// and this builder both refuse it — the tier maps its own
+    /// grant model over the netns and cannot express the deny set.
+    PublicRefused,
 }
 
 impl fmt::Display for Error {
@@ -634,6 +648,12 @@ impl fmt::Display for Error {
                  (allow-domains/connect-ports/listen-ports) contradicts it — \
                  both cannot hold at once; drop the allowlist or share the \
                  network"
+            ),
+            Error::PublicRefused => write!(
+                f,
+                "network = \"public\" is not enforceable on the layered nono \
+                 backend: its grant model cannot express the public deny set \
+                 (bd myconfig-fvi); the run is refused, never weakened"
             ),
             Error::EgressChannelMissing => write!(
                 f,

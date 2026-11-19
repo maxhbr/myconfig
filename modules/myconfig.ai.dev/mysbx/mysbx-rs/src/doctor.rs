@@ -2208,10 +2208,11 @@ pub fn run(args: &[String]) -> i32 {
         match backend.as_str() {
             "bubblewrap" => {
                 bwrap_checks(&mut checks, merged.network.is_shared());
-                // The proxy-only channel (D20): probe it only when the
-                // merged network is the profile, so a shared/none
+                // The brokered channel (D20; the public profile since
+                // bd myconfig-fvi): probe it only when the merged
+                // network rides the broker, so a shared/none
                 // bubblewrap doctor keeps its output.
-                if merged.network == crate::config::Network::ProxyOnly {
+                if merged.network.is_brokered() {
                     egress_check(&mut checks);
                 }
                 host_endpoint_check(&mut checks, &merged, &forwarded);
@@ -2219,11 +2220,12 @@ pub fn run(args: &[String]) -> i32 {
             "nono" => {
                 bwrap_checks(&mut checks, merged.network.is_shared());
                 nono_checks(&mut checks, &merged);
-                // The proxy-only channel (D20, bd myconfig-vpi9.1):
-                // the layered nono backend binds the same forwarder
+                // The brokered channel (D20, bd myconfig-vpi9.1;
+                // the public profile since bd myconfig-fvi): the
+                // layered nono backend binds the same forwarder
                 // socket and wraps the same relay, so the probe is
                 // the bubblewrap one.
-                if merged.network == crate::config::Network::ProxyOnly {
+                if merged.network.is_brokered() {
                     egress_check(&mut checks);
                 }
                 host_endpoint_check(&mut checks, &merged, &forwarded);

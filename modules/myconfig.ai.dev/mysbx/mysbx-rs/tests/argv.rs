@@ -128,6 +128,14 @@ fn proxy_only_base() -> Merged {
     cfg
 }
 
+/// A `network = "public"` base (bd myconfig-fvi): the same bubblewrap
+/// transport, the broker's deny-set lane.
+fn public_base() -> Merged {
+    let mut cfg = base(false);
+    cfg.network = mysbx::config::Network::Public;
+    cfg
+}
+
 /// The egress channel a `proxy-only` run needs (bd myconfig-mo3.2.6):
 /// the forwarder's socket directory, its file name, the relay port and
 /// the relay binary.
@@ -140,6 +148,7 @@ fn egress_channel() -> mysbx::bwrap::EgressChannel<'static> {
         etc_dir: "/synth/store/bbbb-mysbx-egress-etc",
         allow_domains: &[],
         connect_ports: &[],
+        public: false,
     }
 }
 
@@ -627,6 +636,36 @@ fn golden_network_false() {
         "no resolver binds when the network is denied: {argv:?}"
     );
     assert!(!argv.contains(&"/run/systemd/resolve".to_string()));
+}
+
+#[test]
+fn golden_public() {
+    // `network = "public"` (bd myconfig-fvi): the same transport as
+    // proxy-only (no --share-net, the broker's socket directory bound
+    // ro, the relay) PLUS the CONNECT proxy variables — the public
+    // lane serves CONNECT, so the payload's HTTPS clients reach the
+    // broker through them.
+    let mut channel = egress_channel();
+    channel.public = true;
+    let params = Params {
+        egress: Some(channel),
+        ..params()
+    };
+    let argv = bwrap_argv(
+        &public_base(),
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    assert_golden("egress-public.txt", &argv);
+    assert!(
+        argv.windows(3)
+            .any(|w| w[0] == "--setenv" && w[1] == "HTTPS_PROXY"),
+        "the CONNECT proxy is injected: {argv:?}"
+    );
+    assert!(!argv.contains(&"--share-net".to_string()));
 }
 
 #[test]
@@ -7226,6 +7265,34 @@ fn nono_proxy_only_with_an_allowlist_is_refused() {
         matches!(err, NonoError::AllowlistUnderDeniedNetwork),
         "wrong error: {err}"
     );
+}
+
+#[test]
+fn nono_public_is_refused_by_the_builder() {
+    // Defense in depth for bd myconfig-fvi: the pipeline's registry
+    // gate refuses `network = "public"` on the layered tier; the
+    // builder refuses it TOO so a future call path cannot fall into
+    // the deny-all arm (an ungranted deny would be a silently
+    // different profile — the same fail-closed argument as
+    // `nono_proxy_only_without_the_channel_is_refused`).
+    let mut cfg = nono_base(false);
+    cfg.network = mysbx::config::Network::Public;
+    let err = nono_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &NonoParams {
+            egress_port: Some(4000),
+            ..nono_params()
+        },
+    )
+    .expect_err("a public nono run must be refused");
+    assert!(
+        matches!(err, NonoError::PublicRefused),
+        "wrong error: {err}"
+    );
+    assert!(err.to_string().contains("public"), "{err}");
+    assert!(err.to_string().contains("never weakened"), "{err}");
 }
 
 #[test]

@@ -1057,6 +1057,44 @@ fn sidecar_network_true_still_cannot_reenable() {
 }
 
 #[test]
+fn public_sits_in_the_merge_order_and_still_cannot_widen_around_it() {
+    // bd myconfig-fvi: `public` is a REAL merge-order participant —
+    // a sidecar may tighten TO it (shared -> public) and a wider
+    // sidecar value against it is the same NetworkUpgrade hard
+    // error, because public < shared in the order.
+    let (inv, _, sidecar) = fixture("public-merge-order", &["--dry-run"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"public\"\n",
+    )
+    .unwrap();
+    std::fs::write(sidecar.join("config.toml"), "network = true\n").unwrap();
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stdout: {stdout}");
+    assert!(
+        stderr.contains("network = \"shared\" widens the network the user config"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("set to \"public\""), "{stderr}");
+    // And the tightening direction is fine: a shared user layer
+    // tightened to public by the sidecar admits the run.
+    let (inv, _, sidecar) = fixture("public-merge-tighten", &["--dry-run"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = true\n",
+    )
+    .unwrap();
+    std::fs::write(sidecar.join("config.toml"), "network = \"public\"\n").unwrap();
+    let (code, stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stdout.contains("--setenv\nMYSBX_NETWORK\npublic\n"),
+        "the tightened value won: {stdout}"
+    );
+}
+#[test]
 fn no_backend_configured_fails() {
     // cli.md D7: the backend is explicit, never auto-detected; neither
     // layer named one, so the run is refused.
@@ -10293,6 +10331,124 @@ fn proxy_only_is_accepted_on_nono() {
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(stderr.contains("OPENAI_API_KEY"), "{stderr}");
     assert!(stderr.contains("proxy-only"), "{stderr}");
+}
+
+#[test]
+fn public_is_parsed_and_reports_the_broker_lane() {
+    // bd myconfig-fvi (the fvi.2 schema half): `network = "public"`
+    // parses as its own value, rides the SAME broker channel as
+    // proxy-only (same pins, same binds), and its dry-run argv shows
+    // the lane's differences: no --share-net, the CONNECT proxy
+    // variables injected (the lane serves CONNECT — that is its
+    // point), and MYSBX_NETWORK saying `public`.
+    let (inv, _, sidecar) = fixture("public-dry-run", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"public\"\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(!stdout.contains("--share-net"), "no shared netns: {stdout}");
+    assert!(
+        stdout.contains("--setenv\nMYSBX_NETWORK\npublic\n"),
+        "the merged value is announced: {stdout}"
+    );
+    assert!(
+        stdout.contains("--setenv\nHTTPS_PROXY\nhttp://127.0.0.1:4000\n"),
+        "the CONNECT lane's proxy is injected: {stdout}"
+    );
+    assert!(
+        stdout.contains("--setenv\nMYSBX_EGRESS_PROXY\nhttp://127.0.0.1:4000\n"),
+        "the channel endpoint is announced: {stdout}"
+    );
+    // The broker audit of a dry run prints the broker argv: the
+    // public lane's flag is there, and no table flag is.
+    assert!(
+        stdout.contains("\n--public\n"),
+        "the broker argv carries the public lane's flag: {stdout}"
+    );
+    assert!(
+        !stdout.contains("--allow-domain"),
+        "no table flag on the public lane: {stdout}"
+    );
+}
+
+#[test]
+fn public_with_an_allowlist_is_refused() {
+    // bd myconfig-fvi: the public lane's rule IS the deny set — a
+    // table next to it is a second policy the broker's argv cannot
+    // express (`--public` and the table flags are mutually
+    // exclusive), so the keys are refused on every backend (D21:
+    // never accepted-and-ignored), before the clone, audited by a
+    // dry run.
+    let (inv, _, sidecar) = fixture("public-allowlist", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"public\"\nallow-domains = [\"github.com\"]\nconnect-ports = [443]\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"]));
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("second policy the lane cannot express"),
+        "the refusal names the contradiction: {stderr}"
+    );
+    assert!(
+        !stdout.contains("--clearenv"),
+        "no argv on refusal: {stdout}"
+    );
+}
+
+#[test]
+fn public_is_refused_on_every_backend_but_bubblewrap() {
+    // bd myconfig-fvi: only the plain bubblewrap backend carries
+    // `network_public` (the registry row); every other backend —
+    // INCLUDING the layered nono tier, whose grant model cannot
+    // express the deny set — refuses the value (exit 70) with a
+    // backend-specific reason, before the session clone, audited by
+    // a dry run.
+    for backend in [
+        "nono",
+        "podman-gvisor",
+        "podman-krun",
+        "krun",
+        "microvm-qemu",
+        "microvm-ch",
+    ] {
+        let base = match backend {
+            "krun" | "microvm-qemu" | "microvm-ch" | "podman-krun" => {
+                match krun_fixture(&format!("public-refused-{backend}"), &[]) {
+                    Some(t) => t,
+                    None => continue, // no placeable fixture root here
+                }
+            }
+            "nono" => fixture_nono_config(
+                &format!("public-refused-{backend}"),
+                &[],
+                "network = \"public\"\n",
+            ),
+            _ => fixture(&format!("public-refused-{backend}"), &[]),
+        };
+        let (inv, _, sidecar) = base;
+        if backend != "nono" {
+            std::fs::write(
+                sidecar.join("config.toml"),
+                format!("backend = \"{backend}\"\nnetwork = \"public\"\n"),
+            )
+            .unwrap();
+        }
+        let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+        assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "{backend}: {stderr}");
+        assert!(
+            stderr.contains("network = \"public\" is not enforced"),
+            "{backend}: the refusal names the profile: {stderr}"
+        );
+        assert!(
+            !stdout.contains("--clearenv"),
+            "{backend}: no argv on refusal: {stdout}"
+        );
+    }
 }
 
 #[test]

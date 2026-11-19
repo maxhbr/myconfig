@@ -2787,6 +2787,56 @@ fn sandbox_pipeline(
             Some(backends::Allowlist::Broker)
         )
         && broker_pinned;
+    // The fvi public profile (bd myconfig-fvi): `network = "public"`
+    // rides the SAME transport as `proxy-only` (the empty netns and
+    // the per-run broker), so the registry decides who may run it —
+    // and an allowlist under it is REFUSED on every backend: the
+    // public lane's rule is the deny set, a table next to it would be
+    // a second policy the broker's argv cannot even express
+    // (`--public` and the table flags are mutually exclusive).
+    // Refused before the session clone and before the `--dry-run`
+    // return, like every network gate.
+    if merged.network == config::Network::Public {
+        if !allowlist_keys.is_empty() {
+            eprintln!(
+                "mysbx: network = \"public\" is the broker's deny-set lane; an allowlist ({}) next to it is a second policy the lane cannot express — drop the keys or use network = \"shared\" (docs/design/config.md D21)",
+                allowlist_keys
+                    .iter()
+                    .map(|k| format!("`{k}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            return EXIT_INFRASTRUCTURE;
+        }
+        if !backends::find(backend).is_some_and(|row| row.network_public) {
+            let reason = match backend {
+                "podman-gvisor" => {
+                    "pasta's --map-guest-addr ADDS a route, it does not remove the container's default route (bd myconfig-6di.3)"
+                }
+                "podman-krun" | "krun" => {
+                    "libkrun's TSI is an UNFILTERED proxy: the VMM dials whatever the guest connects to, from a netns with a default route"
+                }
+                "microvm-qemu" => {
+                    "the SLiRP net device always has a gateway route (SLiRP restrict is a fvi.3 follow-up, not this backend's today-shape)"
+                }
+                "microvm-ch" => {
+                    "passt's vhost-user net device always has a gateway route (--no-map-gw is a fvi.3 follow-up, not this backend's today-shape)"
+                }
+                "nono" => {
+                    "the layered tier maps its own grant model over the netns; its argv builder cannot express the deny set"
+                }
+                _ => "the backend cannot express a public-internet-without-LAN network",
+            };
+            eprintln!(
+                "mysbx: network = \"public\" is not enforced on the `{backend}` backend — {reason} (bd myconfig-fvi, docs/design/config.md D21); the run is refused, never weakened to a shared network"
+            );
+            eprintln!(
+                "  switch the backend to `bubblewrap` for the profile, or drop network = \"public\""
+            );
+            return EXIT_INFRASTRUCTURE;
+        }
+    }
+
     if merged.network == config::Network::ProxyOnly {
         // The bubblewrap pairing is exempt from the contradiction
         // refusal (E7): there the keys are the broker's TABLE, not a
@@ -3600,6 +3650,7 @@ fn sandbox_pipeline(
                 etc_dir: &pinned.etc_dir,
                 allow_domains: &pinned.allow_domains,
                 connect_ports: &pinned.connect_ports,
+                public: pinned.public,
             }),
             _ => None,
         };
@@ -6216,6 +6267,13 @@ pub struct EgressPins {
     /// behavior is untouched.
     pub allow_domains: Vec<String>,
     pub connect_ports: Vec<u16>,
+    /// The fvi public lane (bd myconfig-fvi): `network = "public"` —
+    /// the broker runs `--public` (every target admitted, the
+    /// hard-deny set the rule) instead of a table. Exactly one of
+    /// `public` and a non-empty table holds: the gates upstream
+    /// refuse an allowlist under the public profile, and the broker's
+    /// parse refuses the mixed argv.
+    pub public: bool,
 }
 
 /// Resolve and validate the `proxy-only` egress channel from
@@ -6251,7 +6309,15 @@ pub fn resolve_egress(
     // `find`): both bwrap-built tiers bind the same socket directory
     // and wrap the same relay (bd myconfig-vpi9.1).
     let enforces = backends::find(backend).is_some_and(|row| row.network_proxy_only);
-    if network != config::Network::ProxyOnly || !enforces {
+    // The public profile rides the same channel (bd myconfig-fvi):
+    // the same registry row (bubblewrap only carries
+    // `network_public`), the same pins, the same per-run broker —
+    // the lane flag below is the only difference.
+    if network.is_public() {
+        if !backends::find(backend).is_some_and(|row| row.network_public) {
+            return Ok(None);
+        }
+    } else if network != config::Network::ProxyOnly || !enforces {
         return Ok(None);
     }
     let complain = |message: &str| {
@@ -6369,6 +6435,10 @@ pub fn resolve_egress(
         // and no `--allow-*` flag is emitted.
         allow_domains,
         connect_ports,
+        // The fvi lane marker (bd myconfig-fvi): true exactly when
+        // the profile is the public one — the upstream gates keep
+        // the table empty there, so the two are never both set.
+        public: network.is_public(),
     }))
 }
 
@@ -7225,6 +7295,14 @@ fn broker_argv(
     for port in &pinned.connect_ports {
         argv.push("--allow-connect-port".into());
         argv.push(port.to_string());
+    }
+    // The fvi public lane (bd myconfig-fvi): `--public` instead of a
+    // table — every target admitted, the hard-deny set the rule. The
+    // upstream gates keep the table empty under the public profile,
+    // so the two never mix (and the broker's parse refuses a mixed
+    // argv as defense in depth).
+    if pinned.public {
+        argv.push("--public".into());
     }
     argv
 }

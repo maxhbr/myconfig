@@ -85,10 +85,13 @@ config that can execute is config that can escape.
   see D27): whether the guest gets hardware virtualization and its
   own `/dev/kvm` — opt-in, honored by exactly one backend
 - network policy (`network`, one key with `"none" | "proxy-only" |
-  "shared"`; `true`/`false` stay aliases of `"shared"`/`"none"`, and
-  `"shared"` is the default through the backend's transport). D21's
-  allowlist keys are enforced only on nono; D20's `"proxy-only"`
-  profile is enforced on bubblewrap and refused elsewhere.
+  "public" | "shared"`; `true`/`false` stay aliases of
+  `"shared"`/`"none"`, and `"shared"` is the default through the
+  backend's transport). D21's allowlist keys are enforced on nono
+  and, under the E7 pairing, through the broker; D20's
+  `"proxy-only"` profile is enforced on bubblewrap and refused
+  elsewhere; fvi's `"public"` profile (the broker's deny-set lane)
+  is enforced on bubblewrap only.
 - environment forwarded into the sandbox (`[env]`)
 - nix settings forwarded into the sandbox (`[nix]`, D24): rendered as
   the sandbox's `NIX_CONFIG`
@@ -695,7 +698,8 @@ after `[env]`, on every backend.
 an in-sandbox agent reasons about egress from the environment
 instead of probing (dialing hosts to see what is refused).
 `MYSBX_NETWORK` is the merged `network` value (`none`,
-`proxy-only`, `shared`, D20), emitted after the identity block on
+`proxy-only`, `public`, `shared`, D20 and bd myconfig-fvi), emitted
+after the identity block on
 every backend — a layer cannot hide the profile from the agent,
 whatever it spells out in `[env]`. `MYSBX_EGRESS_PROXY` names the
 egress endpoint a `proxy-only` payload is expected to use — the
@@ -1254,20 +1258,30 @@ acceptance run.
 
 ### D20: `network = "proxy-only"` is a profile, not an allowlist (bd myconfig-mo3.2, myconfig-t24)
 
-**Accepted.** `network` is ONE key with three values, in this order:
+**Accepted.** `network` is ONE key with four values, in this order:
 
 ```toml
-network = "none" | "proxy-only" | "shared"
+network = "none" | "proxy-only" | "public" | "shared"
 ```
 
 `true` and `false` stay permanent aliases of `"shared"` and `"none"`:
 they are accepted forever, never deprecated, and a bool config's
 generated TOML and argv stay byte-identical. The order is
-`none < proxy-only < shared`; a later `"public"` value (bd
-myconfig-fvi) would sit between `proxy-only` and `shared`.
+`none < proxy-only < public < shared`: `"public"` (bd myconfig-fvi,
+n8kv idea 10) is the public internet without the host's LAN, private
+or metadata ranges — the same brokered transport as `proxy-only`
+(the empty netns, the per-run broker's socket directory, the relay),
+with the broker's `--public` CONNECT lane: every target admitted,
+gated by the hard-deny set (RFC1918, CGNAT 100.64/10, 240/4, ULA
+fc00::/7, the IPv4-mapped and NAT64-embedded spellings, the
+cloud-metadata names). Only the plain `bubblewrap` backend carries
+it; every other backend refuses the value (the layered nono tier's
+grant model cannot express the deny set, the VM and podman
+transports share or fully route), and an allowlist next to it is
+refused on every backend — the lane's rule IS the deny set.
 
 **Merge: the stricter value wins** — the same direction as the bool
-switch always had, generalised to three values. A layer may tighten
+switch always had, generalised to the value order. A layer may tighten
 (`shared` → `proxy-only` → `none`), never widen: a sidecar that names
 a value wider than the user layer's is a `NetworkUpgrade` error, not a
 silent downgrade (D7's trust argument does not extend to widening the

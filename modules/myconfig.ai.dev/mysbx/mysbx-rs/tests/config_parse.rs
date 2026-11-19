@@ -124,7 +124,8 @@ fn minimal_config_is_what_init_writes() {
 #[test]
 fn network_accepts_the_string_values_and_the_bool_aliases() {
     use mysbx::config::Network;
-    // D20: `network` is ONE key with three values; `true`/`false` stay
+    // D20 (and bd myconfig-fvi's `public`): `network` is ONE key
+    // with four values; `true`/`false` stay
     // PERMANENT aliases of `shared`/`none`, so a bool config keeps its
     // byte-identical output.
     let c = load_ok("valid/network-string.toml");
@@ -133,9 +134,12 @@ fn network_accepts_the_string_values_and_the_bool_aliases() {
         Network::parse("proxy-only", "network").unwrap(),
         Network::ProxyOnly
     );
-    // The ordering the merge relies on: none < proxy-only < shared.
+    // The ordering the merge relies on: none < proxy-only < public
+    // < shared (bd myconfig-fvi: public is a widening of proxy-only
+    // and a narrowing of shared).
     assert!(Network::None < Network::ProxyOnly);
-    assert!(Network::ProxyOnly < Network::Shared);
+    assert!(Network::ProxyOnly < Network::Public);
+    assert!(Network::Public < Network::Shared);
     // The aliases decode to the canonical values.
     for (spelling, want) in [
         ("network = true\n", Some(Network::Shared)),
@@ -143,11 +147,23 @@ fn network_accepts_the_string_values_and_the_bool_aliases() {
         ("network = \"shared\"\n", Some(Network::Shared)),
         ("network = \"none\"\n", Some(Network::None)),
         ("network = \"proxy-only\"\n", Some(Network::ProxyOnly)),
+        ("network = \"public\"\n", Some(Network::Public)),
         ("", None),
     ] {
         let c = Config::parse(spelling).unwrap();
         assert_eq!(c.network, want, "input {spelling:?}");
     }
+    // The fvi profile's predicates (bd myconfig-fvi): not shared (no
+    // direct route — the broker's socket is the one channel), not a
+    // denial, brokered like proxy-only.
+    assert!(!Network::Public.is_shared());
+    assert!(!Network::Public.is_none());
+    assert!(Network::Public.is_public());
+    assert!(Network::Public.is_brokered());
+    assert!(Network::ProxyOnly.is_brokered());
+    assert!(!Network::Shared.is_brokered());
+    assert!(!Network::None.is_brokered());
+    assert_eq!(Network::Public.name(), "public");
 }
 
 #[test]
@@ -282,11 +298,11 @@ fn invalid_schema_is_reported_with_the_offending_key() {
         ("invalid/schema-bad-mode.toml", "invalid mode `readwrite`"),
         (
             "invalid/schema-wrong-type.toml",
-            "invalid network `yes`, expected one of `none`, `proxy-only`, `shared` or a boolean",
+            "invalid network `yes`, expected one of `none`, `proxy-only`, `public`, `shared` or a boolean",
         ),
         (
             "invalid/schema-network-value.toml",
-            "invalid network `public`, expected one of",
+            "invalid network `Internet`, expected one of",
         ),
         // The `network = "proxy-only"` + allowlist combination is NO
         // LONGER a schema error (review finding 5, bd myconfig-ew9s):

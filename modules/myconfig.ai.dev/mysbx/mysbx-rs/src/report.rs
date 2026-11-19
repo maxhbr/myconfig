@@ -196,6 +196,24 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
                 ),
             }
         }
+        // The fvi public profile (bd myconfig-fvi): the same unshared
+        // netns and relay channel, with the broker's public CONNECT
+        // lane — the report says what the lane's rule is.
+        crate::config::Network::Public => {
+            match &r.params.egress {
+                Some(e) => p(format!(
+                    "network:        public (no --share-net; 127.0.0.1:{} -> {}/{} via the relay from {}; CONNECT gated by the deny set)",
+                    e.port,
+                    crate::bwrap::EGRESS_DIR,
+                    e.socket,
+                    e.socket_dir,
+                )),
+                None => p(
+                    "network:        public (no enforced channel — the run is refused)"
+                        .to_string(),
+                ),
+            }
+        }
     }
     // The D21 allowlist, when a layer declared one: it narrows a SHARED
     // network only (proxy-only/denied refuse it earlier), so the line
@@ -230,13 +248,19 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
     .flatten()
     .collect();
     // The D21 allowlist line: printed only when a layer set an allowlist
-    // key or the network is proxy-only, so a shared config without one
-    // keeps its `--verbose` output.
-    if !allow.is_empty() || r.merged.network == crate::config::Network::ProxyOnly {
+    // key or the network rides the broker (proxy-only's model-endpoint
+    // lane; the public profile's deny-set lane names its rule too), so
+    // a shared config without one keeps its `--verbose` output.
+    if !allow.is_empty() || r.merged.network.is_brokered() {
         p(format!(
             "allowlist:      {}",
             if allow.is_empty() {
-                "none (proxy-only grants only the model endpoint)".to_owned()
+                match r.merged.network {
+                    crate::config::Network::Public => {
+                        "the public lane: every target, gated by the deny set (RFC1918, CGNAT, 240/4, ULA, metadata)".to_owned()
+                    }
+                    _ => "none (proxy-only grants only the model endpoint)".to_owned(),
+                }
             } else {
                 allow.join("; ")
             }

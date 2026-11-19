@@ -342,10 +342,11 @@ pub enum Error {
     /// infrastructure is a loud failure, never a plain-shell
     /// fallback).
     MultiplexerUnavailable { multiplexer: Multiplexer },
-    /// `network = "proxy-only"` (docs/design/config.md D20) is refused
-    /// on the VM backends: their net device (libkrun TSI, SLiRP,
-    /// passt's vhost-user) always has a gateway route, so the profile
-    /// is not enforceable here (bd myconfig-6di.3, mo3.2.6); the run is
+    /// A brokered network profile (`network = "proxy-only"`, D20, or
+    /// `network = "public"`, bd myconfig-fvi) is refused on the VM
+    /// backends: their net device (libkrun TSI, SLiRP, passt's
+    /// vhost-user) always has a gateway route, so the profile is
+    /// not enforceable here (bd myconfig-6di.3, mo3.2.6); the run is
     /// refused, never weakened to a shared network.
     ProxyOnlyRefused,
     /// A `pids-limit` a whole-VM run cannot express: the VM is the
@@ -422,10 +423,10 @@ impl std::fmt::Display for Error {
             ),
             Error::ProxyOnlyRefused => write!(
                 f,
-                "network = \"proxy-only\" is not enforceable on a VM backend: its net device \
-                 (libkrun TSI, SLiRP, passt's vhost-user) always has a gateway route \
-                 (docs/design/config.md D20, bd myconfig-6di.3); the run is refused, \
-                 never weakened to a shared network"
+                "a brokered network profile is not enforceable on a VM backend: its net \
+                 device (libkrun TSI, SLiRP, passt's vhost-user) always has a gateway \
+                 route (docs/design/config.md D20, bd myconfig-6di.3, myconfig-fvi); \
+                 the run is refused, never weakened to a shared network"
             ),
             Error::PidsLimit { pids } => write!(
                 f,
@@ -988,7 +989,7 @@ pub(crate) fn spec_of(
     // always has a gateway route (libkrun TSI, SLiRP, passt), so the
     // profile is not enforceable. Defense in depth next to the
     // pipeline's step-4b refusal.
-    if cfg.network == crate::config::Network::ProxyOnly {
+    if cfg.network.is_brokered() {
         return Err(Error::ProxyOnlyRefused);
     }
     // The multiplexer applies to the INTERACTIVE payload only (cli.md

@@ -313,6 +313,17 @@ pub enum Network {
     /// other backend refuses it rather than weaken the profile. The
     /// no-model-credential path (D28).
     ProxyOnly,
+    /// The public internet without the host's LAN, private or
+    /// metadata ranges (bd myconfig-fvi, the microvm precedent's
+    /// privateRanges): the bubblewrap backend keeps the empty netns
+    /// and the per-run broker, whose CONNECT lane (`--public`)
+    /// admits every target gated by the hard-deny set (RFC1918,
+    /// CGNAT, 240/4, ULA, the embedded spellings, the
+    /// cloud-metadata names). Every other backend refuses the
+    /// value rather than serve it as a silent `none` or a shared
+    /// network (D21: never accepted-and-ignored). The order of the
+    /// values is the narrowing: none < proxy-only < public < shared.
+    Public,
     /// The whole network the backend's transport gives (D21's
     /// allowlist narrows what may be reached). The `network = true`
     /// alias, and the built-in default.
@@ -323,15 +334,17 @@ impl Network {
     /// The accepted STRING spellings, in the order the schema error
     /// lists them. The bool aliases are not strings: `network = false`
     /// is TOML's boolean false, and the error says so.
-    pub const NAMES: &'static [&'static str] = &["none", "proxy-only", "shared"];
+    pub const NAMES: &'static [&'static str] = &["none", "proxy-only", "public", "shared"];
 
-    /// Parse the canonical value form (`none`/`proxy-only`/`shared`).
+    /// Parse the canonical value form
+    /// (`none`/`proxy-only`/`public`/`shared`).
     /// The bool aliases are handled by the TOML-type dispatch in
     /// `from_table`; this only sees strings.
     pub fn parse(s: &str, at: &str) -> Result<Network, Error> {
         match s {
             "none" => Ok(Network::None),
             "proxy-only" => Ok(Network::ProxyOnly),
+            "public" => Ok(Network::Public),
             "shared" => Ok(Network::Shared),
             other => Err(Error::Schema(format!(
                 "{at}: invalid network `{other}`, expected one of {} or a boolean (false = none, true = shared)",
@@ -351,24 +364,43 @@ impl Network {
         match self {
             Network::None => "none",
             Network::ProxyOnly => "proxy-only",
+            Network::Public => "public",
             Network::Shared => "shared",
         }
     }
 
     /// Whether the network is shared at all — the predicate the rest of
     /// the crate asks. `false` for
-    /// both `None` and `ProxyOnly`: a proxy-only run has NO direct
-    /// route, so every "is the network up" question answers no.
+    /// `None`, `ProxyOnly` AND `Public`: both profiles have NO direct
+    /// route (the broker's socket is the one channel), so every
+    /// "is the network up" question answers no.
     pub fn is_shared(self) -> bool {
         self == Network::Shared
     }
 
     /// Whether the network is denied outright. Distinct from
-    /// `!is_shared()`: `ProxyOnly` is not a denial, so the two
-    /// questions stay separate (the allowlist contradiction check
-    /// must fire for `None` but not for the profile).
+    /// `!is_shared()`: `ProxyOnly` and `Public` are not denials, so
+    /// the questions stay separate (the allowlist contradiction
+    /// check must fire for `None` but not for the profiles).
     pub fn is_none(self) -> bool {
         self == Network::None
+    }
+
+    /// Whether this is the public-internet-without-LAN profile (bd
+    /// myconfig-fvi): the broker's `--public` CONNECT lane. Not a
+    /// predicate the transports ask — the registry row
+    /// (`backends::Backend::network_public`) decides who may run it.
+    pub fn is_public(self) -> bool {
+        self == Network::Public
+    }
+
+    /// Whether the profile's transport is the per-run egress broker
+    /// (the empty netns plus the bound socket directory, D20): true
+    /// for `proxy-only` and `public` — the two profiles the bwrap
+    /// argv builds identically from the outside, differing only in
+    /// the broker's lane flag.
+    pub fn is_brokered(self) -> bool {
+        matches!(self, Network::ProxyOnly | Network::Public)
     }
 }
 

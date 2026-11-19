@@ -1,4 +1,4 @@
-# D20: `network` accepts "none", "proxy-only", "shared" (and the
-# permanent bool aliases false/true) — "public" is a later value that
-# does not exist yet, and an unknown spelling is a schema error.
-network = "public"
+# D20/fvi (bd myconfig-fvi): `network = "public"` is now a REAL value
+# (the broker's deny-set lane) — an unknown spelling stays a schema
+# error, so the fixture uses a spelling that will never exist.
+network = "Internet"

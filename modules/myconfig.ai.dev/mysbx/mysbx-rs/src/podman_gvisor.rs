@@ -503,7 +503,7 @@ pub fn podman_run_argv(
     // next to the pipeline's step 4b) — pasta adds a route to the
     // forwarder without removing the default route, so the profile is
     // not enforceable here.
-    if cfg.network == crate::config::Network::ProxyOnly {
+    if cfg.network.is_brokered() {
         return Err(Error::ProxyOnlyRefused);
     }
     // The multiplexer applies to the INTERACTIVE payload only (cli.md
@@ -1717,9 +1717,10 @@ pub enum Error {
     KrunMuxSocketDest { dest: String },
     /// A `state-dirs` entry would make [`MUX_SOCKET_DIR`] sidecar-backed.
     MuxSocketPersisted { entry: String },
-    /// `network = "proxy-only"` (docs/design/config.md D20) is refused
-    /// on the podman backends: pasta's `--map-guest-addr` ADDS a route
-    /// to the forwarder, it does not remove the default route, so the
+    /// A brokered network profile (`network = "proxy-only"`, D20, or
+    /// `network = "public"`, bd myconfig-fvi) is refused on the podman
+    /// backends: pasta's `--map-guest-addr` ADDS a route to the
+    /// forwarder, it does not remove the default route, so the
     /// profile is not enforceable here (bd myconfig-6di.3). Defense in
     /// depth next to the pipeline's step-4b refusal.
     ProxyOnlyRefused,
@@ -1821,11 +1822,11 @@ impl fmt::Display for Error {
             ),
             Error::ProxyOnlyRefused => write!(
                 f,
-                "network = \"proxy-only\" is not enforceable on the podman \
+                "a brokered network profile is not enforceable on the podman \
                  backends: pasta's --map-guest-addr ADDS a route to the LiteLLM \
                  forwarder, it does not remove the container's default route \
-                 (docs/design/config.md D20, bd myconfig-6di.3); the run is \
-                 refused, never weakened to a shared network"
+                 (docs/design/config.md D20, bd myconfig-6di.3, myconfig-fvi); the \
+                 run is refused, never weakened to a shared network"
             ),
             Error::DisplayUnavailable => write!(
                 f,

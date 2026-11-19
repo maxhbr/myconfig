@@ -216,6 +216,9 @@ pub fn run(args: &[String], dry_run: bool) -> i32 {
             crate::config::Network::ProxyOnly => {
                 "proxy-only (unshared netns, the model endpoint is the only reach)"
             }
+            crate::config::Network::Public => {
+                "public (unshared netns, the broker's CONNECT lane gated by the deny set)"
+            }
         }
     ));
     // The nix store a run of this repo would see (docs/design/
