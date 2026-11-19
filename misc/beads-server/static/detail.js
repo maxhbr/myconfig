@@ -36,17 +36,24 @@ export function refreshSelection() {
 
 export function showDetails(issue) {
   window.SELECTED_ID = issue.id;
-  renderDetails(issue);
-  // the list record carries no comments; fetch the full detail and
-  // re-render if the user hasn't moved on to another issue meanwhile
+  const pane = document.getElementById("details");
+  pane.innerHTML = "";
+  pane.classList.add("open");
+  const loading = h("div", "kv", "loading " + issue.id + "…");
+  pane.append(loading);
+  refreshSelection();
+  // the list record carries no comments; hydrate the full record
+  // BEFORE rendering, so the pane is built once and no re-render can
+  // wipe a draft the user started typing
   fetch(`/api/beads/issue/${encodeURIComponent(issue.id)}`)
     .then((r) => (r.ok ? r.json() : null))
     .then((data) => {
-      if (!data || window.SELECTED_ID !== issue.id) return;
-      renderDetails(data.issue);
+      if (window.SELECTED_ID !== issue.id) return; // moved on meanwhile
+      renderDetails(data ? data.issue : issue);
     })
-    .catch(() => {});
-  return;
+    .catch(() => {
+      if (window.SELECTED_ID === issue.id) renderDetails(issue);
+    });
 }
 
 function renderDetails(issue) {
