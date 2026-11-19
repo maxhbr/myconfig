@@ -97,8 +97,8 @@ class Watcher:
                 continue
             self._refetch()
 
-    def _refetch(self):
-        if self._refetching:
+    def _refetch(self, force=False):
+        if self._refetching and not force:
             return  # another probe already refetches
         self._refetching = True
         try:
@@ -408,10 +408,10 @@ def make_handler(watcher, allow_write):
                 body = {"revision": revision, "issue": issue, "output": proc.stdout.strip()}
                 self._send_json(body)
             elif proc.returncode == 13:
-                # exit 13 = lost --if-status/--if-assignee guard: refetch
-                # first so the 409 carries what ACTUALLY changed, not
-                # the (possibly stale) cached record
-                watcher._refetch()
+                # exit 13 = lost --if-status/--if-assignee guard: force a
+                # refetch so the 409 carries what ACTUALLY changed, even
+                # when a background probe refetch is in flight
+                watcher._refetch(force=True)
                 with watcher.lock:
                     issue = watcher.cache.by_id.get(issue_id)
                 self._send_json_status(409, {"error": "conflict", "issue": issue})

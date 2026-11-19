@@ -41,7 +41,11 @@ async function post(path, body) {
     body: JSON.stringify(body),
   });
   const data = await r.json().catch(() => ({}));
-  if (r.status === 409) {
+  if (r.status === 409 && data.issue) {
+    // reconcile: install the fresh record and tell the open pane, so
+    // the same control cannot keep sending the same stale guard
+    window.reconcileConflict(data.issue);
+  } else if (r.status === 409) {
     toast("conflict: the bead changed elsewhere — reloading it");
     window.refetchAll();
   } else if (!r.ok) {
@@ -117,6 +121,17 @@ export function inlineText(issue, field, value) {
 
 // ------------------------------------------------------ description edit
 
+// panes register their draft probes here so a conflict reconcile can
+// ask "is the user mid-edit?" without the pane rebuilding under them
+const draftProbes = new Set();
+export function registerDraftProbe(probe) {
+  draftProbes.add(probe);
+}
+export function clearDraftProbes() {
+  draftProbes.clear(); // the pane owning the probes is being rebuilt
+}
+window.detailsHasDraft = () => [...draftProbes].some((p) => p());
+
 export function descriptionEditor(issue) {
   const wrap = document.createElement("div");
   const ta = document.createElement("textarea");
@@ -145,7 +160,10 @@ export function descriptionEditor(issue) {
         description: value,
         if_status: issue.status,
       });
-      if (res.ok) base = value;
+      if (res.ok) {
+        base = value;
+        issue.description = value; // the captured object stays truthful
+      }
     } catch {
       dirty = true; // network error: the edit is still pending
     }
@@ -154,6 +172,7 @@ export function descriptionEditor(issue) {
   // each save is a bd run (potentially a git commit)
   let timer = null;
   let dirty = false;
+  registerDraftProbe(() => dirty);
   const arm = () => {
     if (!canWrite()) return;
     dirty = true;
@@ -192,6 +211,7 @@ export function commentComposer(issue) {
   ta.className = "edit-textarea";
   ta.placeholder = "write a comment…";
   ta.disabled = !canWrite();
+  registerDraftProbe(() => ta.value.trim() !== "");
   const btn = document.createElement("button");
   btn.textContent = "comment";
   btn.disabled = !canWrite();

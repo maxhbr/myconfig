@@ -192,6 +192,25 @@ class TestWriteApi(ServerCase):
         self.assertEqual(status, 409)
         self.assertEqual(data["issue"]["status"], "in_progress")
 
+    def test_409_fresh_even_with_refetch_in_flight(self):
+        # a background probe refetch must not starve the 409 of fresh
+        # data: the conflict path forces its own refetch
+        issues = json.loads(json.dumps(ISSUES))
+        issues[0]["status"] = "in_progress"
+        issues[0]["updated_at"] = "2026-01-02T00:00:00Z"
+        (self.repo / ".beads" / "issues.json").write_text(json.dumps(issues))
+        self.watcher._refetching = True  # simulate a probe mid-flight
+        try:
+            status, data = self.post(
+                "/api/beads/issue/t-1/update",
+                {"status": "closed", "if_status": "open"},
+                headers={"X-Beads-Server-Token": self.token},
+            )
+        finally:
+            self.watcher._refetching = False
+        self.assertEqual(status, 409)
+        self.assertEqual(data["issue"]["status"], "in_progress")
+
     def test_missing_token_is_403(self):
         status, _ = self.post("/api/beads/issue/t-1/update", {"status": "closed"})
         self.assertEqual(status, 403)

@@ -7,7 +7,7 @@ import {
 } from "./core.js";
 import {
   canWrite, inlinePriority, inlineStatus, inlineText, inlineAssignee,
-  descriptionEditor, commentComposer, labelEditor,
+  descriptionEditor, commentComposer, labelEditor, clearDraftProbes,
 } from "./edit.js";
 
 function chip(text, bg) {
@@ -56,8 +56,43 @@ export function showDetails(issue) {
     });
 }
 
+// ------------------------------------------------- conflict reconcile
+
+function reconcileConflict(fresh) {
+  // install the fresh record the server sent with the 409 so every
+  // subsequent guard (and the board) uses current values
+  const idx = DATA.issues.findIndex((i) => i.id === fresh.id);
+  if (idx >= 0) {
+    const merged = { ...DATA.issues[idx], ...fresh };
+    DATA.issues[idx] = merged;
+    window.render();
+  }
+  if (window.SELECTED_ID === fresh.id) {
+    if (window.detailsHasDraft && window.detailsHasDraft()) {
+      // a draft is in flight: keep the editor, but warn — the next
+      // save re-checks against the fresh record
+      toastConflict(fresh);
+    } else {
+      showDetails(fresh); // rebuild the pane from current data
+    }
+  }
+}
+window.reconcileConflict = reconcileConflict;
+
+function toastConflict(fresh) {
+  const el = document.createElement("div");
+  el.className = "edit-hint conflict-hint";
+  el.textContent =
+    fresh.id + " changed elsewhere — the pane keeps your draft; " +
+    "guards now use status " + fresh.status;
+  const pane = document.getElementById("details");
+  pane.prepend(el);
+  setTimeout(() => el.remove(), 6000);
+}
+
 function renderDetails(issue) {
   const pane = document.getElementById("details");
+  clearDraftProbes(); // the previous pane's probes die with its DOM
   pane.innerHTML = "";
   pane.classList.add("open");
 
