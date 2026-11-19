@@ -12,62 +12,64 @@
 // installed current data.
 
 import { setData, applySnapshotPatch, applyIndices } from "./core.js";
-import { fetchSnapshot, rebuildFilterOptions } from "./app.js";
 
 let SOURCE = null;
 let installed = 0; // revision whose full state the DOM reflects
 let generation = null; // server process the installed revision belongs to
 let renderScheduled = false;
-let recovering = false; // a full snapshot fetch is in flight
-let pendingPatch = null; // patch that arrived during recovery
+let rebuildFilterOptions;
+let streamOK = false;
+let recovery = null;
 
-async function refetchAll() {
-  recovering = true;
-  setStale(true); // not current until proven otherwise
-  try {
-    const data = await fetchSnapshot();
-    // a foreign generation is ALWAYS a full reinstall: the numbers
-    // mean different things per process. Same generation: install
-    // unless something newer applied meanwhile.
-    if (
-      data.generation !== generation ||
-      (data.generation === generation && data.revision >= installed)
-    ) {
+export async function fetchSnapshot() {
+  const response = await fetch("/api/beads", { cache: "no-store" });
+  if (!response.ok) throw new Error("HTTP " + response.status);
+  return response.json();
+}
+
+function recover({ generation: expected, revision }) {
+  clearTimeout(recovery?.retry);
+  const minimum = expected === generation ? Math.max(revision, installed) : revision;
+  const job = { generation: expected, pending: null };
+  recovery = job;
+  setStale(true);
+  async function attempt() {
+    try {
+      const data = await fetchSnapshot();
+      if (job !== recovery) return; // a later SSE handshake/reset owns recovery
+      if (data.generation !== expected || data.revision < minimum) {
+        throw new Error("snapshot does not cover the stream position");
+      }
       setData(data);
       installed = data.revision;
       generation = data.generation;
       scheduleRender();
+    } catch {
+      // An idle EventSource sends only heartbeat comments, so it cannot
+      // be relied on to trigger another attempt after a transient failure.
+      if (job === recovery) job.retry = setTimeout(attempt, 2000);
+      return;
     }
-    setStale(false); // recovery installed current data
-  } catch {
-    // leave the current board; the stale indicator stays on and the
-    // next SSE event retries recovery
-  } finally {
-    recovering = false;
-    const queued = pendingPatch;
-    pendingPatch = null;
-    if (queued) applyPatch(queued); // re-evaluated against the new base
+    recovery = null;
+    setStale(!streamOK);
+    if (job.pending) applyPatch(job.pending);
   }
+  return attempt();
 }
-window.refetchAll = refetchAll;
+function refetchAll() {
+  if (!recovery) return recover({ generation, revision: installed });
+}
 
 function applyPatch(data) {
-  if (recovering) {
-    pendingPatch = data; // evaluated once recovery installed its base
+  if (recovery?.generation === data.generation) {
+    recovery.pending = data; // checked for contiguity against the new base
     return;
   }
-  if (data.generation !== generation) {
-    // foreign process (restart): its patches describe a base we do
-    // not have — recover instead of comparing meaningless numbers
-    refetchAll();
+  if (recovery || data.generation !== generation || data.revision > installed + 1) {
+    recover(data);
     return;
   }
   if (data.revision <= installed) return; // already covered
-  if (data.revision > installed + 1) {
-    // gap (stalled queue, missed event): recover from a full snapshot
-    refetchAll();
-    return;
-  }
   installed = data.revision;
   applySnapshotPatch(data);
   if (data.indices) applyIndices(data.indices);
@@ -88,9 +90,11 @@ function scheduleRender() {
   });
 }
 
-export function connect(revision, gen) {
+export function connect(revision, gen, rebuildOptions) {
   installed = revision;
-  generation = gen || null;
+  generation = gen;
+  rebuildFilterOptions = rebuildOptions;
+  window.refetchAll = refetchAll;
   if (SOURCE) SOURCE.close();
   SOURCE = new EventSource(
     `/api/events?rev=${installed}` + (generation ? `&gen=${generation}` : "")
@@ -101,29 +105,31 @@ export function connect(revision, gen) {
     // the server only hellos when generation AND revision match;
     // anything else is a protocol surprise — recover rather than
     // silently claim coverage
-    if (data.generation !== generation || data.revision !== installed) {
-      refetchAll();
+    streamOK = true;
+    if (recovery || data.generation !== generation || data.revision !== installed) {
+      recover(data);
       return;
     }
     setStale(false);
   });
 
   SOURCE.addEventListener("patch", (ev) => {
+    streamOK = true;
     applyPatch(JSON.parse(ev.data));
   });
 
   SOURCE.addEventListener("reset", (ev) => {
     // server-side revision diverged (restart or gap): full refetch,
     // patches buffered until the base is in place
-    refetchAll();
+    streamOK = true;
+    recover(JSON.parse(ev.data));
   });
 
-  SOURCE.addEventListener("stale", () => setStale(true));
-
   SOURCE.onerror = () => {
-    // EventSource retries on its own; the server suggests 2000 ms.
+    streamOK = false;
     setStale(true);
   };
+  SOURCE.addEventListener("stale", SOURCE.onerror);
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") refetchAll();

@@ -139,7 +139,7 @@ hash (e.g. `#labels=mysbx`) is a bookmarkable filter view; presets
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/api/beads` | GET | full snapshot `{revision, issues}` |
+| `/api/beads` | GET | issues and dependency indices from one `{generation, revision}` |
 | `/api/beads/issue/<id>` | GET | one issue with comments |
 | `/api/indices` | GET | reverse deps, blocker counts, label counts |
 | `/api/health` | GET | revision, issue count, bd mode, error count |

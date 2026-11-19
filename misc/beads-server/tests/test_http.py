@@ -73,7 +73,7 @@ class ServerCase(unittest.TestCase):
         data = b""
         deadline = time.time() + seconds
         while time.time() < deadline:
-            if until and until.encode() in data:
+            if until and b"\n\n" in data.partition(until.encode())[2]:
                 break
             try:
                 chunk = sock.recv(4096)
@@ -118,6 +118,8 @@ class TestReadOnlyApi(ServerCase):
         self.assertEqual(status, 200)
         self.assertEqual(len(data["issues"]), 2)
         self.assertEqual(data["revision"], 1)
+        _, indices = self.get("/api/indices")
+        self.assertEqual({key: data[key] for key in indices}, indices)
 
     def test_api_issue_detail(self):
         status, data = self.get("/api/beads/issue/t-1")
@@ -429,8 +431,9 @@ class TestSse(ServerCase):
         t.join(timeout=10)
         raw = result.get("raw", "")
         self.assertIn("event: patch", raw)
-        self.assertIn('"upserted"', raw)
-        self.assertIn("indices", raw)  # derived indices ride with patches
+        patch = json.loads(raw.split("event: patch\ndata: ", 1)[1].split("\n\n", 1)[0])
+        self.assertEqual(patch["indices"]["generation"], patch["generation"])
+        self.assertEqual(patch["indices"]["revision"], patch["revision"])
         # the upserted record must carry the derived fields, or the
         # client's card strands outside its lane with a stale chip
         self.assertIn("cluster_root", raw)

@@ -173,6 +173,7 @@ class Watcher:
                 # the client consistent without an extra round trip
                 self.cache.enrich_delta(delta)
                 event["indices"] = delta["indices"]
+                event["indices"]["generation"] = self.generation
             for entry in list(self.listeners):
                 try:
                     entry["q"].put_nowait(event)
@@ -250,10 +251,12 @@ def make_handler(watcher, allow_write):
                 return
             path = urlparse(self.path).path
             if path == "/api/beads":
-                generation, revision, issues = watcher.snapshot()
-                self._send_json(
-                    {"generation": generation, "revision": revision, "issues": issues}
-                )
+                # Capture issues and indices at the same revision, including
+                # when the client is recovering across a process restart.
+                with watcher.lock:
+                    payload = watcher.cache.indices_payload()
+                    payload.update(generation=watcher.generation, issues=watcher.cache.issues)
+                self._send_json(payload)
             elif match := re.match(r"^/api/beads/issue/([^/]+)$", path):
                 self._send_issue(unquote(match.group(1)))
             elif path == "/api/health":
@@ -340,7 +343,7 @@ def make_handler(watcher, allow_write):
                     elif event["revision"] - entry["rev"] > 1:
                         # gap: patches between the client's revision and now
                         # were lost (queue full / slow client) → full refetch
-                        send("reset", {"revision": event["revision"]})
+                        send("reset", {"generation": generation, "revision": event["revision"]})
                         entry["rev"] = event["revision"]
                     else:
                         send("patch", event)

@@ -3,9 +3,9 @@
 // App shell: data load, toolbar wiring, filtering, render dispatch.
 
 import {
-  DATA, STATUS_ORDER, CLUSTER, setData, statusColor, applyIndices,
+  DATA, STATUS_ORDER, CLUSTER, setData, statusColor,
 } from "./core.js";
-import { connect } from "./live.js";
+import { connect, fetchSnapshot } from "./live.js";
 import { init as initEdit, newBeadDialog, canWrite } from "./edit.js";
 import { renderBoard } from "./board.js";
 import { renderGraph, zoomBy, resetView } from "./graph.js";
@@ -253,39 +253,6 @@ function buildPresets() {
   sel.append(save);
 }
 
-export async function applyIndicesFor(data) {
-  // attach reverse_deps/blockers only when they match the issues'
-  // revision, so indices never describe a different snapshot
-  const rIdx = await fetch("/api/indices");
-  if (!rIdx.ok) return;
-  const idx = await rIdx.json();
-  // same process AND same revision, or the numbers mean different things
-  if (
-    idx.generation === data.generation ||
-    (data.generation === undefined && idx.generation === undefined)
-  ) {
-    if (idx.revision === data.revision) {
-      data.reverse_deps = idx.reverse_deps;
-      data.blockers = idx.blockers;
-      data.blocked_by = idx.blocked_by;
-    }
-  }
-}
-
-export async function fetchSnapshot() {
-  const rBeads = await fetch("/api/beads");
-  if (!rBeads.ok) throw new Error("HTTP " + rBeads.status);
-  const data = await rBeads.json();
-  for (let attempt = 0; attempt < 5; attempt++) {
-    await applyIndicesFor(data);
-    if (data.reverse_deps) return data;
-    const fresh = await (await fetch("/api/beads")).json();
-    if (fresh.revision === data.revision) return data;
-    Object.assign(data, fresh);
-  }
-  return data;
-}
-
 async function load() {
   try {
     const data = await fetchSnapshot();
@@ -356,7 +323,7 @@ async function load() {
   // they would otherwise stay read-only until the next redraw
   await initEdit();
   render();
-  connect(DATA.revision, DATA.generation);
+  connect(DATA.revision, DATA.generation, rebuildFilterOptions);
 }
 
 load();
