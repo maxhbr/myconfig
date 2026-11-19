@@ -63,6 +63,21 @@ export function setData(data) {
   CLUSTER = new Map(data.issues.map((i) => [i.id, i.cluster_root || i.id]));
 }
 
+export function applySnapshotPatch({ upserted, removed, revision }) {
+  const byIdMap = new Map(DATA.issues.map((i) => [i.id, i]));
+  for (const issue of upserted) {
+    byIdMap.set(issue.id, issue);
+    const root = issue.cluster_root || issue.id;
+    CLUSTER.set(issue.id, root);
+  }
+  for (const id of removed) {
+    byIdMap.delete(id);
+    CLUSTER.delete(id);
+  }
+  DATA.issues = [...byIdMap.values()];
+  if (revision !== undefined) DATA.revision = revision;
+}
+
 export function select(id) {
   SELECTED = id;
 }

@@ -193,3 +193,10 @@ text.edgelabel { fill: var(--muted); font-size: 9px; }
   border: 1px solid var(--border); background: var(--bg); color: var(--fg);
   border-radius: 4px; cursor: pointer; padding: 1px 8px;
 }
+
+#stale-indicator {
+  display: none;
+  font-size: 11px; padding: 1px 8px; border-radius: 8px;
+  background: var(--blocked); color: #fff; cursor: help;
+}
+#stale-indicator.visible { display: inline-block; }

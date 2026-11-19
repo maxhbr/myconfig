@@ -5,6 +5,7 @@
 import {
   DATA, STATUS_ORDER, CLUSTER, setData, select, statusColor, h,
 } from "./core.js";
+import { connect } from "./live.js";
 import { renderBoard } from "./board.js";
 import { renderGraph, zoomBy, resetView } from "./graph.js";
 import { showDetails, refreshSelection } from "./detail.js";
@@ -151,24 +152,29 @@ function buildFilters() {
   }
 }
 
-async function fetchSnapshot() {
-  // fetch both halves until their revisions match, so reverse_deps and
-  // blockers always describe the same snapshot as issues
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const [rBeads, rIdx] = await Promise.all([
-      fetch("/api/beads"), fetch("/api/indices"),
-    ]);
-    if (!rBeads.ok) throw new Error("HTTP " + rBeads.status);
-    const data = await rBeads.json();
-    if (!rIdx.ok) return data;
-    const idx = await rIdx.json();
-    if (idx.revision === data.revision) {
-      data.reverse_deps = idx.reverse_deps;
-      data.blockers = idx.blockers;
-      return data;
-    }
+export async function applyIndices(data) {
+  // attach reverse_deps/blockers only when they match the issues'
+  // revision, so indices never describe a different snapshot
+  const rIdx = await fetch("/api/indices");
+  if (!rIdx.ok) return;
+  const idx = await rIdx.json();
+  if (idx.revision === data.revision) {
+    data.reverse_deps = idx.reverse_deps;
+    data.blockers = idx.blockers;
   }
-  const data = await (await fetch("/api/beads")).json();
+}
+
+export async function fetchSnapshot() {
+  const rBeads = await fetch("/api/beads");
+  if (!rBeads.ok) throw new Error("HTTP " + rBeads.status);
+  const data = await rBeads.json();
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await applyIndices(data);
+    if (data.reverse_deps) return data;
+    const fresh = await (await fetch("/api/beads")).json();
+    if (fresh.revision === data.revision) return data;
+    Object.assign(data, fresh);
+  }
   return data;
 }
 
@@ -197,6 +203,7 @@ async function load() {
   document.getElementById("zoom-out").onclick = () => zoomBy(0.8);
   document.getElementById("zoom-fit").onclick = resetView;
   render();
+  connect(DATA.revision);
 }
 
 load();

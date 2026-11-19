@@ -9,6 +9,7 @@ cached on the issue dict (a refresh rebuilds every dict, which
 invalidates the cache per revision).
 """
 
+import copy
 import json
 import os
 import subprocess
@@ -78,14 +79,74 @@ class BdCache:
         self.reverse_deps = {}
         self.blocked = set()
         self.label_counts = {}
+        self.error_count = 0
+        self._prev_state = {}  # id -> rendered-field tuple of last snapshot
+        self._pending = None  # refetched-but-uncommitted snapshot (dict)
         self.refresh()
 
     def refresh(self):
-        issues = run_bd_json(self.bd_bin, ["list", "--all", "--limit", "0", "--json"], self.repo)
+        """Refetch and swap in one step; returns `{upserted, removed}`.
+
+        Used at startup and wherever a lock-held subprocess is fine; the
+        watcher uses begin_refetch/refresh_unlocked/commit_refetch so bd
+        never runs under the lock.
+        """
+        self.begin_refetch()
+        delta = self.refresh_unlocked()
+        if not delta.get("error"):
+            self.commit_refetch()
+        return delta
+
+    def begin_refetch(self):
+        """Mark the cache as refetching (single-flight helper)."""
+        self._pending = None
+
+    def refresh_unlocked(self):
+        """Run bd list WITHOUT touching live state; caller commits after.
+
+        On bd failure returns {error: True}; the live snapshot stays.
+        """
+        try:
+            issues = run_bd_json(
+                self.bd_bin, ["list", "--all", "--limit", "0", "--json"], self.repo
+            )
+        except BdError:
+            self.error_count += 1
+            return {"upserted": [], "removed": [], "error": True}
+        delta = self._diff(issues)
+        self._pending = issues
+        return delta
+
+    def commit_refetch(self):
+        """Swap the pending snapshot in under the caller's lock."""
+        issues = self._pending
+        if issues is None:
+            return
+        self._pending = None
         self.issues = issues
         self.by_id = {i["id"]: i for i in issues}
         self.revision += 1
         self._derive()
+
+    def _diff(self, issues):
+        """Diff by `id -> (updated_at, status, priority, assignee, title,
+        labels)` into {upserted, removed} — every field a card renders."""
+        def state(i):
+            return (
+                i.get("updated_at"), i.get("status"), i.get("priority"),
+                i.get("assignee"), i.get("title"),
+                tuple(sorted(i.get("labels", []))),
+            )
+        new_state = {i["id"]: state(i) for i in issues}
+        delta = {"upserted": [], "removed": []}
+        for i in issues:
+            if self._prev_state.get(i["id"]) != new_state[i["id"]]:
+                delta["upserted"].append(copy.deepcopy(i))
+        for issue_id in self._prev_state:
+            if issue_id not in new_state:
+                delta["removed"].append(issue_id)
+        self._prev_state = new_state
+        return delta
 
     def _derive(self):
         """Rebuild the derived indices: clusterRoot, blocked, reverseDeps.
