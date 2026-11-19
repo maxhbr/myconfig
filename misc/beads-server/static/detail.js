@@ -1,6 +1,6 @@
 // Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 // SPDX-License-Identifier: MIT
-// Details pane, ported from misc/beads-viewer/index.html.
+// Details pane
 
 import {
   CLUSTER, DATA, esc, fmtDate, h, isClaimed, statusColor,

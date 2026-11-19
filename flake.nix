@@ -552,11 +552,6 @@
             hostName = "iso";
           } [ ];
 
-          # Single-page web viewer rendering the bd (beads) issue DB as a
-          # dependency graph. `nix run .#beads-viewer` starts the server.
-          packages.beads-viewer = nixpkgs.legacyPackages.${system}.callPackage ./misc/beads-viewer { };
-          apps.beads-viewer = inputs.flake-utils.lib.mkApp { drv = self.packages.${system}.beads-viewer; };
-
           # Live kanban board over the bd (beads) issue DB.
           packages.beads-server = nixpkgs.legacyPackages.${system}.callPackage ./misc/beads-server { };
           apps.beads-server = inputs.flake-utils.lib.mkApp { drv = self.packages.${system}.beads-server; };

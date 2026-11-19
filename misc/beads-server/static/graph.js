@@ -1,6 +1,6 @@
 // Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 // SPDX-License-Identifier: MIT
-// Dependency graph (dagre layout), ported from misc/beads-viewer/index.html.
+// Dependency graph (dagre layout)
 
 import { DATA, SELECTED, el, isClaimed, shorten, statusColor } from "./core.js";
 

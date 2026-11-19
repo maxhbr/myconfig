@@ -1,7 +1,7 @@
 # beads-server — implementation plan
 
-Status: planned, not started. Nothing but documentation exists in this
-directory yet.
+Status: implemented. All eight phases (their beads) are done; this
+file is the historical design record.
 
 Tracker epic: **myconfig-93lp** (`bd show myconfig-93lp`). Each phase below is
 a child bead of that epic; the bead is the work item, this file is the design.

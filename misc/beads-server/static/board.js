@@ -1,6 +1,6 @@
 // Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 // SPDX-License-Identifier: MIT
-// Board renderer, ported from misc/beads-viewer/index.html.
+// Board renderer
 
 import {
   COLUMNS, CLUSTER, DATA, SELECTED, columnOf, h, isClaimed, statusColor,

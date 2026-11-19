@@ -1,8 +1,8 @@
 # beads-server
 
 A kanban board over the repository's `.beads` (embedded Dolt) issue
-database — the successor to `misc/beads-viewer/`. Served as a local web
-app via `nix run .#beads-server`.
+database. Served as a local web app via `nix run .#beads-server`.
+It replaces the former `misc/beads-viewer/`.
 
 Design and phase plan: `docs/PLAN.md` (epic: bd `myconfig-93lp`).
 
