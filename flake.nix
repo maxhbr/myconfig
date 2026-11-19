@@ -678,6 +678,9 @@
                   # wrapper (`compute-commit-attribution-trailer.sh`); shfmt is
                   # not covered by writeShellApplication's own shellcheck pass.
                   "modules/myconfig.ai.dev/skills/commit/compute-commit-attribution-trailer.sh"
+                  # The beads-server bd shim: a plain script executed by the
+                  # unittest suites (bd myconfig-y294).
+                  "misc/beads-server/tests/fake-bd.sh"
                 ];
               in
               pkgs.stdenv.mkDerivation {
@@ -691,6 +694,32 @@
                 checkPhase = ''
                   shfmt -d -s -i 4 -ci ${files}
                   shellcheck -x ${files}
+                '';
+                installPhase = ''
+                  mkdir "$out"
+                '';
+              };
+
+            # beads-server unittest suites (bd myconfig-y294): the Python
+            # stdlib suites run against tests/fake-bd.sh, so they need
+            # neither Dolt nor network access.
+            beads-server-tests =
+              let
+                pkgs = inputs.nixpkgs.legacyPackages."${system}";
+              in
+              pkgs.stdenv.mkDerivation {
+                name = "beads-server-tests";
+                src = ./misc/beads-server;
+                doCheck = true;
+                nativeBuildInputs = [
+                  pkgs.python3
+                  pkgs.jq.bin
+                  pkgs.bash.out
+                ];
+                checkPhase = ''
+                  patchShebangs tests/fake-bd.sh
+                  python3 tests/test_bdcache.py
+                  python3 tests/test_http.py
                 '';
                 installPhase = ''
                   mkdir "$out"

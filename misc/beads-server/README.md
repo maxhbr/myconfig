@@ -113,8 +113,6 @@ this section is the verified behavior.)
 
 ## Usage
 
-Planned (delivered phase by phase — nothing here is built yet):
-
 ```
 nix run .#beads-server [-- --repo PATH --allow-write --port 8339]
 ```
@@ -123,5 +121,68 @@ nix run .#beads-server [-- --repo PATH --allow-write --port 8339]
   (default: `$PWD`)
 - `--allow-write` — opt-in editing (off by default, because
   `auto_commit = true` lets a UI edit create git + Dolt commits)
+- `--poll-interval` — seconds between change probes (default 2)
+- `--events-journal` — tail the bd events journal instead of stat
+  polling; only works when the journal is enabled for the workspace,
+  and it never is by this server (enabling it mutates shared DB state)
 - binds `127.0.0.1` only; mutating requests require a per-run token
-  from `GET /api/session`
+  from `GET /api/session` sent as `X-Beads-Server-Token`
+
+The board: lanes = epics (parent-child clusters), columns =
+status, cards carry type/priority/blocker chips. The details pane
+shows the parent chain and both dependency directions. Drag cards
+between columns to change status (with `--allow-write`); the URL
+hash (e.g. `#labels=mysbx`) is a bookmarkable filter view; presets
+(mysbx / all / mine / saved) live in the toolbar.
+
+## API
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/beads` | GET | full snapshot `{revision, issues}` |
+| `/api/beads/issue/<id>` | GET | one issue with comments |
+| `/api/indices` | GET | reverse deps, blocker counts, label counts |
+| `/api/health` | GET | revision, issue count, bd mode, error count |
+| `/api/capabilities` | GET | `{write: bool}` |
+| `/api/session` | GET | per-run token (403 unless `--allow-write`) |
+| `/api/events` | GET | SSE: `hello`/`patch`/`reset`/`stale`, `retry: 2000`, 15 s heartbeat |
+| `/api/beads/issue/<id>/update` | POST | fields map to `bd update` flags; `if_status`/`if_assignee` guards; exit 13 → 409 with the fresh issue |
+| `/api/beads/issue/<id>/comment` | POST | `bd comment --stdin` |
+| `/api/beads` | POST | `bd create` |
+| `/api/beads/deps` | POST | `bd dep add/remove` |
+| `/api/beads/batch` | POST | `bd batch` (one Dolt transaction) |
+
+## Tests
+
+`tests/fake-bd.sh` is a drop-in `bd` shim over a plain JSON file, so
+`tests/test_bdcache.py` and `tests/test_http.py` (stdlib `unittest`)
+need neither Dolt nor network. In CI:
+
+```
+nix build .#checks.x86_64-linux.beads-server-tests
+```
+
+Locally:
+
+```
+python3 misc/beads-server/tests/test_bdcache.py
+python3 misc/beads-server/tests/test_http.py
+```
+
+## Troubleshooting
+
+- **`bd serve` / `bd sql` unusable** — this workspace uses the
+  embedded-Dolt backend; there is no SQL server. The server shells out
+  to the `bd` CLI instead and that is by design.
+- **`BEADS_DIR points to unsafe location`** — bd on this repo refuses
+  `BEADS_DIR` but accepts plain workspace discovery; the server runs
+  bd with `cwd=<repo>` and no `BEADS_DIR` first, retrying with
+  `BEADS_DIR` only when discovery fails. `/api/health` reports which
+  mode is active.
+- **`the events journal is disabled`** — `bd events` records nothing
+  unless `events-journal` is enabled, and enabling it mutates shared
+  DB state. Live updates therefore poll file fingerprints; the
+  `--events-journal` flag is the opt-in fast path.
+- **`auto_commit = true`** — every successful write may create a git
+  and a Dolt commit in the target repository. That is why editing is
+  off by default and every save is toasted with bd's output.
