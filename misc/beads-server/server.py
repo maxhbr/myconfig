@@ -220,7 +220,20 @@ def journal_loop(watcher, bd_bin, repo):
 
 def make_handler(watcher, allow_write):
     class BeadsHandler(SimpleHTTPRequestHandler):
+        def check_loopback_host(self):
+            """DNS rebinding defense for EVERY request, reads included:
+            without a Host check a rebinding attacker becomes
+            same-origin and can read issue data and the session token
+            from /api/session even on a loopback bind."""
+            host = (self.headers.get("Host") or "").rsplit(":", 1)[0]
+            if host not in ("127.0.0.1", "localhost", "[::1]", "::1"):
+                self.send_error(403, "non-loopback Host refused")
+                return False
+            return True
+
         def do_GET(self):
+            if not self.check_loopback_host():
+                return
             path = urlparse(self.path).path
             if path == "/api/beads":
                 revision, issues = watcher.snapshot()
@@ -343,12 +356,9 @@ def make_handler(watcher, allow_write):
         }
 
         def do_POST(self):
-            # DNS rebinding defense: without an exact Host/Origin check a
-            # rebinding attacker becomes same-origin, fetches /api/session
-            # and drives the token-authenticated API.
-            host = (self.headers.get("Host") or "").rsplit(":", 1)[0]
-            if host not in ("127.0.0.1", "localhost", "[::1]"):
-                self.send_error(403, "non-loopback Host refused")
+            # Origin + Host checks: the Host check above covers reads;
+            # writes additionally refuse any cross-origin request
+            if not self.check_loopback_host():
                 return
             origin = self.headers.get("Origin") or ""
             if origin:
@@ -524,6 +534,13 @@ def make_handler(watcher, allow_write):
 
 
 def serve(host, port, watcher, allow_write):
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        # loopback bind is the security boundary: the session token is
+        # only protected against other machines by not being reachable
+        sys.exit(
+            f"error: --host {host} is not loopback; the server is "
+            "loopback-only. Use an SSH tunnel for remote access."
+        )
     handler = make_handler(watcher, allow_write)
     httpd = ThreadingHTTPServer((host, port), lambda *a, **kw: handler(*a, directory=HERE, **kw))
     httpd.daemon_threads = True

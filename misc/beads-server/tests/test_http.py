@@ -129,6 +129,25 @@ class TestReadOnlyApi(ServerCase):
         else:
             self.fail("expected 403")
 
+    def test_reads_refuse_rebound_host(self):
+        # DNS rebinding: attacker.com resolves to 127.0.0.1; the Host
+        # header betrays it on reads too, not just on writes
+        req = urllib.request.Request(
+            self.base + "/api/beads", headers={"Host": "attacker.com"}
+        )
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            urllib.request.urlopen(req, timeout=10)
+        self.assertEqual(ctx.exception.code, 403)
+
+    def test_session_read_refuse_rebound_host(self):
+        # the session token must never leak to a rebound origin
+        req = urllib.request.Request(
+            self.base + "/api/session", headers={"Host": "attacker.com"}
+        )
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            urllib.request.urlopen(req, timeout=10)
+        self.assertEqual(ctx.exception.code, 403)
+
 
 class TestWriteApi(ServerCase):
     def setUp(self):
@@ -167,6 +186,14 @@ class TestWriteApi(ServerCase):
                 "X-Beads-Server-Token": self.token,
                 "Origin": "https://localhost.evil.com",
             },
+        )
+        self.assertEqual(status, 403)
+
+    def test_evil_host_refused(self):
+        status, _ = self.post(
+            "/api/beads/issue/t-1/update",
+            {"status": "closed"},
+            headers={"X-Beads-Server-Token": self.token, "Host": "evil.com"},
         )
         self.assertEqual(status, 403)
 
