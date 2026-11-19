@@ -343,7 +343,7 @@ validation may still be incomplete.
 | Gap | Old tier that has it | Bead |
 | --- | --- | --- |
 | model key never inside the sandbox on every backend (proxy-only egress) | `microvm` `networkProfile = "proxy-only"` | landed for bubblewrap and the layered nono backend (`config.md` D20/D28: bd myconfig-mo3.2, myconfig-t24, myconfig-vpi9.1); podman/krun/VM backends refuse it (bd myconfig-6di.3). Per-backend transports in bd myconfig-vpi9 |
-| public egress without the host LAN / private ranges | `microvm` (every profile) | bd myconfig-fvi |
+| public egress without the host LAN / private ranges | `microvm` (every profile) | landed for bubblewrap (`network = "public"`, config.md D20, bd myconfig-fvi: the broker's `--public` CONNECT lane gated by the hard-deny set); every other backend refuses the value (fvi.3, the VM transports, is bd myconfig-nakf) |
 | any limit on bwrap/nono (the config keys exist, `config.md` D23) | `microvm` `resourceClasses`, `qemu` `vcpu`/`mem` | bd myconfig-cea |
 | detached interactive runs implemented on bwrap/nono/direct krun/QEMU; refused on Podman, live matrix unrecorded | `gvisor` `run --detach` + `shell`, `microvm` `submit` | bd myconfig-7ioq; [`detach-validation-log.md`](./detach-validation-log.md) |
 | writable nix store on `podman-gvisor` | `gvisor` `nix.enable` / `--nix` | bd myconfig-9mh |

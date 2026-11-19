@@ -497,3 +497,65 @@ egress path, and `cargo fmt --check` was clean.
 - The sandbox ran as uid 0 (a nested-mysbx artifact); a
   capability-dropping payload was not directly represented — only
   probed from inside, see §3's deviation note.
+
+## 2026-11-19, offline dev sandbox — the public lane, unit and integration level (bd myconfig-fvi, fvi.1+fvi.2)
+
+Provenance: executed in the offline dev sandbox that implemented the
+lane (commits `1135cf45b1`, `7e504a636d`). This entry follows the
+q8zg precedent: it records what this environment could and could not
+prove. The live entry (a real CONNECT to a public target through a
+`--public` broker on a networked host, and a denied private /
+metadata target) needs a networked host — same gap the 2026-11-15
+entry had before the 2026-11-16 networked entry closed it.
+
+### §1 the deny set at unit level — PASS
+
+The broker's `private_or_special_use` and the metadata-name admission
+are pinned by the bin's tests
+(`the_public_lane_refuses_the_private_and_special_use_ranges`,
+`the_public_lane_admits_every_target_but_the_metadata_names`):
+RFC1918, CGNAT 100.64/10, 240/4, loopback, unspecified, link-local,
+multicast; ULA fc00::/7; the IPv4-mapped and NAT64-embedded spellings
+decode to their embedded v4 and admit-or-deny by it
+(`nat64_embedded_v4`), the rest of 64:ff9b:1::/48 refused. These are
+pure address-class functions — no network needed, so this is the
+same level of proof the offline sandbox can give for the table
+lane's own rules.
+
+### §2 admission and event honesty — PASS
+
+The integration suite drives a real `--public` broker through a real
+socket: `the_public_lane_denies_the_metadata_names_with_a_403`
+(policy `deny`, 403, the name denied at admission),
+`the_public_lane_listen_line_names_the_deny_set_rule` (the fence
+summary names the rule instead of ports — the lane carries no
+Landlock port fence, E14),
+`a_mixed_public_lane_argv_is_a_usage_error` (`--public` and the
+table flags are mutually exclusive, exit 2). The resolved-address
+dial path (`resolve_connect_host`: resolve one address, dial THAT
+address) is the table lane's shared helper — no DNS rebinding
+window exists at admission time by construction.
+
+### §3 the pipeline and argv shape — PASS
+
+The dry-run audit of a `network = "public"` run on bubblewrap is
+pinned by the CLI test (`public_is_parsed_and_reports_the_broker_lane`):
+no `--share-net`, the broker argv carries `--public` and no table
+flag, `MYSBX_NETWORK=public`, the CONNECT proxy variables injected;
+the argv golden `egress-public.txt` pins the same shape byte-for-byte.
+The refusals are pinned too: allowlist-under-public, every
+non-bubblewrap backend, the nono builder's `PublicRefused` defense
+in depth. The merge order (a wider sidecar is the same
+`NetworkUpgrade` hard error) is pinned by
+`public_sits_in_the_merge_order_and_still_cannot_widen_around_it`.
+
+### Limits of this entry
+
+- No end-to-end CONNECT round trip: this sandbox's host has no
+  network, so a public target cannot be dialed here. The 2026-11-16
+  entry's shape (a networked host closing exactly this gap for the
+  table lane) is the template for the follow-up.
+- The metadata-name denial is proven by the trusted-resolver
+  admission path, not against a real cloud metadata service.
+- The VM transports (fvi.3, bd myconfig-nakf) are out of scope by
+  design: every non-bubblewrap backend refuses the value.

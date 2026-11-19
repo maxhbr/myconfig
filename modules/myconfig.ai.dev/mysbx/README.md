@@ -379,6 +379,13 @@ only in the host environment, never in a store path, so an `[env]`
 entry cannot forward it and only the variable NAME travels through a
 configuration layer.
 
+Under `network = "public"` (bubblewrap, bd myconfig-fvi) the same
+transport carries a wider lane: the broker's `--public` CONNECT lane
+admits every target gated by the hard-deny set (RFC1918, CGNAT,
+240/4, ULA, the IPv4-mapped and NAT64-embedded spellings, the
+cloud-metadata names) — the public internet without the host's LAN.
+An allowlist next to it is refused: the lane's rule IS the deny set.
+
 Under `network = "proxy-only"` (bubblewrap, `docs/design/config.md`
 D20/D28) the credential story flips to the no-key path: the host
 LiteLLM proxy holds the model credential and the sandbox reaches only

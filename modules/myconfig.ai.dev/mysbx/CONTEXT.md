@@ -88,6 +88,19 @@ tiers (bubblewrap and nono) and refused on every other backend. The
 credential rules it implies are config.md D28.
 _Avoid_: egress mode, proxy mode, restricted network
 
+**Public profile**:
+The `network = "public"` setting (config.md D20's order, bd
+myconfig-fvi): the public internet without the host's LAN, private or
+metadata ranges — the same brokered transport as `proxy-only` (empty
+netns, the per-run egress broker, the relay) with the broker's
+`--public` CONNECT lane: every target admitted, gated by the
+hard-deny set (RFC1918, CGNAT 100.64/10, 240/4, ULA fc00::/7, the
+IPv4-mapped and NAT64-embedded spellings, the cloud-metadata names).
+Enforced on the plain bubblewrap backend only; every other backend
+refuses the value, and an allowlist next to it is refused everywhere
+(the lane's rule IS the deny set).
+_Avoid_: internet mode, no-LAN mode, unrestricted network
+
 **Egress forwarder**:
 The host-side, port-scoped `systemd-socket-proxyd` listener
 (`myconfig.ai.dev.litellm-forwarder`) that makes the loopback-only LiteLLM

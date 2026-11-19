@@ -381,13 +381,50 @@ upstream. See the 2026-11-16 entry in
 attribution caveat above is kept as the record of what the
 implementing sandbox could prove.
 
+## E14: the public lane (bd myconfig-fvi)
+
+The fvi profile is a third lane on the same transport: `network =
+"public"` rides the E7 pairing's empty netns, per-run broker and
+relay unchanged, and the broker's argv carries `--public` instead of
+a table. The lane's rule is the hard-deny set, applied to the
+RESOLVED address at admission (no DNS rebinding after the fact):
+
+- IPv4: RFC1918 (10/8, 172.16/12, 192.168/16), CGNAT 100.64/10,
+  240/4, loopback, unspecified, link-local, multicast, and the
+  reserved/broadcast edges of 0/8 the table lane shares.
+- IPv6: ULA fc00::/7; the IPv4-mapped ::ffff:0:0/96 and NAT64
+  64:ff9b::/96, 64:ff9b:1::/96 spellings decode to their embedded
+  v4 and admit-or-deny by it; the rest of 64:ff9b:1::/48 is refused.
+- The cloud-metadata ENDPOINT NAMES (metadata.google.internal,
+  metadata.azure.internal, case-insensitive) are denied at admission
+  with policy `deny`/403 — the name is how a trusted resolver hands
+  the endpoint over. The metadata IPs themselves fall to the range
+  rules above.
+
+The public lane carries NO Landlock port fence (E10): Landlock
+grants ports, never addresses, so a deny set on the resolved
+address cannot be a port fence — enumerating 65535 ports would claim
+a policy the kernel does not have. The E5 fail-closed ABI check
+still runs. The E11 argument is untouched: a permitted destination
+still cannot become a relay.
+
+Two shapes are REFUSED, never accepted-and-ignored (D21):
+
+- an allowlist under `network = "public"`, on every backend: a table
+  next to the lane is a second policy the broker's argv cannot
+  express (`--public` and the table flags are mutually exclusive).
+- the value on any backend but the plain bubblewrap one, with
+  per-backend reasons (the registry's `network_public` row); the VM
+  transports are fvi.3 territory, not this lane.
+
 ## Not decided here
 
 - `listen-ports` beyond the existing refusals (listen-ports-only
   stays refused; the key riding along with allow-domains remains
   in-sandbox loopback, unchanged by this design).
 - The layered nono backend's `proxy-only` + keys pairing.
-- The `"public"` network value, datagram/raw denial (bd
+- The `"public"` value's VM transports (bd myconfig-nakf, the fvi.3
+  follow-up; the lane itself is E14), datagram/raw denial (bd
   myconfig-n8kv.4), TLS interception and credential injection (bd
   myconfig-n8kv.3).
 - A seccomp `IP_TRANSPARENT` filter as belt-and-braces on top of E11.
