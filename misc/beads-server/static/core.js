@@ -83,6 +83,7 @@ export function applyIndices(idx) {
   if (DATA && idx && idx.revision === DATA.revision) {
     DATA.reverse_deps = idx.reverse_deps;
     DATA.blockers = idx.blockers;
+    DATA.blocked_by = idx.blocked_by;
   }
 }
 

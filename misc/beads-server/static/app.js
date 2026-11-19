@@ -262,6 +262,7 @@ export async function applyIndicesFor(data) {
   if (idx.revision === data.revision) {
     data.reverse_deps = idx.reverse_deps;
     data.blockers = idx.blockers;
+    data.blocked_by = idx.blocked_by;
   }
 }
 
