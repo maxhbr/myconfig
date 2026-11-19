@@ -4,6 +4,7 @@
 read-only refusal — against the fake-bd shim on an ephemeral port."""
 
 import json
+import re
 import shutil
 import socket
 import sys
@@ -62,6 +63,28 @@ class ServerCase(unittest.TestCase):
         self.watcher = watcher
         self.base = f"http://127.0.0.1:{self.port}"
         return watcher
+
+    def read_sse(self, path, seconds=3.0, until=None):
+        """Read raw bytes from an SSE endpoint until `until` appears
+        (a frame marker like "event: patch") or the deadline passes."""
+        sock = socket.create_connection(("127.0.0.1", self.port), timeout=seconds)
+        sock.sendall(f"GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n".encode())
+        sock.settimeout(0.5)
+        data = b""
+        deadline = time.time() + seconds
+        while time.time() < deadline:
+            if until and until.encode() in data:
+                break
+            try:
+                chunk = sock.recv(4096)
+            except socket.timeout:
+                continue
+            if not chunk:
+                break
+            data += chunk
+        sock.close()
+        return data.decode(errors="replace")
+
 
     def get(self, path):
         with urllib.request.urlopen(self.base + path, timeout=10) as r:
@@ -193,6 +216,8 @@ class TestWriteApi(ServerCase):
         self.assertEqual(data["issue"]["status"], "in_progress")
 
     def test_409_fresh_even_with_refetch_in_flight(self):
+        # NOTE: superseded by test_overlapping_refetches_are_consistent,
+        # kept for the direct single-flight regression
         # a background probe refetch must not starve the 409 of fresh
         # data: the conflict path forces its own refetch
         issues = json.loads(json.dumps(ISSUES))
@@ -251,31 +276,83 @@ class TestWriteApi(ServerCase):
         self.assertEqual(status, 400)
 
 
+class TestRefetchConsistency(ServerCase):
+    def test_overlapping_refetches_are_consistent(self):
+        # two concurrent refetch cycles share the cache's pending
+        # slots; serialization must keep snapshot/delta/revision in
+        # lockstep so no delta is published under the wrong revision
+        self.boot(allow_write=False)
+
+        results = []
+
+        def run_refetch():
+            results.append(self.watcher._refetch(force=True))
+
+        t1 = threading.Thread(target=run_refetch)
+        t1.start()
+        # second forced refetch while the first is mid-cycle
+        results.append(self.watcher._refetch(force=True))
+        t1.join(timeout=10)
+
+        # both cycles committed consistently: the SSE-visible revision
+        # matches what a client subscribing now would get
+        _, health = self.get("/api/health")
+        _, beads = self.get("/api/beads")
+        self.assertEqual(health["revision"], beads["revision"])
+        self.assertEqual(len(beads["issues"]), len(ISSUES))
+
+    def test_delta_never_published_under_wrong_revision(self):
+        # a client subscribed before the overlap must see a patch whose
+        # revision equals the snapshot the cache actually committed
+        self.boot(allow_write=False)
+        result = {}
+
+        def reader():
+            result["raw"] = self.read_sse(
+                "/api/events?rev=1", seconds=8.0, until="event: patch"
+            )
+
+        t = threading.Thread(target=reader)
+        t.start()
+        deadline = time.time() + 8
+        while time.time() < deadline:
+            with self.watcher.lock:
+                if self.watcher.listeners:
+                    break
+            time.sleep(0.05)
+        self.assertTrue(self.watcher.listeners, "SSE client never subscribed")
+
+        # two overlapping cycles + a data change: the patch the client
+        # receives must reference the exact revisions the cache moved
+        # through, never a delta from one cycle under the other's rev
+        issues = json.loads(json.dumps(ISSUES))
+        issues[0]["status"] = "in_progress"
+        issues[0]["updated_at"] = "2026-01-02T00:00:00Z"
+        (self.repo / ".beads" / "issues.json").write_text(json.dumps(issues))
+
+        def run_refetch():
+            self.watcher._refetch(force=True)
+
+        t1 = threading.Thread(target=run_refetch)
+        t1.start()
+        self.watcher._refetch(force=True)
+        t1.join(timeout=10)
+        t.join(timeout=10)
+
+        raw = result.get("raw", "")
+        self.assertIn("event: patch", raw)
+        # every patch event carries the revision it truly belongs to
+        for m in re.finditer(r"event: patch\ndata: (.*)\n\n", raw):
+            payload = json.loads(m.group(1))
+            self.assertEqual(
+                payload["revision"], payload["indices"]["revision"]
+            )
+
+
 class TestSse(ServerCase):
     def setUp(self):
         super().setUp()
         self.boot(allow_write=False)
-
-    def read_sse(self, path, seconds=3.0, until=None):
-        """Read raw bytes from an SSE endpoint until `until` appears
-        (a frame marker like "event: patch") or the deadline passes."""
-        sock = socket.create_connection(("127.0.0.1", self.port), timeout=seconds)
-        sock.sendall(f"GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n".encode())
-        sock.settimeout(0.5)
-        data = b""
-        deadline = time.time() + seconds
-        while time.time() < deadline:
-            if until and until.encode() in data:
-                break
-            try:
-                chunk = sock.recv(4096)
-            except socket.timeout:
-                continue
-            if not chunk:
-                break
-            data += chunk
-        sock.close()
-        return data.decode(errors="replace")
 
     def test_sse_framing_hello_and_retry(self):
         raw = self.read_sse("/api/events?rev=0", until="event: hello")

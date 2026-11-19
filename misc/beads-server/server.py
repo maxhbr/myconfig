@@ -49,6 +49,7 @@ class Watcher:
         self.token = secrets.token_urlsafe(32)
         self.cache = BdCache(bd_bin, repo)
         self.lock = threading.Lock()
+        self._cycle_lock = threading.Lock()  # serializes whole refetches
         self._fingerprints = {}
         self._tick = 0
         self._refetching = False  # single-flight guard
@@ -98,26 +99,33 @@ class Watcher:
             self._refetch()
 
     def _refetch(self, force=False):
+        # the cycle lock serializes fetch→commit→publish: two refetches
+        # share the cache's pending-snapshot and delta slots, so letting
+        # one run mid-cycle commits the other's snapshot and publishes
+        # the wrong delta under that revision
         if self._refetching and not force:
             return  # another probe already refetches
-        self._refetching = True
-        try:
-            # fetch outside the lock: bd list takes ~a second and must
-            # not block the read endpoints
-            with self.lock:
-                self.cache.begin_refetch()
-            delta = self.cache.refresh_unlocked()
-            if delta.get("error"):
+        with self._cycle_lock:
+            if self._refetching and not force:
+                return  # a cycle started while we waited for the lock
+            self._refetching = True
+            try:
+                # fetch outside the cache lock: bd list takes ~a second
+                # and must not block the read endpoints
+                with self.lock:
+                    self.cache.begin_refetch()
+                delta = self.cache.refresh_unlocked()
+                if delta.get("error"):
+                    self._publish(delta)
+                    return  # fingerprint stays armed; next tick retries
+                bd_mode = self._probe_mode()
+                with self.lock:
+                    self.cache.commit_refetch()
+                    self.bd_mode = bd_mode
+                self.capture_fingerprint()
                 self._publish(delta)
-                return  # fingerprint stays armed; next tick retries
-            bd_mode = self._probe_mode()
-            with self.lock:
-                self.cache.commit_refetch()
-                self.bd_mode = bd_mode
-            self.capture_fingerprint()
-            self._publish(delta)
-        finally:
-            self._refetching = False
+            finally:
+                self._refetching = False
 
     def capture_fingerprint(self):
         self._fingerprints = {}
