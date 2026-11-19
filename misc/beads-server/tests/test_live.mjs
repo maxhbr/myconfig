@@ -18,7 +18,9 @@ async function setup(t) {
   globalThis.document = {
     addEventListener() {},
     querySelectorAll: () => [],
-    getElementById: () => ({ classList: { toggle: (_, flag) => { stale = flag; } } }),
+    getElementById: (id) => ({ classList: { toggle: (_, flag) => {
+      if (id === "stale-indicator") stale = flag;
+    } } }),
   };
   globalThis.requestAnimationFrame = (f) => f();
   globalThis.EventSource = class {
@@ -81,4 +83,40 @@ test("a failed, wrong-process or too-old recovery retries without another event"
   assert.equal(stale(), false);
   assert.equal(DATA.generation, "B");
   assert.equal(DATA.revision, 3);
+});
+
+test("only the installed restart snapshot can renew writes; credential failures do not block reads", async (t) => {
+  const { send, requests, restart, sessions } = await setup(t);
+  restart();
+  const fetchOK = globalThis.fetch;
+  globalThis.fetch = (path) => path === "/api/session" ? new Response(null, { status: 503 }) : fetchOK(path);
+  send("reset", snapshot("B", 1));
+  send("reset", snapshot("B", 2));
+  requests[0].resolve(Response.json(snapshot("B", 1)));
+  await setImmediate();
+  assert.equal(DATA.generation, "A");
+  assert.equal(canWrite(), false);
+  requests[1].resolve(Response.json(snapshot("B", 2)));
+  await setImmediate();
+  assert.equal(DATA.generation, "B");
+  assert.equal(canWrite(), false);
+  send("patch", { generation: "B", revision: 3, upserted: [], removed: [] });
+  assert.equal(DATA.revision, 3);
+  globalThis.fetch = fetchOK;
+  t.mock.timers.tick(2000);
+  await setImmediate();
+  assert.equal(canWrite(), true);
+  assert.equal(requests.length, 2); // retry only the session, not the snapshot
+  assert.deepEqual(sessions, ["A", "B"]);
+});
+
+test("a buffered patch cannot clear a later stale warning", async (t) => {
+  const { send, requests, stale } = await setup(t);
+  window.refetchAll();
+  send("patch", { generation: "A", revision: 10, upserted: [], removed: [] });
+  send("stale", {});
+  requests[0].resolve(Response.json(snapshot("A", 9)));
+  await setImmediate();
+  assert.equal(DATA.revision, 10);
+  assert.equal(stale(), true);
 });

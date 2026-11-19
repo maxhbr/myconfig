@@ -21,6 +21,7 @@ let renderScheduled = false;
 let refreshControls;
 let streamOK = false;
 let recovery = null;
+let renewal = null;
 
 export async function fetchSnapshot() {
   const response = await fetch("/api/beads", { cache: "no-store" });
@@ -28,11 +29,35 @@ export async function fetchSnapshot() {
   return response.json();
 }
 
+// Renew only for an installed snapshot. An unavailable write session must
+// not prevent read-only clients from installing snapshots or live patches.
+function renewWrites() {
+  if (sessionReady() || renewal) return;
+  const job = { generation };
+  renewal = job;
+  async function attempt() {
+    if (renewal !== job) return;
+    const ready = await initEdit(job.generation);
+    if (renewal !== job) return;
+    if (ready) {
+      renewal = null;
+      scheduleRender();
+    } else {
+      job.retry = setTimeout(attempt, 2000);
+    }
+  }
+  attempt();
+}
+
 function recover({ generation: expected, revision }) {
   clearTimeout(recovery?.retry);
   const minimum = expected === generation ? Math.max(revision, installed) : revision;
   const job = { generation: expected, pending: null };
   recovery = job;
+  if (renewal && renewal.generation !== expected) {
+    clearTimeout(renewal.retry);
+    renewal = null;
+  }
   selectSession(expected); // invalidate old credentials before any asynchronous work
   setStale(true);
   async function attempt() {
@@ -42,8 +67,6 @@ function recover({ generation: expected, revision }) {
       if (data.generation !== expected || data.revision < minimum) {
         throw new Error("snapshot does not cover the stream position");
       }
-      if (!sessionReady() && !(await initEdit(expected))) throw new Error("session not ready");
-      if (job !== recovery) return;
       setData(data);
       installed = data.revision;
       generation = data.generation;
@@ -57,6 +80,7 @@ function recover({ generation: expected, revision }) {
     recovery = null;
     setStale(!streamOK);
     if (job.pending) applyPatch(job.pending);
+    if (!recovery) renewWrites();
   }
   return attempt();
 }
@@ -78,7 +102,7 @@ function applyPatch(data) {
   applySnapshotPatch(data);
   if (data.indices) applyIndices(data.indices);
   scheduleRender();
-  setStale(false);
+  setStale(!streamOK);
 }
 
 function scheduleRender() {
@@ -110,11 +134,12 @@ export function connect(revision, gen, onRender) {
     // anything else is a protocol surprise — recover rather than
     // silently claim coverage
     streamOK = true;
-    if (recovery || !sessionReady() || data.generation !== generation || data.revision !== installed) {
+    if (recovery || data.generation !== generation || data.revision !== installed) {
       recover(data);
       return;
     }
     setStale(false);
+    renewWrites();
   });
 
   SOURCE.addEventListener("patch", (ev) => {
