@@ -2816,11 +2816,20 @@ fn sandbox_pipeline(
                 "podman-krun" | "krun" => {
                     "libkrun's TSI is an UNFILTERED proxy: the VMM dials whatever the guest connects to, from a netns with a default route"
                 }
+                // bd myconfig-nakf investigated the two candidate
+                // mechanisms and both were refused by design: SLiRP's
+                // restrict=on drops ALL outbound (a forwards-only
+                // shape, not internet-without-LAN), passt's
+                // --no-map-gw only stops the gateway-to-host remap
+                // (the guest still NATs to the LAN). The denial set
+                // needs a per-run netns with nftables (n8kv.2's
+                // default-deny transports) — until then the refusal
+                // is the honest answer.
                 "microvm-qemu" => {
-                    "the SLiRP net device always has a gateway route (SLiRP restrict is a fvi.3 follow-up, not this backend's today-shape)"
+                    "the SLiRP net device always has a gateway route; SLiRP's restrict=on cannot express the lane (it drops all outbound, not the LAN only)"
                 }
                 "microvm-ch" => {
-                    "passt's vhost-user net device always has a gateway route (--no-map-gw is a fvi.3 follow-up, not this backend's today-shape)"
+                    "passt's vhost-user net device always has a gateway route; --no-map-gw only stops the gateway remap, the guest would still reach the LAN"
                 }
                 "nono" => {
                     "the layered tier maps its own grant model over the netns; its argv builder cannot express the deny set"

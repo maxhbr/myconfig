@@ -414,8 +414,13 @@ Two shapes are REFUSED, never accepted-and-ignored (D21):
   next to the lane is a second policy the broker's argv cannot
   express (`--public` and the table flags are mutually exclusive).
 - the value on any backend but the plain bubblewrap one, with
-  per-backend reasons (the registry's `network_public` row); the VM
-  transports are fvi.3 territory, not this lane.
+  per-backend reasons (the registry's `network_public` row). The VM
+  transports' refusal is BY DESIGN (bd myconfig-nakf): the two
+  candidate mechanisms cannot express the lane — SLiRP restrict=on
+  drops all outbound (a forwards-only shape), passt --no-map-gw
+  only stops the gateway remap — and the real fix (a per-run netns
+  with nftables) is n8kv.2's default-deny transports, not this
+  lane's.
 
 ## Not decided here
 
@@ -423,8 +428,8 @@ Two shapes are REFUSED, never accepted-and-ignored (D21):
   stays refused; the key riding along with allow-domains remains
   in-sandbox loopback, unchanged by this design).
 - The layered nono backend's `proxy-only` + keys pairing.
-- The `"public"` value's VM transports (bd myconfig-nakf, the fvi.3
-  follow-up; the lane itself is E14), datagram/raw denial (bd
-  myconfig-n8kv.4), TLS interception and credential injection (bd
-  myconfig-n8kv.3).
+- The `"public"` value on the VM transports — decided, not pending:
+  refused by design (bd myconfig-nakf; the lane itself is E14).
+  Datagram/raw denial (bd myconfig-n8kv.4), TLS interception and
+  credential injection (bd myconfig-n8kv.3) stay undecided.
 - A seccomp `IP_TRANSPARENT` filter as belt-and-braces on top of E11.

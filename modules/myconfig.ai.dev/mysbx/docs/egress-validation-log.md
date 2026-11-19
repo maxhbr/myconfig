@@ -557,5 +557,7 @@ in depth. The merge order (a wider sidecar is the same
   table lane) is the template for the follow-up.
 - The metadata-name denial is proven by the trusted-resolver
   admission path, not against a real cloud metadata service.
-- The VM transports (fvi.3, bd myconfig-nakf) are out of scope by
-  design: every non-bubblewrap backend refuses the value.
+- The VM transports are out of scope by design (bd
+  myconfig-nakf): every non-bubblewrap backend refuses the value,
+  and for qemu/ch the refusal is permanent — the candidate
+  mechanisms cannot express the lane.
