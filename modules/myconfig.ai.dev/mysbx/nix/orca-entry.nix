@@ -38,11 +38,27 @@
 # network (config.md D5/D9 — `network` defaults to `true`; a
 # `network = false` layer makes the server unreachable from outside the
 # sandbox, which is a refused-for-practical-purposes session, not a
-# sandboxed escape). The endpoint knobs mirror the host-side
-# `orca-serve` unit of ../../services.orca.nix (`--port`,
-# `--pairing-address`) and are config-layer surface, not host env:
-# mysbx forwards only its fixed allowlist, so set them in a layer's
-# `[env]` table:
+# sandboxed escape).
+#
+# In-sandbox panes need NO pairing code at all (bd myconfig-pe8,
+# source-verified against orca 1.4.137): the runtime's PRIMARY
+# transport is the per-sandbox unix socket, and the CLI's local path
+# reads the runtime metadata (`orca-runtime.json`: endpoint +
+# authToken) from the SAME `$XDG_CONFIG_HOME/orca` the sandboxed
+# `serve` writes it to — so `orca terminal create` & co. work
+# directly. `ORCA_PAIRING_CODE`/`ORCA_ENVIRONMENT` are the REMOTE
+# fallback only (a websocket to another machine's runtime). The code
+# is credential-shaped in orca's own semantics (it authenticates a
+# remote client), so it stays out of mysbx's fixed forward allowlist
+# (config.md D28 rule 6a drops it under `network = "proxy-only"`
+# regardless); a repo that WANTS an in-sandbox pane to drive a remote
+# runtime opts in explicitly with `[env] ORCA_PAIRING_CODE = "..."` —
+# visible in the `--dry-run` audit, refused nowhere.
+#
+# The endpoint knobs mirror the host-side `orca-serve` unit of
+# ../../services.orca.nix (`--port`, `--pairing-address`) and are
+# config-layer surface, not host env: mysbx forwards only its fixed
+# allowlist, so set them in a layer's `[env]` table:
 #
 #   ORCA_PORT            pin the port (unset: orca binds 6768 or a
 #                        fallback, and the ready block on stdout is
