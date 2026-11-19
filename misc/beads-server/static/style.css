@@ -200,3 +200,17 @@ text.edgelabel { fill: var(--muted); font-size: 9px; }
   background: var(--blocked); color: #fff; cursor: help;
 }
 #stale-indicator.visible { display: inline-block; }
+
+#label-picker {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  padding: 0 14px 6px; background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+#label-picker:empty { display: none; }
+.label-chip {
+  font-size: 11px; padding: 1px 8px; border-radius: 8px;
+  border: 1px solid var(--border); color: var(--muted); cursor: pointer;
+}
+.label-chip.selected {
+  border-color: var(--open); color: var(--open); background: #1a2632;
+}

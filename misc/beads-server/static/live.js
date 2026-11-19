@@ -3,7 +3,7 @@
 // Live updates: SSE client, patch application, coalesced render.
 
 import { setData, applySnapshotPatch } from "./core.js";
-import { fetchSnapshot } from "./app.js";
+import { fetchSnapshot, rebuildFilterOptions } from "./app.js";
 
 let SOURCE = null;
 let lastRevision = 0;
@@ -21,6 +21,7 @@ function scheduleRender() {
   renderScheduled = true;
   requestAnimationFrame(() => {
     renderScheduled = false;
+    rebuildFilterOptions();
     const board = document.getElementById("board");
     const keepScroll = board.scrollTop;
     window.render();

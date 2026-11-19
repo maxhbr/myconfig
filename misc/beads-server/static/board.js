@@ -5,6 +5,7 @@
 import {
   COLUMNS, CLUSTER, DATA, SELECTED, columnOf, h, isClaimed, statusColor,
 } from "./core.js";
+import { state } from "./filters.js";
 
 // collapsed lanes live here (cluster root id -> true); ungrouped = null key
 const collapsed = new Set();
@@ -20,8 +21,7 @@ export function renderBoard() {
   const board = document.getElementById("board");
   board.innerHTML = "";
 
-  const showClosed = document.getElementById("toggle-closed").checked;
-  const cols = COLUMNS.filter((c) => showClosed || c.key !== "closed");
+  const cols = COLUMNS.filter((c) => state.showClosed || c.key !== "closed");
   board.style.setProperty("--ncols", cols.length);
 
   // lane = cluster root id -> visible issues

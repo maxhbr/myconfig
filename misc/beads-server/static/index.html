@@ -20,19 +20,31 @@
         <option value="graph">graph</option>
       </select>
     </label>
-    <label><input type="checkbox" id="toggle-closed" checked> closed</label>
+    <label><input type="checkbox" id="toggle-closed"> closed</label>
     <label id="label-deps"><input type="checkbox" id="toggle-deps" checked> edges</label>
+    <label><input type="checkbox" id="toggle-blocked"> blocked only</label>
     <label>type
       <select id="filter-type"><option value="">all</option></select>
     </label>
     <label>status
       <select id="filter-status"><option value="">all</option></select>
     </label>
+    <label>priority
+      <select id="filter-priority"><option value="">all</option></select>
+    </label>
+    <label>assignee
+      <select id="filter-assignee"><option value="">all</option></select>
+    </label>
     <label>lane
       <select id="filter-lane"><option value="">all</option></select>
     </label>
+    <select id="presets"></select>
     <input type="search" id="search" placeholder="search title/id…">
+    <label title="also search issue descriptions (heavier)">
+      <input type="checkbox" id="toggle-search-desc"> desc
+    </label>
   </div>
+  <div id="label-picker"></div>
 </header>
 <div class="legend" id="legend"></div>
 <div id="focus-banner">
