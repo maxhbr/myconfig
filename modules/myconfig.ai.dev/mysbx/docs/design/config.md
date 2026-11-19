@@ -1303,7 +1303,7 @@ as D21. The bwrap-built tiers enforce it (bubblewrap, and the layered
 
 | backend | `network = "proxy-only"` means |
 | --- | --- |
-| `bubblewrap` | the enforcing backend: an unshared network namespace, the FIXED directory `/run/mysbx-egress` bound read-only, and the `mysbx-egress-relay` binary listening on `127.0.0.1:<litellm port>` and forwarding to the socket inside it; no resolver, but a fixed `/etc/hosts` (`127.0.0.1 localhost` only) and `/etc/nsswitch.conf` (`hosts: files`) from the store (`MYSBX_EGRESS_ETC`), so `localhost` reaches the relay and every other name fails at once as not found instead of timing out on DNS (bd myconfig-mo3.2.6) |
+| `bubblewrap` | the enforcing backend: an unshared network namespace, the per-run egress broker's socket DIRECTORY (`$XDG_RUNTIME_DIR/mysbx-egress/<pid>/`, created by the run) bound read-only at the fixed in-sandbox `/run/mysbx-egress`, and the `mysbx-egress-relay` binary listening on `127.0.0.1:<litellm port>` and forwarding to the socket inside it; no resolver, but a fixed `/etc/hosts` (`127.0.0.1 localhost` only) and `/etc/nsswitch.conf` (`hosts: files`) from the store (`MYSBX_EGRESS_ETC`), so `localhost` reaches the relay and every other name fails at once as not found instead of timing out on DNS (bd myconfig-mo3.2.6; the broker channel since myconfig-n8kv.1, required by myconfig-ps3i) |
 | `nono` | the same bwrap channel, PLUS nono's own deny: `--block-net` with ONE `--allow-connect-port <litellm port>` (bd myconfig-vpi9.1). The deny is what makes the profile real on this layer rather than a bare consequence of the empty netns — it also denies UDP and raw sockets, which a Landlock port grant alone does not. The relay runs OUTSIDE nono (bwrap's innermost wrap), so the socket directory and the relay's listener are not this layer's grants. The port grant carries no address (Landlock grants ports); harmless here because the netns holds nothing but `lo` |
 | `podman-gvisor` | refused — pasta's `--map-guest-addr` ADDS a route to the forwarder, it does not remove the default route (bd myconfig-6di.3) |
 | `podman-krun` | refused — libkrun's TSI is an unfiltered proxy from the container netns (bd myconfig-6di.5.5) |
@@ -1311,31 +1311,31 @@ as D21. The bwrap-built tiers enforce it (bubblewrap, and the layered
 | `microvm-qemu` | refused — the SLiRP net device always has a gateway route |
 | `microvm-ch` | refused — passt's vhost-user net device always has a gateway route |
 
-**The socket path is pinned.** `MYSBX_EGRESS_SOCKET` must be exactly
-`/run/mysbx-egress/<name>`, `<name>` one plain file name
-(`[A-Za-z0-9._-]+`, not `.`/`..`) — compared as a literal string, so a
-`..` component, a subdirectory or a symlinked spelling can never widen
-the bind to a shared directory (`/run` would expose
-`/run/user/<uid>`: D-Bus, Wayland, ssh-agent). The nix option is
-`unixSocket.name` for the same reason; the path itself is fixed. On a
-real run the directory must also be a non-symlink, root-owned and not
-group- or world-writable — the bind grants exactly one directory, so
-its ownership has to be trustworthy. `--dry-run` checks the path shape
-but not the filesystem.
+**The socket name is pinned, and the channel is the per-run broker.**
+`MYSBX_EGRESS_SOCKET_NAME` must be one plain file name
+(`[A-Za-z0-9._-]+`, not `.`/`..`, no `/`): it names the socket the
+per-run egress broker binds inside `$XDG_RUNTIME_DIR/mysbx-egress/<pid>/`,
+a directory the run itself creates at mode 0700 — so no host directory
+is bound, and no shared location (`/run` would expose
+`/run/user/<uid>`: D-Bus, Wayland, ssh-agent) can widen the bind. The
+nix option is `unixSocketName`. The broker pin
+(`MYSBX_EGRESS_BROKER`) is REQUIRED since the static
+`agent-litellm-forward-unix` unit was dropped (bd myconfig-ps3i,
+[`egress.md`](./egress.md) E4/E6): a build without it cannot serve the
+profile at all.
 
 The refusal is exit `70` with a backend-specific reason, before
 anything is created (`ensure_state_dirs`, the SSH key, the session
 clone) and before the `--dry-run` early return, so a dry run audits
 it. The same holds for a mount or a `state-dirs` entry that would
-cover `/run/mysbx-egress`. A bwrap-tier run whose pinned
-forwarder socket or wrapper pins are missing is REFUSED (exit `70`,
-naming the option to enable) — the profile fails closed, never falls
-back to a shared network. The f13 live run of the enforcing backend is
-in [`../egress-validation-log.md`](../egress-validation-log.md).
-Phase B–D (per-backend transports, the broker) live in bd
-myconfig-vpi9; the broker's own decision record is
-[`egress.md`](./egress.md) (bd myconfig-n8kv.1), and it replaces the
-root-owned-directory clause above with a user-owned per-run one.
+cover `/run/mysbx-egress`. A bwrap-tier run whose broker or wrapper
+pins are missing is REFUSED (exit `70`, naming the rebuild) — the
+profile fails closed, never falls back to a shared network. The live
+runs of the enforcing backends are in
+[`../egress-validation-log.md`](../egress-validation-log.md).
+Phase B–D (per-backend transports) live in bd myconfig-vpi9; the
+broker's own decision record is [`egress.md`](./egress.md) (bd
+myconfig-n8kv.1).
 
 **Orca's shared-network requirement** stays unsatisfied under this
 profile: `multiplexer = "orca"` needs the shared network and is

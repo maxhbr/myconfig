@@ -1158,16 +1158,17 @@ fn host_endpoint_check(
 }
 
 /// The `network = "proxy-only"` channel check (docs/design/config.md
-/// D20, bd myconfig-mo3.2.6): the wrapper pins `MYSBX_EGRESS_SOCKET`,
+/// D20, bd myconfig-mo3.2.6; the required broker since bd
+/// myconfig-ps3i): the wrapper pins `MYSBX_EGRESS_SOCKET_NAME`,
 /// `MYSBX_EGRESS_PORT`, `MYSBX_EGRESS_RELAY` and `MYSBX_EGRESS_ETC`.
-/// Report what a
-/// `proxy-only` run would use, and CONNECT to the forwarder socket and
-/// send a `GET /v1/models` — a host-side probe of the same channel the
-/// sandbox reaches, so a stopped forwarder or a missing socket surfaces
-/// here rather than as a sandboxed agent that cannot reach its model.
+/// Report what a `proxy-only` run would use, and probe THROUGH a
+/// short-lived per-run broker with a `GET /v1/models` — a host-side
+/// probe of the same channel the sandbox reaches, so a broken broker,
+/// an old Landlock kernel or a stopped model proxy surfaces here
+/// rather than as a sandboxed agent that cannot reach its model.
 fn egress_check(checks: &mut Vec<Check>) {
-    let (Some(socket), Some(port), Some(relay), Some(etc_dir)) = (
-        crate::env_opt("MYSBX_EGRESS_SOCKET"),
+    let (Some(socket_name), Some(port), Some(relay), Some(etc_dir)) = (
+        crate::env_opt("MYSBX_EGRESS_SOCKET_NAME"),
         crate::env_opt("MYSBX_EGRESS_PORT"),
         crate::env_opt("MYSBX_EGRESS_RELAY"),
         crate::env_opt("MYSBX_EGRESS_ETC"),
@@ -1175,12 +1176,16 @@ fn egress_check(checks: &mut Vec<Check>) {
         checks.push(Check::warn(
             "egress channel",
             "network = \"proxy-only\" is not pinned on this host",
-            "enable myconfig.ai.dev.litellm-forwarder.unixSocket.enable so the \
-             host runs the forwarder and the wrapper pins MYSBX_EGRESS_SOCKET/\
-             PORT/RELAY/ETC",
+            "enable services.litellm and rebuild so the wrapper pins \
+             MYSBX_EGRESS_SOCKET_NAME/PORT/RELAY/ETC/BROKER",
         ));
         return;
     };
+    // The name pin's shape is the same rule a run enforces in step 4b
+    // (`validate_egress_socket`): one plain file-name component.
+    if let Err(message) = crate::validate_egress_socket("MYSBX_EGRESS_SOCKET_NAME", &socket_name) {
+        checks.push(Check::fail("egress socket name", message, "fix the pin"));
+    }
     // The sandbox's name lookup files (bound over /etc/hosts and
     // /etc/nsswitch.conf in a proxy-only run).
     let etc = Path::new(&etc_dir);
@@ -1216,13 +1221,9 @@ fn egress_check(checks: &mut Vec<Check>) {
     // whose Landlock ABI can confine it, and a probe THROUGH it. Each is
     // its own line so a host with a broken broker says which part is
     // wrong, and the probe is SKIPped when a dependency already failed
-    // (the `Check::skip` contract).
-    // The per-run broker (docs/design/egress.md E1/E5, bd
-    // myconfig-n8kv.1.4). It is OPTIONAL: a build without the pin serves
-    // the channel from the static forwarder, which needs no Landlock at
-    // all (the fence is the empty netns plus the bound socket), so every
-    // broker-specific verdict below hangs off the pin. A host on an old
-    // kernel is a healthy STATIC-forwarder host, not a broken one.
+    // (the `Check::skip` contract). The broker is REQUIRED since the
+    // static forwarder unit went away (bd myconfig-ps3i): a build without
+    // the pin cannot serve the profile at all.
     let broker = crate::env_opt("MYSBX_EGRESS_BROKER");
     let mut broker_ok = true;
     match broker.as_deref() {
@@ -1238,11 +1239,15 @@ fn egress_check(checks: &mut Vec<Check>) {
                 "rebuild mysbx from a store that carries mysbx-egress-broker",
             ));
         }
-        None => checks.push(Check::ok(
-            "egress broker",
-            "not pinned; the channel comes from the static forwarder socket \
-             (no Landlock needed)",
-        )),
+        None => {
+            broker_ok = false;
+            checks.push(Check::fail(
+                "egress broker",
+                "MYSBX_EGRESS_BROKER is not pinned",
+                "rebuild mysbx from a host config that runs LiteLLM; the static \
+                 forwarder unit is gone, so the broker is the only channel",
+            ));
+        }
     }
     // The broker confines ITSELF with Landlock TCP port rules, so the ABI
     // floor is a broker requirement only.
@@ -1286,23 +1291,12 @@ fn egress_check(checks: &mut Vec<Check>) {
     // makes, and stop it. That exercises the whole path the run will use —
     // the binary, its confinement, its upstream — instead of just asking
     // whether the host's static socket answers (docs/design/egress.md E5).
-    if let Some(broker) = broker {
-        checks.push(probe_through_broker(&broker, &port));
+    let Some(broker) = broker else {
+        // `broker_ok` is false here — the None arm already pushed the
+        // FAIL; the probe is SKIPped (below, on `!broker_ok`).
         return;
-    }
-    // The static channel: the socket → LiteLLM path, the same request.
-    checks.push(match uds_http_get(&socket, "/v1/models") {
-        Ok(answer) => Check::ok(
-            "egress socket",
-            format!("{socket} answered GET /v1/models ({})", answer.trim()),
-        ),
-        Err(e) => Check::warn(
-            "egress socket",
-            format!("{socket}: {e}"),
-            "start the forwarder (systemctl status agent-litellm-forward-unix \
-             .socket) and make sure litellm.service is up",
-        ),
-    });
+    };
+    checks.push(probe_through_broker(&broker, &port));
 }
 
 /// Start the per-run broker on a throwaway directory under
@@ -2759,11 +2753,10 @@ mod tests {
     }
 
     #[test]
-    fn the_broker_confinement_verdict_hangs_off_the_pin() {
-        // bd myconfig-1012: the broker's Landlock self-fence is a BROKER
-        // requirement. A build without the pin serves the channel from the
-        // static forwarder, which needs none, so an old kernel must not
-        // turn into a FAIL (and a SKIPped probe) on such a host.
+    fn the_broker_is_required_and_judged_by_its_pin() {
+        // bd myconfig-ps3i: the static forwarder unit is gone, so the
+        // broker is the ONLY channel — a build without the pin is a
+        // FAIL, and a pinned broker is judged by its Landlock floor.
         //
         // The pin is read from the process environment, so this test owns
         // the variables for its duration and restores them. No other test
@@ -2771,14 +2764,14 @@ mod tests {
         // ownership cannot race (`cargo test` runs these in parallel).
         let key = "MYSBX_EGRESS_BROKER";
         let saved = std::env::var_os(key);
-        let mut run = |value: Option<std::ffi::OsString>| {
+        let run = |value: Option<std::ffi::OsString>| {
             match &value {
                 Some(v) => unsafe { std::env::set_var(key, v) },
                 None => unsafe { std::env::remove_var(key) },
             }
             // A fixed set of pins, so the only variable is the broker one.
             for (name, val) in [
-                ("MYSBX_EGRESS_SOCKET", "/run/mysbx-egress/litellm.sock"),
+                ("MYSBX_EGRESS_SOCKET_NAME", "litellm.sock"),
                 ("MYSBX_EGRESS_PORT", "4000"),
                 (
                     "MYSBX_EGRESS_RELAY",
@@ -2791,7 +2784,7 @@ mod tests {
             let mut checks = Vec::new();
             egress_check(&mut checks);
             for name in [
-                "MYSBX_EGRESS_SOCKET",
+                "MYSBX_EGRESS_SOCKET_NAME",
                 "MYSBX_EGRESS_PORT",
                 "MYSBX_EGRESS_RELAY",
                 "MYSBX_EGRESS_ETC",
@@ -2801,17 +2794,27 @@ mod tests {
             checks
         };
 
-        // No pin: no broker verdicts at all, and no SKIP on the probe.
-        let static_only = run(None);
+        // No pin: the broker is REQUIRED, so that is a FAIL and the probe
+        // is SKIPped, with no Landlock verdict (there is nothing to
+        // confine).
+        let unpinned = run(None);
         assert!(
-            !static_only
+            unpinned
                 .iter()
-                .any(|c| c.name == "egress broker confinement"),
-            "a static-forwarder build must not be judged by the broker's Landlock: {static_only:?}"
+                .any(|c| c.name == "egress broker" && c.level == Level::Fail),
+            "a build without the broker must FAIL the egress channel: {unpinned:?}"
         );
         assert!(
-            !static_only.iter().any(|c| c.name == "egress channel probe"),
-            "the static path probes the socket directly: {static_only:?}"
+            !unpinned
+                .iter()
+                .any(|c| c.name == "egress broker confinement"),
+            "nothing to confine without a broker: {unpinned:?}"
+        );
+        assert!(
+            unpinned
+                .iter()
+                .any(|c| c.name == "egress channel probe" && c.level == Level::Skip),
+            "{unpinned:?}"
         );
 
         // A pinned broker is judged (the binary is missing here, so the pin

@@ -489,17 +489,14 @@ let
       podmanPastaSpec = if cfg.podman.enable then cfg.podman.pastaSpec else null;
       podmanEnv = if cfg.podman.enable then cfg.podman.env else { };
       # The `network = "proxy-only"` channel pins (../docs/design/
-      # config.md D20, bd myconfig-mo3.2.4): the LiteLLM forwarder's
-      # Unix socket and the port the in-sandbox relay listens on.
-      # Pinned whenever the forwarder's socket half runs — that gate
-      # is `services.litellm.enable`, independent of the podman
-      # backends (the profile runs on plain bubblewrap).
-      egressSocket =
-        if litellmForwarder.unixSocket.enable then
-          "/run/mysbx-egress/${litellmForwarder.unixSocket.name}"
-        else
-          null;
-      egressPort = if litellmForwarder.unixSocket.enable then litellmForwarder.port else null;
+      # config.md D20, bd myconfig-mo3.2.4, myconfig-ps3i): the egress
+      # socket file name (the per-run broker binds it inside
+      # `$XDG_RUNTIME_DIR/mysbx-egress/<pid>/`) and the port the
+      # in-sandbox relay listens on. Pinned whenever the host runs
+      # LiteLLM, independent of the podman backends (the profile runs
+      # on plain bubblewrap).
+      egressSocketName = if config.services.litellm.enable then litellmForwarder.unixSocketName else null;
+      egressPort = if config.services.litellm.enable then litellmForwarder.port else null;
       # The podman-krun runtime (backends.md D2): the backend is
       # `podman-gvisor` with the runtime swapped, so it rides the
       # podman flag — the shared image is what makes it runnable.
@@ -2417,16 +2414,6 @@ in
     myconfig.ai.dev.litellm-forwarder.enable = lib.mkIf (
       cfg.podman.enable && config.services.litellm.enable
     ) true;
-
-    # The Unix-socket half of the same forwarder (bd myconfig-mo3.2.4):
-    # the host channel the `network = "proxy-only"` profile binds
-    # into the sandbox (docs/design/config.md D20). Gated on the host
-    # running LiteLLM alone — it is independent of the podman
-    # backends, because the profile runs on the bwrap-built tiers
-    # (bubblewrap and the layered nono backend). The forwarder is
-    # socket-activated, so an enabled-but-unused one runs nothing
-    # until a `proxy-only` sandbox connects.
-    myconfig.ai.dev.litellm-forwarder.unixSocket.enable = lib.mkIf config.services.litellm.enable true;
 
     # The endpoint as the CONTAINER sees it, for tools that read
     # `OPENAI_BASE_URL`. The agent CLIs whose model

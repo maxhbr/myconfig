@@ -165,13 +165,13 @@ run's empty-directory sweep of `$XDG_RUNTIME_DIR/mysbx-egress` — a
 directory whose pid is gone and which holds nothing is debris, the
 `pid_gone` idea applied to a root that may hold several runs.
 
-### E4: The socket lives under `$XDG_RUNTIME_DIR`, and the name comes from the existing pin
+### E4: The socket lives under `$XDG_RUNTIME_DIR`, and the name comes from the name pin
 
 `<run dir>/<name>`, where `<run dir>` is
-`$XDG_RUNTIME_DIR/mysbx-egress/<pid>/` and `<name>` is the file name of
-the wrapper's existing `MYSBX_EGRESS_SOCKET` pin, validated by the
-existing `validate_egress_socket` shape rule (one plain file-name
-component, never `.`/`..`).
+`$XDG_RUNTIME_DIR/mysbx-egress/<pid>/` and `<name>` is the
+`MYSBX_EGRESS_SOCKET_NAME` pin, validated by the
+`validate_egress_socket` shape rule (one plain file-name component,
+never `.`/`..`).
 
 Why this root and not `<sidecar>/egress/<pid>/` (the location the
 parent bead's B1 line names, `pid_gone`-swept):
@@ -206,12 +206,13 @@ That is also why item 4 above sits in step 4b: the root is resolved
 once, early, and the pins carry the finished directory, so the argv
 builder and the broker start cannot disagree about the path.
 
-The wrapper keeps pinning `MYSBX_EGRESS_SOCKET` as the absolute
-`/run/mysbx-egress/<name>` string it pins today: that value is now the
-NAME source, so a host's existing option (`unixSocket.name`) keeps
-working unchanged, and a run that finds the pin malformed refuses exactly
-as it does now. The `/run/mysbx-egress` prefix stops being a location
-and becomes the pin's fixed shape.
+The wrapper pins the NAME directly since the static unit went away (bd
+myconfig-ps3i, E6 step 3): `MYSBX_EGRESS_SOCKET_NAME` is one plain
+file-name component (`[A-Za-z0-9._-]+`, not `.`/`..`, no `/`), sourced
+from the host option `myconfig.ai.dev.litellm-forwarder.unixSocketName`
+(the old `unixSocket.name` spelling went with the unit). A run that
+finds the pin malformed refuses exactly as it does now; a path-shaped
+value is not a name and is refused.
 
 The DECISION LOG does not live in this directory. The sandbox binds the
 run directory read-only, so anything in it is readable by the payload;
@@ -276,14 +277,12 @@ record.
 Every failure is exit 70, in the order that already exists (D20): the
 pin checks run in step 4b, BEFORE anything is created (`ensure_state_dirs`,
 the SSH key, the session clone) and before the `--dry-run` early return,
-so a dry run audits them: a missing or malformed `MYSBX_EGRESS_SOCKET` /
+so a dry run audits them: a missing or malformed `MYSBX_EGRESS_SOCKET_NAME` /
 `_PORT`, an unset or relative `$XDG_RUNTIME_DIR` (when the broker is
 pinned), a computed socket path over `SUN_PATH_LIMIT`.
 
-A build WITHOUT the broker pin is not a refusal: it binds the static
-forwarder directory, which is the phase-A channel (E6 step 1). "No
-broker, no egress" governs a build that HAS the broker — once the pin is
-there, a broker that cannot start refuses the run.
+A build WITHOUT the broker pin is a refusal too, since E6 step 3: the
+static unit is gone, so "no broker, no egress" governs every build.
 
 The checks that need the filesystem or a live process come AFTER that
 return, on a real run only, and are still refusals, not warnings: the run
@@ -298,59 +297,41 @@ directory and no sidecar log directory. The test for this is the `mkdir`
 sentinel: a dry run in a fresh `$XDG_RUNTIME_DIR` and a fresh sidecar
 leaves both empty.
 
-### E6: The static forwarder stays until the live check passes, then goes
+### E6: The static forwarder unit is gone (the sequenced removal, executed)
 
 Decision 3 of the epic ("keep-as-fallback after the broker exists:
-decide in myconfig-n8kv.1") is decided here as a sequenced removal:
+decide in myconfig-n8kv.1") was decided as a sequenced removal and has
+run to the end:
 
-1. The broker lands first (n8kv.1.2, .1.3) while the static unit still
-   exists. Both channels can serve one host, and a run uses exactly one:
-   `MYSBX_EGRESS_BROKER` is a required pin on a build that has the
-   broker, and the wrapper that sets it also stops pointing
-   `MYSBX_EGRESS_SOCKET` at the static unit's directory. The two are
-   expected to be pinned BY THE SAME WRAPPER, so "broker pinned, static
-   channel still bound" is a state this record does not define — a
-   wrapper that pins the broker uses it, period (E5: no broker, no
-   egress). The static unit survives as the phase-A BUILD's channel, not
-   as a per-run fallback.
-2. The f13 live check (n8kv.1.6) validates the broker path on the real
-   host.
-3. Only then is the static unit dropped, in ONE commit, so a revert is one
-   commit if the live check regresses.
+1. The broker landed first (n8kv.1.2, .1.3) while the static unit still
+   existed, and the wrapper pinned both spellings.
+2. The live checks (n8kv.1.6, and the vpi9.1 nono run) validated the
+   broker path on real hardware — bubblewrap (§1–§4) and a brokered
+   nono run (§5) on host 'thing', 2026-11-14, in the
+   [validation log](../egress-validation-log.md).
+3. bd myconfig-ps3i then dropped the static unit in ONE commit
+   (revertable as one), together with the name-source rewrite it was
+   waiting on: `MYSBX_EGRESS_SOCKET` (the `/run/mysbx-egress/<name>`
+   path shape) became `MYSBX_EGRESS_SOCKET_NAME` (a plain name), and
+   the broker pin became REQUIRED — a build without it refuses the
+   profile, so there is no fallback channel to keep.
 
-What becomes dead when the unit goes, named so the removal commit can be
-checked against it:
+What went dead, named so the removal commit can be checked against it:
 
 - `systemd.sockets.agent-litellm-forward-unix` /
   `systemd.services.agent-litellm-forward-unix` and their
   `DirectoryMode`/`SocketMode` block in
   `myconfig.ai.dev.litellm-forwarder.nix`, plus the
   `mkIf cfg.unixSocket.enable` half of that module;
-- the `unixSocket.enable` option (and what it asserts);
-- the `egressSocket` argument of `nix/mysbx.nix` and the
-  `egressPinGate` in `nix/config-eval-test.nix`;
-- the root-owned-directory rule of D20 (already replaced by E3).
-
-**The live evidence covers both bwrap-built tiers.** Since bd
-myconfig-vpi9.1 the layered `nono` backend enforces the profile through the
-same bwrap channel, so nono is a second consumer of the broker path. Both
-passed on real hardware on host 'thing', 2026-11-14: bubblewrap (§1–§4)
-and a real brokered nono run (§5) in the
-[validation log](../egress-validation-log.md). Step 2's precondition is
-therefore met.
-
-**What still holds the unit in place is narrower than "a fallback".** With
-a broker pinned, a run binds the per-run directory and never binds — or
-even stats — the static directory (`lib.rs`: the bind source comes from
-`broker_dir`, and the static-directory checks are gated on
-`broker_bin.is_none()`). What remains is the NAME: `MYSBX_EGRESS_SOCKET`
-is parsed for its file-name component and its exact-shape rule on every
-run, so the pin outlives the unit as a spelling. Step 3 therefore has to
-rewrite the name source, not merely delete a unit — and a build that pins
-no broker still serves the channel from the unit (step 1).
+- the `unixSocket.enable` option (and what it asserted) — the surviving
+  option is `unixSocketName`, the NAME source;
+- the `egressSocket` argument of `nix/mysbx.nix` (now `egressSocketName`)
+  and the `egressPinGate` in `nix/config-eval-test.nix` (now gating the
+  name);
+- the root-owned-directory rule of D20 (replaced by E3 in phase B).
 
 The TCP half of the forwarder is NOT part of this: it serves the podman
-backends (bd myconfig-jq2) and is hardened separately in n8kv.1.5.
+backends (bd myconfig-jq2) and is hardened separately in n8kv.15.
 
 ## Not decided here
 

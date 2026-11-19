@@ -142,10 +142,11 @@ fn spawn_with_args<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> C
         // The `network = "proxy-only"` channel pins (D20, bd
         // myconfig-mo3.2.6): wrapper-provided, so an unwrapped test run
         // sees none unless it pins them itself.
-        .env_remove("MYSBX_EGRESS_SOCKET")
+        .env_remove("MYSBX_EGRESS_SOCKET_NAME")
         .env_remove("MYSBX_EGRESS_PORT")
         .env_remove("MYSBX_EGRESS_RELAY")
         .env_remove("MYSBX_EGRESS_ETC")
+        .env_remove("MYSBX_EGRESS_BROKER")
         // The detached-run registry root is not a fixture input: a
         // host-set value would make runs of this very sandbox depend
         // on the machine's runtime dir. Tests that exercise the
@@ -189,20 +190,31 @@ fn run_binary_with(inv: &Invocation, args: &[&str]) -> (i32, String, String) {
 /// run reaches the argv/report stages instead of the missing-pin
 /// refusal.
 fn spawn_proxy_only<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> Command {
-    // The socket path is pinned to /run/mysbx-egress/<name>
-    // (docs/design/config.md D20); a `--dry-run` never touches it, so
-    // the directory need not exist.
+    // The socket NAME is pinned (docs/design/egress.md E4, bd
+    // myconfig-ps3i); the per-run directory is created by the run.
     let mut cmd = spawn_with_args(inv, args);
-    cmd.env(
-        "MYSBX_EGRESS_SOCKET",
-        format!("{}/litellm.sock", mysbx::EGRESS_SOCKET_DIR),
-    )
-    .env("MYSBX_EGRESS_PORT", "4000")
-    .env(
-        "MYSBX_EGRESS_RELAY",
-        "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
-    )
-    .env("MYSBX_EGRESS_ETC", "/synth/store/bbbb-mysbx-egress-etc");
+    cmd.env("MYSBX_EGRESS_SOCKET_NAME", "litellm.sock")
+        .env("MYSBX_EGRESS_PORT", "4000")
+        .env(
+            "MYSBX_EGRESS_RELAY",
+            "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
+        )
+        .env("MYSBX_EGRESS_ETC", "/synth/store/bbbb-mysbx-egress-etc")
+        // The broker is REQUIRED (bd myconfig-ps3i): a wrapped build pins
+        // it, so the helper pins the shape a `--dry-run` needs (an argv
+        // print; a real run would refuse a non-executable path, which the
+        // broker-cannot-start test covers on purpose).
+        .env(
+            "MYSBX_EGRESS_BROKER",
+            "/synth/store/cccc-mysbx/bin/mysbx-egress-broker",
+        )
+        // The per-run directory root (docs/design/egress.md E4): the base
+        // helper removes a host-set one, so pin a scratch root a dry run
+        // never writes to.
+        .env(
+            "XDG_RUNTIME_DIR",
+            std::env::temp_dir().join("mysbx-egress-test-rt"),
+        );
     cmd
 }
 
@@ -10230,11 +10242,12 @@ fn the_split_layer_pairing_decides_at_merge_time_not_per_file() {
 #[test]
 fn proxy_only_on_bubblewrap_without_pins_is_refused() {
     // D20 enforced by bubblewrap (bd myconfig-mo3.2.6), but the
-    // channel needs the wrapper's MYSBX_EGRESS_SOCKET/PORT/RELAY pins.
-    // A run without them FAILS CLOSED: exit 70 naming the option to
-    // enable, never a silent fallback to a shared network. This test
-    // runs an UNWRAPPED fixture (no pins), the shape an unwrapped
-    // build has.
+    // channel needs the wrapper's MYSBX_EGRESS_BROKER pin (required
+    // since bd myconfig-ps3i: the static forwarder unit is gone) plus
+    // the SOCKET_NAME/PORT/RELAY pins. A run without them FAILS CLOSED:
+    // exit 70 naming the broker, never a silent fallback to a shared
+    // network. This test runs an UNWRAPPED fixture (no pins), the shape
+    // an unwrapped build has.
     let (inv, _, sidecar) = fixture("proxy-only-bwrap-no-pins", &[]);
     std::fs::write(
         sidecar.join("config.toml"),
@@ -10244,13 +10257,9 @@ fn proxy_only_on_bubblewrap_without_pins_is_refused() {
     let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(
-        stderr.contains("network = \"proxy-only\" needs the LiteLLM forwarder")
-            && stderr.contains("MYSBX_EGRESS_SOCKET"),
-        "the refusal names the harness and the pins: {stderr}"
-    );
-    assert!(
-        stderr.contains("unixSocket.enable"),
-        "the refusal names the option to enable: {stderr}"
+        stderr.contains("network = \"proxy-only\" needs the per-run egress broker")
+            && stderr.contains("MYSBX_EGRESS_BROKER"),
+        "the refusal names the required broker: {stderr}"
     );
     assert!(
         !stdout.contains("--clearenv"),
@@ -10353,17 +10362,8 @@ fn proxy_only_refuses_a_non_numeric_egress_port() {
             "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
         )
         .unwrap();
-        let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
-        cmd.env(
-            "MYSBX_EGRESS_SOCKET",
-            format!("{}/litellm.sock", mysbx::EGRESS_SOCKET_DIR),
-        )
-        .env("MYSBX_EGRESS_PORT", bad)
-        .env(
-            "MYSBX_EGRESS_RELAY",
-            "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
-        )
-        .env("MYSBX_EGRESS_ETC", "/synth/store/bbbb-mysbx-egress-etc");
+        let mut cmd = spawn_proxy_only(&inv, &["--dry-run"]);
+        cmd.env("MYSBX_EGRESS_PORT", bad);
         let (code, _stdout, stderr) = run_command(cmd);
         assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "{bad}: {stderr}");
         assert!(
@@ -10374,43 +10374,32 @@ fn proxy_only_refuses_a_non_numeric_egress_port() {
 }
 
 #[test]
-fn proxy_only_real_run_needs_a_real_socket_at_the_pinned_path() {
-    // bd myconfig-mo3.2.6: a REAL run requires /run/mysbx-egress to be
-    // a real root-owned directory and the socket file to exist and be a
-    // Unix socket. --dry-run skips the filesystem checks (it creates
-    // nothing) but still enforces the path shape.
-    let (inv, _, sidecar) = fixture("proxy-only-real-socket", &[]);
-    std::fs::write(
-        sidecar.join("config.toml"),
-        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
-    )
-    .unwrap();
-
-    // --dry-run always succeeds and shows the channel.
-    let (code, stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"]));
-    assert_eq!(code, 0, "stderr: {stderr}");
-    assert!(stdout.contains("mysbx-egress-relay"), "{stdout}");
-
-    // A real run against the real host directory, with a socket name no
-    // forwarder uses: the run refuses whether /run/mysbx-egress is
-    // missing or user-owned (a build sandbox) or a valid forwarder
-    // directory (a host running agent-litellm-forward-unix.socket),
-    // so it never goes on to start a sandbox. Both refusals name the
-    // unit.
-    let absent = format!(
-        "{}/mysbx-test-absent-{}.sock",
-        mysbx::EGRESS_SOCKET_DIR,
-        std::process::id()
-    );
-    let mut cmd = spawn_proxy_only(&inv, &["run", "--", "/bin/true"]);
-    cmd.env("MYSBX_EGRESS_SOCKET", &absent);
-    let (code, _stdout, stderr) = run_command(cmd);
-    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
-    assert!(
-        stderr.contains("MYSBX_EGRESS_SOCKET")
-            && stderr.contains("agent-litellm-forward-unix.socket"),
-        "the refusal names the setting and the unit: {stderr}"
-    );
+fn proxy_only_refuses_a_path_shaped_socket_name() {
+    // bd myconfig-ps3i: the name source is the plain NAME pin, so the
+    // old static-path spellings are names no more — a `--dry-run`
+    // already refuses them (step 4b), naming the setting and the value.
+    for bad in [
+        "/run/mysbx-egress/litellm.sock",
+        "/run/x/../litellm.sock",
+        "sub/dir.sock",
+        "..",
+    ] {
+        let (inv, _, sidecar) = fixture("proxy-only-bad-socket-name", &[]);
+        std::fs::write(
+            sidecar.join("config.toml"),
+            "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
+        )
+        .unwrap();
+        let mut cmd = spawn_proxy_only(&inv, &["--dry-run"]);
+        cmd.env("MYSBX_EGRESS_SOCKET_NAME", bad);
+        let (code, stdout, stderr) = run_command(cmd);
+        assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "{bad}: {stderr}");
+        assert!(
+            stderr.contains("MYSBX_EGRESS_SOCKET_NAME") && stderr.contains(bad),
+            "{bad}: the refusal names the setting and the value: {stderr}"
+        );
+        assert!(!stdout.contains("--clearenv"), "{bad}: no argv: {stdout}");
+    }
 }
 
 #[test]
@@ -11112,7 +11101,9 @@ fn proxy_only_refuses_a_socket_outside_the_pinned_directory() {
         "/run/mysbx-egress/a/b.sock",
         "/run/mysbx-egress/",
         "/run/x.sock",
-        "litellm.sock",
+        "sub/litellm.sock",
+        ".",
+        "..",
     ] {
         let (inv, _, sidecar) = fixture("proxy-only-bad-socket", &[]);
         std::fs::write(
@@ -11120,23 +11111,13 @@ fn proxy_only_refuses_a_socket_outside_the_pinned_directory() {
             "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n",
         )
         .unwrap();
-        let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
-        cmd.env("MYSBX_EGRESS_SOCKET", socket)
-            .env("MYSBX_EGRESS_PORT", "4000")
-            .env(
-                "MYSBX_EGRESS_RELAY",
-                "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
-            )
-            .env("MYSBX_EGRESS_ETC", "/synth/store/bbbb-mysbx-egress-etc");
+        let mut cmd = spawn_proxy_only(&inv, &["--dry-run"]);
+        cmd.env("MYSBX_EGRESS_SOCKET_NAME", socket);
         let (code, stdout, stderr) = run_command(cmd);
         assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "{socket}: {stderr}");
         assert!(
-            stderr.contains("MYSBX_EGRESS_SOCKET") && stderr.contains(socket),
+            stderr.contains("MYSBX_EGRESS_SOCKET_NAME") && stderr.contains(socket),
             "{socket}: the refusal names the setting and the value: {stderr}"
-        );
-        assert!(
-            stderr.contains("/run/mysbx-egress/<name>"),
-            "{socket}: the expected form is stated: {stderr}"
         );
         assert!(
             !stdout.contains("--clearenv"),
@@ -11150,7 +11131,7 @@ fn proxy_only_refusal_creates_no_state_dir_or_key() {
     // bd myconfig-mo3.2.6: the egress refusal runs before anything is
     // created. A REAL run (not --dry-run, not --session: only a live run
     // creates state directories and the SSH key) with no
-    // MYSBX_EGRESS_SOCKET exits 70 and leaves the sidecar's state tree
+    // MYSBX_EGRESS_BROKER exits 70 and leaves the sidecar's state tree
     // empty.
     let (inv, _repo, sidecar) = fixture("proxy-only-no-state", &[]);
     std::fs::write(
@@ -11162,7 +11143,7 @@ fn proxy_only_refusal_creates_no_state_dir_or_key() {
     let (code, _stdout, stderr) = run_binary_with(&inv, &[] as &[&str]);
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(
-        stderr.contains("MYSBX_EGRESS_SOCKET"),
+        stderr.contains("MYSBX_EGRESS_BROKER"),
         "the refusal names the missing pin: {stderr}"
     );
     // No state directory (the `cache` entry would back one).
@@ -11218,7 +11199,7 @@ fn proxy_only_refuses_a_mount_over_the_egress_directory() {
 #[test]
 fn proxy_only_refusal_creates_no_session_clone() {
     // bd myconfig-mo3.2.6: a real `--session` run with no
-    // MYSBX_EGRESS_SOCKET is refused (exit 70) before the clone exists.
+    // MYSBX_EGRESS_BROKER is refused (exit 70) before the clone exists.
     let (inv, repo, sidecar) = fixture("proxy-only-no-clone", &[]);
     std::fs::write(
         sidecar.join("config.toml"),
@@ -11228,7 +11209,7 @@ fn proxy_only_refusal_creates_no_session_clone() {
     let (code, _stdout, stderr) = run_binary_with(&inv, &["--session", "s1"]);
     assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
     assert!(
-        stderr.contains("MYSBX_EGRESS_SOCKET"),
+        stderr.contains("MYSBX_EGRESS_BROKER"),
         "the refusal names the missing pin: {stderr}"
     );
     let worktrees = repo.parent().unwrap().join(format!(

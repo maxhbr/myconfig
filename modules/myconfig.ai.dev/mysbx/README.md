@@ -657,22 +657,23 @@ keyless, and API keys reach a sandbox only through
 
 The bubblewrap no-key profile (`docs/design/config.md` D20/D28, bd
 myconfig-mo3.2). The sandbox's network namespace is empty except one
-host channel: the LiteLLM forwarder's Unix socket
-(`myconfig.ai.dev.litellm-forwarder.unixSocket`, default
-`/run/mysbx-egress/litellm.sock`), whose DIRECTORY the backend binds
-read-only at `/run/mysbx-egress`. The socket path is pinned to that one
-directory (only the file name is configurable, `unixSocket.name`), so a
-`..` or a shared directory cannot widen the bind; on a real run the
-directory must also be root-owned and not group-/world-writable. Inside
-the sandbox
+host channel: the per-run egress broker
+(`mysbx-egress-broker`, `MYSBX_EGRESS_BROKER` — required, bd
+myconfig-ps3i), which binds one Unix socket inside
+`$XDG_RUNTIME_DIR/mysbx-egress/<pid>/`. The run binds that DIRECTORY
+read-only at the fixed in-sandbox `/run/mysbx-egress`; only the
+socket's FILE NAME is configurable
+(`myconfig.ai.dev.litellm-forwarder.unixSocketName`, default
+`litellm.sock`, pinned as `MYSBX_EGRESS_SOCKET_NAME`), so a `..` or a
+path shape cannot widen the bind. Inside the sandbox
 `mysbx-egress-relay` (`MYSBX_EGRESS_RELAY`) listens on
 `127.0.0.1:<litellm port>` and forwards every connection to that
 socket, so agents keep their baked `http://127.0.0.1:<port>/v1` URLs
 while the only reachable endpoint is the host proxy.
 
-The module turns the socket half on wherever `services.litellm` runs
-and pins `MYSBX_EGRESS_SOCKET` / `MYSBX_EGRESS_PORT` /
-`MYSBX_EGRESS_RELAY`. A `proxy-only` run with a missing pin, or on a
+The module pins `MYSBX_EGRESS_SOCKET_NAME` / `MYSBX_EGRESS_PORT` /
+`MYSBX_EGRESS_RELAY` / `MYSBX_EGRESS_BROKER` wherever
+`services.litellm` runs. A `proxy-only` run with a missing pin, or on a
 backend that does not enforce the profile, is refused (exit 70) —
 never weakened to a shared network. `mysbx doctor` probes the channel
 with a `GET /v1/models` — through the per-run broker when the build pins

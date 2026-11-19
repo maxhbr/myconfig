@@ -91,24 +91,24 @@ _Avoid_: egress mode, proxy mode, restricted network
 **Egress forwarder**:
 The host-side, port-scoped `systemd-socket-proxyd` listener
 (`myconfig.ai.dev.litellm-forwarder`) that makes the loopback-only LiteLLM
-proxy reachable from a sandbox. It is a static, socket-activated unit;
-under `proxy-only` its Unix socket is the one channel the
-sandbox has.
+proxy reachable from the podman backends (pasta's `--map-guest-addr`
+maps to its port). Its old static Unix-socket half
+(`agent-litellm-forward-unix`) is gone (bd myconfig-ps3i) — the
+`proxy-only` channel is the per-run egress broker's.
 _Avoid_: proxy bridge, port forward, tunnel
 
 **Egress relay**:
 The in-sandbox process (`mysbx-egress-relay`) that accepts loopback TCP
-clients and forwards to the host egress forwarder's socket. It makes
+clients and forwards to the egress broker's socket. It makes
 proxy-aware clients work without giving them a route. The relay
 makes no allow/deny decisions of its own.
 _Avoid_: proxy server, sidecar, gateway
 
 **Egress broker**:
-The host process mysbx is DESIGNED to spawn once per run (bd
-myconfig-n8kv.1, not shipped yet) to own the sandbox's single network
+The host process mysbx spawns once per `proxy-only` run (bd
+myconfig-n8kv.1, myconfig-ps3i) to own the sandbox's single network
 channel: it listens on a socket in a user-owned per-run directory, dials
 the host LiteLLM endpoint itself, and writes a JSONL decision log the
 payload cannot reach ([`docs/design/egress.md`](./docs/design/egress.md)).
-Where it replaces the static egress forwarder's Unix socket for
-`proxy-only` runs.
+It is the ONLY host channel such a run has.
 _Avoid_: egress daemon, proxy service, gateway

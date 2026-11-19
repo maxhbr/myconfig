@@ -327,28 +327,27 @@
   # spec is a per-invocation debugging knob rather than a closure
   # path that must match the build.
   podmanPastaSpec ? null,
-  # The host Unix socket of the `network = "proxy-only"` channel
-  # (`MYSBX_EGRESS_SOCKET`, docs/design/config.md D20, bd
-  # myconfig-mo3.2.4): the `agent-litellm-forward-unix` forwarder's
-  # socket path, which the bubblewrap backend binds into the sandbox.
-  # It must be exactly `/run/mysbx-egress/<name>` — that directory is
-  # the only host path the profile binds, and the Rust side refuses
-  # anything else. `null` pins nothing, and a `proxy-only` run without
-  # a pinned socket is REFUSED (it fails closed). Pinned with
-  # `--set-default`: a debugging run may point it at another socket.
-  egressSocket ? null,
+  # The socket file NAME of the `network = "proxy-only"` channel
+  # (`MYSBX_EGRESS_SOCKET_NAME`, docs/design/egress.md E4, bd
+  # myconfig-ps3i): the file the per-run egress broker binds inside
+  # `$XDG_RUNTIME_DIR/mysbx-egress/<pid>/`. One plain file-name
+  # component — the Rust side refuses anything else. `null` pins
+  # nothing, and a `proxy-only` run without a pinned name is REFUSED
+  # (it fails closed). Pinned with `--set-default`: a debugging run
+  # may point it at another name.
+  egressSocketName ? null,
   # The host LiteLLM port the in-sandbox relay listens on
   # (`MYSBX_EGRESS_PORT`, docs/design/config.md D20): the relay binds
   # `127.0.0.1:<port>` inside the sandbox and forwards to the egress
   # socket, so an agent keeps its baked `127.0.0.1:<litellm port>`
   # URLs. `null` pins nothing.
   egressPort ? null,
-  # Whether this build carries the per-run egress broker
-  # (`MYSBX_EGRESS_BROKER`, docs/design/egress.md E1, bd
-  # myconfig-n8kv.1.2). A closure path, so `--set`, not `--set-default`:
-  # it must match this build. `false` pins nothing, which is the phase-A
-  # state (the static `agent-litellm-forward-unix` unit is the channel).
-  egressBroker ? true,
+  # The per-run egress broker (`MYSBX_EGRESS_BROKER`,
+  # docs/design/egress.md E1, bd myconfig-n8kv.1.2) is REQUIRED for
+  # `network = "proxy-only"` (bd myconfig-ps3i): the static
+  # `agent-litellm-forward-unix` unit is gone, so the broker is the
+  # only channel. A closure path, so `--set`, not `--set-default`: it
+  # must match this build.
   # Backend-specific environment pins of the podman-gvisor backend
   # (`MYSBX_PODMAN_ENV`): an attrset rendered as a space-separated
   # `KEY=VALUE` list. The container gets them as `--env` after the
@@ -987,7 +986,9 @@ let
     printf 'hosts: files\n' > "$out/nsswitch.conf"
   '';
   egressPins =
-    lib.optionalString (egressSocket != null) "--set-default MYSBX_EGRESS_SOCKET '${egressSocket}' "
+    lib.optionalString (
+      egressSocketName != null
+    ) "--set-default MYSBX_EGRESS_SOCKET_NAME '${egressSocketName}' "
     + lib.optionalString (
       egressPort != null
     ) "--set-default MYSBX_EGRESS_PORT '${toString egressPort}' "
@@ -995,8 +996,9 @@ let
     # so `--set`, not `--set-default` — it must match this build.
     + "--set MYSBX_EGRESS_RELAY '${crate}/bin/mysbx-egress-relay' "
     # The host-side broker (docs/design/egress.md E1, bd
-    # myconfig-n8kv.1.2): a closure path, so `--set`.
-    + lib.optionalString (egressBroker) "--set MYSBX_EGRESS_BROKER '${crate}/bin/mysbx-egress-broker' "
+    # myconfig-n8kv.1.2): a closure path, so `--set`. Always pinned —
+    # the profile has no other channel (bd myconfig-ps3i).
+    + "--set MYSBX_EGRESS_BROKER '${crate}/bin/mysbx-egress-broker' "
     + "--set MYSBX_EGRESS_ETC '${egressEtc}'";
   # The nono backend pins of the layered backend (bd
   # myconfig-6di.4.3): the binary (`--set`, an absolute store path
@@ -1218,11 +1220,11 @@ symlinkJoin {
     # `vm.store.enable` feeds it; the checks.nix wiring gate reads
     # it at eval time.
     vmStoreBaked = vmStoreBaked;
-    # The `network = "proxy-only"` channel pins (bd myconfig-mo3.2.4),
-    # for the generated-config gate: the host forwarder's Unix socket
-    # and the port the in-sandbox relay listens on. `null` when the
-    # caller pinned nothing.
-    inherit egressSocket egressPort;
+    # The `network = "proxy-only"` channel pins (bd myconfig-mo3.2.4,
+    # myconfig-ps3i), for the generated-config gate: the egress socket
+    # file name and the port the in-sandbox relay listens on. `null`
+    # when the caller pinned nothing.
+    inherit egressSocketName egressPort;
     # The in-sandbox relay binary the wrapper pins (bd myconfig-mo3.2.5),
     # for the checks.nix gate that runs it live.
     egressRelay = "${crate}/bin/mysbx-egress-relay";

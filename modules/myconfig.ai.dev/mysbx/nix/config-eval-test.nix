@@ -489,12 +489,11 @@ let
     else
       "ok";
   # The `network = "proxy-only"` channel pins (docs/design/config.md
-  # D20, bd myconfig-mo3.2.4): the wrapper pins the host forwarder's
-  # Unix socket and the relay port EXACTLY when the forwarder's
-  # socket half runs — gated on `services.litellm.enable` alone (the
-  # profile runs on plain bubblewrap, not only on podman hosts) — and
-  # pins NOTHING on a host without LiteLLM. Modelled on
-  # `gvisorPinGate`.
+  # D20, bd myconfig-mo3.2.4, myconfig-ps3i): the wrapper pins the
+  # egress socket NAME and the relay port EXACTLY when the host runs
+  # LiteLLM — the per-run egress broker binds `<name>` inside
+  # `$XDG_RUNTIME_DIR/mysbx-egress/<pid>/` — and pins NOTHING on a host
+  # without LiteLLM. Modelled on `gvisorPinGate`.
   egressPinGate =
     let
       pinsOf = extraModules: (evaluated extraModules).myconfig.ai.dev.mysbx.package.passthru;
@@ -508,18 +507,18 @@ let
       ];
       off = pinsOf [ { } ];
     in
-    if on.egressSocket != "/run/mysbx-egress/litellm.sock" then
-      throw "mysbx generated-config test: a litellm host did not pin the egress socket (got ${toString on.egressSocket})"
+    if on.egressSocketName != "litellm.sock" then
+      throw "mysbx generated-config test: a litellm host did not pin the egress socket name (got ${toString on.egressSocketName})"
     else if on.egressPort != 4000 then
       throw "mysbx generated-config test: the egress port did not follow the litellm port (got ${toString on.egressPort})"
-    else if off.egressSocket != null then
-      throw "mysbx generated-config test: a host without litellm pinned the egress socket (${toString off.egressSocket})"
+    else if off.egressSocketName != null then
+      throw "mysbx generated-config test: a host without litellm pinned the egress socket name (${toString off.egressSocketName})"
     else if off.egressPort != null then
       throw "mysbx generated-config test: a host without litellm pinned the egress port (${toString off.egressPort})"
     else
       "ok";
 
-  # Both halves of the host forwarder carry ONE confinement block
+  # The host forwarder carries ONE confinement block
   # (../../myconfig.ai.dev.litellm-forwarder.nix, bd myconfig-n8kv.1.5):
   # no privileges and a DESTINATION fence, so a compromised forwarder
   # cannot reach the LAN, the VPN or a cloud-metadata endpoint. Checked at
@@ -543,14 +542,10 @@ let
             enable = true;
             port = 4000;
           };
-          myconfig.ai.dev.litellm-forwarder = {
-            enable = false;
-            unixSocket.enable = true;
-          };
+          myconfig.ai.dev.litellm-forwarder.enable = false;
         }
       ];
       tcp = withForwarder.services.agent-litellm-forward.serviceConfig;
-      unix = withoutTcp.services.agent-litellm-forward-unix.serviceConfig;
       expected = {
         IPAddressAllow = "localhost";
         IPAddressDeny = "any";
@@ -566,12 +561,9 @@ let
         config:
         builtins.filter (key: (config.${key} or null) != expected.${key}) (builtins.attrNames expected);
       tcpWrong = wrongOf tcp;
-      unixWrong = wrongOf unix;
     in
     if tcpWrong != [ ] then
       throw "mysbx generated-config test: the TCP forwarder lost its hardening (${builtins.concatStringsSep ", " tcpWrong})"
-    else if unixWrong != [ ] then
-      throw "mysbx generated-config test: the Unix forwarder lost its hardening (${builtins.concatStringsSep ", " unixWrong})"
     else if tcp.Accept or null != null then
       throw "mysbx generated-config test: the TCP forwarder must keep Accept at its default (systemd-socket-proxyd inherits the listening socket)"
     else if withForwarder.sockets.agent-litellm-forward.socketConfig.Accept or false != false then
@@ -580,6 +572,11 @@ let
       throw "mysbx generated-config test: the TCP forwarder must keep the host netns to reach 127.0.0.1 (got ${builtins.toJSON tcp.PrivateNetwork})"
     else if withoutTcp.services ? agent-litellm-forward then
       throw "mysbx generated-config test: the TCP forwarder unit exists although the forwarder is off"
+    else if
+      withForwarder.services ? agent-litellm-forward-unix
+      || withForwarder.sockets ? agent-litellm-forward-unix
+    then
+      throw "mysbx generated-config test: the static unix forwarder unit still exists (bd myconfig-ps3i)"
     else
       "ok";
 

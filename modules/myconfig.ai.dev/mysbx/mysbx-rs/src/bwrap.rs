@@ -1859,10 +1859,10 @@ impl fmt::Display for Error {
             Error::EgressChannelMissing => write!(
                 f,
                 "network = \"proxy-only\" but this run carries no egress channel \
-                 \u{2014} no pinned forwarder socket (MYSBX_EGRESS_SOCKET) or relay \
-                 binary (MYSBX_EGRESS_RELAY); enable \
-                 myconfig.ai.dev.litellm-forwarder.unixSocket.enable so the host \
-                 runs the forwarder, or set network = \"shared\"/\"none\" \
+                 \u{2014} no per-run egress broker (MYSBX_EGRESS_BROKER), socket \
+                 name (MYSBX_EGRESS_SOCKET_NAME) or relay \
+                 binary (MYSBX_EGRESS_RELAY); rebuild mysbx from a host \
+                 config that runs LiteLLM, or set network = \"shared\"/\"none\" \
                  (docs/design/config.md D20) \u{2014} the profile fails closed \
                  rather than falling back to a shared network"
             ),

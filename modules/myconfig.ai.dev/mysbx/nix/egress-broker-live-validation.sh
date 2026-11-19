@@ -161,14 +161,15 @@ pass "mysbx diagnose egress reads the log back (cli.md D29)"
 
 # ---- E5: fail closed ----------------------------------------------------
 # Inject the failure WITHOUT touching the pinned broker: the wrapper pins
-# `MYSBX_EGRESS_BROKER` with `--set` (immovable) but `MYSBX_EGRESS_SOCKET`
-# and `_PORT` with `--set-default`, so a run can be given a socket path
-# step 4b rejects. That is the same fail-closed path (exit 70, nothing
+# `MYSBX_EGRESS_BROKER` with `--set` (immovable) but
+# `MYSBX_EGRESS_SOCKET_NAME` and `_PORT` with `--set-default`, so a run
+# can be given a socket name step 4b rejects (a path shape is not a
+# plain file name). That is the same fail-closed path (exit 70, nothing
 # created) reached without moving a shared executable that a concurrent
 # mysbx run may be using.
 before=$(count_run_dirs)
 sidecar_before=$(find "$sidecar" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)
-MYSBX_EGRESS_SOCKET='/run/not-the-egress-dir/litellm.sock' \
+MYSBX_EGRESS_SOCKET_NAME='/run/not-the-egress-dir/litellm.sock' \
     "$mysbx" run -- true >/dev/null 2>&1 && refused=0 || refused=$?
 [ "$refused" = "$MYSBX_EXIT_REFUSED" ] ||
     fail "fail closed" "a run with a broken egress pin exited $refused, expected $MYSBX_EXIT_REFUSED (E5)"
