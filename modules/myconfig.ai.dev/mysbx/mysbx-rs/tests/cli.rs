@@ -117,6 +117,7 @@ fn spawn_with_args<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> C
         .env_remove("MYSBX_PODMAN_TARBALL")
         .env_remove("MYSBX_PODMAN_IMAGE")
         .env_remove("MYSBX_PODMAN_IMAGE_ID")
+        .env_remove("MYSBX_PODMAN_EGRESS_RELAY")
         .env_remove("MYSBX_GVISOR_RUNTIME_FLAGS")
         .env_remove("MYSBX_GVISOR_CGROUP_MANAGER")
         .env_remove("MYSBX_PODMAN_SHELL")
@@ -10107,22 +10108,18 @@ fn allowlist_on_microvm_ch_is_refused() {
 }
 
 #[test]
-fn proxy_only_is_refused_on_every_backend_but_the_bwrap_tiers() {
-    // D20 (bd myconfig-mo3.2.3, mo3.2.6, myconfig-vpi9.1):
-    // `network = "proxy-only"` is enforced by the bwrap-built tiers
-    // (bubblewrap and the layered nono backend on top of it); every
-    // other backend refuses it (exit 70) with a backend-specific
-    // reason, before the session clone and before the --dry-run
-    // return, so a dry run audits it. (The bwrap tiers' own
-    // missing-pins fail-closed refusal is
-    // `proxy_only_on_bubblewrap_without_pins_is_refused`.)
-    for backend in [
-        "podman-gvisor",
-        "podman-krun",
-        "krun",
-        "microvm-qemu",
-        "microvm-ch",
-    ] {
+fn proxy_only_is_refused_on_every_backend_but_the_enforcing_tiers() {
+    // D20 (bd myconfig-mo3.2.3, mo3.2.6, myconfig-vpi9.1, and
+    // myconfig-eov2 — n8kv.2 C5 lifting podman-gvisor):
+    // `network = "proxy-only"` is enforced by bubblewrap, the
+    // layered nono backend and podman-gvisor (with its pins — the
+    // bwrap tiers' own missing-pins fail-closed refusal is
+    // `proxy_only_on_bubblewrap_without_pins_is_refused`, the
+    // podman one `proxy_only_on_podman_gvisor_without_the_image_relay_is_refused`);
+    // every other backend refuses it (exit 70) with a
+    // backend-specific reason, before the session clone and before
+    // the --dry-run return, so a dry run audits it.
+    for backend in ["podman-krun", "krun", "microvm-qemu", "microvm-ch"] {
         let base = match backend {
             // The VM backends need a fixture root the guest can place a
             // share under; the refusal fires before any share is made,
@@ -10303,6 +10300,142 @@ fn proxy_only_on_bubblewrap_without_pins_is_refused() {
         !stdout.contains("--clearenv"),
         "no argv on refusal: {stdout}"
     );
+}
+
+#[test]
+fn proxy_only_on_podman_gvisor_is_accepted_with_the_image_relay() {
+    // The C5 lift (bd myconfig-eov2): the pipeline admits the profile
+    // on podman-gvisor when the wrapper pinned the channel — the
+    // broker pins of `spawn_proxy_only` plus the IN-IMAGE relay
+    // (`MYSBX_PODMAN_EGRESS_RELAY`, the `MYSBX_PODMAN_WAYPIPE`
+    // idiom). The argv itself is locked by the
+    // `podman-egress-proxy-only.txt` golden; what only a CLI run can
+    // show is the pipeline letting the run through and the dry run
+    // auditing the podman shape of the channel.
+    let (inv, _, sidecar) = fixture("proxy-only-podman-gvisor", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"podman-gvisor\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/agent-gvisor:latest")
+        .env(
+            "MYSBX_PODMAN_EGRESS_RELAY",
+            "/nix/store/synth-image-mysbx/bin/mysbx-egress-relay",
+        );
+    let (code, stdout, stderr) = run_command(cmd);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stdout.contains("\n--runtime-flag\nhost-uds=open\n"),
+        "the runsc UDS channel is part of the audit: {stdout}"
+    );
+    assert!(
+        stdout.contains("dst=/run/mysbx-egress,ro"),
+        "the broker directory bind is part of the audit: {stdout}"
+    );
+    assert!(
+        stdout.contains("\n--network\nnone\n"),
+        "the empty container network is part of the audit: {stdout}"
+    );
+    assert!(
+        stdout.contains("MYSBX_EGRESS_PROXY=http://127.0.0.1:4000"),
+        "the endpoint is announced: {stdout}"
+    );
+    assert!(
+        stdout.contains(
+            "\n/nix/store/synth-image-mysbx/bin/mysbx-egress-relay\n--listen\n127.0.0.1:4000\n"
+        ),
+        "the in-image relay wraps the payload: {stdout}"
+    );
+    // The broker argv block of the dry run names the same channel a
+    // bwrap run would spawn — one broker, every backend.
+    assert!(
+        stdout.contains("mysbx-egress-broker"),
+        "the dry run audits the broker argv: {stdout}"
+    );
+}
+
+#[test]
+fn proxy_only_on_podman_gvisor_without_the_image_relay_is_refused() {
+    // Fail-closed (bd myconfig-eov2): the broker pins alone are not
+    // enough on podman-gvisor — the payload wrap needs the IN-IMAGE
+    // relay, and a build whose image carries none (a host without
+    // LiteLLM, or a stale image) REFUSES the run instead of wrapping
+    // the payload in a binary that would die with ENOENT inside the
+    // container.
+    let (inv, _, sidecar) = fixture("proxy-only-podman-gvisor-no-relay", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"podman-gvisor\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/agent-gvisor:latest");
+    let (code, stdout, stderr) = run_command(cmd);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("MYSBX_PODMAN_EGRESS_RELAY"),
+        "the refusal names the pin: {stderr}"
+    );
+    assert!(
+        stderr.contains("imagePackages") || stderr.contains("mysbx-egress-relay"),
+        "the refusal names the fix: {stderr}"
+    );
+    assert!(
+        !stdout.contains("--runtime=runsc"),
+        "no argv on refusal: {stdout}"
+    );
+}
+
+#[test]
+fn proxy_only_on_podman_gvisor_refuses_a_socket_in_another_bind() {
+    // The safety gate of the lift (bd myconfig-eov2): runsc's
+    // `host-uds=open` opens the gofer's Unix-socket channel to every
+    // UDS pathnode the binds carry, so a bind source that already
+    // contains a host socket is a second channel the profile does not
+    // grant — the run is REFUSED, naming the socket. A REAL-RUN check
+    // (the E5 rule: a dry run audits the argv, never the filesystem),
+    // and it fires before the broker spawn, so a refused run starts
+    // nothing. The refusal lands before the backend exec, so the test
+    // needs no podman installed.
+    let (inv, _, sidecar) = fixture("proxy-only-podman-gvisor-socket-audit", &["run"]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"podman-gvisor\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    // A planted socket in the repo — the bind every run carries. The
+    // audit must find it RECURSIVELY; it sits one level below a
+    // subdirectory to pin the walk, not the top-level readdir.
+    let socket_dir = inv.cwd.join("hidden").join("deep");
+    std::fs::create_dir_all(&socket_dir).unwrap();
+    let planted = socket_dir.join("planted.sock");
+    let _ = std::os::unix::net::UnixListener::bind(&planted);
+    let mut cmd = spawn_proxy_only(&inv, &["run", "--", "/bin/true"]);
+    cmd.env("MYSBX_PODMAN_IMAGE", "localhost/agent-gvisor:latest")
+        .env("MYSBX_PODMAN_EGRESS_RELAY", "/synth/relay")
+        .env("MYSBX_TOOLS_PATH", "/bin")
+        .env("MYSBX_BWRAP", "/bin/true")
+        .env(
+            "MYSBX_SSH_KEYGEN",
+            fake_ssh_keygen(&inv.cwd).to_str().unwrap(),
+        );
+    let (code, stdout, stderr) = run_command(cmd);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("hidden/deep/planted.sock"),
+        "the refusal names the planted socket: {stderr}"
+    );
+    assert!(
+        stderr.contains("host-uds"),
+        "the refusal names the channel the gate guards: {stderr}"
+    );
+    assert!(
+        !stdout.contains("--runtime=runsc"),
+        "no argv on refusal: {stdout}"
+    );
+    let _ = std::fs::remove_file(&planted);
 }
 
 #[test]

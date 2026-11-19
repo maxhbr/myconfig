@@ -176,7 +176,12 @@ pub const REGISTRY: &[Backend] = &[
         detach_refused: true,
         waypipe_refused: false,
         allowlist: Allowlist::Refused,
-        network_proxy_only: false,
+        // Enforced since bd myconfig-eov2 (n8kv.2 C5): `--network none`
+        // plus the per-run broker's socket directory bound into the
+        // container with runsc's `--host-uds=open` — the gofer's UDS
+        // reach is exactly the pathnodes the binds carry, so the
+        // payload gets the one broker socket and nothing else.
+        network_proxy_only: true,
         network_public: false,
     },
     Backend {
@@ -363,14 +368,17 @@ mod tests {
                 b.name
             );
             // D20's proxy-only profile needs an EMPTY network
-            // namespace to put one loopback port into, which only the
-            // bwrap-built tiers have (bd myconfig-mo3.2.6 for
-            // bubblewrap, bd myconfig-vpi9.1 for the layered nono
-            // backend, which IS bubblewrap plus nono inside). That is
-            // exactly the always-on base tier; every other backend
-            // refuses the profile.
+            // namespace to put one loopback port into. The
+            // bwrap-built tiers have it since phase B (bd
+            // myconfig-mo3.2.6 for bubblewrap, myconfig-vpi9.1 for the
+            // layered nono backend); podman-gvisor joins them since
+            // bd myconfig-eov2 (n8kv.2 C5) — `--network none` plus
+            // the bound broker socket and runsc's `host-uds=open` is
+            // the same fence. Every other backend still refuses the
+            // profile.
+            let proxy_only_expected = b.always_on || b.name == "podman-gvisor";
             assert_eq!(
-                b.network_proxy_only, b.always_on,
+                b.network_proxy_only, proxy_only_expected,
                 "`{}`: network_proxy_only must match config.md D20's table",
                 b.name
             );

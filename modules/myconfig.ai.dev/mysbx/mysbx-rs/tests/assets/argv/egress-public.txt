@@ -48,7 +48,7 @@ MYSBX_MULTIPLEXER
 none
 --setenv
 MYSBX_HOST
-(none)
+localhost
 --setenv
 MYSBX_NETWORK
 public

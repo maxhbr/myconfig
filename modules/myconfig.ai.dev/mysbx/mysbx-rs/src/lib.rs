@@ -2810,8 +2810,13 @@ fn sandbox_pipeline(
         }
         if !backends::find(backend).is_some_and(|row| row.network_public) {
             let reason = match backend {
+                // Enforced proxy-only since bd myconfig-eov2 (n8kv.2
+                // C5), but the PUBLIC lane stays bubblewrap-only (bd
+                // myconfig-fvi's registry decision): the lane is the
+                // broker's `--public` CONNECT mode, and only the
+                // bubblewrap backend carries that lane today.
                 "podman-gvisor" => {
-                    "pasta's --map-guest-addr ADDS a route, it does not remove the container's default route (bd myconfig-6di.3)"
+                    "the public lane is the broker's --public CONNECT mode, carried only by the bubblewrap backend (bd myconfig-fvi); the proxy-only transport is not a public transport"
                 }
                 "podman-krun" | "krun" => {
                     "libkrun's TSI is an UNFILTERED proxy: the VMM dials whatever the guest connects to, from a netns with a default route"
@@ -2869,8 +2874,14 @@ fn sandbox_pipeline(
         }
         if !backends::find(backend).is_some_and(|row| row.network_proxy_only) {
             let reason = match backend {
+                // The podman-gvisor profile is ENFORCED since bd
+                // myconfig-eov2 (n8kv.2 C5); this arm is unreachable
+                // for it — the registry row admits it upstream and the
+                // channel resolution below fails closed on the pins.
+                // Kept as a named arm so a registry regression names
+                // the transport, not a generic "cannot express".
                 "podman-gvisor" => {
-                    "pasta's --map-guest-addr ADDS a route to the LiteLLM forwarder, it does not remove the container's default route (bd myconfig-6di.3)"
+                    "the egress channel did not resolve (MYSBX_PODMAN_EGRESS_RELAY / the broker pins); the refusal is fail-closed, never a shared network"
                 }
                 // bd myconfig-n8kv.2 C6: the podman-krun refusal is
                 // PERMANENT — not a "not yet" like the direct-VM
@@ -3671,6 +3682,55 @@ fn sandbox_pipeline(
             }),
             _ => None,
         };
+    // The podman-gvisor twin of the channel (bd myconfig-eov2 — n8kv.2
+    // C5): the SAME per-run broker directory and socket name, but the
+    // relay binary is the IN-IMAGE one (`MYSBX_PODMAN_EGRESS_RELAY`,
+    // the `MYSBX_PODMAN_WAYPIPE` idiom — this backend mounts nothing
+    // from the host `/nix/store`, so the host relay pin would die with
+    // ENOENT inside the container) and the look-up files are NOT
+    // bound: the image carries its own `/etc`, and podman's `--network
+    // none` leaves the container's `hosts` file to podman. `None`
+    // whenever the bwrap channel is `None` — the same pins gate both
+    // (step 4b), and an unset image-relay pin FAILS CLOSED right
+    // here rather than producing a channel whose payload wrap would
+    // die at exec time with the container running.
+    let podman_egress_relay: Option<String> =
+        if egress.is_some() && backends::find(backend).is_some_and(|row| row.podman()) {
+            match env_opt("MYSBX_PODMAN_EGRESS_RELAY") {
+                Some(relay) => Some(relay),
+                None => {
+                    eprintln!(
+                        "mysbx: network = \"proxy-only\" on the podman-gvisor backend \
+                     needs the in-image egress relay (MYSBX_PODMAN_EGRESS_RELAY), \
+                     but this build pinned none — bake mysbx-egress-relay into \
+                     the container image (myconfig.ai.dev.mysbx.podman.imagePackages \
+                     carries it when the host runs LiteLLM) and rebuild, or switch \
+                     the backend (docs/design/config.md D20, bd myconfig-eov2)"
+                    );
+                    return EXIT_INFRASTRUCTURE;
+                }
+            }
+        } else {
+            None
+        };
+    let podman_egress_params: Option<bwrap::EgressChannel<'_>> =
+        match (egress.as_ref(), egress_bind_dir.as_deref()) {
+            (Some(pinned), Some(socket_dir)) => {
+                podman_egress_relay
+                    .as_deref()
+                    .map(|relay| bwrap::EgressChannel {
+                        socket_dir,
+                        socket: &pinned.socket,
+                        port: pinned.port,
+                        relay_bin: relay,
+                        etc_dir: &pinned.etc_dir,
+                        allow_domains: &pinned.allow_domains,
+                        connect_ports: &pinned.connect_ports,
+                        public: pinned.public,
+                    })
+            }
+            _ => None,
+        };
     let (report_shell, report_tools_path, report_mux_entry) =
         if backends::find(backend).is_some_and(|row| row.podman()) {
             (
@@ -3711,8 +3771,15 @@ fn sandbox_pipeline(
         detachable,
         inner: None,
         // The egress channel the report's `network:` line describes;
-        // the bubblewrap arm below consumes the same value.
-        egress: egress_params.clone(),
+        // the bubblewrap arm below consumes the same value — and a
+        // podman run's report names the PODMAN channel (the same
+        // directory, socket and port; the relay is the image's), so
+        // one line stays honest on every enforcing backend.
+        egress: if backends::find(backend).is_some_and(|row| row.podman()) {
+            podman_egress_params.clone()
+        } else {
+            egress_params.clone()
+        },
     };
     // The backend dispatch produces the backend binary, the argv and
     // — for podman-gvisor — the container image. Every backend's
@@ -4132,6 +4199,12 @@ fn sandbox_pipeline(
                 git_trust: git_trust_params,
                 run_id: pid,
                 krun_scratch: krun_scratch_params,
+                // The proxy-only channel of the gvisor variant (bd
+                // myconfig-eov2): the in-image relay bind/wrap/env of
+                // the lift. `None` on krun by construction (the profile
+                // is refused upstream), and the builder re-refuses a
+                // channel on the krun variant as defense in depth.
+                egress: podman_egress_params.as_ref(),
                 pids_limit,
                 memory,
                 cpus,
@@ -5021,6 +5094,58 @@ fn sandbox_pipeline(
             }
         }
         return 0;
+    }
+
+    // The recursive socket audit of the podman-gvisor proxy-only lift
+    // (bd myconfig-eov2 — n8kv.2 C5), the SAFETY GATE the design notes
+    // name: runsc's `host-uds=open` lets the gofer CONNECT the host
+    // path of any Unix-socket pathnode the application can reach
+    // through a bind — the reach is exactly the bound trees, so every
+    // OTHER bind beside the broker's directory is a potential second
+    // channel (a state-dir backing or configured mount that already
+    // contains a host socket would become connectable, while under
+    // runsc's `host-uds=none` default no socket is). The audit walks
+    // every effective bind source EXCEPT the two intended channels —
+    // the broker's run directory and a waypipe display run's socket
+    // directory — and REFUSES the run when it finds a socket, naming
+    // the path. A REAL-RUN check after the dry-run return (the E5
+    // rule: the filesystem is not audited by a dry run), before the
+    // broker spawn so a refused run starts nothing.
+    if podman_egress_params.is_some() && backend == "podman-gvisor" {
+        let waypipe_dir = waypipe_socket_dir.clone();
+        let mut sources: Vec<std::path::PathBuf> = merged
+            .mounts
+            .iter()
+            .map(|m| std::path::PathBuf::from(&m.path))
+            .collect();
+        match &session {
+            Some(s) => {
+                sources.push(canon_bind_source(&s.clone));
+                sources.push(canon_bind_source(&s.worktrees));
+            }
+            None => {
+                sources.push(repo.root.clone());
+                sources.extend(repo.git_dirs.iter().cloned());
+                if let Some(worktrees) = &repo.worktrees {
+                    sources.push(canon_bind_source(worktrees));
+                }
+                for entry in merged.effective_state_dirs() {
+                    sources.push(canon_bind_source(&repo.sidecar.join("state").join(entry)));
+                }
+            }
+        }
+        sources.retain(|s| s != &waypipe_dir && Some(s) != egress.as_ref().map(|p| &p.broker_dir));
+        if let Some(socket) = find_unix_socket(&sources) {
+            eprintln!(
+                "mysbx: network = \"proxy-only\" on the podman-gvisor backend opens the \
+                 gofer's host Unix-socket channel (runsc host-uds=open), and the bind \
+                 source {} contains a Unix socket — a second channel the profile \
+                 does not grant. Remove the socket or drop it from the binds \
+                 (docs/design/config.md D20, bd myconfig-eov2)",
+                socket.display()
+            );
+            return EXIT_INFRASTRUCTURE;
+        }
     }
 
     // 7a. under `--verbose` the exact executed command is part of the
@@ -7262,6 +7387,59 @@ fn sweep_pid_dirs(root: &std::path::Path) {
             let _ = std::fs::remove_dir_all(entry.path());
         }
     }
+}
+
+/// The recursive socket audit of the podman-gvisor proxy-only lift
+/// (bd myconfig-eov2 — n8kv.2 C5): walk each source tree and return
+/// the FIRST Unix socket found, `None` when none is.
+/// No-symlink-follow, one depth-first pass over `read_dir`:
+/// a socket behind an ABSOLUTE symlink is not reachable through the
+/// bind (gvisor's sandbox VFS resolves absolute targets against the
+/// CONTAINER root, never the host — only the bound pathnodes are
+/// gofer-backed), and a RELATIVE symlink's socket target lies inside
+/// the same tree and is found by the walk itself. Directory symlink
+/// cycles therefore cannot loop the walk either.
+/// Walks the WHOLE tree (a checkout can be large — the price of the
+/// gate; a socket can hide at any depth because the gofer reaches
+/// by pathname, not by top level).
+fn find_unix_socket(sources: &[std::path::PathBuf]) -> Option<std::path::PathBuf> {
+    for source in sources {
+        if let Some(hit) = find_unix_socket_under(source) {
+            return Some(hit);
+        }
+    }
+    None
+}
+/// The recursive half of [`find_unix_socket`]: `None`-terminated DFS,
+/// checking each entry's file type once (a socket never hides behind a
+/// further directory).
+fn find_unix_socket_under(dir: &std::path::Path) -> Option<std::path::PathBuf> {
+    use std::os::unix::fs::FileTypeExt;
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return None;
+    };
+    for entry in entries.flatten() {
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if file_type.is_symlink() {
+            // A symlinked DIRECTORY is not descended: its target is
+            // either outside the tree (absolute — unreachable through
+            // the bind, see the walk's doc) or inside it (found by the
+            // walk from the real path). A symlinked SOCKET target
+            // resolves within the tree the same way.
+            continue;
+        }
+        if file_type.is_socket() {
+            return Some(entry.path());
+        }
+        if file_type.is_dir() {
+            if let Some(hit) = find_unix_socket_under(&entry.path()) {
+                return Some(hit);
+            }
+        }
+    }
+    None
 }
 
 /// Start the per-run egress broker (docs/design/egress.md E1/E2): create

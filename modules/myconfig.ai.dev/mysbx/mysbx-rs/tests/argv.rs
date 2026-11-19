@@ -4102,6 +4102,9 @@ fn podman_params() -> PodmanParams<'static> {
         // Foreground runs pass `false` (detach.md B7): the argv stays
         // byte-identical, the goldens pin it.
         detachable: false,
+        // No proxy-only channel by default (bd myconfig-eov2): the
+        // proxy-only tests pass their own, like the git trust tests.
+        egress: None,
     }
 }
 
@@ -4344,15 +4347,20 @@ fn podman_config_env_cannot_repoint_the_xdg_base_dirs() {
 }
 
 #[test]
-fn proxy_only_is_refused_by_the_podman_builder() {
-    // D20 (bd myconfig-6di.3): the shared podman builder refuses
-    // `network = "proxy-only"` itself — pasta adds a route to the
-    // forwarder without removing the default route — defense in depth
-    // next to the pipeline's step-4b refusal. The SAME builder serves
-    // podman-gvisor and podman-krun, so one test covers both.
+fn proxy_only_is_refused_by_the_podman_krun_builder() {
+    // D20 (bd myconfig-6di.3, made PERMANENT for krun by bd
+    // myconfig-1h9q): the shared podman builder refuses a brokered
+    // network profile on the KRUN variant itself — TSI is an
+    // unfiltered proxy and AF_UNIX sockets do not cross virtio-fs —
+    // defense in depth next to the pipeline's step-4b refusal. The
+    // GVISOR sibling enforces the profile since bd myconfig-eov2
+    // (`--network none` + the bound broker socket + runsc
+    // `host-uds=open`), covered by its own tests below.
     let mut cfg = podman_base(true);
     cfg.network = mysbx::config::Network::ProxyOnly;
-    let params = podman_params();
+    let mut params = podman_params();
+    params.krun = true;
+    params.runtime = "/synth/crun-libkrun";
     let err = podman_run_argv(
         &cfg,
         &synth_repo(),
@@ -4360,7 +4368,153 @@ fn proxy_only_is_refused_by_the_podman_builder() {
         &host_env(&[]),
         &params,
     )
-    .expect_err("a proxy-only podman run must be refused");
+    .expect_err("a proxy-only podman-krun run must be refused");
+    assert!(
+        matches!(err, mysbx::podman_gvisor::Error::ProxyOnlyRefused),
+        "{err}"
+    );
+}
+
+#[test]
+fn proxy_only_on_podman_gvisor_fails_closed_without_a_channel() {
+    // The gvisor half of the lift's defense in depth (bd
+    // myconfig-eov2): a brokered config whose channel did not
+    // resolve is refused by the builder too — the same fail-closed
+    // rule as bwrap's `EgressChannelMissing`, never a silent shared
+    // network. (The pipeline refuses upstream when the pins are
+    // missing; this pins the builder's own backstop.)
+    let mut cfg = podman_base(true);
+    cfg.network = mysbx::config::Network::ProxyOnly;
+    let err = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &podman_params(),
+    )
+    .expect_err("a channel-less proxy-only gvisor run must be refused");
+    assert!(
+        matches!(err, mysbx::podman_gvisor::Error::EgressChannelMissing),
+        "{err}"
+    );
+}
+
+/// A synthetic podman-gvisor egress channel (bd myconfig-eov2): the
+/// same shape the pipeline threads from the resolved pins, with the
+/// IN-IMAGE relay the `MYSBX_PODMAN_EGRESS_RELAY` pin names.
+fn podman_egress() -> mysbx::bwrap::EgressChannel<'static> {
+    mysbx::bwrap::EgressChannel {
+        socket_dir: "/run/user/1000/mysbx-egress/1234",
+        socket: "litellm.sock",
+        port: 4000,
+        relay_bin: "/nix/store/synth-image-mysbx/bin/mysbx-egress-relay",
+        etc_dir: "/synth/store/bbbb-mysbx-egress-etc",
+        allow_domains: &[],
+        connect_ports: &[],
+        public: false,
+    }
+}
+
+#[test]
+fn podman_golden_egress_proxy_only() {
+    // The C5 lift (bd myconfig-eov2): on podman-gvisor the profile
+    // rides `--network none` (the `network_spec` the podman arm maps
+    // a non-shared network onto), the per-run broker's socket
+    // DIRECTORY bound ro at the same in-sandbox path bwrap uses,
+    // runsc's `host-uds=open` runtime flag, the MYSBX_EGRESS_PROXY
+    // env in the infrastructure block and the IN-IMAGE relay as the
+    // innermost payload wrap — one golden pins the whole shape.
+    let mut cfg = podman_base(false);
+    cfg.network = mysbx::config::Network::ProxyOnly;
+    let mut params = podman_params();
+    params.network_spec = Some("none");
+    let egress = podman_egress();
+    params.egress = Some(&egress);
+    let argv = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
+    assert_golden("podman-egress-proxy-only.txt", &argv);
+    // The load-bearing deltas, asserted beyond the golden bytes so a
+    // regenerated golden with a regression still fails a named rule:
+    // the host-uds flag (the gofer's connect channel), the bind, the
+    // announced endpoint and the relay wrap ordering.
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--runtime-flag" && w[1] == "host-uds=open"),
+        "runsc must open its UDS connect channel: {argv:?}"
+    );
+    assert!(
+        argv.windows(2).any(|w| w[0] == "--mount"
+            && w[1].contains("src=/run/user/1000/mysbx-egress/1234,dst=/run/mysbx-egress,ro")),
+        "the broker directory bind is missing: {argv:?}"
+    );
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--env" && w[1] == "MYSBX_EGRESS_PROXY=http://127.0.0.1:4000"),
+        "the endpoint must be announced: {argv:?}"
+    );
+    let image_at = argv.iter().position(|a| a == params.image).unwrap();
+    assert_eq!(argv[image_at + 1], params.egress.unwrap().relay_bin);
+    assert!(argv[image_at + 1..]
+        .windows(2)
+        .any(|w| w[0] == "--" && w[1] == "/bin/synth-shell"));
+    // The operator's runtime flags win over the appended one: a
+    // debugging pin can still re-close the channel, and the appended
+    // flag never duplicates an explicit `host-uds` pin in a way that
+    // would change its position class.
+    let flags = ["host-uds=none".to_string()];
+    let mut pinned = podman_params();
+    pinned.network_spec = Some("none");
+    pinned.runtime_flags = &flags;
+    let egress = podman_egress();
+    pinned.egress = Some(&egress);
+    let argv = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &pinned,
+    )
+    .unwrap();
+    let positions: Vec<usize> = argv
+        .windows(2)
+        .enumerate()
+        .filter(|(_, w)| w[0] == "--runtime-flag")
+        .map(|(i, _)| i)
+        .collect();
+    assert_eq!(
+        argv[positions[0] + 1],
+        "host-uds=none",
+        "the operator's flag stays first (runsc's last-wins parsing keeps ours): {argv:?}"
+    );
+}
+
+#[test]
+fn podman_egress_channel_on_krun_is_refused() {
+    // The channel itself is gvisor-only (bd myconfig-eov2): a
+    // `Some` on the krun variant is the permanent refusal (C6),
+    // never accepted-and-ignored — the same refusal shape as
+    // `GitTrustOnGvisor`, mirrored.
+    let mut cfg = podman_base(true);
+    cfg.network = mysbx::config::Network::ProxyOnly;
+    let mut params = podman_params();
+    params.krun = true;
+    params.runtime = "/synth/crun-libkrun";
+    let egress = podman_egress();
+    params.egress = Some(&egress);
+    let err = podman_run_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .expect_err("a channel on the krun variant must be refused");
     assert!(
         matches!(err, mysbx::podman_gvisor::Error::ProxyOnlyRefused),
         "{err}"

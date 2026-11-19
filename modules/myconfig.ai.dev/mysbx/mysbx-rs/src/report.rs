@@ -181,7 +181,7 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
                 // E3/E4), the host's static forwarder directory without
                 // one. The in-sandbox destination is fixed either way.
                 Some(e) => p(format!(
-                    "network:        proxy-only (no --share-net; 127.0.0.1:{} -> {}/{} via the relay from {})",
+                    "network:        proxy-only (unshared netns; 127.0.0.1:{} -> {}/{} via the relay from {})",
                     e.port,
                     crate::bwrap::EGRESS_DIR,
                     e.socket,
@@ -202,7 +202,7 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         crate::config::Network::Public => {
             match &r.params.egress {
                 Some(e) => p(format!(
-                    "network:        public (no --share-net; 127.0.0.1:{} -> {}/{} via the relay from {}; CONNECT gated by the deny set)",
+                    "network:        public (unshared netns; 127.0.0.1:{} -> {}/{} via the relay from {}; CONNECT gated by the deny set)",
                     e.port,
                     crate::bwrap::EGRESS_DIR,
                     e.socket,

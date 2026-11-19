@@ -1291,7 +1291,7 @@ network, whose whole point is that a host-wide decision holds).
 reachable, and no model credential exists inside the sandbox — the
 proxy holds it (D28 records the credential rules, including the
 residual risks the profile does NOT remove). On every backend except
-`bubblewrap` the profile is mutually exclusive with D21's
+the enforcing `bubblewrap` and `podman-gvisor` the profile is mutually exclusive with D21's
 hostname/port allowlists: those keys describe what a sandbox with a
 *shared* network may reach, so next to `network = "proxy-only"` they
 are a refused run (exit `70`) — decided at MERGE time, where the
@@ -1319,8 +1319,8 @@ as D21. The bwrap-built tiers enforce it (bubblewrap, and the layered
 | --- | --- |
 | `bubblewrap` | the enforcing backend: an unshared network namespace, the per-run egress broker's socket DIRECTORY (`$XDG_RUNTIME_DIR/mysbx-egress/<pid>/`, created by the run) bound read-only at the fixed in-sandbox `/run/mysbx-egress`, and the `mysbx-egress-relay` binary listening on `127.0.0.1:<litellm port>` and forwarding to the socket inside it; no resolver, but a fixed `/etc/hosts` (`127.0.0.1 localhost` only) and `/etc/nsswitch.conf` (`hosts: files`) from the store (`MYSBX_EGRESS_ETC`), so `localhost` reaches the relay and every other name fails at once as not found instead of timing out on DNS (bd myconfig-mo3.2.6; the broker channel since myconfig-n8kv.1, required by myconfig-ps3i) |
 | `nono` | the same bwrap channel, PLUS nono's own deny: `--block-net` with ONE `--allow-connect-port <litellm port>` (bd myconfig-vpi9.1). The deny is what makes the profile real on this layer rather than a bare consequence of the empty netns — it also denies UDP and raw sockets, which a Landlock port grant alone does not. The relay runs OUTSIDE nono (bwrap's innermost wrap), so the socket directory and the relay's listener are not this layer's grants. The port grant carries no address (Landlock grants ports); harmless here because the netns holds nothing but `lo` |
-| `podman-gvisor` | refused — pasta's `--map-guest-addr` ADDS a route to the forwarder, it does not remove the default route (bd myconfig-6di.3) |
-| `podman-krun` | refused — libkrun's TSI is an unfiltered proxy from the container netns (bd myconfig-6di.5.5) |
+| `podman-gvisor` | the second enforcing backend (bd myconfig-n8kv.2 C5, bd myconfig-eov2): `--network none` — no net device, no route, pasta not involved — the per-run broker's socket directory bound read-only at the fixed `/run/mysbx-egress` (the same directory bubblewrap binds, the same pin), and runsc's `--host-uds=open` so connect(2) to the bound socket inode is allowed — the gate is real: runsc's default `host-uds=none` refuses it. The reachable host-socket set is exactly the declared binds (the gofer tree; live-proven in `egress-validation-log.md`), and a recursive no-symlink-follow audit of every bind source runs before spawn. The in-image `mysbx-egress-relay` (`MYSBX_PODMAN_EGRESS_RELAY`, baked into the image only when the host's LiteLLM is enabled) listens on `127.0.0.1:<litellm port>` and forwards to the bound socket — the baked store's own binary, not a host bind |
+| `podman-krun` | refused, PERMANENTLY (bd myconfig-n8kv.2 C6) — libkrun's TSI is an unfiltered proxy from the container netns, and AF_UNIX sockets do not cross virtio-fs, so no default-deny transport exists |
 | `krun` | refused — direct libkrun TSI has no default-deny network mode |
 | `microvm-qemu` | refused — the SLiRP net device always has a gateway route |
 | `microvm-ch` | refused — passt's vhost-user net device always has a gateway route |

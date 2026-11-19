@@ -112,7 +112,9 @@
 //! as your uid with a bind-mounted CWD" — this backend proves the seam
 //! is general.
 
-use crate::bwrap::{Payload, PolicyPath, Waypipe, Workspace, HERDR_SOCKET_DIR};
+use crate::bwrap::{
+    EgressChannel, Payload, PolicyPath, Waypipe, Workspace, EGRESS_DIR, HERDR_SOCKET_DIR,
+};
 use crate::config::{Mode, Mount, Multiplexer};
 use crate::merge::Merged;
 use crate::repo::Repo;
@@ -472,6 +474,28 @@ pub struct Params<'a> {
     /// run ([`Error::KrunScratchOnGvisor`]), the same refusal as
     /// [`Params::git_trust`].
     pub krun_scratch: Option<KrunScratch>,
+    /// The `network = "proxy-only"` channel (docs/design/config.md
+    /// D20, bd myconfig-eov2 — n8kv.2 C5): `Some` only on the GVISOR
+    /// variant, where the profile is now enforced — `--network none`
+    /// (the `network_spec` the podman arm already maps a non-shared
+    /// network onto) plus this channel: the per-run broker's socket
+    /// DIRECTORY bound read-only at [`EGRESS_DIR`], runsc's
+    /// `host-uds=open` runtime flag (section 0) so the gofer may
+    /// CONNECT the payload to that one socket, the `MYSBX_EGRESS_PROXY`
+    /// env (section 7) and the IN-IMAGE relay wrapping the payload
+    /// (section 11) — the same channel shape the bwrap backend
+    /// serves. `Some` on the krun variant is a refused run
+    /// ([`Error::ProxyOnlyRefused`] — the permanent C6 refusal), and a
+    /// brokered config WITHOUT a channel on gvisor fails closed
+    /// ([`Error::EgressChannelMissing`]) — never a silent shared
+    /// network.
+    ///
+    /// [`EgressChannel::relay_bin`] here must be the IN-IMAGE path
+    /// (pinned as `MYSBX_PODMAN_EGRESS_RELAY`, baked into the image via
+    /// the module's `podman.imagePackages`) — this backend mounts
+    /// nothing from the host `/nix/store`, so the bwrap-side host
+    /// relay pin would die with ENOENT inside the container.
+    pub egress: Option<&'a EgressChannel<'a>>,
     /// Resource limits from configuration.
     /// Using Cow to allow both borrowed (from env vars) and owned strings.
     pub pids_limit: Option<Cow<'a, str>>,
@@ -498,14 +522,28 @@ pub fn podman_run_argv(
     // socket checks, the state-parent tmpfses and the bind emission
     // below all see one list.
     let effective_state_dirs = cfg.effective_state_dirs();
-    // `network = "proxy-only"` (docs/design/config.md D20, bd
-    // myconfig-6di.3): refused on the podman backends (defense in depth
-    // next to the pipeline's step 4b) — pasta adds a route to the
-    // forwarder without removing the default route, so the profile is
-    // not enforceable here.
+    // `network = "proxy-only"` (docs/design/config.md D20) on the
+    // podman backends (bd myconfig-6di.3, lifted for the gvisor
+    // variant by bd myconfig-eov2 — n8kv.2 C5): the KRUN variant
+    // keeps its PERMANENT refusal (TSI is an unfiltered proxy and
+    // AF_UNIX sockets do not cross virtio-fs, bd myconfig-1h9q —
+    // defense in depth next to the pipeline's step-4b refusal); the
+    // GVISOR variant enforces it through the channel of
+    // [`Params::egress`] — `--network none` plus the bound broker
+    // socket and runsc's `host-uds=open` — and a brokered config
+    // without a channel fails closed here too.
     if cfg.network.is_brokered() {
+        if params.krun {
+            return Err(Error::ProxyOnlyRefused);
+        }
+        if params.egress.is_none() {
+            return Err(Error::EgressChannelMissing);
+        }
+    }
+    if params.egress.is_some() && params.krun {
         return Err(Error::ProxyOnlyRefused);
     }
+    let egress = params.egress;
     // The multiplexer applies to the INTERACTIVE payload only (cli.md
     // D11): `mysbx run -- CMD` is a one-shot, and wrapping it in a
     // multiplexer would leave the command's output in a pane nobody
@@ -567,6 +605,20 @@ pub fn podman_run_argv(
     argv.push(format!("--runtime={}", params.runtime));
     for flag in params.runtime_flags {
         argv.extend(["--runtime-flag".into(), flag.clone()]);
+    }
+    // runsc's `host-uds` level of the proxy-only channel (bd
+    // myconfig-eov2 — n8kv.2 C5): with `none` (runsc's default) the
+    // gofer refuses every host Unix-socket connect/create (EPERM,
+    // one-time warning in the log), with `open` it CONNECTS the
+    // host path of the node the application touched — so the reach
+    // is exactly the UDS pathnodes the binds carry (the gvisor
+    // source audit of the bead: runsc/fsgofer/lisafs.go Connect(),
+    // no global UDS namespace exposure). Appended AFTER the
+    // operator's flags so an explicit pin wins, krun never sees it
+    // (its crun would die on the unknown runsc flag) and every
+    // non-brokered gvisor run keeps runsc's default.
+    if params.egress.is_some() && !params.krun {
+        argv.extend(["--runtime-flag".into(), "host-uds=open".into()]);
     }
     if let Some(manager) = params.cgroup_manager {
         argv.push(format!("--cgroup-manager={manager}"));
@@ -943,6 +995,23 @@ pub fn podman_run_argv(
         bind_mount(&mut argv, src, dest, true);
     }
 
+    // 5c. the egress channel bind (bd myconfig-eov2 — n8kv.2 C5): the
+    // per-run broker's socket DIRECTORY, bound READ-ONLY at
+    // [`EGRESS_DIR`] — the same in-sandbox path the bwrap backend
+    // binds, so the payload and the docs share one spelling across
+    // the enforcing backends. The DIRECTORY, not the socket file: the
+    // broker owns it (mode 0700, egress.md E3/E4) and a ro bind still
+    // allows `connect()` — only the listener's owner needs write
+    // permission on the socket path. A bind, not a tmpfs: the gofer
+    // needs the host pathnode of the socket for `host-uds=open` to
+    // connect through. Infrastructure destination like the git trust
+    // file, exempt from [`check_dest`] — the guard list protects
+    // configuration-controlled dests, and `/run/mysbx-egress` below the
+    // read-only container root is created by the bind itself.
+    if let Some(channel) = egress {
+        bind_mount(&mut argv, channel.socket_dir, EGRESS_DIR, false);
+    }
+
     // Review-3 item 3: policy file protection (same as bwrap)
     for src in cfg
         .mounts
@@ -1145,6 +1214,19 @@ pub fn podman_run_argv(
         "--env".into(),
         format!("MYSBX_NETWORK={}", cfg.network.name()),
     ]);
+    // The proxy-only channel's endpoint (bd myconfig-w44l, threaded to
+    // this backend by bd myconfig-eov2): the relay's loopback listener,
+    // the ONE address a `proxy-only` payload may reach — announced like
+    // the policy itself, after `[env]`, so no configuration layer can
+    // repoint it. Absent on every other policy: an unset variable IS
+    // the honest answer. Same spelling as the bwrap backend's, so an
+    // agent reads one name on every enforcing backend.
+    if let Some(channel) = egress {
+        argv.extend([
+            "--env".into(),
+            format!("MYSBX_EGRESS_PROXY=http://127.0.0.1:{}", channel.port),
+        ]);
+    }
     // The XDG base dirs are infrastructure like `HOME` (config.md D14):
     // they are derived FROM it, and re-anchoring them matters ONLY under
     // this backend — bubblewrap's `HOME` is already its own tmpfs,
@@ -1314,6 +1396,30 @@ pub fn podman_run_argv(
     // and its multi mode is the one that CREATES the display socket
     // for the payload — and one server-conn child per window the
     // payload opens — and it exits when the payload does.
+    //
+    // The `network = "proxy-only"` relay (bd myconfig-eov2 — n8kv.2
+    // C5) wraps the payload FIRST — the innermost position, before
+    // waypipe and the image command, the same position it holds on
+    // the bwrap backend — so the relay's listener is the first thing
+    // that runs and a client connecting immediately never races a
+    // half-started relay. It binds `127.0.0.1:<port>` inside the
+    // empty netns of `--network none` and forwards each connection to
+    // the bound broker socket through the `host-uds=open` gofer
+    // channel, then runs the payload as its child and exits with its
+    // status. The binary is the IN-IMAGE relay
+    // ([`EgressChannel::relay_bin`], pinned as
+    // MYSBX_PODMAN_EGRESS_RELAY) — this backend mounts nothing from
+    // the host `/nix/store`. podman passes the container command's
+    // argv straight to the runtime, so the relay's own `--` separates
+    // its command like waypipe's below.
+    if let Some(channel) = egress {
+        argv.push(channel.relay_bin.into());
+        argv.push("--listen".into());
+        argv.push(format!("127.0.0.1:{}", channel.port).into());
+        argv.push("--connect".into());
+        argv.push(format!("{}/{}", EGRESS_DIR, channel.socket).into());
+        argv.push("--".into());
+    }
     if cfg.display.is_waypipe() {
         let wp = params
             .waypipe
@@ -1718,12 +1824,24 @@ pub enum Error {
     /// A `state-dirs` entry would make [`MUX_SOCKET_DIR`] sidecar-backed.
     MuxSocketPersisted { entry: String },
     /// A brokered network profile (`network = "proxy-only"`, D20, or
-    /// `network = "public"`, bd myconfig-fvi) is refused on the podman
-    /// backends: pasta's `--map-guest-addr` ADDS a route to the
-    /// forwarder, it does not remove the default route, so the
-    /// profile is not enforceable here (bd myconfig-6di.3). Defense in
-    /// depth next to the pipeline's step-4b refusal.
+    /// `network = "public"`, bd myconfig-fvi) is refused on the
+    /// podman-KRUN backend (bd myconfig-1h9q, a PERMANENT refusal):
+    /// libkrun's TSI is an UNFILTERED proxy (any AF_INET/AF_INET6
+    /// connect() the guest makes, the VMM dials from the container
+    /// netns — no per-domain/port hook exists in the muxer) and
+    /// AF_UNIX sockets do not cross virtio-fs, so neither the broker's
+    /// socket channel nor any other default-deny transport can reach
+    /// the guest. The podman-GVISOR sibling enforces the profile since
+    /// bd myconfig-eov2 (`--network none` + the bound broker socket
+    /// + runsc `host-uds=open`); this arm is the krun one only.
     ProxyOnlyRefused,
+    /// A brokered network profile on the podman-GVISOR backend reached
+    /// the argv builder without a channel (bd myconfig-eov2): the
+    /// pipeline resolves the channel in step 4b and refuses upstream
+    /// when the pins are missing, so this is defense in depth — the
+    /// same fail-closed rule as [`Error::MultiplexerUnavailable`],
+    /// never a silent shared network.
+    EgressChannelMissing,
     /// The configuration selects the waypipe display (D18) but this
     /// build pinned no in-image waypipe (`MYSBX_PODMAN_WAYPIPE`). The
     /// container mounts nothing from the host `/nix/store`, so no
@@ -1822,15 +1940,20 @@ impl fmt::Display for Error {
             ),
             Error::ProxyOnlyRefused => write!(
                 f,
-                "a brokered network profile is not enforceable on the podman \
-                 backends (bd myconfig-n8kv.2 C6, a PERMANENT refusal): \
-                 podman-gvisor's pasta --map-guest-addr ADDS a route to the \
-                 LiteLLM forwarder without removing the container's default \
-                 route; podman-krun's TSI is an UNFILTERED proxy and AF_UNIX \
-                 sockets do not cross virtio-fs, so no default-deny transport \
-                 exists (docs/design/config.md D20, bd myconfig-6di.3, \
-                 myconfig-fvi); the run is refused, never weakened to a shared \
-                 network"
+                "a brokered network profile is not enforceable on the \
+                 podman-krun backend (bd myconfig-1h9q, a PERMANENT refusal): \
+                 libkrun's TSI is an UNFILTERED proxy and AF_UNIX sockets do \
+                 not cross virtio-fs, so no default-deny transport exists \
+                 (docs/design/config.md D20, bd myconfig-6di.3); the run is \
+                 refused, never weakened to a shared network"
+            ),
+            Error::EgressChannelMissing => write!(
+                f,
+                "network = \"proxy-only\" needs the egress channel \
+                 (the per-run broker's socket directory bind and the in-image \
+                 relay, MYSBX_PODMAN_EGRESS_RELAY), but this run resolved none \
+                 (docs/design/config.md D20, bd myconfig-eov2); the run is \
+                 refused, never weakened to a shared network"
             ),
             Error::DisplayUnavailable => write!(
                 f,

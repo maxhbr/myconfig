@@ -442,6 +442,16 @@
   # pins nothing — `display = "waypipe"` with `backend =
   # "podman-gvisor"` is refused.
   podmanWaypipe ? null,
+  # The IN-IMAGE egress relay of the podman-gvisor proxy-only channel
+  # (bd myconfig-eov2 — n8kv.2 C5): the store path of
+  # `bin/mysbx-egress-relay` as it exists INSIDE `podmanImage` — the
+  # same crate the wrapper builds, baked into the image by
+  # `podman.imagePackages`. Pinned as `MYSBX_PODMAN_EGRESS_RELAY` (the
+  # `MYSBX_PODMAN_WAYPIPE` idiom: a path inside the container, because
+  # this backend mounts nothing from the host `/nix/store`). `null`
+  # pins nothing — a `proxy-only` podman-gvisor run is then REFUSED
+  # (it fails closed, naming the pin).
+  podmanEgressRelay ? null,
   # The nono backend binary (mysbx-rs/src/nono.rs, upstream
   # nolabs-ai/nono): `null` pins nothing and the crate's PATH
   # fallback (`nono` via env_or) applies — the same contract as the
@@ -638,27 +648,13 @@ let
     else
       null;
 
-  # The bare Rust crate, without the wrapper. Exposed as
+  # The bare Rust crate, without the wrapper. One expression with
+  # the wrapper's own closure (./crate.nix, so the podman image and
+  # the wrapper pin the SAME derivation — see that file); exposed as
   # `mysbx.passthru.crate` so the `nix/checks.nix` check (mvp-6) can run
   # the cargo test suite against the unwrapped binary — the tests set
   # their own `MYSBX_*` variables and must never see the wrapper's pins.
-  crate = rustPlatform.buildRustPackage {
-    pname = "mysbx";
-    version = "0.1.0";
-
-    src = ../mysbx-rs;
-    cargoLock.lockFile = ../mysbx-rs/Cargo.lock;
-
-    # The test suite runs in `nix/checks.nix`; keep it out of every
-    # production host rebuild.
-    doCheck = false;
-
-    meta = {
-      description = "My sandboxing tool (unwrapped crate build — for tests)";
-      mainProgram = "mysbx";
-      platforms = lib.platforms.linux;
-    };
-  };
+  crate = callPackage ./crate.nix { };
   # The sandbox's nix.conf (review-2 item 3): GENERATED, never the
   # host's. The host file is what carries `access-tokens` (GitHub and
   # GitLab credentials), `netrc-file` pointers and other per-machine
@@ -961,7 +957,13 @@ let
   # paths — the wrapper idiom of every other pin.
   waypipePins =
     lib.optionalString (waypipe != null) "--set MYSBX_WAYPIPE '${lib.getExe waypipe}' "
-    + lib.optionalString (podmanWaypipe != null) "--set MYSBX_PODMAN_WAYPIPE '${podmanWaypipe}'";
+    + lib.optionalString (podmanWaypipe != null) "--set MYSBX_PODMAN_WAYPIPE '${podmanWaypipe}'"
+    # The in-image relay of the podman-gvisor channel (bd
+    # myconfig-eov2): a closure path like the waypipe pin — `--set`,
+    # it must match the image this build serves.
+    + lib.optionalString (
+      podmanEgressRelay != null
+    ) "--set MYSBX_PODMAN_EGRESS_RELAY '${podmanEgressRelay}'";
   # The dtach master pin of detached runs (detach.md B10): an
   # absolute store path like every other closure pin. `--set`, not
   # `--set-default`: the pin is infrastructure, not an operator
@@ -1233,6 +1235,10 @@ symlinkJoin {
     egressBroker = "${crate}/bin/mysbx-egress-broker";
     # The proxy-only sandbox's `hosts` and `nsswitch.conf`.
     egressEtc = "${egressEtc}";
+    # The in-image relay the wrapper pins for the podman-gvisor channel
+    # (bd myconfig-eov2), for the same gate: the pin and the image bake
+    # must both follow the host's LiteLLM.
+    inherit podmanEgressRelay;
     # The disk's closure roots as store paths, for the same gate:
     # `vmStoreExtraRoots` (the guest nix wrappers, the
     # git-default-diff wrapper) must appear here when the module

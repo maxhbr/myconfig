@@ -497,6 +497,18 @@ let
   egressPinGate =
     let
       pinsOf = extraModules: (evaluated extraModules).myconfig.ai.dev.mysbx.package.passthru;
+      # The litellm+podman scenario of the channel twin (bd
+      # myconfig-eov2): shared between the pin check and the image
+      # bake check below, so the two read ONE configuration.
+      litellmPodman = [
+        {
+          services.litellm = {
+            enable = true;
+            port = 4000;
+          };
+          myconfig.ai.dev.mysbx.podman.enable = true;
+        }
+      ];
       on = pinsOf [
         {
           services.litellm = {
@@ -506,6 +518,14 @@ let
         }
       ];
       off = pinsOf [ { } ];
+      podmanOn = pinsOf litellmPodman;
+      # Whether the image bake carries the crate (the relay): read from
+      # the option value — `extraImagePackages` folds `imagePackages`
+      # in, and a package list is eval-visible while the baked image
+      # contents are a build artifact.
+      bakedRelay = builtins.any (p: p.pname or p.name or "" == "mysbx") (
+        (evaluated litellmPodman).myconfig.ai.dev.mysbx.podman.extraImagePackages
+      );
     in
     if on.egressSocketName != "litellm.sock" then
       throw "mysbx generated-config test: a litellm host did not pin the egress socket name (got ${toString on.egressSocketName})"
@@ -515,6 +535,15 @@ let
       throw "mysbx generated-config test: a host without litellm pinned the egress socket name (${toString off.egressSocketName})"
     else if off.egressPort != null then
       throw "mysbx generated-config test: a host without litellm pinned the egress port (${toString off.egressPort})"
+    else if on.podmanEgressRelay != null then
+      throw "mysbx generated-config test: a litellm host without podman pinned the in-image relay (${toString on.podmanEgressRelay})"
+    else if
+      podmanOn.podmanEgressRelay == null
+      || !lib.hasSuffix "/bin/mysbx-egress-relay" podmanOn.podmanEgressRelay
+    then
+      throw "mysbx generated-config test: a litellm+podman host did not pin the in-image relay (got ${toString podmanOn.podmanEgressRelay})"
+    else if !bakedRelay then
+      throw "mysbx generated-config test: a litellm+podman host did not bake the crate into the image"
     else
       "ok";
 

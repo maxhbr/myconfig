@@ -608,9 +608,18 @@ Consequences, stated honestly:
   PERMANENT (bd myconfig-n8kv.2 C6, decided 2026-11-19): TSI has no
   per-domain/port hook, and AF_UNIX sockets do not cross virtio-fs,
   so no default-deny transport exists on this backend. podman-gvisor
-  and the direct VM backends keep their `not enforceable today`
-  refusals with their possible lifts tracked under bd
-  myconfig-n8kv.2's children (C3-C5).
+  has since been LIFTED (bd myconfig-n8kv.2 C5, bd myconfig-eov2):
+  `--network none` removes the net device entirely (pasta is not
+  involved), the per-run broker's socket directory is bound read-only
+  at `/run/mysbx-egress`, runsc runs with `--host-uds=open` (the flag
+  gates connect(2) to the gofer-reachable socket inodes — runsc's
+  default `none` refuses them), and the in-image `mysbx-egress-relay`
+  bridges the baked `127.0.0.1:<litellm port>` URLs onto the bound
+  socket; a recursive no-symlink-follow audit of every bind source
+  precedes spawn. Live-proven on runsc 20260817.0
+  (`egress-validation-log.md`). The direct VM backends keep their
+  `not enforceable today` refusals with their possible lifts tracked
+  under bd myconfig-n8kv.2's children (C2-C4).
 - DNS travels the same TSI path (the VMM resolves from the netns's
   resolver) — no guest-specific resolver story is needed for the first
   cut, and none is invented here.

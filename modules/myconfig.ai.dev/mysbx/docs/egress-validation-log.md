@@ -561,3 +561,75 @@ in depth. The merge order (a wider sidecar is the same
   myconfig-nakf): every non-bubblewrap backend refuses the value,
   and for qemu/ch the refusal is permanent — the candidate
   mechanisms cannot express the lane.
+
+## 2026-11-19, offline dev sandbox (kernel 6.12.117) — podman-gvisor's channel, live runsc probes (bd myconfig-eov2)
+
+Provenance: run inside the dev sandbox (no podman installed, so the
+probes drive `runsc` directly — the same binary the backend invokes
+through podman's `--runtime-flag`; the podman layer itself is pinned
+by the argv goldens). runsc is the flake's pinned build
+`gvisor 20260817.0` (nix/gvisor-overlay.nix, rev `b1b5614`),
+platform systrap, rootless (`--ignore-cgroups`; the module sets the
+same flag on hosts without a delegated cgroup). Probes 2-4 use a
+hand-built OCI bundle (rootfs: bash + the crate's own
+`mysbx-egress-relay`), because the production shape is exactly
+`--network none` + the broker-dir bind + `--host-uds=open`.
+
+### §1 the production shape round-trips — PASS
+
+```
+runsc --host-uds=open --network=none run --bundle <b> <id>
+  probe 1: dial 127.0.0.1:9            -> Connection refused (empty netns, no route)
+  probe 2: relay --listen 127.0.0.1:4000 --connect /run/mysbx-egress/litellm.sock
+           payload reads /dev/tcp/127.0.0.1/4000
+                                        -> RELAY-ROUND-TRIP-REPLY: BOUND-SOCKET-REPLY
+                                           (a host-side UDS server behind the bind
+                                            answered through the relay), exit 0
+```
+
+So the C5 design is live-proven: a `--network none` gVisor sandbox
+has NO route out, and the single bound host socket reaches the
+payload's loopback client through the in-image relay.
+
+### §2 the host-uds gate is real — PASS
+
+```
+runsc --host-uds=none --network=none, same bundle:
+  relay -> /run/mysbx-egress/litellm.sock:
+     cannot reach ...: Connection refused (os error 111)
+```
+
+The bind alone is not the fence: `--host-uds=none` (the default!)
+refuses connect(2) to the socket inode even though the gofer serves
+the directory. The channel exists only because the backend appends
+`--runtime-flag host-uds=open` (pinned in the argv golden).
+
+### §3 the reachable set is the declared binds, not the host — PASS
+
+```
+--host-uds=open, TWO binds (hostsock -> /run/mysbx-egress, otherbind -> /run/other):
+  relay -> /run/other/other.sock      -> OTHER-BIND-REPLY (second bind's socket answers)
+  relay -> /run/other/MISSING.sock    -> ENOENT, connection dropped, relay stays up
+  relay -> /run/no-such-mount/x.sock  -> ENOENT (no bind covers it)
+```
+
+`--host-uds=open` does NOT open the host's sockets wholesale: outside
+the mounts the pathnodes do not exist for the sentry at all. The
+fence is the *combination* — default-deny netns + gofer-reachable set
+(= the binds) + the host-uds gate — which is exactly the claim the
+design doc makes for the backend's socket audit (the recursive
+no-symlink-follow audit of every bind source before spawn).
+
+### Limits of this entry
+
+- podman itself was not driven (not installed in this sandbox): the
+  `--network none`, `--runtime-flag host-uds=open`, `-v <brokerdir>:/run/mysbx-egress:ro`
+  argv shape is pinned by the golden `podman-egress-proxy-only.txt`
+  and the CLI tests, and the runsc layer below it is what these
+  probes exercise.
+- The relay probe used a stand-in UDS server, not the host's LiteLLM
+  forwarder (offline sandbox); the bubblewrap entries above prove the
+  broker+relay protocol, this entry proves the gVisor transport.
+- `runsc do` (test-only, whole host mounted ro) showed the same gate
+  (`none` -> refused, `open` -> connects), confirming the flag's
+  semantics independent of the bundle shape.

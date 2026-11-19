@@ -460,6 +460,11 @@ let
   // lib.optionalAttrs (cfg.config.scratchSize != null) { "scratch-size" = cfg.config.scratchSize; }
   // lib.optionalAttrs (cfg.config.cpus != null) { inherit (cfg.config) cpus; }
   // lib.optionalAttrs (cfg.config.pidsLimit != null) { pids-limit = cfg.config.pidsLimit; };
+  # The mysbx crate — the SAME derivation the wrapper builds around
+  # (./nix/crate.nix): one definition, two consumers, so the in-image
+  # relay and the `MYSBX_PODMAN_EGRESS_RELAY` pin can never drift
+  # apart (bd myconfig-eov2).
+  egressRelayCrate = pkgs.callPackage ./nix/crate.nix { };
   # The wrapper factory (`mkWrapper <extraTools> <backends> <binName>
   # <vmStoreBaked>`): ONE call site of ./nix/mysbx.nix for the base
   # `package` AND every flavor of `profiles.<name>` below — a flavor
@@ -546,6 +551,20 @@ let
       # B10): pinned so `--detach` needs no host PATH lookup.
       dtach = pkgs.dtach;
       podmanWaypipe = if cfg.podman.enable then cfg.podman.waypipe else null;
+      # The in-image egress relay of the podman-gvisor proxy-only
+      # channel (bd myconfig-eov2 — n8kv.2 C5): the crate's
+      # `bin/mysbx-egress-relay` at its store path — the SAME
+      # derivation `podman.imagePackages` bakes into the image (both
+      # come from ./nix/crate.nix), so the pin always names a binary
+      # the loaded image carries. Pinned only when the host runs
+      # LiteLLM (the profile's upstream): without it the image bake
+      # is skipped too, and a `proxy-only` run is refused naming the
+      # pin — fail closed, the same gate as the bwrap pins above.
+      podmanEgressRelay =
+        if cfg.podman.enable && config.services.litellm.enable then
+          "${egressRelayCrate}/bin/mysbx-egress-relay"
+        else
+          null;
       podmanMuxEntries = if cfg.podman.enable then cfg.podman.muxEntries else { };
       nono = cfg.nono.package;
       ssh-keygen = pkgs.openssh;
@@ -1143,6 +1162,15 @@ in
           selectedMuxTools
           ++ builtins.attrValues cfg.podman.muxEntries
           ++ lib.optionals (cfg.display.package != null) [ cfg.display.package ]
+          # The mysbx crate when the host runs LiteLLM (bd
+          # myconfig-eov2 — n8kv.2 C5): the `network = "proxy-only"`
+          # channel on podman-gvisor wraps the payload in the IN-IMAGE
+          # `mysbx-egress-relay` — the same derivation
+          # `egressRelayCrate` pins as MYSBX_PODMAN_EGRESS_RELAY, so the
+          # image always carries the binary the wrapper names. Only
+          # under LiteLLM: a host without the upstream has no profile
+          # to serve, and the crate stays out of the image.
+          ++ lib.optionals config.services.litellm.enable [ egressRelayCrate ]
           # The nested-podman userspace of the krun backend (bd
           # myconfig-6di.5.8): the image is SHARED between both podman
           # backends, so provisioning rides this seam — appended only
@@ -1153,7 +1181,7 @@ in
           # Image processing on the container `PATH` — the same payload
           # the bwrap backend gets via `extraTools`.
           ++ [ pkgs.imagemagick ];
-        defaultText = literalExpression "the selected multiplexer's tools, the `podman.muxEntries` scripts, plus waypipe, see `display.package`; plus `krun.nestedPodman.packages` / `krun.nix.packages` when `krun.nestedPodman.enable` / `krun.nix.enable`; plus imagemagick";
+        defaultText = literalExpression "the selected multiplexer's tools, the `podman.muxEntries` scripts, plus waypipe, see `display.package`; plus the mysbx crate when the host runs LiteLLM (the in-image egress relay, bd myconfig-eov2); plus `krun.nestedPodman.packages` / `krun.nix.packages` when `krun.nestedPodman.enable` / `krun.nix.enable`; plus imagemagick";
         description = ''
           Packages baked into the container image (`podman.image`, see
           ./podman.nix) next to the enabled agents, the fish world and
