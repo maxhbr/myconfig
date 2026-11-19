@@ -907,6 +907,98 @@ fn a_connect_without_a_table_is_refused_not_tunneled() {
 }
 
 #[test]
+fn a_mixed_public_lane_argv_is_a_usage_error() {
+    // bd myconfig-fvi: `--public` and the CONNECT table are mutually
+    // exclusive — two admission rules in one argv would make the
+    // log's deny lines unattributable, so the parse refuses the mix
+    // as a usage error (exit 2), before anything exists.
+    let dir = run_dir("public-mixed");
+    let (code, _stdout, stderr) = run(&[
+        "--listen",
+        &sock(&dir),
+        "--upstream",
+        "127.0.0.1:4000",
+        "--decision-log",
+        &log_in(&dir),
+        "--public",
+        "--allow-domain",
+        "github.com",
+    ]);
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(code, Some(2), "stderr: {stderr}");
+    assert!(stderr.contains("mutually exclusive"), "{stderr}");
+    assert!(
+        !Path::new(&sock(&dir)).exists(),
+        "no socket from a refused argv"
+    );
+}
+
+#[test]
+fn the_public_lane_denies_the_metadata_names_with_a_403() {
+    // bd myconfig-fvi: under `--public` every target is admitted
+    // except the cloud-metadata NAMES — the name is how a trusted
+    // resolver hands the endpoint over, so the refusal is a POLICY
+    // `deny` (403) at admission, before any resolution or dial.
+    // Offline-provable: no DNS is consulted for a denied name.
+    for name in [
+        "metadata.google.internal",
+        "metadata.azure.internal",
+        "Metadata.Google.Internal",
+    ] {
+        let dir = run_dir("public-metadata");
+        let addr = upstream_fixture();
+        let (child, socket) = spawn_ready_with(&dir, &addr, &["--public"]);
+        let mut client = std::os::unix::net::UnixStream::connect(&socket).expect("connect");
+        client
+            .write_all(format!("CONNECT {name}:80 HTTP/1.1\r\n\r\n").as_bytes())
+            .expect("write CONNECT");
+        let answer = read_line_until_double_crlf(&mut client);
+        let mut child = child;
+        let _ = client.shutdown(std::net::Shutdown::Both);
+        let _ = child.kill();
+        let _ = child.wait();
+        let log = std::fs::read_to_string(log_in(&dir)).expect("read the decision log");
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(
+            log.contains("\"event\":\"deny\""),
+            "the metadata name is a policy refusal: {log}"
+        );
+        assert!(
+            log.contains("cloud-metadata"),
+            "the reason names the metadata policy: {log}"
+        );
+        assert!(
+            answer.starts_with("HTTP/1.1 403"),
+            "the handshake is refused, not tunneled: {answer}"
+        );
+    }
+}
+
+#[test]
+fn the_public_lane_listen_line_names_the_deny_set_rule() {
+    // The fence honesty (review finding 3's rule, applied to the
+    // public lane): the listen line must not claim a port fence the
+    // kernel does not carry. The public lane's line names the deny
+    // set as the rule instead.
+    let dir = run_dir("public-listen");
+    let addr = upstream_fixture();
+    let (child, _socket) = spawn_ready_with(&dir, &addr, &["--public"]);
+    let mut child = child;
+    let _ = child.kill();
+    let _ = child.wait();
+    let log = std::fs::read_to_string(log_in(&dir)).expect("read the decision log");
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(
+        log.contains("deny set"),
+        "the listen line names the public lane's rule: {log}"
+    );
+    assert!(
+        !log.contains("the ports named by the CONNECT table"),
+        "no table claim on a public lane: {log}"
+    );
+}
+
+#[test]
 fn the_model_lane_is_untouched_by_the_connect_table() {
     // E8's other half: with a table installed, a NON-CONNECT request
     // still takes the model lane byte-for-byte — the agents' baked

@@ -15,8 +15,10 @@
 //!    --decision-log <path>` plus the optional CONNECT-lane table,
 //!    `--allow-domain <host>` and `--allow-connect-port <port>`
 //!    (repeatable; docs/design/egress-connect.md E7–E10, bd
-//!    myconfig-ew9s) (`-h`/`--help` prints the usage to stdout and
-//!    exits 0; a usage error exits 2).
+//!    myconfig-ew9s), or `--public` (bd myconfig-fvi: the `network =
+//!    "public"` lane — every target admitted, gated by the
+//!    private/special-use deny set) (`-h`/`--help` prints the usage
+//!    to stdout and exits 0; a usage error exits 2).
 //! 2. Refuse before doing anything visible (exit 70, one stderr line):
 //!    an upstream that is not loopback, a socket path over
 //!    `SUN_PATH_LIMIT`, a run directory that is not a real directory
@@ -103,7 +105,8 @@ const HELP_REQUESTED: &str = "__help__";
 /// about the SHAPE of the command line append it).
 const USAGE: &str = "usage: mysbx-egress-broker --listen <unix-socket> \
                      --upstream 127.0.0.1:<port> --decision-log <path> \
-                     [--allow-domain <host>]... [--allow-connect-port <port>]...";
+                     [--allow-domain <host>]... [--allow-connect-port <port>]... \
+                     [--public]";
 
 /// The parsed invocation.
 #[derive(Debug, PartialEq, Eq)]
@@ -124,6 +127,16 @@ struct Invocation {
     /// domains-only table (review finding 3, correcting E10), so the
     /// fence can always list the ports exactly (E10).
     allow_connect_ports: Vec<u16>,
+    /// The `network = "public"` lane (bd myconfig-fvi): every
+    /// CONNECT target is admitted, gated only by the public lane's
+    /// hard-deny set — the host-service classes every lane refuses
+    /// plus the private/special-use ranges (RFC1918, CGNAT, 240/4,
+    /// ULA, the NAT64/mapped spellings) and the cloud-metadata
+    /// endpoints by name. Mutually exclusive with the table: the
+    /// lane is either the E9 table or the public one, never a mix
+    /// (a mixed argv would make two admission rules the log could
+    /// not tell apart).
+    public: bool,
 }
 
 impl Invocation {
@@ -133,6 +146,7 @@ impl Invocation {
         let mut decision_log = None;
         let mut allow_domains = Vec::new();
         let mut allow_connect_ports = Vec::new();
+        let mut public = false;
         let mut i = 0;
         while i < args.len() {
             match args[i].as_str() {
@@ -182,9 +196,21 @@ impl Invocation {
                     allow_connect_ports.push(port);
                     i += 2;
                 }
+                "--public" => {
+                    public = true;
+                    i += 1;
+                }
                 "-h" | "--help" => return Err(HELP_REQUESTED.to_owned()),
                 other => return Err(format!("unknown argument `{other}`\n{USAGE}")),
             }
+        }
+        if public && (!allow_domains.is_empty() || !allow_connect_ports.is_empty()) {
+            return Err(
+                "`--public` and the CONNECT table (`--allow-domain`/`--allow-connect-port`) \
+                 are mutually exclusive: the lane is either the E9 table or the public \
+                 deny set, never a mix (bd myconfig-fvi)"
+                    .to_owned(),
+            );
         }
         Ok(Invocation {
             listen: listen.ok_or_else(|| format!("missing `--listen`\n{USAGE}"))?,
@@ -193,6 +219,7 @@ impl Invocation {
                 .ok_or_else(|| format!("missing `--decision-log`\n{USAGE}"))?,
             allow_domains,
             allow_connect_ports,
+            public,
         })
     }
 }
@@ -209,12 +236,20 @@ fn run(inv: &Invocation) -> Result<(), String> {
             inv.upstream
         ));
     }
-    // The CONNECT table is applied, never accepted-and-ignored (E9): a
-    // name the broker cannot match, or a table that names nothing, is
-    // a refused run. `--allow-connect-port` alone (nono's ports-only
-    // semantics, honestly mapped) is a table — any host on those
-    // ports; no rows at all is the plain phase-B broker.
+    // The CONNECT lane's policy is applied, never accepted-and-
+    // ignored (E9): a name the broker cannot match, or a table that
+    // names nothing, is a refused run. `--allow-connect-port` alone
+    // (nono's ports-only semantics, honestly mapped) is a table —
+    // any host on those ports; no rows at all is the plain phase-B
+    // broker; `--public` (bd myconfig-fvi) is the public lane.
     let table = ConnectTable::validate(&inv.allow_domains, &inv.allow_connect_ports)?;
+    let policy = if inv.public {
+        Policy::Public
+    } else if table.is_empty() {
+        Policy::None
+    } else {
+        Policy::Table(table)
+    };
     check_socket_path(&inv.listen)?;
     check_run_dir(&inv.listen)?;
 
@@ -224,10 +259,29 @@ fn run(inv: &Invocation) -> Result<(), String> {
     // behind. E10 (corrected by review finding 3): the upstream port
     // plus every allow-connect-port — the table's ports are always
     // named when its hosts are, so the fence is exactly the admission
-    // rule's port set, and the listen line says the same thing.
-    let mut fence_ports = vec![inv.upstream.port()];
-    fence_ports.extend(table.dial_ports());
-    confine_to_ports(&fence_ports)?;
+    // rule's port set, and the listen line says the same thing. The
+    // PUBLIC lane names no ports: its rule is the deny set on the
+    // resolved address, not a port fence, and the listen line says
+    // so (a Landlock port fence cannot express "every port", so
+    // none is claimed).
+    match &policy {
+        // The table lane and the plain broker fence exactly their
+        // ports (the admission rule's port set, E10). The PUBLIC
+        // lane carries no TCP port fence: see the position note on
+        // [`confine_to_ports`] — its rule is the deny set on the
+        // resolved address, which a port fence cannot express. The
+        // kernel check still runs (E5's fail-closed rule): a broker
+        // that cannot prove the Landlock TCP-port capability refuses
+        // rather than serve a lane whose only gate is the code.
+        Policy::Public => {
+            check_landlock_support()?;
+        }
+        _ => {
+            let mut fence_ports = vec![inv.upstream.port()];
+            fence_ports.extend(policy.dial_ports());
+            confine_to_ports(&fence_ports)?;
+        }
+    }
 
     // A stale socket in our own (pid-named) directory belongs to a run
     // that is gone: unlinking is always safe here, and a `bind(2)` on a
@@ -261,11 +315,11 @@ fn run(inv: &Invocation) -> Result<(), String> {
             "{} -> {}, confined by Landlock to {}",
             inv.listen.display(),
             inv.upstream,
-            table.fence_summary()
+            policy.fence_summary()
         ),
     );
 
-    accept_loop(&listener, inv.upstream, &table, &log)
+    accept_loop(&listener, inv.upstream, &policy, &log)
 }
 
 /// The socket path must fit `sockaddr_un::sun_path` (107 bytes, the same
@@ -479,10 +533,10 @@ impl ConnectTable {
 
     /// The admission decision for one CONNECT target (E9), the pure
     /// half — resolution happens in [`Self::resolve`] before the
-    /// dial, the address classes in [`Self::dialable_addr`].
-    ///
-    /// Returns `Ok(())` when admitted, `Err(why)` when denied — the
-    /// caller writes the `deny` event with `why`.
+    /// dial, the address classes in [`Self::dialable_addr`]. Kept on
+    /// `ConnectTable` as the TABLE lane's rule ([`Policy::Table`]);
+    /// the public lane admits unconditionally and lets the dial's
+    /// deny set refuse.
     fn admit(&self, host: &str, port: u16) -> Result<(), String> {
         // No table, no lane: the phase-B broker serves no CONNECT at
         // all (E8). The caller checks this first and writes its own
@@ -530,79 +584,23 @@ impl ConnectTable {
     /// and returned to be logged. Refuses a name that resolves to
     /// nothing. Resolution is host-side, at connect time — the
     /// rebinding and metadata-range concerns of bd myconfig-fvi
-    /// become applicable here, deliberately (see E9).
+    /// become applicable here, deliberately (see E9). A thin wrapper
+    /// around [`resolve_connect_host`] so the table's own tests can
+    /// call it on the table.
     fn resolve(&self, host: &str) -> Result<std::net::IpAddr, String> {
-        use std::net::ToSocketAddrs;
-        let addrs: Vec<std::net::SocketAddr> = (host, 0)
-            .to_socket_addrs()
-            .map_err(|e| format!("cannot resolve {host}: {e}"))?
-            .collect();
-        let addr = addrs
-            .first()
-            .ok_or_else(|| format!("{host} resolves to no address"))?;
-        Ok(addr.ip())
+        resolve_connect_host(host)
     }
 
-    /// The address-class refusal (E9): the CONNECT lane never dials
-    /// loopback, link-local, unspecified or multicast targets — only
-    /// the model lane's upstream row may reach the host's loopback.
-    /// Without this rule an allowed name whose A record points at
-    /// `127.0.0.1` or `169.254.169.254` would make the broker a
-    /// host-service and metadata client.
-    ///
-    /// IPv4-mapped IPv6 addresses (`::ffff:127.0.0.1`) run the FULL
-    /// IPv4 rule set: `std`'s per-family predicates do not see through
-    /// the mapping (`'::ffff:127.0.0.1'.parse::<Ipv6Addr>()` is not
-    /// `is_loopback`), so a per-family check let the mapped forms of
-    /// every refused v4 class through — review finding 1 on 53a6c680b3,
-    /// probed live as a 200 from a local listener. Mapping first applies
-    /// the same rule the v4 spellings get to the v6 spellings of the
-    /// same address.
+    /// The address-class refusal (E9): the TABLE lane's gate — the
+    /// host-service classes every lane refuses, nothing more (a
+    /// private-range NAME stays dialable here:
+    /// `allow-domains = ["proxy.internal"]` is a documented use;
+    /// the public lane's wider deny set lives on [`Policy`]). The
+    /// mapped-spelling rule is the same: `host_service_class` refuses
+    /// the v6 spellings of every refused v4 class (review finding 1
+    /// on 53a6c680b3).
     fn dialable_addr(&self, addr: std::net::IpAddr) -> Result<(), String> {
-        let refused = match addr {
-            std::net::IpAddr::V4(v4) => {
-                v4.is_loopback()
-                    || v4.is_link_local()
-                    || v4.is_unspecified()
-                    || v4.is_multicast()
-                    || v4.is_broadcast()
-                    || v4.is_documentation()
-            }
-            std::net::IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
-                // The mapped form IS that v4 address; refuse it exactly
-                // as the v4 spelling is refused (loopback, link-local,
-                // unspecified, multicast, broadcast, documentation).
-                Some(v4) => {
-                    v4.is_loopback()
-                        || v4.is_link_local()
-                        || v4.is_unspecified()
-                        || v4.is_multicast()
-                        || v4.is_broadcast()
-                        || v4.is_documentation()
-                }
-                // Genuine v6: the v6 rules only. `to_ipv4()` (the
-                // deprecated IPv4-compatible ::a.b.c.d form) is NOT
-                // mapped here on purpose: it is unassigned space no
-                // real resolver returns, and treating it as v4 would
-                // make `::127.0.0.1` a loopback — harmless to refuse,
-                // but the mapped form is the one that reaches the
-                // kernel's v4 stack and the one the reviewer probed.
-                None => {
-                    v6.is_loopback()
-                        || is_link_local_v6(v6)
-                        || v6.is_unspecified()
-                        || v6.is_multicast()
-                }
-            },
-        };
-        if refused {
-            return Err(format!(
-                "{addr} is in a refused address class (loopback, link-local, \
-                 unspecified or multicast); the CONNECT lane reaches the network, \
-                 never the host's own services (docs/design/egress-connect.md E9)"
-            ));
-        }
-        Ok(())
+        host_service_class(addr)
     }
 
     /// The `listen` line's fence description: exactly the ports the
@@ -627,6 +625,297 @@ impl ConnectTable {
     }
 }
 
+// The ConnectTable impl ends here; `Policy` (below in the file)
+// owns the lane-level rules.
+
+/// The CONNECT lane's policy (bd myconfig-fvi): which admission rule
+/// the lane runs. `Table` is the E9 conjunction (domains × ports);
+/// `Public` is the fvi lane — every target admitted, the public
+/// hard-deny set (and the fence's ports) the only rules. The enum
+/// keeps the two admission rules from mixing: a mixed argv is refused
+/// at parse time, and the log's `deny` lines always name ONE rule.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+enum Policy {
+    /// No CONNECT lane: the plain phase-B broker, CONNECT refused as
+    /// an unknown request (the model lane is the whole channel).
+    #[default]
+    None,
+    /// The E9 table conjunction.
+    Table(ConnectTable),
+    /// The `network = "public"` lane (bd myconfig-fvi).
+    Public,
+}
+
+impl Policy {
+    /// Whether a CONNECT request reaches an admission rule at all:
+    /// `None` serves no lane (the caller writes its own refusal).
+    fn serves_connect(&self) -> bool {
+        !matches!(self, Policy::None)
+    }
+
+    /// The admission decision for one CONNECT target: the table's
+    /// conjunction, or the public lane's admit. The public lane
+    /// refuses the cloud-metadata NAMES (bd myconfig-fvi): their IPs
+    /// sit in classes the dial refuses everywhere, but the name is
+    /// how a resolver the host trusts would hand the endpoint over,
+    /// so the NAME is a policy refusal (`deny`), not a transport
+    /// one. Everything else is admitted — the deny set gates the
+    /// DIAL, so its refusals are `deny` lines naming the range.
+    fn admit(&self, host: &str, port: u16) -> Result<(), String> {
+        match self {
+            Policy::None => {
+                Err("the broker serves no CONNECT lane (the table is empty)".to_owned())
+            }
+            Policy::Public => {
+                let lower = host.to_ascii_lowercase();
+                if METADATA_ENDPOINT_NAMES.contains(&lower.as_str()) {
+                    return Err(format!(
+                        "{host} is a cloud-metadata endpoint; the public lane \
+                         never reaches the metadata service (bd myconfig-fvi)"
+                    ));
+                }
+                Ok(())
+            }
+            Policy::Table(table) => table.admit(host, port),
+        }
+    }
+
+    /// The address-class gate for the DIAL, after resolution (E9;
+    /// fvi): every lane refuses the host-service classes; the public
+    /// lane refuses the private/special-use ranges and the
+    /// cloud-metadata endpoints too — its admit is the deny set, so
+    /// an address the set refuses is a POLICY refusal there, logged
+    /// as `deny` (in the table lane the same classes are transport
+    /// refusals, `unreachable`, because the table never claimed to
+    /// classify them).
+    fn dialable_addr(&self, addr: std::net::IpAddr) -> Result<(), String> {
+        host_service_class(addr)?;
+        if matches!(self, Policy::Public) {
+            private_or_special_use(addr).map_err(|why| {
+                format!(
+                    "{addr} {why}; the public lane reaches the public internet, \
+                     never the host's LAN, private or metadata ranges \
+                     (bd myconfig-fvi)"
+                )
+            })?;
+        }
+        Ok(())
+    }
+
+    /// The `listen` line's fence description: exactly the ports the
+    /// fence grants. The public lane grants EVERY port (it admits
+    /// every target), so the Landlock fence is not the public lane's
+    /// rule — the deny set is; the line says so instead of claiming a
+    /// port fence that is not there.
+    fn fence_summary(&self) -> String {
+        match self {
+            Policy::None => "that one port".to_owned(),
+            Policy::Public => "every port (the public lane's rule is the deny set, not a \
+                 port fence — the resolved address is gated, bd myconfig-fvi)"
+                .to_owned(),
+            Policy::Table(table) => table.fence_summary(),
+        }
+    }
+
+    /// The ports the Landlock fence must carry beyond the upstream
+    /// (E10): the table's rows; the public lane names none — its
+    /// gate is the deny set, and a port fence would wrongly claim the
+    /// table's semantics.
+    fn dial_ports(&self) -> Vec<u16> {
+        match self {
+            Policy::Table(table) => table.dial_ports(),
+            _ => Vec::new(),
+        }
+    }
+}
+
+/// Resolve a CONNECT target's host to ONE address, pinned for the
+/// life of the connection (E9; the public lane's fvi rule): the
+/// broker dials the RESOLVED address, never the name, so no DNS
+/// rebinding can widen an admission after the fact.
+fn resolve_connect_host(host: &str) -> Result<std::net::IpAddr, String> {
+    use std::net::ToSocketAddrs;
+    let addrs: Vec<std::net::SocketAddr> = (host, 0)
+        .to_socket_addrs()
+        .map_err(|e| format!("cannot resolve {host}: {e}"))?
+        .collect();
+    let addr = addrs
+        .first()
+        .ok_or_else(|| format!("{host} resolves to no address"))?;
+    Ok(addr.ip())
+}
+
+/// The cloud-metadata endpoint NAMES (bd myconfig-fvi): the IPs are
+/// refused by the link-local class everywhere, but the names are how
+/// a resolver hands the endpoint over, so the public lane refuses
+/// them by name at admission — a `deny`, not a transport `502`.
+const METADATA_ENDPOINT_NAMES: &[&str] = &["metadata.google.internal", "metadata.azure.internal"];
+
+/// The host-service address classes EVERY lane refuses (E9): the
+/// broker must never become a host-service or metadata client,
+/// whatever the policy — loopback, link-local, unspecified,
+/// multicast, broadcast and the documentation ranges, plus the
+/// IPv4-mapped spellings of the same (review finding 1 on
+/// 53a6c680b3: `std`'s per-family predicates do not see through the
+/// mapping).
+fn host_service_class(addr: std::net::IpAddr) -> Result<(), String> {
+    let refused = match addr {
+        std::net::IpAddr::V4(v4) => {
+            v4.is_loopback()
+                || v4.is_link_local()
+                || v4.is_unspecified()
+                || v4.is_multicast()
+                || v4.is_broadcast()
+                || v4.is_documentation()
+        }
+        std::net::IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
+            // The mapped form IS that v4 address; refuse it exactly
+            // as the v4 spelling is refused (loopback, link-local,
+            // unspecified, multicast, broadcast, documentation).
+            Some(v4) => {
+                v4.is_loopback()
+                    || v4.is_link_local()
+                    || v4.is_unspecified()
+                    || v4.is_multicast()
+                    || v4.is_broadcast()
+                    || v4.is_documentation()
+            }
+            // Genuine v6: the v6 rules only. `to_ipv4()` (the
+            // deprecated IPv4-compatible ::a.b.c.d form) is NOT
+            // mapped here on purpose: it is unassigned space no
+            // real resolver returns, and treating it as v4 would
+            // make `::127.0.0.1` a loopback — harmless to refuse,
+            // but the mapped form is the one that reaches the
+            // kernel's v4 stack and the one the reviewer probed.
+            None => {
+                v6.is_loopback() || is_link_local_v6(v6) || v6.is_unspecified() || v6.is_multicast()
+            }
+        },
+    };
+    if refused {
+        return Err(format!(
+            "{addr} is in a refused address class (loopback, link-local, \
+             unspecified or multicast); the CONNECT lane reaches the network, \
+             never the host's own services (docs/design/egress-connect.md E9)"
+        ));
+    }
+    Ok(())
+}
+
+/// The public lane's hard-deny set (bd myconfig-fvi, n8kv idea 10;
+/// the ranges of sandboxes/myconfig.ai.microvm network.nix): the
+/// private and special-use ranges a `network = "public"` target must
+/// never be — RFC1918, CGNAT 100.64/10, the reserved 240/4 block,
+/// IPv6 ULA fc00::/7, and the NAT64-embedded IPv4 spellings
+/// (64:ff9b::/96 well-known, 64:ff9b:1::/96 the local-translation
+/// prefix — its /96 admits, the REST of 64:ff9b:1::/48 does not).
+/// The cloud-metadata IPs (169.254.169.254 and friends) are inside
+/// the link-local / metadata classes the dial refuses everywhere;
+/// their NAMES are refused in [`Policy::admit`]'s public arm.
+fn private_or_special_use(addr: std::net::IpAddr) -> Result<(), &'static str> {
+    let refused = match addr {
+        std::net::IpAddr::V4(v4) => {
+            is_rfc1918_v4(v4)
+                || (v4.octets()[0] == 100 && (v4.octets()[1] & 0xc0) == 64)
+                || (v4.octets()[0] & 0xf0) == 0xf0
+        }
+        std::net::IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
+            // The mapped form runs the FULL v4 rule set, exactly as
+            // the host-service classes do.
+            Some(v4) => {
+                is_rfc1918_v4(v4)
+                    || (v4.octets()[0] == 100 && (v4.octets()[1] & 0xc0) == 64)
+                    || (v4.octets()[0] & 0xf0) == 0xf0
+            }
+            None => {
+                let seg = v6.segments();
+                // ULA fc00::/7.
+                if (seg[0] & 0xfe00) == 0xfc00 {
+                    return Err("is a unique-local address (ULA fc00::/7)");
+                }
+                // NAT64 well-known prefix 64:ff9b::/96: the embedded
+                // v4 decides (deny the same ranges).
+                if let Some(v4) = nat64_embedded_v4(v6) {
+                    if is_private_or_special_v4(v4) {
+                        return Err("embeds a private or special-use IPv4 in \
+                            64:ff9b::/96");
+                    }
+                    return Ok(());
+                }
+                // The LOCAL-translation prefix 64:ff9b:1::/96 embeds
+                // its IPv4 the same way and is decided by it; the REST
+                // of 64:ff9b:1::/48 is not a translation prefix and
+                // is unassigned — refused rather than dialed.
+                if seg[0] == 0x0064 && seg[1] == 0xff9b && seg[2] == 0x0001 {
+                    return match nat64_local_prefix_v4(v6) {
+                        Some(v4) if !is_private_or_special_v4(v4) => Ok(()),
+                        Some(_) => Err("embeds a private or special-use IPv4 in \
+                                64:ff9b:1::/96"),
+                        // Inside the /48 but not the /96: unassigned
+                        // rest of the local-translation prefix.
+                        None => Err("is in 64:ff9b:1::/48 outside its /96 \
+                            translation prefix"),
+                    };
+                }
+                // Every other global v6 is public.
+                false
+            }
+        },
+    };
+    if refused {
+        return Err(
+            "is in a private or special-use range (RFC1918, CGNAT, 240/4, \
+             ULA or an embedded spelling of one)",
+        );
+    }
+    Ok(())
+}
+
+/// RFC1918: 10/8, 172.16/12, 192.168/16.
+fn is_rfc1918_v4(v4: std::net::Ipv4Addr) -> bool {
+    let o = v4.octets();
+    o[0] == 10 || (o[0] == 172 && (o[1] & 0xf0) == 16) || (o[0] == 192 && o[1] == 168)
+}
+
+/// The v4 rule of [`private_or_special_use`], for the embedded
+/// spellings.
+fn is_private_or_special_v4(v4: std::net::Ipv4Addr) -> bool {
+    is_rfc1918_v4(v4)
+        || (v4.octets()[0] == 100 && (v4.octets()[1] & 0xc0) == 64)
+        || (v4.octets()[0] & 0xf0) == 0xf0
+}
+
+/// The well-known NAT64 prefix 64:ff9b::/96 embeds its IPv4 in the
+/// LOW 32 bits: `64:ff9b::a.b.c.d`. Returns the embedded address.
+fn nat64_embedded_v4(v6: std::net::Ipv6Addr) -> Option<std::net::Ipv4Addr> {
+    let seg = v6.segments();
+    if seg[0] == 0x0064 && seg[1] == 0xff9b && seg[2..6].iter().all(|&s| s == 0) {
+        return Some(std::net::Ipv4Addr::new(
+            (seg[6] >> 8) as u8,
+            seg[6] as u8,
+            (seg[7] >> 8) as u8,
+            seg[7] as u8,
+        ));
+    }
+    None
+}
+
+/// The local-translation NAT64 prefix 64:ff9b:1::/96 embeds its
+/// IPv4 the same way. Returns the embedded address.
+fn nat64_local_prefix_v4(v6: std::net::Ipv6Addr) -> Option<std::net::Ipv4Addr> {
+    let seg = v6.segments();
+    if seg[0] == 0x0064 && seg[1] == 0xff9b && seg[2] == 0x0001 && seg[3..6].iter().all(|&s| s == 0)
+    {
+        return Some(std::net::Ipv4Addr::new(
+            (seg[6] >> 8) as u8,
+            seg[6] as u8,
+            (seg[7] >> 8) as u8,
+            seg[7] as u8,
+        ));
+    }
+    None
+}
+
 /// `fe80::/10`: `std`'s `Ipv6Addr` has no `is_link_local`.
 fn is_link_local_v6(v6: std::net::Ipv6Addr) -> bool {
     (v6.segments()[0] & 0xffc0) == 0xfe80
@@ -639,18 +928,18 @@ fn is_link_local_v6(v6: std::net::Ipv6Addr) -> bool {
 fn accept_loop(
     listener: &UnixListener,
     upstream: SocketAddr,
-    table: &ConnectTable,
+    policy: &Policy,
     log: &DecisionLog,
 ) -> Result<(), String> {
-    let table = table.clone();
+    let policy = policy.clone();
     loop {
         match listener.accept() {
             Ok((client, _)) => {
                 let log = log.clone();
-                let table = table.clone();
+                let policy = policy.clone();
                 // One thread per connection: a slow client must not block
                 // the accept loop, an agent may open several.
-                std::thread::spawn(move || relay_one(client, upstream, &table, &log));
+                std::thread::spawn(move || relay_one(client, upstream, &policy, &log));
             }
             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
                 std::thread::sleep(Duration::from_millis(50));
@@ -697,7 +986,7 @@ fn is_transient_accept_pressure(e: &io::Error) -> bool {
 /// `unreachable`/`io`/`resolve` are transport failures AFTER
 /// admission. A reader of the log must not mistake a stopped model
 /// proxy for a policy refusal.
-fn relay_one(client: UnixStream, upstream: SocketAddr, table: &ConnectTable, log: &DecisionLog) {
+fn relay_one(client: UnixStream, upstream: SocketAddr, policy: &Policy, log: &DecisionLog) {
     let peer = match peer_cred(&client) {
         Some((pid, uid)) => format!("pid {pid} uid {uid}"),
         None => "unknown peer".to_owned(),
@@ -720,7 +1009,7 @@ fn relay_one(client: UnixStream, upstream: SocketAddr, table: &ConnectTable, log
         Preface::Connect(head_so_far) => {
             let first_line = first_line_of(&head_so_far).to_vec();
             match parse_connect_request(&first_line) {
-                Some(target) => connect_lane(client, target, table, &peer, log, head_so_far),
+                Some(target) => connect_lane(client, target, policy, &peer, log, head_so_far),
                 None => model_lane(client, upstream, &peer, log, head_so_far),
             }
         }
@@ -906,17 +1195,17 @@ fn model_lane(
 fn connect_lane(
     mut client: UnixStream,
     target: ConnectTarget,
-    table: &ConnectTable,
+    policy: &Policy,
     peer: &str,
     log: &DecisionLog,
     head_so_far: Vec<u8>,
 ) {
-    // No table, no lane: a plain phase-B broker serves no CONNECT at
-    // all — the model lane is the whole channel. (This is unreachable
-    // when the table is empty because the CLI never emits CONNECT
-    // proxy variables then, but a broker whose argv lost its table
-    // must still refuse rather than tunnel.)
-    if table.is_empty() {
+    // No lane: a plain phase-B broker serves no CONNECT at all — the
+    // model lane is the whole channel. (This is unreachable when no
+    // lane exists because the CLI never emits CONNECT proxy variables
+    // then, but a broker whose argv lost its lane flags must still
+    // refuse rather than tunnel.)
+    if !policy.serves_connect() {
         log.record(
             "deny",
             &format!(
@@ -928,7 +1217,7 @@ fn connect_lane(
         let _ = client.shutdown(Shutdown::Both);
         return;
     }
-    if let Err(why) = table.admit(&target.host, target.port) {
+    if let Err(why) = policy.admit(&target.host, target.port) {
         log.record(
             "deny",
             &format!("{peer} -> {}:{}: {why}", target.host, target.port),
@@ -941,11 +1230,15 @@ fn connect_lane(
         "allow",
         &format!("{peer} CONNECT {}:{}", target.host, target.port),
     );
-    // Resolution and address classes are transport steps AFTER the
-    // admission decision, so their events are transport events —
-    // `unreachable`, never `deny` (a DNS outage must not read as a
-    // policy refusal in the log).
-    let addr = match table.resolve(&target.host) {
+    // Resolution is a transport step AFTER the admission decision,
+    // so its events are transport events — `unreachable`, never
+    // `deny` (a DNS outage must not read as a policy refusal in the
+    // log). The address classes keep the table lane's split (a
+    // refused class is a transport refusal there); under the PUBLIC
+    // lane the deny set IS the policy, so a refused range is a
+    // `deny` (the admission claim was "every target", the range is
+    // the exception, and the log must say which rule refused).
+    let addr = match resolve_connect_host(&target.host) {
         Ok(addr) => addr,
         Err(e) => {
             log.record(
@@ -957,12 +1250,20 @@ fn connect_lane(
             return;
         }
     };
-    if let Err(why) = table.dialable_addr(addr) {
-        log.record(
-            "unreachable",
-            &format!("{peer} -> {}:{} ({addr}): {why}", target.host, target.port),
-        );
-        let _ = client.write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n");
+    if let Err(why) = policy.dialable_addr(addr) {
+        if matches!(policy, Policy::Public) {
+            log.record(
+                "deny",
+                &format!("{peer} -> {}:{} ({addr}): {why}", target.host, target.port),
+            );
+            let _ = client.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n");
+        } else {
+            log.record(
+                "unreachable",
+                &format!("{peer} -> {}:{} ({addr}): {why}", target.host, target.port),
+            );
+            let _ = client.write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n");
+        }
         let _ = client.shutdown(Shutdown::Both);
         return;
     }
@@ -1235,6 +1536,16 @@ fn escape(raw: &str) -> String {
 /// cannot do it. The mechanism is `mysbx::landlock` (the crate's shared
 /// binding; `mysbx doctor` reads the same ABI). E10: one rule per
 /// port, all in one ruleset.
+/// The public lane's Landlock position, in one place: the public
+/// lane carries NO TCP port fence. Landlock grants ports, never
+/// addresses; the public lane's rule is the deny set on the RESOLVED
+/// address, checked in code at the dial, and the target ports are
+/// not known up front — a fence that enumerated all 65535 ports would
+/// grant exactly what the deny set refuses to classify, claiming a
+/// kernel-side policy that does not exist. The model lane's upstream
+/// port stays fenced as always; the CONNECT lane's dial is gated by
+/// the deny set alone, and the listen line says so
+/// ([`Policy::fence_summary`]).
 fn confine_to_ports(ports: &[u16]) -> Result<(), String> {
     let abi = mysbx::landlock::abi().map_err(|e| {
         format!(
@@ -1246,6 +1557,24 @@ fn confine_to_ports(ports: &[u16]) -> Result<(), String> {
         return Err(unsupported_landlock(abi));
     }
     mysbx::landlock::confine_to_tcp_ports(ports)
+}
+
+/// The kernel-capability check every lane runs (E5's fail-closed
+/// rule), fence or no fence: a broker on a kernel that cannot prove
+/// the Landlock TCP-port capability (ABI 4) refuses the run, because
+/// the public lane's only address gate is the code-level deny set
+/// and a silent downgrade must not look like a served lane.
+fn check_landlock_support() -> Result<(), String> {
+    let abi = mysbx::landlock::abi().map_err(|e| {
+        format!(
+            "{e}; the broker gates its egress lanes with Landlock \
+             (docs/design/egress.md E5), so the run is refused"
+        )
+    })?;
+    if abi < mysbx::landlock::ABI_NET_PORTS {
+        return Err(unsupported_landlock(abi));
+    }
+    Ok(())
 }
 
 /// The effective uid (`geteuid(2)`), the same zero-dependency raw extern
@@ -1352,6 +1681,43 @@ mod tests {
         .unwrap();
         assert_eq!(inv.allow_domains, ["github.com", "proxy.internal"]);
         assert_eq!(inv.allow_connect_ports, [443, 22]);
+    }
+
+    #[test]
+    fn parses_the_public_flag_and_refuses_a_mixed_lane() {
+        // bd myconfig-fvi: `--public` is the public lane's argv. It
+        // carries no table — a mixed argv would make two admission
+        // rules the log could not tell apart, so the parse refuses it.
+        let inv = Invocation::parse(&s(&[
+            "--listen",
+            "/x/litellm.sock",
+            "--upstream",
+            "127.0.0.1:4000",
+            "--decision-log",
+            "/x/log",
+            "--public",
+        ]))
+        .unwrap();
+        assert!(inv.public);
+        assert!(inv.allow_domains.is_empty());
+        assert!(inv.allow_connect_ports.is_empty());
+        for mixed in [
+            vec!["--allow-domain", "github.com"],
+            vec!["--allow-connect-port", "443"],
+        ] {
+            let mut args = s(&[
+                "--listen",
+                "/x/litellm.sock",
+                "--upstream",
+                "127.0.0.1:4000",
+                "--decision-log",
+                "/x/log",
+                "--public",
+            ]);
+            args.extend(mixed.iter().map(|a| a.to_string()));
+            let e = Invocation::parse(&args).unwrap_err();
+            assert!(e.contains("mutually exclusive"), "{e}");
+        }
     }
 
     #[test]
@@ -1581,6 +1947,124 @@ mod tests {
         assert!(table
             .dialable_addr("2001:db8:1::1".parse().unwrap())
             .is_ok());
+    }
+
+    #[test]
+    fn the_public_lane_admits_every_target_but_the_metadata_names() {
+        // bd myconfig-fvi: the public lane's admission is
+        // "every target"; the cloud-metadata NAMES are the one
+        // policy refusal at admit time (their IPs sit in classes
+        // the dial refuses anyway, but the name is how a trusted
+        // resolver would hand the endpoint over). An IP-LITERAL
+        // target is admitted here — the deny set classifies the
+        // resolved address, and the public lane has no names to
+        // match (the table lane's "the name is the policy" rule
+        // does not apply).
+        let policy = Policy::Public;
+        assert!(policy.admit("github.com", 443).is_ok());
+        assert!(policy.admit("140.82.121.4", 443).is_ok());
+        assert!(policy.admit("anything.example", 8080).is_ok());
+        for name in ["metadata.google.internal", "metadata.azure.internal"] {
+            let e = policy.admit(name, 80).unwrap_err();
+            assert!(e.contains("metadata"), "{name}: {e}");
+            // The case-insensitive spelling refuses too.
+            let upper = name.to_ascii_uppercase();
+            assert!(policy.admit(&upper, 80).is_err(), "{upper}");
+        }
+    }
+
+    #[test]
+    fn the_public_lane_refuses_the_private_and_special_use_ranges() {
+        // bd myconfig-fvi: the public lane's deny set — the
+        // host-service classes every lane refuses PLUS the private/
+        // special-use ranges the microvm precedent drops: RFC1918,
+        // CGNAT 100.64/10, 240/4, ULA fc00::/7, and the embedded
+        // spellings (mapped v6, NAT64 well-known and local-translation
+        // prefixes). The TABLE lane keeps those dialable on purpose
+        // (`allow-domains = ["proxy.internal"]` is a documented use),
+        // pinned by the inverse assertions.
+        let public = Policy::Public;
+        for refused in [
+            // RFC1918.
+            "10.0.0.5",
+            "10.255.255.255",
+            "172.16.0.1",
+            "172.31.255.255",
+            "192.168.1.1",
+            // CGNAT 100.64/10 (and not the neighboring 100.0.0.1).
+            "100.64.0.1",
+            "100.127.255.255",
+            // 240/4.
+            "240.0.0.1",
+            "255.0.0.1",
+            // The mapped spellings run the same rule set.
+            "::ffff:10.0.0.5",
+            "::ffff:192.168.1.1",
+            "::ffff:100.64.0.1",
+            "::ffff:240.0.0.1",
+            // ULA fc00::/7 (both halves).
+            "fc00::1",
+            "fd12:3456:789a::1",
+            // NAT64 well-known 64:ff9b::/96 embedding a private v4.
+            "64:ff9b::a00:5",
+            "64:ff9b::192.168.1.1",
+            // Local-translation 64:ff9b:1::/96 embedding one.
+            "64:ff9b:1::a00:5",
+            // The rest of 64:ff9b:1::/48: unassigned, refused.
+            "64:ff9b:1:1::1",
+        ] {
+            let addr: std::net::IpAddr = refused.parse().unwrap();
+            let e = public.dialable_addr(addr).unwrap_err();
+            assert!(
+                e.contains("public lane") || e.contains("refused address class"),
+                "{refused}: {e}"
+            );
+        }
+        for allowed in [
+            // A public v4 and v6.
+            "140.82.121.4",
+            "1.1.1.1",
+            "2606:4700::1111",
+            // 100.0.0.1 is NOT CGNAT (the /10 starts at 100.64).
+            "100.0.0.1",
+            // NAT64 embedding a PUBLIC v4 is the translation
+            // mechanism working.
+            "64:ff9b::8ca5:2004",
+            "64:ff9b:1::8ca5:2004",
+            // The mapped spellings of public addresses.
+            "::ffff:140.82.121.4",
+        ] {
+            let addr: std::net::IpAddr = allowed.parse().unwrap();
+            assert!(public.dialable_addr(addr).is_ok(), "{allowed}");
+        }
+        // The TABLE lane keeps the private ranges dialable on purpose
+        // (its documented use), and refuses only the host-service
+        // classes — the inverse pin.
+        let table =
+            Policy::Table(ConnectTable::validate(&["proxy.internal".to_owned()], &[443]).unwrap());
+        assert!(table.dialable_addr("10.0.0.5".parse().unwrap()).is_ok());
+        assert!(table
+            .dialable_addr("::ffff:10.0.0.5".parse().unwrap())
+            .is_ok());
+        assert!(table.dialable_addr("127.0.0.1".parse().unwrap()).is_err());
+    }
+
+    #[test]
+    fn the_public_lane_names_no_fence_ports_and_says_so() {
+        // The public lane's rule is the deny set on the resolved
+        // address, not a port fence: `dial_ports` is empty (the
+        // upstream-only fence stays) and the listen line says what
+        // the rule is instead of claiming a widening the kernel does
+        // not grant.
+        let public = Policy::Public;
+        assert!(public.dial_ports().is_empty());
+        let summary = public.fence_summary();
+        assert!(summary.contains("deny set"), "{summary}");
+        assert!(!summary.contains("443"), "{summary}");
+        // No lane at all: the phase-B broker.
+        assert_eq!(Policy::None.dial_ports(), Vec::<u16>::new());
+        assert!(!Policy::None.serves_connect());
+        assert!(Policy::Public.serves_connect());
     }
 
     #[test]
