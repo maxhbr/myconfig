@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>beads-server</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>beads-server</h1>
+  <div id="status-count"></div>
+  <div class="spacer"></div>
+  <div id="toolbar">
+    <label>view
+      <select id="view-mode">
+        <option value="board">board</option>
+        <option value="graph">graph</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="toggle-closed" checked> closed</label>
+    <label id="label-deps"><input type="checkbox" id="toggle-deps" checked> edges</label>
+    <label>type
+      <select id="filter-type"><option value="">all</option></select>
+    </label>
+    <label>status
+      <select id="filter-status"><option value="">all</option></select>
+    </label>
+    <input type="search" id="search" placeholder="search title/id…">
+  </div>
+</header>
+<div class="legend" id="legend"></div>
+<main>
+  <div id="board" hidden></div>
+  <div id="graph-wrap" hidden>
+    <div class="controls" id="graph-controls">
+      <button id="zoom-in" title="zoom in">+</button>
+      <button id="zoom-out" title="zoom out">−</button>
+      <button id="zoom-fit" title="fit">⛶</button>
+    </div>
+  </div>
+  <aside id="details"></aside>
+</main>
+
+<div id="loading" hidden></div>
+<div id="error" hidden></div>
+
+<script src="vendor/dagre-0.8.5.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

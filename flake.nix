@@ -557,6 +557,10 @@
           packages.beads-viewer = nixpkgs.legacyPackages.${system}.callPackage ./misc/beads-viewer { };
           apps.beads-viewer = inputs.flake-utils.lib.mkApp { drv = self.packages.${system}.beads-viewer; };
 
+          # Live kanban board over the bd (beads) issue DB.
+          packages.beads-server = nixpkgs.legacyPackages.${system}.callPackage ./misc/beads-server { };
+          apps.beads-server = inputs.flake-utils.lib.mkApp { drv = self.packages.${system}.beads-server; };
+
           # `nix fmt` — nixfmt for Nix, rustfmt for the
           # hand-written Rust crate in `modules/`
           # (`myconfig.ai.dev/mysbx/mysbx-rs`). `nixfmt-tree`
