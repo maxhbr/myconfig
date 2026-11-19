@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>beads-server</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6' fill='%234a9eff'/></svg>">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -26,10 +27,17 @@
     <label>status
       <select id="filter-status"><option value="">all</option></select>
     </label>
+    <label>lane
+      <select id="filter-lane"><option value="">all</option></select>
+    </label>
     <input type="search" id="search" placeholder="search title/id…">
   </div>
 </header>
 <div class="legend" id="legend"></div>
+<div id="focus-banner">
+  <span id="focus-text"></span>
+  <button id="focus-clear">clear focus</button>
+</div>
 <main>
   <div id="board" hidden></div>
   <div id="graph-wrap" hidden>

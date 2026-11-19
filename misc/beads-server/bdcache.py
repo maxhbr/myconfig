@@ -66,7 +66,7 @@ def run_bd_json(bd_bin, args, repo, timeout=600):
 
 
 class BdCache:
-    """Snapshot of all issues, refreshed wholesale on fingerprint change."""
+    """Snapshot of all issues plus derived indices, rebuilt per refresh."""
 
     def __init__(self, bd_bin, repo):
         self.bd_bin = bd_bin
@@ -74,6 +74,10 @@ class BdCache:
         self.revision = 0
         self.issues = []
         self.by_id = {}
+        self.cluster_root = {}
+        self.reverse_deps = {}
+        self.blocked = set()
+        self.label_counts = {}
         self.refresh()
 
     def refresh(self):
@@ -81,6 +85,105 @@ class BdCache:
         self.issues = issues
         self.by_id = {i["id"]: i for i in issues}
         self.revision += 1
+        self._derive()
+
+    def _derive(self):
+        """Rebuild the derived indices: clusterRoot, blocked, reverseDeps.
+
+        `blocked` = status open and at least one non-closed `blocks`
+        in-edge. `labels` is sparse (absent, not null, on most issues),
+        so every consumer uses `|| []`-style `.get("labels", [])`.
+        """
+        by_id = self.by_id
+
+        # clusterRoot: strict parent chains first, then discovered-from
+        # so beads found while working on a lane member join that lane
+        def parent_of(issue):
+            p = issue.get("parent")
+            if isinstance(p, str):
+                return p
+            if isinstance(p, dict) and p.get("id"):
+                return p["id"]
+            for d in issue.get("dependencies", []):
+                if d.get("type") == "parent-child":
+                    return d.get("depends_on_id")
+            return None
+
+        strict_root = {}
+        for issue in self.issues:
+            seen = {issue["id"]}
+            cur = issue
+            while True:
+                p = parent_of(cur)
+                if not p or p in seen or p not in by_id:
+                    break
+                seen.add(p)
+                cur = by_id[p]
+            strict_root[issue["id"]] = cur["id"]
+
+        cluster_size = {}
+        for root in strict_root.values():
+            cluster_size[root] = cluster_size.get(root, 0) + 1
+        def is_lane(root):
+            return cluster_size.get(root, 0) > 1
+
+        self.cluster_root = {}
+        for issue in self.issues:
+            root = strict_root[issue["id"]]
+            if not is_lane(root):
+                for d in issue.get("dependencies", []):
+                    if d.get("type") != "discovered-from":
+                        continue
+                    target = strict_root.get(d.get("depends_on_id"))
+                    if target is not None and is_lane(target):
+                        root = target
+                        break
+            self.cluster_root[issue["id"]] = root
+            issue["cluster_root"] = root
+
+        # reverseDeps: id -> issues that depend on it
+        self.reverse_deps = {}
+        for issue in self.issues:
+            for d in issue.get("dependencies", []):
+                target = d.get("depends_on_id")
+                if target in by_id:
+                    self.reverse_deps.setdefault(target, []).append(
+                        {"issue_id": issue["id"], "type": d.get("type")}
+                    )
+
+        self.blocked = set()
+        for target, deps in self.reverse_deps.items():
+            if by_id.get(target, {}).get("status") != "open":
+                continue
+            for d in deps:
+                if d["type"] == "blocks" and by_id[d["issue_id"]]["status"] != "closed":
+                    self.blocked.add(target)
+                    break
+        for issue_id in self.blocked:
+            self.by_id[issue_id]["is_blocked"] = True
+
+        # label counts for the UI badges
+        self.label_counts = {}
+        for issue in self.issues:
+            for label in issue.get("labels", []):
+                self.label_counts[label] = self.label_counts.get(label, 0) + 1
+
+    def indices_payload(self):
+        """Serializable derived-index view, built under the caller's lock."""
+        return {
+            "revision": self.revision,
+            "reverse_deps": self.reverse_deps,
+            "blockers": {
+                k: sum(
+                    1
+                    for d in deps
+                    if d["type"] == "blocks"
+                    and self.by_id[d["issue_id"]]["status"] != "closed"
+                )
+                for k, deps in self.reverse_deps.items()
+            },
+            "label_counts": self.label_counts,
+        }
 
     def issue(self, issue_id, with_comments=False):
         """Full `bd show` record, lazily fetched and cached on the dict.

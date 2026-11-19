@@ -49,6 +49,10 @@ export function showDetails(issue) {
   pane.append(close, h2);
 
   pane.append(chip(issue.id));
+  const focusChip = chip("◀ focus");
+  focusChip.style.cursor = "pointer";
+  focusChip.onclick = () => window.setFocus(issue.id);
+  pane.append(focusChip);
   pane.append(chip(issue.status, statusColor(issue.status)));
   pane.append(chip(issue.issue_type || "—"));
   pane.append(chip("P" + issue.priority));
@@ -117,6 +121,60 @@ export function showDetails(issue) {
       wrap.append(line);
     }
     section("depends on", wrap);
+  }
+
+  const blockers = DATA.reverse_deps?.[issue.id] || [];
+  if (blockers.length) {
+    const wrap = document.createElement("div");
+    for (const b of blockers) {
+      const line = document.createElement("div");
+      const a = document.createElement("span");
+      a.className = "dep-link";
+      a.textContent = b.issue_id;
+      a.onclick = () => {
+        const target = DATA.issues.find((i) => i.id === b.issue_id);
+        if (target) showDetails(target);
+      };
+      line.append(a);
+      const t = document.createElement("span");
+      t.textContent = "  (" + b.type + ")";
+      t.style.color = "var(--muted)";
+      line.append(t);
+      wrap.append(line);
+    }
+    section("blocks (reverse deps)", wrap);
+  }
+
+  const chain = [];
+  let cur = issue;
+  const seen = new Set([issue.id]);
+  while (true) {
+    const pid = typeof cur.parent === "string" ? cur.parent
+      : cur.parent?.id
+      || (cur.dependencies || []).find((d) => d.type === "parent-child")?.depends_on_id;
+    if (!pid || seen.has(pid)) break;
+    seen.add(pid);
+    const parent = DATA.issues.find((i) => i.id === pid);
+    if (!parent) break;
+    chain.push(parent);
+    cur = parent;
+  }
+  if (chain.length) {
+    const wrap = document.createElement("div");
+    for (const p of chain.slice().reverse()) {
+      const line = document.createElement("div");
+      const a = document.createElement("span");
+      a.className = "dep-link";
+      a.textContent = p.id;
+      a.onclick = () => showDetails(p);
+      line.append(a);
+      const t = document.createElement("span");
+      t.textContent = "  " + p.title;
+      t.style.color = "var(--muted)";
+      line.append(t);
+      wrap.append(line);
+    }
+    section("parent chain", wrap);
   }
 
   if ((issue.comments || []).length) {

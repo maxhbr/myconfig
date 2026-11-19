@@ -110,6 +110,10 @@ def make_handler(app):
                         "bd_mode": app.bd_mode,
                     }
                 )
+            elif path == "/api/indices":
+                with app.lock:
+                    payload = app.cache.indices_payload()
+                self._send_json(payload)
             elif path == "/api/capabilities":
                 self._send_json({"write": app.allow_write})
             else:

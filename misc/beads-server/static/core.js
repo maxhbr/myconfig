@@ -18,6 +18,8 @@ export const STATUS_ORDER = [
 export const COLUMNS = [
   { key: "open", label: "Open", statuses: ["open"] },
   { key: "in_progress", label: "In Progress", statuses: ["in_progress"] },
+  { key: "blocked", label: "Blocked", statuses: ["blocked"] },
+  { key: "deferred", label: "Deferred", statuses: ["deferred", "pinned"] },
   { key: "closed", label: "Closed", statuses: ["closed"] },
 ];
 const COLUMN_STATUS = {}; // status -> column key
@@ -58,7 +60,7 @@ export let CLUSTER = null; // Map: issue id -> cluster root id
 
 export function setData(data) {
   DATA = data;
-  computeClusters();
+  CLUSTER = new Map(data.issues.map((i) => [i.id, i.cluster_root || i.id]));
 }
 
 export function select(id) {
@@ -67,60 +69,6 @@ export function select(id) {
 
 export function byId() {
   return new Map(DATA.issues.map((i) => [i.id, i]));
-}
-
-// ---------------------------------------------------------------- clusters
-
-// A cluster groups beads that belong to one epic / big work area:
-// parent-child links first, then discovered-from as a fallback so that
-// beads discovered while working on an issue land in its lane.
-function parentOf(issue) {
-  const p = issue.parent;
-  if (typeof p === "string") return p;
-  if (p && typeof p === "object" && p.id) return p.id;
-  for (const d of issue.dependencies || []) {
-    if (d.type === "parent-child") return d.depends_on_id;
-  }
-  return null;
-}
-
-function computeClusters() {
-  const map = new Map(DATA.issues.map((i) => [i.id, i]));
-
-  // pass 1: strict parent chains (parent field / parent-child deps)
-  const strictRoot = new Map();
-  for (const issue of DATA.issues) {
-    const seen = new Set([issue.id]);
-    let cur = issue;
-    while (true) {
-      const p = parentOf(cur);
-      if (!p || seen.has(p) || !map.has(p)) break;
-      seen.add(p);
-      cur = map.get(p);
-    }
-    strictRoot.set(issue.id, cur.id);
-  }
-
-  // a lane exists for every strict cluster with more than one member
-  const clusterSize = new Map();
-  for (const root of strictRoot.values())
-    clusterSize.set(root, (clusterSize.get(root) || 0) + 1);
-  const isLane = (root) => (clusterSize.get(root) || 0) > 1;
-
-  // pass 2: beads discovered while working on a lane member join that
-  // lane; everything discovered outside a lane stays ungrouped
-  CLUSTER = new Map();
-  for (const issue of DATA.issues) {
-    let root = strictRoot.get(issue.id);
-    if (!isLane(root)) {
-      for (const d of issue.dependencies || []) {
-        if (d.type !== "discovered-from") continue;
-        const target = strictRoot.get(d.depends_on_id);
-        if (target !== undefined && isLane(target)) { root = target; break; }
-      }
-    }
-    CLUSTER.set(issue.id, root);
-  }
 }
 
 // ---------------------------------------------------------------- misc

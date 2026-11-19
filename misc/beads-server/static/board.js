@@ -6,6 +6,16 @@ import {
   COLUMNS, CLUSTER, DATA, SELECTED, columnOf, h, isClaimed, statusColor,
 } from "./core.js";
 
+// collapsed lanes live here (cluster root id -> true); ungrouped = null key
+const collapsed = new Set();
+export function isCollapsed(laneRoot) {
+  return collapsed.has(laneRoot);
+}
+export function toggleLane(laneRoot) {
+  if (collapsed.has(laneRoot)) collapsed.delete(laneRoot);
+  else collapsed.add(laneRoot);
+}
+
 export function renderBoard() {
   const board = document.getElementById("board");
   board.innerHTML = "";
@@ -64,14 +74,16 @@ export function renderBoard() {
     if (laneRoot) {
       const root = byIdMap.get(laneRoot);
       const rootLink = h("span", "lane-root", laneRoot);
-      if (root) rootLink.onclick = () => window.showDetails(root);
+      if (root) rootLink.onclick = (ev) => { ev.stopPropagation(); window.showDetails(root); };
       headEl.append(rootLink);
       headEl.append(h("div", "lane-title", root ? root.title : ""));
     } else {
       headEl.append(h("div", "lane-title", "ungrouped"));
     }
+    headEl.append(h("div", "lane-toggle", collapsed.has(laneRoot) ? "▸" : "▾"));
+    headEl.onclick = () => { toggleLane(laneRoot); renderBoard(); };
 
-    const stats = { open: 0, in_progress: 0, closed: 0 };
+    const stats = { open: 0, in_progress: 0, blocked: 0, deferred: 0, closed: 0 };
     for (const m of members) {
       const col = columnOf(m.status);
       if (stats[col] !== undefined) stats[col]++;
@@ -80,9 +92,17 @@ export function renderBoard() {
     const statParts = [];
     if (stats.open) statParts.push(stats.open + " open");
     if (stats.in_progress) statParts.push(stats.in_progress + " wip");
+    if (stats.blocked) statParts.push(stats.blocked + " blocked");
+    if (stats.deferred) statParts.push(stats.deferred + " deferred");
     if (stats.closed) statParts.push(stats.closed + " closed");
     headEl.append(h("div", "lane-stats", statParts.join(" · ") || "—"));
     lane.append(headEl);
+    board.append(lane);
+
+    if (collapsed.has(laneRoot)) {
+      lane.classList.add("collapsed");
+      return; // cards hidden, lane head stays for toggling back
+    }
 
     // partition members into columns, in-progress first within each
     const perCol = {};
@@ -94,7 +114,6 @@ export function renderBoard() {
       for (const m of perCol[c.key]) col.append(card(m));
       lane.append(col);
     }
-    board.append(lane);
   };
 
   for (const { rootId, members } of named) buildLane(rootId, members, false);
@@ -131,6 +150,7 @@ function card(issue) {
   mk("P" + (issue.priority ?? "—"));
   if (issue.status && !COLUMNS.some((col) => col.statuses.includes(issue.status)))
     mk(issue.status, "substatus");
+  if (issue.is_blocked) mk("⛔ " + (DATA.blockers?.[issue.id] ?? ""), "blocked-chip");
   if (issue.comment_count) mk("💬 " + issue.comment_count);
   c.append(chips);
 

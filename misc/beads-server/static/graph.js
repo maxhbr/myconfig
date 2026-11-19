@@ -99,6 +99,7 @@ function draw(nodes) {
     title.setAttribute("fill", "#10131a");
     g.append(label, title);
     g.addEventListener("click", () => window.showDetails(issue));
+    g.addEventListener("dblclick", () => window.setFocus(issue.id));
     root.append(g);
   }
 

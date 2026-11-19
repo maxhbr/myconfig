@@ -174,3 +174,22 @@ text.edgelabel { fill: var(--muted); font-size: 9px; }
   width: 30px; height: 30px; border-radius: 4px; border: 1px solid var(--border);
   background: var(--panel); color: var(--fg); cursor: pointer; font-size: 16px;
 }
+.lane-head .lane-toggle {
+  color: var(--muted); font-size: 14px; margin-top: auto;
+}
+.lane.collapsed .col { display: none; }
+.card .card-chips span.blocked-chip {
+  color: var(--blocked); border-color: var(--blocked);
+}
+.col-blocked .card { border-left-color: var(--blocked); }
+.col-deferred .card { border-left-color: var(--frozen); opacity: .82; }
+#focus-banner {
+  display: none; align-items: center; gap: 8px;
+  padding: 4px 14px; font-size: 12px; color: var(--muted);
+  background: var(--panel); border-bottom: 1px solid var(--border);
+}
+#focus-banner.visible { display: flex; }
+#focus-banner button {
+  border: 1px solid var(--border); background: var(--bg); color: var(--fg);
+  border-radius: 4px; cursor: pointer; padding: 1px 8px;
+}
