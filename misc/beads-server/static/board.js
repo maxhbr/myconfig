@@ -6,6 +6,7 @@ import {
   COLUMNS, CLUSTER, DATA, SELECTED, columnOf, h, isClaimed, statusColor,
 } from "./core.js";
 import { state } from "./filters.js";
+import { makeDraggable, makeDropTarget } from "./edit.js";
 
 // collapsed lanes live here (cluster root id -> true); ungrouped = null key
 const collapsed = new Set();
@@ -112,6 +113,7 @@ export function renderBoard() {
     for (const c of cols) {
       const col = h("div", "col col-" + c.key);
       for (const m of perCol[c.key]) col.append(card(m));
+      makeDropTarget(col, c.statuses[0], (id) => DATA.issues.find((i) => i.id === id));
       lane.append(col);
     }
   };
@@ -155,5 +157,6 @@ function card(issue) {
   c.append(chips);
 
   c.onclick = () => window.showDetails(issue);
+  makeDraggable(c, issue);
   return c;
 }

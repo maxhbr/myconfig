@@ -5,6 +5,10 @@
 import {
   CLUSTER, DATA, esc, fmtDate, h, isClaimed, statusColor,
 } from "./core.js";
+import {
+  canWrite, inlinePriority, inlineStatus, inlineText, inlineAssignee,
+  descriptionEditor, commentComposer, labelEditor,
+} from "./edit.js";
 
 function chip(text, bg) {
   const c = document.createElement("span");
@@ -45,7 +49,12 @@ export function showDetails(issue) {
     refreshSelection();
   };
   const h2 = document.createElement("h2");
-  h2.textContent = issue.title;
+  if (canWrite()) {
+    const titleInput = inlineText(issue, "title", issue.title);
+    h2.append(titleInput);
+  } else {
+    h2.textContent = issue.title;
+  }
   pane.append(close, h2);
 
   pane.append(chip(issue.id));
@@ -53,9 +62,27 @@ export function showDetails(issue) {
   focusChip.style.cursor = "pointer";
   focusChip.onclick = () => window.setFocus(issue.id);
   pane.append(focusChip);
-  pane.append(chip(issue.status, statusColor(issue.status)));
-  pane.append(chip(issue.issue_type || "—"));
-  pane.append(chip("P" + issue.priority));
+  if (canWrite()) {
+    const statuses = [...new Set(DATA.issues.map((i) => i.status))];
+    pane.append(inlineStatus(issue, statuses));
+    const typeSel = inlineText(issue, "type", issue.issue_type);
+    typeSel.style.width = "90px";
+    typeSel.style.display = "inline-block";
+    pane.append(typeSel);
+    const pr = inlinePriority(issue);
+    pr.style.width = "60px";
+    pr.style.display = "inline-block";
+    pane.append(pr);
+    const assignees = [...new Set(DATA.issues.map((i) => i.assignee).filter(Boolean))];
+    const asg = inlineAssignee(issue, assignees);
+    asg.style.width = "110px";
+    asg.style.display = "inline-block";
+    pane.append(asg);
+  } else {
+    pane.append(chip(issue.status, statusColor(issue.status)));
+    pane.append(chip(issue.issue_type || "—"));
+    pane.append(chip("P" + issue.priority));
+  }
 
   const claimed = isClaimed(issue);
   if (claimed) {
@@ -97,13 +124,15 @@ export function showDetails(issue) {
     pane.append(s);
   };
 
-  if ((issue.labels || []).length) {
-    const wrap = document.createElement("div");
-    for (const l of issue.labels) wrap.append(chip(l));
-    section("labels", wrap);
+  if (canWrite() || (issue.labels || []).length) {
+    section("labels", labelEditor(issue));
   }
 
-  if (issue.description) section("description", issue.description);
+  if (canWrite()) {
+    section("description", descriptionEditor(issue));
+  } else if (issue.description) {
+    section("description", issue.description);
+  }
   if (issue.close_reason) section("close reason", issue.close_reason);
   if (issue.notes) section("notes", issue.notes);
   if (issue.acceptance_criteria) section("acceptance criteria", issue.acceptance_criteria);
@@ -192,6 +221,7 @@ export function showDetails(issue) {
     }
     section(`comments (${issue.comment_count})`, wrap);
   }
+  if (canWrite()) section("add a comment", commentComposer(issue));
 
   refreshSelection(); // update selection highlight
 }

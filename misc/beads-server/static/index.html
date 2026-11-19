@@ -39,6 +39,7 @@
       <select id="filter-lane"><option value="">all</option></select>
     </label>
     <select id="presets"></select>
+    <button id="new-bead" title="create a bead">+ new</button>
     <input type="search" id="search" placeholder="search title/id…">
     <label title="also search issue descriptions (heavier)">
       <input type="checkbox" id="toggle-search-desc"> desc
@@ -47,6 +48,7 @@
   <div id="label-picker"></div>
 </header>
 <div class="legend" id="legend"></div>
+<div id="edit-banner" hidden></div>
 <div id="focus-banner">
   <span id="focus-text"></span>
   <button id="focus-clear">clear focus</button>
@@ -63,6 +65,7 @@
   <aside id="details"></aside>
 </main>
 
+<div id="toast"></div>
 <div id="loading" hidden></div>
 <div id="error" hidden></div>
 

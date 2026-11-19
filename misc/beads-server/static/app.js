@@ -6,8 +6,10 @@ import {
   DATA, STATUS_ORDER, CLUSTER, setData, statusColor,
 } from "./core.js";
 import { connect } from "./live.js";
+import { init as initEdit, newBeadDialog, canWrite } from "./edit.js";
 import { renderBoard } from "./board.js";
 import { renderGraph, zoomBy, resetView } from "./graph.js";
+import { showDetails, refreshSelection } from "./detail.js";
 import * as filters from "./filters.js";
 const { state, matches, writeToHash, readFromHash } = filters;
 
@@ -334,8 +336,10 @@ async function load() {
   document.getElementById("zoom-in").onclick = () => zoomBy(1.25);
   document.getElementById("zoom-out").onclick = () => zoomBy(0.8);
   document.getElementById("zoom-fit").onclick = resetView;
+  document.getElementById("new-bead").onclick = () => newBeadDialog();
   render();
   connect(DATA.revision);
+  initEdit();
 }
 
 load();

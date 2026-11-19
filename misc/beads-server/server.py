@@ -20,6 +20,7 @@ import json
 import os
 import queue
 import re
+import secrets
 import subprocess
 import sys
 import threading
@@ -45,6 +46,7 @@ class Watcher:
         self.bd_bin = bd_bin
         self.repo = repo
         self.poll_interval = poll_interval
+        self.token = secrets.token_urlsafe(32)
         self.cache = BdCache(bd_bin, repo)
         self.lock = threading.Lock()
         self._fingerprints = {}
@@ -158,6 +160,31 @@ class Watcher:
                 except queue.Full:
                     pass  # a stalled client misses patches; reset covers it
 
+def run_bd_input(bd_bin, args, repo, stdin_text, timeout=600):
+    """Like run_bd, but feeds stdin_text (bd --*-file - reads it) and
+    attributes the write to beads-server."""
+    env = {**os.environ, "BEADS_ACTOR": "beads-server"}
+    env.pop("BEADS_DIR", None)
+    for beads_dir in (None, str(repo / ".beads")):
+        if beads_dir is not None:
+            env["BEADS_DIR"] = beads_dir
+        proc = subprocess.run(
+            [bd_bin, *args],
+            input=stdin_text,
+            capture_output=True,
+            text=True,
+            cwd=str(repo),
+            env=env,
+            timeout=timeout,
+        )
+        if proc.returncode == 0:
+            return proc
+        if beads_dir is None and "no beads database found" not in proc.stderr \
+                and "cannot resolve workspace" not in proc.stderr:
+            break
+    return proc
+
+
 def journal_available(bd_bin, repo):
     """The journal records only when events-journal is enabled for the
     workspace; enabling it mutates shared DB state, so we only detect."""
@@ -214,6 +241,10 @@ def make_handler(watcher, allow_write):
                 self._send_events()
             elif path == "/api/capabilities":
                 self._send_json({"write": allow_write})
+            elif path == "/api/session" and allow_write:
+                self._send_json({"token": watcher.token})
+            elif path == "/api/session":
+                self.send_error(403, "editing disabled: start with --allow-write")
             else:
                 super().do_GET()
 
@@ -289,9 +320,190 @@ def make_handler(watcher, allow_write):
             else:
                 self._send_json({"revision": watcher.cache.revision, "issue": issue})
 
-        def _send_json(self, obj):
+        # ---------------------------------------------------------- writing
+
+        # argv allowlist per field; values are passed as single argv
+        # entries, never through a shell
+        UPDATE_FLAGS = {
+            "status": "--status",
+            "priority": "--priority",
+            "assignee": "--assignee",
+            "type": "--type",
+            "title": "--title",
+            "parent": "--parent",
+        }
+        UPDATE_STDIN = {
+            "description": "--body-file",
+            "design": "--design-file",
+        }
+
+        def do_POST(self):
+            # DNS rebinding defense: without an exact Host/Origin check a
+            # rebinding attacker becomes same-origin, fetches /api/session
+            # and drives the token-authenticated API.
+            host = (self.headers.get("Host") or "").rsplit(":", 1)[0]
+            if host not in ("127.0.0.1", "localhost", "[::1]"):
+                self.send_error(403, "non-loopback Host refused")
+                return
+            origin = self.headers.get("Origin") or ""
+            if origin:
+                ohost = urlparse(origin).hostname or ""
+                if ohost not in ("127.0.0.1", "localhost", "::1"):
+                    self.send_error(403, "cross-origin write refused")
+                    return
+            if not allow_write:
+                self.send_error(403, "editing disabled: start with --allow-write")
+                return
+            supplied = self.headers.get("X-Beads-Server-Token") or ""
+            if not secrets.compare_digest(supplied, watcher.token):
+                self.send_error(403, "missing or invalid X-Beads-Server-Token")
+                return
+            path = urlparse(self.path).path
+            if match := re.match(r"^/api/beads/issue/([^/]+)/update$", path):
+                self._update_issue(unquote(match.group(1)))
+            elif match := re.match(r"^/api/beads/issue/([^/]+)/comment$", path):
+                self._comment_issue(unquote(match.group(1)))
+            elif path == "/api/beads":
+                self._create_issue()
+            elif path == "/api/beads/deps":
+                self._dep_change()
+            elif path == "/api/beads/batch":
+                self._batch()
+            else:
+                self.send_error(404, f"unknown POST endpoint {path}")
+
+        def _read_json(self):
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                return json.loads(self.rfile.read(length))
+            except (ValueError, json.JSONDecodeError):
+                return None
+
+        def _write_result(self, proc, issue_id):
+            """Map a bd subprocess result to an HTTP response.
+
+            Exit 13 = a lost --if-status/--if-assignee guard → 409 with
+            the fresh issue, so the caller reloads instead of overwriting.
+            """
+            if proc.returncode == 0:
+                watcher._refetch()
+                with watcher.lock:
+                    issue = watcher.cache.by_id.get(issue_id)
+                    revision = watcher.cache.revision
+                body = {"revision": revision, "issue": issue, "output": proc.stdout.strip()}
+                self._send_json(body)
+            elif proc.returncode == 13:
+                with watcher.lock:
+                    issue = watcher.cache.by_id.get(issue_id)
+                self._send_json_status(409, {"error": "conflict", "issue": issue})
+            else:
+                self._send_json_status(
+                    400, {"error": proc.stderr.strip() or proc.stdout.strip()}
+                )
+
+        def _update_issue(self, issue_id):
+            req = self._read_json()
+            if req is None:
+                self.send_error(400, "invalid JSON body")
+                return
+            args = ["update", issue_id]
+            stdin_keys = [k for k in self.UPDATE_STDIN if k in req]
+            if len(stdin_keys) > 1:
+                # one stdin pipe cannot carry two --*-file - flags
+                self.send_error(400, "one stdin field per request")
+                return
+            for key, flag in self.UPDATE_FLAGS.items():
+                if key in req:
+                    args += [flag, str(req[key])]
+            for key, flag in self.UPDATE_STDIN.items():
+                if key in req:
+                    args += [flag, "-"]
+            if "notes" in req:
+                args += ["--notes", str(req["notes"])]
+            if "append_notes" in req:
+                args += ["--append-notes", str(req["append_notes"])]
+            if "acceptance" in req:
+                args += ["--acceptance", str(req["acceptance"])]
+            for label in req.get("add_labels", []):
+                args += ["--add-label", str(label)]
+            for label in req.get("remove_labels", []):
+                args += ["--remove-label", str(label)]
+            if "set_labels" in req:
+                args += ["--set-labels", ",".join(str(l) for l in req["set_labels"])]
+            if "if_status" in req:
+                args += ["--if-status", str(req["if_status"])]
+            if "if_assignee" in req:
+                args += ["--if-assignee", str(req["if_assignee"])]
+            if len(args) == 2:
+                self.send_error(400, "no updates specified")
+                return
+            stdin_text = str(req[stdin_keys[0]]) if stdin_keys else ""
+            proc = run_bd_input(watcher.bd_bin, args, watcher.repo, stdin_text)
+            self._write_result(proc, issue_id)
+
+        def _comment_issue(self, issue_id):
+            req = self._read_json()
+            if req is None or not str(req.get("text", "")).strip():
+                self.send_error(400, "comment text required")
+                return
+            proc = run_bd_input(
+                watcher.bd_bin, ["comment", issue_id, "--stdin"], watcher.repo,
+                str(req["text"]),
+            )
+            self._write_result(proc, issue_id)
+
+        def _create_issue(self):
+            req = self._read_json()
+            if req is None or not str(req.get("title", "")).strip():
+                self.send_error(400, "title required")
+                return
+            args = ["create", str(req["title"])]
+            if "type" in req:
+                args += ["-t", str(req["type"])]
+            if "priority" in req:
+                args += ["-p", str(req["priority"])]
+            if "description" in req:
+                args += ["--description-file", "-"]
+            for label in req.get("labels", []):
+                args += ["--label", str(label)]
+            stdin_text = str(req.get("description", ""))
+            proc = run_bd_input(watcher.bd_bin, args, watcher.repo, stdin_text)
+            self._write_result(proc, None)
+
+        def _dep_change(self):
+            req = self._read_json()
+            if req is None or not all(k in req for k in ("action", "from", "to")):
+                self.send_error(400, "action/from/to required")
+                return
+            sub = "add" if req["action"] == "add" else "remove"
+            args = ["dep", sub, str(req["from"]), str(req["to"])]
+            if sub == "add" and "type" in req:
+                args += [str(req["type"])]
+            proc = run_bd_input(watcher.bd_bin, args, watcher.repo, "")
+            self._write_result(proc, req["from"])
+
+        def _batch(self):
+            req = self._read_json()
+            if req is None or not isinstance(req.get("commands", []), list):
+                self.send_error(400, "commands list required")
+                return
+            for line in req["commands"]:
+                # bd batch parses its own grammar from stdin (no shell),
+                # but refuse quotes and metacharacters anyway so a hostile
+                # client cannot smuggle a second bd command line
+                if re.search(r"[;&|`$\\><\"'\r\n]", str(line)):
+                    self.send_error(400, "refusing batch line")
+                    return
+            stdin_text = "\n".join(str(c) for c in req["commands"])
+            proc = run_bd_input(watcher.bd_bin, ["batch"], watcher.repo, stdin_text)
+            self._write_result(proc, None)
+
+        def _send_json_status(self, code, obj):
+            self._send_json(obj, code=code)
+
+        def _send_json(self, obj, code=200):
             body = json.dumps(obj).encode()
-            self.send_response(200)
+            self.send_response(code)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
