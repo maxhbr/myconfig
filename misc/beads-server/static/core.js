@@ -61,6 +61,20 @@ export let CLUSTER = null; // Map: issue id -> cluster root id
 export function setData(data) {
   DATA = data;
   CLUSTER = new Map(data.issues.map((i) => [i.id, i.cluster_root || i.id]));
+  window.DATA_ISSUES_BY_ID = Object.fromEntries(
+    data.issues.map((i) => [i.id, i])
+  );
+}
+
+export function liveIssue(id) {
+  // the authoritative current record: module DATA first, then the
+  // window map (kept for closures that captured a replaced object)
+  const fromWindow = window.DATA_ISSUES_BY_ID && window.DATA_ISSUES_BY_ID[id];
+  if (DATA) {
+    const fromData = DATA.issues.find((i) => i.id === id);
+    if (fromData) return fromData;
+  }
+  return fromWindow;
 }
 
 export function applySnapshotPatch({ upserted, removed, revision }) {
@@ -76,6 +90,9 @@ export function applySnapshotPatch({ upserted, removed, revision }) {
   }
   DATA.issues = [...byIdMap.values()];
   if (revision !== undefined) DATA.revision = revision;
+  window.DATA_ISSUES_BY_ID = Object.fromEntries(
+    DATA.issues.map((i) => [i.id, i])
+  );
 }
 
 export function applyIndices(idx) {

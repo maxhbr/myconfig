@@ -5,6 +5,8 @@
 // /api/capabilities advertises write; every mutation requires the
 // per-run token from /api/session.
 
+import { liveIssue } from "./core.js";
+
 let TOKEN = null;
 let CAPABILITIES = { write: false };
 
@@ -136,21 +138,27 @@ export function descriptionEditor(issue) {
   const wrap = document.createElement("div");
   const ta = document.createElement("textarea");
   ta.className = "edit-textarea";
-  // the value the editor started from: if the live issue record
-  // gained a different description (someone else saved), that base is
-  // stale and saving would overwrite their edit
+  // The concurrency story, honestly: bd 1.3.4 guards only status and
+  // assignee, so there is NO atomic description precondition. The
+  // editor therefore tracks the LAST SAVED value and re-reads the
+  // LIVE record (by id, never the captured object — live updates
+  // replace it) before every save: if the live description differs
+  // from what we last saved or started from, someone else wrote and
+  // the draft is preserved for review instead of overwriting them.
+  const liveIssueById = () => liveIssue(issue.id) || issue;
   let base = issue.description || "";
   ta.value = base;
   ta.disabled = !canWrite();
   ta.placeholder = "description (markdown)";
   const save = async () => {
     if (!dirty) return;
-    if ((issue.description || "") !== base) {
-      // the record changed underneath: reload instead of overwriting
+    const live = liveIssueById();
+    if ((live.description || "") !== base) {
+      // the record changed underneath: keep the draft and surface
+      // both versions — never silently overwrite a concurrent edit
       dirty = false;
       clearTimeout(timer);
-      toast("description changed elsewhere — reopening it");
-      window.refetchAll();
+      showConflict(live);
       return;
     }
     dirty = false;
@@ -158,11 +166,15 @@ export function descriptionEditor(issue) {
     try {
       const res = await post(`/api/beads/issue/${issue.id}/update`, {
         description: value,
-        if_status: issue.status,
+        if_status: live.status,
       });
       if (res.ok) {
         base = value;
-        issue.description = value; // the captured object stays truthful
+        // advance the live record too: the next edit in the same
+        // pane must not read as a false conflict
+        liveIssueById().description = value;
+      } else {
+        dirty = true; // 409/4xx: the draft is still pending
       }
     } catch {
       dirty = true; // network error: the edit is still pending
@@ -200,6 +212,22 @@ export function descriptionEditor(issue) {
     ? "autosaves 1.5 s after typing stops · Ctrl-S saves now"
     : "";
   wrap.append(ta, hint);
+  // a concurrent writer beat us: show their version next to the
+  // draft (kept intact above) instead of discarding either side
+  const showConflict = (live) => {
+    const box = document.createElement("div");
+    box.className = "edit-hint conflict-hint";
+    const theirs = document.createElement("pre");
+    theirs.textContent = live.description || "(empty)";
+    const label = document.createElement("div");
+    label.textContent =
+      "description changed elsewhere — their version (draft kept above, " +
+      "Ctrl-S overwrites):";
+    box.append(label, theirs);
+    wrap.insertBefore(box, hint);
+    base = live.description || ""; // next save overwrites consciously
+    toast("description changed elsewhere — draft kept");
+  };
   return wrap;
 }
 
