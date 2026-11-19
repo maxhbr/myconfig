@@ -121,24 +121,53 @@ export function descriptionEditor(issue) {
   const wrap = document.createElement("div");
   const ta = document.createElement("textarea");
   ta.className = "edit-textarea";
-  ta.value = issue.description || "";
+  // the value the editor started from: if the live issue record
+  // gained a different description (someone else saved), that base is
+  // stale and saving would overwrite their edit
+  let base = issue.description || "";
+  ta.value = base;
   ta.disabled = !canWrite();
   ta.placeholder = "description (markdown)";
   const save = async () => {
-    await post(`/api/beads/issue/${issue.id}/update`, {
-      description: ta.value,
-      if_status: issue.status,
-    });
+    if (!dirty) return;
+    if ((issue.description || "") !== base) {
+      // the record changed underneath: reload instead of overwriting
+      dirty = false;
+      clearTimeout(timer);
+      toast("description changed elsewhere — reopening it");
+      window.refetchAll();
+      return;
+    }
+    dirty = false;
+    const value = ta.value;
+    try {
+      const res = await post(`/api/beads/issue/${issue.id}/update`, {
+        description: value,
+        if_status: issue.status,
+      });
+      if (res.ok) base = value;
+    } catch {
+      dirty = true; // network error: the edit is still pending
+    }
   };
   // debounce: description edits arrive one keystroke at a time, and
   // each save is a bd run (potentially a git commit)
   let timer = null;
-  ta.oninput = () => {
+  let dirty = false;
+  const arm = () => {
     if (!canWrite()) return;
+    dirty = true;
     clearTimeout(timer);
     timer = setTimeout(save, 1500);
   };
-  ta.onblur = save;
+  ta.oninput = arm;
+  ta.onblur = () => {
+    if (!canWrite()) return;
+    // blur either flushes a pending edit or cancels the timer — it
+    // must never submit on its own and never leave the timer armed
+    clearTimeout(timer);
+    save();
+  };
   ta.onkeydown = (ev) => {
     if (ev.key === "s" && (ev.ctrlKey || ev.metaKey)) {
       ev.preventDefault();
