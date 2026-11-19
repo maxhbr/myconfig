@@ -30,13 +30,18 @@ async function setup(t) {
   await init(server.generation);
   clearDraftProbes();
   const issue = { id: "one", status: "open", description: "original" };
-  const publish = (description) => setData({ issues: [{ ...issue, description }] });
+  const publish = (description, revision = 1) => setData({
+    generation: server.generation, revision, issues: [{ ...issue, description }],
+  });
+  const ack = (index, revision) => posts[index].request.resolve(Response.json({
+    revision, issue: { ...issue, description: posts[index].description },
+  }));
   publish(issue.description);
   const [ta, conflict] = descriptionEditor(issue).children;
   controls.push(ta);
   const type = (text) => { ta.value = text; ta.oninput(); };
   const confirm = () => ta.onkeydown({ key: "s", ctrlKey: true, preventDefault() {} });
-  return { ta, conflict, publish, posts, type, confirm, server };
+  return { ta, conflict, publish, posts, type, confirm, server, ack };
 }
 
 test("blur and debounce cannot confirm a conflict, including an empty description", async (t) => {
@@ -61,7 +66,7 @@ test("blur and debounce cannot confirm a conflict, including an empty descriptio
 });
 
 test("a slow save flushes the latest edit once, even after debounce and blur", async (t) => {
-  const { ta, posts, type } = await setup(t);
+  const { ta, posts, type, publish, ack } = await setup(t);
   type("first");
   t.mock.timers.tick(1500);
   type("second");
@@ -69,7 +74,8 @@ test("a slow save flushes the latest edit once, even after debounce and blur", a
   type("last");
   ta.onblur();
   assert.equal(posts.length, 1);
-  posts[0].request.resolve(Response.json({}));
+  publish("original", 1); // full snapshot overtakes the request, but predates its revision
+  ack(0, 2);
   await setImmediate();
   assert.deepEqual(posts.map(p => p.description), ["first", "last"]);
   posts[1].request.resolve(Response.json({}));
@@ -95,14 +101,27 @@ test("a rejected save keeps the draft and does not drain a queued write", async 
 });
 
 test("a delayed successful save cannot undo a live revert to the old text", async (t) => {
-  const { ta, posts, type, publish } = await setup(t);
+  const { ta, type, publish, ack } = await setup(t);
   type("my change");
   ta.onblur();
-  publish("my change");
-  publish("original");
-  posts[0].request.resolve(Response.json({}));
+  publish("my change", 2);
+  publish("original", 3);
+  ack(0, 2);
   await setImmediate();
   assert.equal(liveIssue("one").description, "original");
+});
+
+test("typing during an explicit overwrite rearms autosave after success", async (t) => {
+  const { type, publish, confirm, ack, posts } = await setup(t);
+  type("draft");
+  publish("remote edit", 2);
+  t.mock.timers.tick(1500);
+  confirm();
+  type("newer draft");
+  ack(0, 3);
+  await setImmediate();
+  t.mock.timers.tick(1500);
+  assert.deepEqual(posts.map(p => p.description), ["draft", "newer draft"]);
 });
 
 test("a restart preserves unsent drafts without replaying old writes with the new token", async (t) => {
@@ -115,8 +134,6 @@ test("a restart preserves unsent drafts without replaying old writes with the ne
   await init(server.generation);
   assert.equal(ta.disabled, true);
   assert.equal(canWrite(), false);
-  posts[0].request.resolve(Response.json({}));
-  await setImmediate();
   server.generation = "writable-again";
   server.write = true;
   await init(server.generation);
@@ -128,6 +145,10 @@ test("a restart preserves unsent drafts without replaying old writes with the ne
   confirm();
   assert.equal(posts[1].token, "writable-again");
   assert.equal(posts[1].description, ta.value);
+  posts[0].request.resolve(Response.json({})); // the old request finishes last
+  await setImmediate();
+  assert.equal(window.detailsHasDraft(), true);
+  assert.equal(posts.length, 2);
 });
 
 test("a delayed session reply cannot enable writes on a newer read-only server", async (t) => {

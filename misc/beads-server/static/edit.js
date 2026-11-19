@@ -5,7 +5,7 @@
 // /api/capabilities advertises write; every mutation requires the
 // per-run token from /api/session.
 
-import { liveIssue } from "./core.js";
+import { DATA, liveIssue } from "./core.js";
 
 let session = {};
 
@@ -177,7 +177,15 @@ export function descriptionEditor(issue) {
   // replace it) before every save: if the live description differs
   // from what we last saved or started from, someone else wrote and
   // the draft is preserved for review instead of overwriting them.
-  const liveIssueById = () => liveIssue(issue.id) || issue;
+  let acknowledged = null;
+  const liveIssueById = () => {
+    // The POST may acknowledge a newer revision than our SSE stream has
+    // installed. Use that single issue locally, never mutate the board.
+    if (acknowledged?.owner === session && DATA.revision < acknowledged.revision) {
+      return acknowledged.issue;
+    }
+    return liveIssue(issue.id) || issue;
+  };
   let base = issue.description || "";
   ta.value = base;
   ta.disabled = !canWrite();
@@ -187,7 +195,7 @@ export function descriptionEditor(issue) {
   // rejected (409) or still in flight keeps reporting a draft and
   // the pane is never rebuilt out from under the user.
   let pending = false;
-  let saving = false;
+  let saving = null;
   let queued = false;
   let conflict = null; // exact version shown to the user, including ""
   let draftSession = session;
@@ -197,7 +205,7 @@ export function descriptionEditor(issue) {
     // A restart never replays a draft via an old timer, blur or queued flush.
     if (draftSession !== session && !explicit) return;
     draftSession = session;
-    if (saving) {
+    if (saving === session) {
       queued = true;
       return;
     }
@@ -207,7 +215,8 @@ export function descriptionEditor(issue) {
       showConflict(theirs);
       return;
     }
-    saving = true;
+    const owner = session;
+    saving = owner;
     queued = false;
     const value = ta.value;
     try {
@@ -215,11 +224,10 @@ export function descriptionEditor(issue) {
         description: value,
         if_status: live.status,
       });
+      if (owner !== session) return;
       if (res.ok) {
         base = value;
-        // A replaced record belongs to SSE, even if its text was reverted
-        // to the old value while this response was in flight.
-        if (liveIssueById() === live) live.description = value;
+        acknowledged = res.data.issue ? { owner, issue: res.data.issue, revision: res.data.revision } : null;
         conflict = null;
         conflictBox.hidden = true;
         pending = ta.value !== value;
@@ -228,14 +236,18 @@ export function descriptionEditor(issue) {
       }
       if (!res.ok) return; // never replay a rejected write
     } catch {
-      toast("save failed — draft kept");
+      if (owner === session) toast("save failed — draft kept");
       return;
     } finally {
-      saving = false;
+      if (saving === owner) saving = null;
     }
     // A debounce, blur or Ctrl-S may have already fired during the POST.
     // Flush the latest text once, but only after a successful write.
-    if (queued && pending) return save();
+    if (pending) {
+      clearTimeout(timer);
+      if (queued) return save();
+      timer = setTimeout(save, 1500);
+    }
   };
   // debounce: description edits arrive one keystroke at a time, and
   // each save is a bd run (potentially a git commit)
@@ -243,7 +255,7 @@ export function descriptionEditor(issue) {
   const arm = () => {
     if (!canWrite()) return;
     if (!pending && !saving) draftSession = session;
-    pending = saving || conflict !== null || ta.value !== base;
+    pending = !!saving || conflict !== null || ta.value !== base;
     clearTimeout(timer);
     if (pending && conflict === null) timer = setTimeout(save, 1500);
   };

@@ -426,7 +426,9 @@ def make_handler(watcher, allow_write):
             the fresh issue, so the caller reloads instead of overwriting.
             """
             if proc.returncode == 0:
-                watcher._refetch()
+                # The editor uses this revision as an acknowledgement. A poll
+                # that started before the write cannot stand in for this read.
+                watcher._refetch(force=True)
                 with watcher.lock:
                     issue = watcher.cache.by_id.get(issue_id)
                     revision = watcher.cache.revision
