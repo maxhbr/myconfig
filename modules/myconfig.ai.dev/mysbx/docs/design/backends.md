@@ -626,9 +626,16 @@ Consequences, stated honestly:
   broker's socket — the VMM's muxer connects it per guest
   connection, the baked guest `mysbx-vsock-bridge` serves the
   payload's `127.0.0.1` URLs over it, and the guest has NO net
-  device at all (see D3/D6). The remaining VM backend (microvm-ch)
-  keeps its `not enforceable today` refusal with its possible lift
-  tracked under bd myconfig-n8kv.2's children (C2).
+  device at all (see D3/D6). microvm-ch has since been LIFTED as
+  the last VM transport (bd myconfig-n8kv.2 C2, bd
+  myconfig-fo1r): the passt NIC is dropped and `--vsock
+  cid=3,socket=<run>/vsock.sock` is the only device — the ONE
+  mapped port rides CH's own hybrid-vsock convention (the VMM
+  connects `<mux socket>_<port>` per guest connection), where the
+  egress relay's new `--vsock-listener` mode forwards to the
+  broker's socket; the guest is the SAME no-NIC vsock-bridge class
+  the krun twin defined (see D11). With it, every VM backend
+  enforces the profile.
 - DNS travels the same TSI path (the VMM resolves from the netns's
   resolver) — no guest-specific resolver story is needed for the first
   cut, and none is invented here.
@@ -1475,6 +1482,7 @@ What differs from `microvm-qemu` (D9), stated honestly:
 | --- | --- | --- |
 | VMM | qemu-system, out-of-process | cloud-hypervisor, out-of-process (Rust, per-thread seccomp default-on) |
 | network = shared | SLiRP in-process (`-netdev user`) | one passt `--vhost-user` child per run, CH connecting as the socket CLIENT (`vhost_mode=client`); passt mimics SLiRP's exact plan (`10.0.2.15/24`, gateway `10.0.2.2`, DNS `10.0.2.3`, `--ipv4-only`), so the guest's static NIC config and the `10.0.2.2` model-endpoint pins carry over unchanged. The guest MAC is PINNED to passt's banner value (`9a:55:9a:55:9a:55`, the `mac=` CH flag) — the spike proved the pin load-bearing: passt frames for its own banner MAC and silently drops anything else |
+| network = "proxy-only" (D20) | SLiRP `restrict=on` + one `guestfwd` (bd myconfig-krab, C4) | the passt child is DROPPED and `--vsock cid=3,socket=<run>/vsock.sock` is the ONLY device (bd myconfig-fo1r, C2): the guest gets no NIC at all; its ONE mapped port rides CH's own hybrid-vsock convention (docs/vsock.md — the VMM connects `<mux socket>_<port>` per guest connection), where the crate's `mysbx-egress-relay` listens in its `--vsock-listener` mode (pinned into the launcher's wrapper as `MYSBX_MICROVM_CH_EGRESS_RELAY`) and forwards to the per-run broker's socket, whose directory the run binds ro into the launcher's bwrap view (the waypipe-dir idiom). The guest is the SAME no-NIC vsock-bridge class as the krun twin's: the baked `mysbx-vsock-bridge` serves `127.0.0.1:<port>` over `VSOCK-CONNECT:2:<port>`, started by the init under the shared `MYSBX_KRUN_NET=restricted` marker; the microvm kernel builds `VSOCKETS`/`VIRTIO_VSOCKETS` in for it |
 | exit code | a virtio-serial port (`mysbx-exit`, bd myconfig-dnmk) | the 16550: CH has no multiport virtio-serial, so `--serial file=` wires ttyS0 to a runtime file and the init writes one `mysbx-exit:N` line there (bd myconfig-9wkp.4); the launcher reads the file AFTER the VM exits — a file, unlike the qemu twin's chardev socket, so there is no live-reader connect race |
 | teardown | `reboot=t panic=-1` + `-no-reboot`: a PID-1 exit panics and qemu EXITS | `poweroff -f` from the init (the serial16550 branch): CH has NO `-no-reboot`, so `panic=-1` would REBOOT and re-run the payload, and a PID-1 exit's kernel panic would HANG the VM. `--pvpanic` + `--event-monitor` arm the crash signal: the launcher's crash watch polls the event monitor for CH's `"event": "panic"` record and kills the hung VM the moment it appears, with a teardown timeout as the backstop for a VM that neither powers off nor panics — a hung VM is killed and reported, never a wedged session |
 | nested-virt (D27) | `-cpu max,vmx=off,svm=off` masks, `-cpu host` opt-in | `nested=off` FORCED on every plain run — CH defaults nested ON, the exact inverse of qemu; `--nested-virt` switches to `nested=on`. The run path pre-flights `/dev/kvm` and the host's nested parameter identically |

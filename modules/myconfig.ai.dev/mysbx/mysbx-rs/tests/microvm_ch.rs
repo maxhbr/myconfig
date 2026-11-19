@@ -90,11 +90,162 @@ fn assert_parity(cfg: &Merged, params: &Params<'_>) -> Vec<String> {
     ch
 }
 
+/// Bless/write the golden of a CH argv (the krun/qemu suites'
+/// convention): MYSBX_BLESS_GOLDEN=1 rewrites the file, otherwise
+/// the argv must match it byte for byte, one argument per line.
+fn assert_golden(rel: &str, argv: &[String]) {
+    let path = format!("tests/assets/microvm-ch/{rel}");
+    let mut rendered = String::new();
+    for arg in argv {
+        rendered.push_str(arg);
+        rendered.push('\n');
+    }
+    if std::env::var_os("MYSBX_BLESS_GOLDEN").is_some() {
+        std::fs::write(&path, &rendered).unwrap_or_else(|e| panic!("cannot bless {path}: {e}"));
+        return;
+    }
+    let expected = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("cannot read the golden {path}: {e}"));
+    assert_eq!(
+        rendered, expected,
+        "the CH argv drifted from the golden {path} (bless with \
+         MYSBX_BLESS_GOLDEN=1 after an INTENDED change)"
+    );
+}
+
 #[test]
-fn proxy_only_is_refused_by_the_builder() {
-    // D20 (bd myconfig-6di.3): the CH builder refuses
-    // `network = "proxy-only"` itself — passt's vhost-user net device
-    // always has a gateway route.
+fn proxy_only_is_accepted_by_the_builder_with_the_vsock_channel() {
+    // The C2 lift (bd myconfig-fo1r): the CH twin renders the
+    // proxy-only channel as `--network restricted` plus the
+    // `--egress-socket`/`--egress-port` pair — the same launcher
+    // grammar the krun twin defined, a different transport behind
+    // it (the hybrid vsock: no NIC, one mapped port, the launcher's
+    // relay child). The guest env carries the no-NIC vsock-bridge
+    // marker (the krun spelling: it names the shared guest CLASS,
+    // not a backend) and the guest-loopback `MYSBX_EGRESS_PROXY`.
+    // No `--network none`, no `MYSBX_MICROVM_NET=1` — the NIC is
+    // GONE, that is the fence.
+    let mut cfg = base();
+    cfg.network = mysbx::config::Network::ProxyOnly;
+    let channel = mysbx::bwrap::EgressChannel {
+        socket_dir: "/run/user/1000/mysbx-egress/1234",
+        socket: "litellm.sock",
+        port: 4000,
+        relay_bin: "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
+        etc_dir: "/synth/store/bbbb-mysbx-egress-etc",
+        allow_domains: &[],
+        connect_ports: &[],
+        public: false,
+    };
+    let p = Params {
+        egress: Some(&channel),
+        ..params()
+    };
+    std::env::set_var(
+        "MYSBX_RESOLV_SOURCE",
+        "tests/assets/microvm-qemu/resolv.conf",
+    );
+    let host_env = BTreeMap::new();
+    let argv = microvm_ch_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env,
+        &p,
+        KERNEL,
+        &[],
+    )
+    .unwrap_or_else(|e| panic!("the restricted CH argv builds: {e}"));
+    assert!(argv
+        .windows(2)
+        .any(|w| w[0] == "--network" && w[1] == "restricted"));
+    assert!(
+        argv.windows(2).any(|w| w[0] == "--egress-socket"
+            && w[1] == "/run/user/1000/mysbx-egress/1234/litellm.sock"),
+        "the socket is the broker dir plus the pinned name: {argv:?}"
+    );
+    assert!(argv
+        .windows(2)
+        .any(|w| w[0] == "--egress-port" && w[1] == "4000"));
+    assert!(argv
+        .windows(2)
+        .any(|w| w[0] == "--env" && w[1] == "MYSBX_KRUN_NET=restricted"));
+    assert!(argv
+        .windows(2)
+        .any(|w| w[0] == "--env" && w[1] == "MYSBX_EGRESS_PROXY=http://127.0.0.1:4000"));
+    assert!(argv
+        .windows(2)
+        .any(|w| w[0] == "--env" && w[1] == "MYSBX_NETWORK=proxy-only"));
+    assert!(!argv.iter().any(|a| a == "none"));
+    assert!(
+        !argv
+            .windows(2)
+            .any(|w| w[0] == "--env" && w[1] == "MYSBX_MICROVM_NET=1"),
+        "the restricted guest gets no NIC marker — passt is never spawned: {argv:?}"
+    );
+    assert!(
+        !argv.iter().any(|a| a.contains("aaaa-mysbx")),
+        "the relay pin never rides the CH argv — the launcher's wrapper pin (MYSBX_MICROVM_CH_EGRESS_RELAY) serves it: {argv:?}"
+    );
+    assert_golden("egress-proxy-only.txt", &argv);
+}
+
+#[test]
+fn a_channel_with_connect_lane_state_is_refused_by_the_builder() {
+    // The CONNECT lane is the bubblewrap broker's (C7 owns the
+    // table work): a channel carrying table rows or the public
+    // flag renders a restricted vsock guest whose ONE mapped port
+    // cannot express them — refused in the SHARED spec (spec_of),
+    // the same three shapes the krun/qemu twins pin.
+    for (domains, ports, public) in [
+        (vec!["api.openai.com".to_string()], vec![], false),
+        (vec![], vec![443], false),
+        (vec![], vec![], true),
+    ] {
+        let mut cfg = base();
+        cfg.network = mysbx::config::Network::ProxyOnly;
+        let channel = mysbx::bwrap::EgressChannel {
+            socket_dir: "/run/user/1000/mysbx-egress/1234",
+            socket: "litellm.sock",
+            port: 4000,
+            relay_bin: "/synth/store/aaaa-mysbx/bin/mysbx-egress-relay",
+            etc_dir: "/synth/store/bbbb-mysbx-egress-etc",
+            allow_domains: &domains,
+            connect_ports: &ports,
+            public,
+        };
+        let p = Params {
+            egress: Some(&channel),
+            ..params()
+        };
+        let host_env = BTreeMap::new();
+        let err = microvm_ch_argv(
+            &cfg,
+            &synth_repo(),
+            &Payload::Shell,
+            &host_env,
+            &p,
+            KERNEL,
+            &[],
+        )
+        .expect_err("a CONNECT-lane channel must be refused on microvm-ch");
+        assert!(
+            matches!(err, mysbx::krun::Error::EgressLaneUnsupported),
+            "{err}"
+        );
+    }
+}
+
+#[test]
+fn a_channel_less_brokered_run_is_still_refused_by_the_builder() {
+    // The fail-closed complement of the lift: a brokered profile
+    // whose Params carry NO channel (a run that lost its broker
+    // pins between the pipeline's gate and the builder) still
+    // fails closed in `spec_of` — never a shared passt net. The
+    // refusal itself lives in the SHARED spec builder, so the
+    // parity of the refusal is pinned by the krun/qemu suites;
+    // this test pins that the CH renderer propagates it (it calls
+    // `krun::spec_of` verbatim).
     let mut cfg = base();
     cfg.network = mysbx::config::Network::ProxyOnly;
     let p = params();
@@ -108,7 +259,7 @@ fn proxy_only_is_refused_by_the_builder() {
         KERNEL,
         &[],
     )
-    .expect_err("a proxy-only CH run must be refused");
+    .expect_err("a channel-less brokered CH run must be refused");
     assert!(matches!(err, mysbx::krun::Error::ProxyOnlyRefused), "{err}");
 }
 

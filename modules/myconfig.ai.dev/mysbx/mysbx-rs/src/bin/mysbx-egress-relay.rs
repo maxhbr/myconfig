@@ -90,6 +90,7 @@ fn main() {
             payload,
         } => run(listen, connect, payload),
         Invocation::GuestFwd { connect } => run_guestfwd(connect),
+        Invocation::VsockListener { listen, connect } => run_vsock_listener(listen, connect),
     };
     match outcome {
         Ok(code) => std::process::exit(code),
@@ -105,12 +106,15 @@ fn main() {
 /// not an error); every real parse error exits 2 (cli.md D8).
 const HELP_REQUESTED: &str = "__help__";
 
-/// The parsed invocation: either the listener form (where to
-/// listen, what host socket to forward to, and the payload to run
-/// while forwarding) or the guestfwd form (the already-connected
-/// socket on stdio, the host socket to forward to, no payload —
-/// one process per guest connection, spawned by qemu's
-/// `guestfwd=…-cmd:` and exited at stream end).
+/// The parsed invocation: the listener form (where to listen,
+/// what host socket to forward to, and the payload to run while
+/// forwarding), the guestfwd form (the already-connected socket on
+/// stdio, the host socket to forward to, no payload — one process
+/// per guest connection, spawned by qemu's `guestfwd=…-cmd:` and
+/// exited at stream end) or the vsock-listener form (bd
+/// myconfig-fo1r — the cloud-hypervisor channel: a Unix listener
+/// at the path CH's vsock muxer connects to, forwarded to the
+/// broker socket, owned by the CH launcher's lifetime).
 #[derive(Debug, PartialEq, Eq)]
 enum Invocation {
     /// `--listen <addr> --connect <path> -- <cmd...>`: bind the
@@ -127,19 +131,34 @@ enum Invocation {
     /// Unix socket and copies both ways until EOF — no listener, no
     /// child, nothing to supervise.
     GuestFwd { connect: String },
+    /// `--vsock-listener <path> --connect <path>` (bd myconfig-fo1r
+    /// — n8kv.2 C2): the cloud-hypervisor channel. CH's vsock muxer
+    /// is a Unix CLIENT — a guest connection to host CID 2 port N
+    /// is delivered as the VMM connecting to the Unix socket
+    /// `<mux socket>_<N>` — so the HOST half of the channel is a
+    /// LISTENER at that path (the network.nix precedent:
+    /// systemd-socket-proxyd on `notify.vsock_<port>`). This
+    /// process binds the path (the CH launcher derives it from its
+    /// own per-run socket path and owns this process's lifetime),
+    /// accepts the VMM's connections and forwards each one to the
+    /// per-run egress broker's socket. No payload, no child.
+    VsockListener { listen: String, connect: String },
 }
 
 impl Invocation {
-    /// Parse `--listen <addr> --connect <path> -- <cmd...>` or
-    /// `--guestfwd <path>`. The `--` separator (listener form) is
+    /// Parse `--listen <addr> --connect <path> -- <cmd...>`,
+    /// `--guestfwd <path>` or `--vsock-listener <path>
+    /// --connect <path>`. The `--` separator (listener form) is
     /// required so a payload argument can never be mistaken for a
-    /// relay flag; the two forms share `--connect`'s spelling but
-    /// never coexist (a `--guestfwd` run takes no `--listen` and no
-    /// payload).
+    /// relay flag; the forms share `--connect`'s spelling but never
+    /// coexist (a `--guestfwd` run takes no `--listen` and no
+    /// payload; a `--vsock-listener` run takes no `--listen` and no
+    /// payload either).
     fn parse(args: &[String]) -> Result<Invocation, String> {
         let mut listen = None;
         let mut connect = None;
         let mut guestfwd = false;
+        let mut vsock_listener = false;
         let mut connect_spelled = false;
         let mut i = 0;
         let mut payload = Vec::new();
@@ -150,6 +169,11 @@ impl Invocation {
                     break;
                 }
                 "--listen" => {
+                    if vsock_listener {
+                        return Err(format!(
+                            "`--listen` and `--vsock-listener` are different transports\n{USAGE}"
+                        ));
+                    }
                     listen = Some(
                         args.get(i + 1)
                             .ok_or_else(|| "`--listen` needs a `<host>:<port>` value".to_owned())?
@@ -194,6 +218,32 @@ impl Invocation {
                     guestfwd = true;
                     i += 2;
                 }
+                "--vsock-listener" => {
+                    // The cloud-hypervisor form (bd myconfig-fo1r):
+                    // the listener is a Unix PATH (CH's muxer
+                    // connects to `<socket>_<port>`), not a TCP
+                    // address — and the `--listen`/`--guestfwd`
+                    // transports may not mix with it.
+                    if guestfwd {
+                        return Err(format!(
+                            "`--guestfwd` and `--vsock-listener` are different transports\n{USAGE}"
+                        ));
+                    }
+                    if listen.is_some() {
+                        return Err(format!(
+                            "`--listen` and `--vsock-listener` are different transports\n{USAGE}"
+                        ));
+                    }
+                    listen = Some(
+                        args.get(i + 1)
+                            .ok_or_else(|| {
+                                format!("`--vsock-listener` needs a Unix-socket path\n{USAGE}")
+                            })?
+                            .clone(),
+                    );
+                    vsock_listener = true;
+                    i += 2;
+                }
                 "-h" | "--help" => {
                     return Err(HELP_REQUESTED.to_owned());
                 }
@@ -208,6 +258,18 @@ impl Invocation {
                 ));
             }
             return Ok(Invocation::GuestFwd { connect });
+        }
+        if vsock_listener {
+            // The listen slot holds the Unix path (set by
+            // `--vsock-listener`, which is the only other writer
+            // once `--listen` is ruled out below).
+            let listen = listen.ok_or_else(|| {
+                format!("`--vsock-listener` needs its own path — this form has no TCP `--listen`\n{USAGE}")
+            })?;
+            if !payload.is_empty() {
+                return Err(format!("`--vsock-listener` takes no payload\n{USAGE}"));
+            }
+            return Ok(Invocation::VsockListener { listen, connect });
         }
         let listen = listen.ok_or_else(|| format!("missing `--listen`\n{USAGE}"))?;
         if payload.is_empty() {
@@ -224,7 +286,8 @@ impl Invocation {
 /// The usage text (`-h`/`--help` and every parse error prints it).
 const USAGE: &str =
     "usage: mysbx-egress-relay --listen 127.0.0.1:<port> --connect <unix-socket> -- <cmd...>\n\
-       or:    mysbx-egress-relay --guestfwd <unix-socket>";
+       or:    mysbx-egress-relay --guestfwd <unix-socket>\n\
+       or:    mysbx-egress-relay --vsock-listener <unix-socket> --connect <unix-socket>";
 
 fn run(listen: &str, connect: &str, payload: &[String]) -> Result<i32, String> {
     // Every fallible setup step happens BEFORE the payload is spawned: a
@@ -339,6 +402,111 @@ fn run_guestfwd(connect: &str) -> Result<i32, String> {
     let client = unsafe { TcpStream::from_raw_fd(0) };
     relay_one(client, connect);
     Ok(0)
+}
+
+/// The vsock-listener form (bd myconfig-fo1r — n8kv.2 C2): bind the
+/// Unix socket path cloud-hypervisor's vsock muxer connects to (the
+/// `<mux socket>_<port>` convention, docs/vsock.md of CH itself),
+/// accept the VMM's connections and forward each one to the per-run
+/// egress broker's socket. The process has NO payload and NO child:
+/// the CH LAUNCHER spawns it before the VM and kills it with the run
+/// (its Daemons guard), so this function never returns in a healthy
+/// run — the accept loop blocks forever, the parent's kill(2) ends
+/// it. A bind failure (a stale socket file, an unwritable dir) is
+/// the one fatal case: reported as a plain error, exit 70, BEFORE
+/// the VM ever starts — the launcher refuses a run whose channel
+/// half could not come up, exactly like the qemu twin's relay.
+fn run_vsock_listener(listen: &str, connect: &str) -> Result<i32, String> {
+    use std::os::unix::net::UnixListener;
+    // A stale socket file would shadow the bind (EADDRINUSE) — a
+    // leftover of a killed run must not kill the NEXT one. The
+    // launcher's per-run dir is fresh, so the file can only exist
+    // if something else already bound it; removing it and failing
+    // the bind would be the same race re-run. Sweep, then let the
+    // bind speak for what stands.
+    let _ = std::fs::remove_file(listen);
+    let listener = UnixListener::bind(listen).map_err(|e| format!("cannot bind {listen}: {e}"))?;
+    listener
+        .set_nonblocking(true)
+        .map_err(|e| format!("cannot poll {listen}: {e}"))?;
+    // No stop flag: the parent owns this process's lifetime. The
+    // loop polls non-blocking so a kill(2) lands between accepts.
+    accept_unix_loop(listener, connect);
+    Ok(0)
+}
+
+/// The Unix-listener twin of [`accept_loop`]: same back-off rules,
+/// same per-connection thread, same quiet-drop failure mode — only
+/// the socket type differs (CH's muxer connects as a Unix client).
+fn accept_unix_loop(listener: std::os::unix::net::UnixListener, connect: &str) {
+    loop {
+        match listener.accept() {
+            Ok((client, _)) => {
+                let connect = connect.to_owned();
+                // One thread per connection: a slow client must not
+                // block the accept loop (an agent may open several).
+                std::thread::spawn(move || relay_unix_one(client, &connect));
+            }
+            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            // Transient: the peer aborted the connection before accept
+            // finished, or a signal interrupted the syscall.
+            Err(ref e)
+                if matches!(
+                    e.kind(),
+                    io::ErrorKind::ConnectionAborted | io::ErrorKind::Interrupted
+                ) => {}
+            // Descriptor pressure: back off briefly instead of spinning.
+            Err(ref e) if is_transient_accept_pressure(e) => {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            // Fatal: report it once, on stderr, and stop accepting
+            // (rather than stopping silently).
+            Err(e) => {
+                eprintln!("mysbx-egress-relay: accept failed: {e}");
+                break;
+            }
+        }
+    }
+}
+
+/// [`relay_one`]'s Unix-stream twin: connect the broker socket and
+/// copy both ways until EOF, half-closing each direction — the same
+/// copy, the same quiet-drop failure mode, only the client type
+/// differs (a Unix socket the VMM connected, not a TCP stream).
+fn relay_unix_one(client: UnixStream, connect: &str) {
+    let upstream = match UnixStream::connect(connect) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("mysbx-egress-relay: cannot reach {connect}: {e}");
+            let _ = client.shutdown(Shutdown::Both);
+            return;
+        }
+    };
+    let (mut client_read, client_write) = match (client.try_clone(), client) {
+        (Ok(r), w) => (r, w),
+        (Err(e), _) => {
+            eprintln!("mysbx-egress-relay: cannot split the client: {e}");
+            return;
+        }
+    };
+    let (mut up_read, up_write) = match (upstream.try_clone(), upstream) {
+        (Ok(r), w) => (r, w),
+        (Err(e), _) => {
+            eprintln!("mysbx-egress-relay: cannot split the upstream: {e}");
+            return;
+        }
+    };
+    let c2u = std::thread::spawn(move || {
+        let mut up_write = up_write;
+        copy(&mut client_read, &mut up_write);
+        let _ = up_write.shutdown(Shutdown::Write);
+    });
+    let mut client_write = client_write;
+    copy(&mut up_read, &mut client_write);
+    let _ = client_write.shutdown(Shutdown::Write);
+    let _ = c2u.join();
 }
 
 /// Accept connections until the payload exits, forwarding each one.
@@ -576,6 +744,92 @@ mod tests {
         // spelled once: both naming it is a parse error, not a silent
         // pick.
         assert!(Invocation::parse(&s(&["--guestfwd", "/x", "--connect", "/x"])).is_err());
+    }
+
+    /// The vsock-listener form (bd myconfig-fo1r): the CH channel's
+    /// host half — a Unix listener path plus the broker socket, and
+    /// mixes with neither a payload nor the other transports.
+    #[test]
+    fn parses_the_vsock_listener_invocation() {
+        assert_eq!(
+            Invocation::parse(&s(&[
+                "--vsock-listener",
+                "/tmp/mysbx-microvm-ch-1/vsock.sock_4000",
+                "--connect",
+                "/run/user/1000/mysbx-egress/42/litellm.sock"
+            ]))
+            .unwrap(),
+            Invocation::VsockListener {
+                listen: "/tmp/mysbx-microvm-ch-1/vsock.sock_4000".to_owned(),
+                connect: "/run/user/1000/mysbx-egress/42/litellm.sock".to_owned(),
+            }
+        );
+        // No payload, no TCP listen, no mixing with the other forms.
+        assert!(Invocation::parse(&s(&["--vsock-listener", "/x"])).is_err());
+        assert!(Invocation::parse(&s(&[
+            "--vsock-listener",
+            "/x",
+            "--connect",
+            "/y",
+            "--",
+            "true"
+        ]))
+        .is_err());
+        assert!(Invocation::parse(&s(&[
+            "--vsock-listener",
+            "/x",
+            "--connect",
+            "/y",
+            "--listen",
+            "127.0.0.1:1"
+        ]))
+        .is_err());
+        assert!(Invocation::parse(&s(&["--guestfwd", "/x", "--vsock-listener", "/y"])).is_err());
+    }
+
+    /// The vsock-listener copy path: a Unix client (the VMM's muxer
+    /// connection) round-trips through `relay_unix_one` to the
+    /// broker socket — the same copy the other transports share,
+    /// proven on the descriptor shape this form actually serves.
+    #[test]
+    fn vsock_listener_round_trips_unix_to_unix() {
+        use std::os::unix::net::UnixListener;
+
+        let dir = std::env::temp_dir().join(format!("mysbx-relay-vl-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let sock = dir.join("up.sock");
+        let _ = std::fs::remove_file(&sock);
+        let up = UnixListener::bind(&sock).unwrap();
+
+        // The VMM half of a socketpair plays CH's muxer connection.
+        let (vmm, relay_side) = std::os::unix::net::UnixStream::pair().unwrap();
+        let sock_str = sock.to_string_lossy().into_owned();
+        let relay_handle = std::thread::spawn(move || {
+            relay_unix_one(relay_side, &sock_str);
+        });
+
+        // The broker: read, echo back — on its own thread (the same
+        // deadlock-by-construction argument as the guestfwd test).
+        let up_handle = std::thread::spawn(move || {
+            let (mut conn, _) = up.accept().unwrap();
+            let mut buf = [0u8; 5];
+            conn.read_exact(&mut buf).unwrap();
+            conn.write_all(&buf).unwrap();
+            buf
+        });
+
+        let mut vmm = vmm;
+        vmm.write_all(b"hello").unwrap();
+        let mut got = [0u8; 5];
+        vmm.read_exact(&mut got).unwrap();
+        assert_eq!(&got, b"hello");
+
+        drop(vmm);
+        relay_handle.join().unwrap();
+        let echoed = up_handle.join().unwrap();
+        assert_eq!(&echoed, b"hello");
+        let _ = std::fs::remove_file(&sock);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// The guestfwd copy path: a `TcpStream` re-wrapped from a raw fd

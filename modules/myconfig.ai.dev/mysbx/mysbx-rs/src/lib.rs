@@ -2909,8 +2909,16 @@ fn sandbox_pipeline(
                 "microvm-qemu" => {
                     "the egress channel did not resolve (the broker pins); the refusal is fail-closed, never a shared network"
                 }
+                // The microvm-ch profile is ENFORCED since bd
+                // myconfig-fo1r (n8kv.2 C2); this arm is unreachable
+                // for it — the registry row admits it upstream and
+                // `spec_of` fails closed when the channel is absent
+                // (a run that lost its broker pins never reaches
+                // the vsock argv). Kept as a named arm so a registry
+                // regression names the transport, not a generic
+                // "cannot express".
                 "microvm-ch" => {
-                    "passt's vhost-user net device always has a gateway route"
+                    "the egress channel did not resolve (the broker pins); the refusal is fail-closed, never a shared network"
                 }
                 _ => "the backend cannot express a default-deny network",
             };
@@ -4559,19 +4567,23 @@ fn sandbox_pipeline(
             // the broker socket per guest connection); krun maps it
             // onto the EXPLICIT vsock's one port (bd myconfig-ild7
             // — n8kv.2 C3) — the muxer itself connects the
-            // socket, no relay binary. MICROVM-CH KEEPS ITS
-            // REFUSAL (C2's own bead): a channel here never reaches
-            // the CH builder (`spec_of` enforces the pair on both
-            // sides). The HOST relay pin (`MYSBX_EGRESS_RELAY`)
-            // serves the qemu twin: its libslirp execs the relay
-            // inside the launcher's bwrap view, where the ro
-            // /nix/store bind already carries the store path — the
-            // same pin the bwrap channel uses, no qemu-specific
-            // wrapper variable. A brokered run that reaches this
-            // arm WITHOUT a channel fails closed in `spec_of`
-            // (`ProxyOnlyRefused`), never a shared net.
+            // socket, no relay binary; microvm-ch maps it onto
+            // the HYBRID vsock (bd myconfig-fo1r — n8kv.2 C2) —
+            // CH's muxer connects the egress relay's listener
+            // per guest connection, the relay carries them to the
+            // broker socket (the network.nix rootless precedent).
+            // The HOST relay pin (`MYSBX_EGRESS_RELAY`) serves the
+            // qemu twin; the CH launcher's relay pin rides ITS
+            // wrapper (`MYSBX_MICROVM_CH_EGRESS_RELAY`), because
+            // bwrap's --clearenv keeps this pipeline's env from
+            // reaching the launcher's children. A brokered run
+            // that reaches this arm WITHOUT a channel fails closed
+            // in `spec_of` (`ProxyOnlyRefused`), never a shared
+            // net.
             let vm_egress_params: Option<bwrap::EgressChannel<'_>> =
-                if (backend == "microvm-qemu" || backend == "krun") && egress.is_some() {
+                if (backend == "microvm-qemu" || backend == "krun" || backend == "microvm-ch")
+                    && egress.is_some()
+                {
                     egress_params.clone()
                 } else {
                     None
@@ -4776,12 +4788,14 @@ fn sandbox_pipeline(
             if backend == "microvm-ch" {
                 argv.extend(["--ro-bind".into(), "/sys".into(), "/sys".into()]);
             }
-            // The broker directory of a restricted qemu/krun run
-            // (bd myconfig-krab C4 / bd myconfig-ild7 C3): qemu's
-            // libslirp spawns the egress relay INSIDE this view
-            // (the guestfwd `-cmd:`), and krun's VMM muxer
-            // connects the broker's socket from ITS process — this
-            // same launcher-view process — per guest connection.
+            // The broker directory of a restricted VM run (bd
+            // myconfig-krab C4 / bd myconfig-ild7 C3 / bd
+            // myconfig-fo1r C2): qemu's libslirp spawns the egress
+            // relay INSIDE this view (the guestfwd `-cmd:`), krun's
+            // VMM muxer connects the broker's socket from ITS
+            // process — this same launcher-view process — per
+            // guest connection, and the CH launcher's relay child
+            // connects it from ITS process inside the same view.
             // Read-only either way, the waypipe-socket-dir idiom:
             // connect(2) needs no write on the socket path, and
             // the broker (running OUTSIDE this view) owns the

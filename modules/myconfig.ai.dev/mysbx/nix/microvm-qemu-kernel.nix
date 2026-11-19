@@ -16,6 +16,10 @@
 #   ext4 + overlayfs                                  the scratch + store overlay
 #   erofs                                             the guest-own store disk
 #                                                     (docs/design/guest-store.md)
+#   vsock + virtio_vsocks                             the microvm-ch proxy-only
+#                                                     channel (bd myconfig-fo1r):
+#                                                     the restricted guest's ONLY
+#                                                     device — inert everywhere else
 #   kvm (+ kvm_intel / kvm_amd)                        the nested-virt opt-in
 #                                                     (docs/design/config.md D27): a
 #                                                     `nested-virt = true` run boots
@@ -113,6 +117,18 @@ kernelPackages.kernel.override {
     # static-busybox guest init can never load, so without this
     # line the device stays dead. Built in like the virtio stack.
     PVPANIC_PCI = yes;
+    # The proxy-only channel's guest transport (bd myconfig-fo1r —
+    # n8kv.2 C2): the microvm-ch restricted run attaches a
+    # virtio-vsock device (the ONLY device of that guest — no
+    # NIC), and the baked static bridge dials it, so the AF_VSOCK
+    # core and the virtio transport must be BUILT IN like every
+    # other device the static init needs. INERT on every other
+    # arm: qemu's C4 channel is the SLiRP guestfwd (a NIC story,
+    # no vsock device attached), and a shared/none run attaches
+    # no vsock device either — the same one-kernel reasoning as
+    # PVPANIC above.
+    VSOCKETS = yes;
+    VIRTIO_VSOCKETS = yes;
   };
   # Faster build, smaller bzImage: no modules to sign or strip.
   buildDTBs = false;

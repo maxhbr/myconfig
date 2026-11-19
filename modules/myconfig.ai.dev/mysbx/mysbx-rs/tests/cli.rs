@@ -10119,13 +10119,14 @@ fn proxy_only_is_refused_on_every_backend_but_the_enforcing_tiers() {
     // `proxy_only_on_bubblewrap_without_pins_is_refused`, the
     // podman one `proxy_only_on_podman_gvisor_without_the_image_relay_is_refused`),
     // microvm-qemu (SLiRP `restrict=on` + guestfwd — its
-    // missing-pins refusal is `spec_of`'s, tested in krun.rs) and
-    // krun (the explicit egress vsock — its missing-pins refusal
-    // is the same broker gate);
+    // missing-pins refusal is `spec_of`'s, tested in krun.rs),
+    // krun (the explicit egress vsock) and microvm-ch (the hybrid
+    // vsock — both VM vsock transports' missing-pins refusal is
+    // the same broker gate);
     // every other backend refuses it (exit 70) with a
     // backend-specific reason, before the session clone and before
     // the --dry-run return, so a dry run audits it.
-    for backend in ["podman-krun", "microvm-ch"] {
+    for backend in ["podman-krun"] {
         let base = match backend {
             // The VM backends need a fixture root the guest can place a
             // share under; the refusal fires before any share is made,
@@ -10641,6 +10642,84 @@ fn proxy_only_on_krun_is_accepted_with_the_channel() {
     );
     // The launcher-view bind of the broker directory: ro, the
     // waypipe-dir idiom — the VMM's muxer connects the socket by
+    // pathname from inside this view.
+    let lines: Vec<&str> = stdout.lines().collect();
+    let bind_at = lines
+        .windows(2)
+        .find(|w| w[0] == "--ro-bind" && w[1].contains("mysbx-egress"))
+        .map(|w| w[1])
+        .expect("the broker directory is ro-bound into the launcher view");
+    let pid_named = bind_at
+        .rsplit('/')
+        .next()
+        .map(|last| last.chars().all(|c| c.is_ascii_digit()) && !last.is_empty())
+        .unwrap_or(false);
+    assert!(
+        bind_at.contains("mysbx-egress-test-rt") && bind_at.contains("mysbx-egress") && pid_named,
+        "the broker directory is ro-bound into the launcher view: {bind_at} (argv: {stdout})"
+    );
+}
+
+#[test]
+fn proxy_only_on_microvm_ch_is_accepted_with_the_channel() {
+    // The C2 lift (bd myconfig-fo1r): with the broker pins the
+    // pipeline admits the profile on microvm-ch, and the dry run
+    // audits the restricted shape — the launcher flags (`--network
+    // restricted`, the `--egress-socket`/`--egress-port` pair), the
+    // guest env markers (the no-NIC vsock-bridge class marker, the
+    // guest-loopback `127.0.0.1` spelling of `MYSBX_EGRESS_PROXY`)
+    // and the ro bind of the broker directory into the launcher's
+    // bwrap view (the relay child connects the socket from that
+    // view). The argv itself is locked by the microvm-ch
+    // `egress-proxy-only.txt` golden; what only a CLI run can show
+    // is the pipeline letting the run through.
+    let Some((inv, _, sidecar)) = krun_fixture("proxy-only-microvm-ch-accepted", &[]) else {
+        return; // no placeable fixture root here
+    };
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"microvm-ch\"\nnetwork = \"proxy-only\"\n",
+    )
+    .unwrap();
+    let rootfs = sidecar.join("rootfs-stub");
+    std::fs::create_dir_all(rootfs.join("bin")).unwrap();
+    std::fs::write(rootfs.join("bin/mysbx-init"), "#!/bin/sh\n").unwrap();
+    let kernel = sidecar.join("bzImage-stub");
+    std::fs::write(&kernel, "stub\n").unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["run", "--dry-run", "--", "/bin/true"]);
+    cmd.env("MYSBX_MICROVM_CH_LAUNCHER", "/does/not/matter/dry-run")
+        .env(
+            "MYSBX_MICROVM_CH_ROOTFS",
+            rootfs.to_str().unwrap().to_string(),
+        )
+        .env(
+            "MYSBX_MICROVM_CH_KERNEL",
+            kernel.to_str().unwrap().to_string(),
+        );
+    let (code, stdout, stderr) = run_command(cmd);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stdout.contains("\n--network\nrestricted\n"),
+        "the launcher learns the restricted vsock: {stdout}"
+    );
+    assert!(
+        stdout.contains("\n--egress-socket\n"),
+        "the broker socket is handed to the launcher: {stdout}"
+    );
+    assert!(
+        stdout.contains("\n--egress-port\n4000\n"),
+        "the model port is handed to the launcher: {stdout}"
+    );
+    assert!(
+        stdout.contains("MYSBX_EGRESS_PROXY=http://127.0.0.1:4000"),
+        "the guest-loopback spelling is announced (the bridge serves it): {stdout}"
+    );
+    assert!(
+        stdout.contains("MYSBX_KRUN_NET=restricted"),
+        "the init's no-NIC vsock-bridge marker is announced: {stdout}"
+    );
+    // The launcher-view bind of the broker directory: ro, the
+    // waypipe-dir idiom — the relay child connects the socket by
     // pathname from inside this view.
     let lines: Vec<&str> = stdout.lines().collect();
     let bind_at = lines

@@ -895,7 +895,10 @@ in
   # and the shared markers, and NO overlay flag ever rides (the
   # launcher refuses it). The kernel stub is SHARED with the qemu
   # check's (one kernel serves both VM backends, bd
-  # myconfig-9wkp.3).
+  # myconfig-9wkp.3). The restricted channel's dry run (bd
+  # myconfig-fo1r — n8kv.2 C2) audits the `--network restricted`
+  # shape: the egress pair, the no-NIC guest marker, the
+  # guest-loopback endpoint, and NO passt NIC marker.
   mysbx-microvm-ch-wrapper-test =
     let
       stubLauncher = pkgs.runCommand "mysbx-microvm-ch-stub-launcher" { } ''
@@ -1020,6 +1023,41 @@ in
           || fail "a sidecar nested-virt = true does not reach the launcher as --nested-virt"
         echo "$argv_nested" | grep -qx -- 'MYSBX_MICROVM_NESTED_VIRT=1' \
           || fail "a nested-virt run carries no MYSBX_MICROVM_NESTED_VIRT=1 marker — the guest init could not refuse a kvm-less host"
+
+        # 3b. the RESTRICTED channel (bd myconfig-fo1r — n8kv.2 C2),
+        #     end to end through the real wrapped binary: a sidecar
+        #     `network = "proxy-only"` with the egress pins must
+        #     render `--network restricted` plus the
+        #     --egress-socket/--egress-port pair, the no-NIC
+        #     vsock-bridge guest marker and the guest-loopback
+        #     endpoint spelling — and NO passt NIC marker (the NIC
+        #     is the fence the channel replaces).
+        printf 'backend = "microvm-ch"\nnetwork = "proxy-only"\n' > "$work/repo.mysbx/config.toml"
+        egress_argv=$( \
+          cd "$repo" && HOME="$work/home" \
+          MYSBX_EGRESS_SOCKET_NAME=litellm.sock MYSBX_EGRESS_PORT=4000 \
+          MYSBX_EGRESS_ETC=/nix/store/synth-egress-etc \
+          MYSBX_EGRESS_RELAY=/nix/store/synth-relay/bin/mysbx-egress-relay \
+          MYSBX_EGRESS_BROKER=/nix/store/synth-broker/bin/mysbx-egress-broker \
+          XDG_RUNTIME_DIR="$work/rt" \
+          "${pkgCh}/bin/mysbx" run --dry-run -- true \
+        ) || fail "the restricted dry run refused — run it verbosely for the diagnosis"
+        echo "$egress_argv" | grep -qx -- '--network' \
+          || fail "the restricted dry run does not name --network"
+        next=$(grep -A1 -- '--network' <<<"$egress_argv" | head -2 | tail -1)
+        [ "$next" = restricted ] \
+          || fail "--network's value is not restricted: $next"
+        echo "$egress_argv" | grep -qx -- '--egress-socket' \
+          || fail "the restricted dry run does not carry --egress-socket"
+        echo "$egress_argv" | grep -qx -- '--egress-port' \
+          || fail "the restricted dry run does not carry --egress-port"
+        echo "$egress_argv" | grep -qx -- 'MYSBX_KRUN_NET=restricted' \
+          || fail "the restricted dry run carries no no-NIC vsock-bridge guest marker"
+        echo "$egress_argv" | grep -qx -- 'MYSBX_EGRESS_PROXY=http://127.0.0.1:4000' \
+          || fail "the restricted endpoint must spell the guest loopback (the bridge serves it)"
+        if grep -n -q -- 'MYSBX_MICROVM_NET=1' <<<"$egress_argv"; then
+          fail "the restricted dry run carries the passt NIC marker — the channel replaces the NIC"
+        fi
 
         touch $out
       '';

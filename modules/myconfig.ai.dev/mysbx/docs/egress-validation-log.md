@@ -3,8 +3,8 @@
 > **Scope / current status:** the dated entries below are host-run evidence
 > for the configuration named in each entry, not acceptance of every later
 > backend or policy. The enforcing backends today are `bubblewrap`, the
-> layered `nono` backend, `podman-gvisor`, `microvm-qemu` and `krun`; every
-> other backend refuses `network = "proxy-only"`. See
+> layered `nono` backend, `podman-gvisor`, `microvm-qemu`, `krun` and
+> `microvm-ch`; every other backend refuses `network = "proxy-only"`. See
 > [`backend-comparison.md`](./backend-comparison.md) for the current backend
 > guide and [D20](./design/config.md) for the decision the runs verify.
 > Podman-gVisor's endpoint reachability is a separate item (bd
@@ -778,3 +778,69 @@ guestfwd.
 - The stand-in upstream replaces LiteLLM (offline host); the
   bubblewrap entries prove the broker's model-lane protocol against
   the real stack, this entry proves the krun transport.
+
+## 2026-11-19 · microvm-ch hybrid vsock, live KVM probe (bd myconfig-fo1r, n8kv.2 C2)
+
+Host: the offline dev sandbox, KVM present. Guest: the microvm
+kernel 6.12.117 (rebuilt with `VSOCKETS`/`VIRTIO_VSOCKETS` built
+in — the static init loads no modules), `backend =
+"microvm-ch"`, `network = "proxy-only"`, host-store mode. The
+channel: the launcher drops the passt child entirely and attaches
+`--vsock cid=3,socket=<run>/vsock.sock`; the egress relay (the
+SAME crate binary the bwrap/qemu channels use, pinned into the
+launcher's own wrapper as `MYSBX_MICROVM_CH_EGRESS_RELAY`) runs
+in its new `--vsock-listener` mode at `<mux socket>_<port>` —
+CH's own convention (docs/vsock.md: the VMM connects that path
+per guest connection to host CID 2 port N; the network.nix
+rootless precedent's `notify.vsock_<port>` idiom) — and forwards
+to the per-run broker's socket. A python echo upstream on host
+`127.0.0.1:4000` stands in for LiteLLM.
+
+### §1 The guest has no net device at all
+
+`ip -o link` shows only `lo` (up); `ip route` is empty; there is
+no `/etc/resolv.conf`. The baked static `mysbx-vsock-bridge` is
+listening on guest `127.0.0.1:4000` (netstat) — the init started
+it under the `MYSBX_KRUN_NET=restricted` marker, the SAME no-NIC
+vsock-bridge guest class the krun twin defined (the marker names
+the class, not a backend — like `MYSBX_MICROVM_NET` before it
+served both qemu and ch's SLiRP class).
+
+### §2 The one mapped port answers end to end
+
+`nc 127.0.0.1 4000` → `UPSTREAM-REPLY: MODEL-PROBE` (rc 0):
+guest bridge → AF_VSOCK CID 2:4000 → CH's VMM muxer → the
+relay's listener → the broker's socket → the Landlock-confined
+upstream. The broker's `decisions.jsonl` records the `listen`
+and the `allow`. No passt, no NIC, no gateway route anywhere on
+the path — the device list IS the fence.
+
+### §3 Everything else fails
+
+- A second loopback port (`127.0.0.1:80`): refused instantly
+  (rc 1).
+- An outside address (`1.1.1.1:80`): refused instantly (rc 1) —
+  no net device exists.
+- An UNMAPPED vsock port (a second bridge on 4001):
+  `connect vsock: Connection reset by peer` — CH's muxer RSTs
+  ports with no listener, a HARDER failure than krun's silent
+  drop (C3's probe 5 timed out); the mapped port still answered
+  afterwards.
+- DNS (`nslookup api.openai.com`): instant failure (no resolver
+  file, nothing on the guest loopback :53).
+
+### Notes
+
+- The relay's `--vsock-listener` mode is the third transport of
+  the one `mysbx-egress-relay` binary (`--listen` bwrap,
+  `--guestfwd` qemu, `--vsock-listener` ch): the host halves of
+  all three channels are now one binary's argv shapes.
+- The kernel rebuild is load-bearing for the GUEST bridge: the
+  stock microvm kernel built the virtio-vsock transport as a
+  module the static init can never load — `VSOCKETS`/`VIRTIO_
+  VSOCKETS` are built in now (inert on every other arm: qemu's
+  C4 channel is a NIC story, a shared/none run attaches no
+  vsock device).
+- The stand-in upstream replaces LiteLLM (offline host); the
+  bubblewrap entries prove the broker's model-lane protocol
+  against the real stack, this entry proves the ch transport.

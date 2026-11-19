@@ -28,6 +28,15 @@
   # The passt the RUN should invoke (the vhost-user networking of
   # --network shared, bd myconfig-9wkp.5).
   passt,
+  # The egress relay of the restricted channel (bd myconfig-fo1r —
+  # n8kv.2 C2): the crate's `bin/mysbx-egress-relay`, which the
+  # launcher spawns in `--vsock-listener` mode (the VMM connects
+  # its listener per guest connection, the relay forwards to the
+  # broker). Optional — the module default passes it, a standalone
+  # callPackage may omit it, and a launcher without the pin fails
+  # a `--network restricted` run closed, naming the variable (the
+  # qemu twin's own rule).
+  egressRelay ? null,
 }:
 rustPlatform.buildRustPackage {
   pname = "mysbx-microvm-ch";
@@ -48,7 +57,10 @@ rustPlatform.buildRustPackage {
     wrapProgram $out/bin/mysbx-microvm-ch \
       --set MYSBX_MICROVM_CH_CH '${lib.getExe cloud-hypervisor}' \
       --set MYSBX_MICROVM_CH_VIRTIOFSD '${lib.getExe virtiofsd}' \
-      --set MYSBX_MICROVM_CH_PASST '${lib.getExe passt}'
+      --set MYSBX_MICROVM_CH_PASST '${lib.getExe passt}' \
+      ${lib.optionalString (
+        egressRelay != null
+      ) "--set MYSBX_MICROVM_CH_EGRESS_RELAY '${egressRelay}/bin/mysbx-egress-relay'"}
   '';
 
   meta = {

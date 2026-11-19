@@ -90,8 +90,8 @@ config that can execute is config that can escape.
   backend's transport). D21's allowlist keys are enforced on nono
   and, under the E7 pairing, through the broker; D20's
   `"proxy-only"` profile is enforced on the default-deny tiers
-  (bubblewrap, nono, podman-gvisor, microvm-qemu, krun) and refused
-  elsewhere; fvi's `"public"` profile (the broker's deny-set lane)
+  (bubblewrap, nono, podman-gvisor, microvm-qemu, krun,
+  microvm-ch) and refused elsewhere; fvi's `"public"` profile (the broker's deny-set lane)
   is enforced on bubblewrap only.
 - environment forwarded into the sandbox (`[env]`)
 - nix settings forwarded into the sandbox (`[nix]`, D24): rendered as
@@ -1292,8 +1292,8 @@ network, whose whole point is that a host-wide decision holds).
 reachable, and no model credential exists inside the sandbox — the
 proxy holds it (D28 records the credential rules, including the
 residual risks the profile does NOT remove). On every backend except
-the enforcing `bubblewrap`, `podman-gvisor`, `microvm-qemu` and
-`krun`, the profile is mutually exclusive with D21's
+the enforcing `bubblewrap`, `podman-gvisor`, `microvm-qemu`,
+`krun` and `microvm-ch`, the profile is mutually exclusive with D21's
 hostname/port allowlists: those keys describe what a sandbox with a
 *shared* network may reach, so next to `network = "proxy-only"` they
 are a refused run (exit `70`) — decided at MERGE time, where the
@@ -1325,7 +1325,7 @@ as D21. The bwrap-built tiers enforce it (bubblewrap, and the layered
 | `podman-krun` | refused, PERMANENTLY (bd myconfig-n8kv.2 C6) — libkrun's TSI is an unfiltered proxy from the container netns, and AF_UNIX sockets do not cross virtio-fs, so no default-deny transport exists |
 | `krun` | the fourth enforcing backend (bd myconfig-n8kv.2 C3, bd myconfig-ild7): the implicit TSI vsock is replaced by an EXPLICIT vsock (`krun_disable_implicit_vsock` → `krun_add_vsock(0)` — tsi_features 0, no `tsi_hijack` on the guest kernel cmdline, verified at the pinned libkrun source) whose ONE `krun_add_vsock_port` mapping sends the model port to the per-run broker's Unix socket — and the guest gets NO net device at all, the strictest fence of the table. The VMM's own muxer connects the socket per guest connection (the launcher's bwrap view sees the broker directory through the same ro bind as qemu's — the waypipe-dir idiom), so NO host relay binary exists; the GUEST side has the relay instead: the baked static `mysbx-vsock-bridge` (rootfs `bin/`, the store-scan idiom) listens on the guest's `127.0.0.1:<litellm port>` and pumps each accepted connection to `VSOCK-CONNECT:2:<port>` (CID 2 = the host muxer), started by the init under the `MYSBX_KRUN_NET=restricted` marker with the port parsed from `MYSBX_EGRESS_PROXY` — the guest-side endpoint spelling is `http://127.0.0.1:<litellm port>`, the guest's own loopback (unlike qemu's `10.0.2.2` gateway). The launcher refuses a restricted run on a libkrun missing the explicit-vsock API symbols, by name, fail-closed — the only fallback would be the unfiltered TSI proxy. The CONNECT-lane pairing (D21 keys, `public`) is still refused here — the one-port vsock map cannot express a table |
 | `microvm-qemu` | the third enforcing backend (bd myconfig-n8kv.2 C4, bd myconfig-krab): SLiRP's `restrict=on` — libslirp drops every outbound TCP SYN except the ONE `guestfwd`-mapped address:port and blocks outbound UDP entirely (the fvi.3 libslirp source audit) — plus a single `guestfwd=tcp:10.0.2.2:<litellm port>-cmd:<relay> --guestfwd <broker socket>` mapping: the guest's ONLY reach is the model port, and qemu's libslirp execs the crate's `mysbx-egress-relay` per guest connection (`--guestfwd <socket>` mode: fd 0 is the accepted connection) to carry it to the per-run broker's Unix socket, visible in the launcher's bwrap view through the ro broker-directory bind (the waypipe-dir idiom). The guest init configures the NIC address without a default route under the `MYSBX_MICROVM_NET=restricted` marker (10.0.2.2 is on-link) and empties resolv.conf (no DNS proxy — the profile grants the endpoint, not the name), and the guest-side endpoint spelling is `MYSBX_EGRESS_PROXY=http://10.0.2.2:<litellm port>`. The relay pin rides the launcher's OWN wrapper (`MYSBX_MICROVM_QEMU_EGRESS_RELAY`), not the mysbx wrapper — the launcher runs inside bwrap's `--clearenv`. The CONNECT-lane pairing (D21 keys, `public`) is still refused here — the forwards-only netdev cannot express a table |
-| `microvm-ch` | refused — passt's vhost-user net device always has a gateway route (the C2 vsock lift would change this) |
+| `microvm-ch` | the fifth enforcing backend (bd myconfig-n8kv.2 C2, bd myconfig-fo1r): the passt NIC is DROPPED — the launcher attaches NO net device at all, only `--vsock cid=3,socket=<run>/vsock.sock`. The ONE mapped port rides CH's own hybrid-vsock convention (docs/vsock.md): a guest connection to host CID 2 port N is delivered by the VMM as a Unix CONNECT to `<mux socket>_<N>`, where the crate's `mysbx-egress-relay` listens in its new `--vsock-listener` mode (the network.nix rootless precedent's `notify.vsock_<port>` idiom) and forwards to the per-run broker's socket, visible in the launcher's bwrap view through the same ro broker-directory bind as the other VM twins (the waypipe-dir idiom). The guest is the SAME no-NIC vsock-bridge class as the krun twin's: the baked static `mysbx-vsock-bridge` serves `http://127.0.0.1:<litellm port>` over `VSOCK-CONNECT:2:<port>`, started by the init under the `MYSBX_KRUN_NET=restricted` marker (the class's marker, serving both vsock twins). The relay pin rides the launcher's OWN wrapper (`MYSBX_MICROVM_CH_EGRESS_RELAY`), not the mysbx wrapper — the launcher runs inside bwrap's `--clearenv`. The microvm kernel now builds `VSOCKETS`/`VIRTIO_VSOCKETS` in (the static init loads no modules). The CONNECT-lane pairing (D21 keys, `public`) is still refused here — the one-port vsock map cannot express a table |
 
 **The socket name is pinned, and the channel is the per-run broker.**
 `MYSBX_EGRESS_SOCKET_NAME` must be one plain file name

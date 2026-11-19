@@ -22,8 +22,12 @@
 //! Section order (fixed, the qemu twin's): `--cpus/--ram`,
 //! `--verbose`, `--rootfs`, `--kernel`, `--init`, the staged
 //! devices + manifest, the shares, the env plus the backend pins
-//! (MYSBX_MICROVM_CH_ENV), `--network none` (shared is silent —
-//! passt mimics SLiRP, the launcher's default), the scratch,
+//! (MYSBX_MICROVM_CH_ENV), the network (`none` explicit, `shared`
+//! silent — passt mimics SLiRP, the launcher's default;
+//! `restricted` + the `--egress-socket`/`--egress-port` pair of
+//! the proxy-only channel, bd myconfig-fo1r — n8kv.2 C2: no NIC,
+//! one virtio-vsock, the launcher's relay child bridging the
+//! VMM's connections to the broker socket), the scratch,
 //! `--chdir`, `--` payload. The opt-in `--nested-virt` switch
 //! (config.md D27) sits with the CH-only pair; the launcher forces
 //! `nested=off` on every plain run — CH defaults it ON, the exact
@@ -137,10 +141,35 @@ pub fn microvm_ch_argv(
     }
     // The SLiRP NIC marker (bd myconfig-k106, the qemu twin's): the
     // guest init configures the NIC only when this env rides the
-    // manifest — the passt NIC uses the same static plan.
-    if spec.network {
-        argv.push("--env".to_owned());
-        argv.push("MYSBX_MICROVM_NET=1".to_owned());
+    // manifest — the passt NIC uses the same static plan. The
+    // restricted arm (bd myconfig-fo1r — n8kv.2 C2) emits the
+    // NO-NIC vsock-bridge marker instead: this guest has no NIC at
+    // all (the launcher attaches no net device, only the vsock),
+    // and the init starts the baked bridge the payload's
+    // 127.0.0.1:<port> endpoint URLs need — the SAME marker the
+    // krun twin emits, because it names the shared guest CLASS
+    // (no NIC, vsock bridge, port from MYSBX_EGRESS_PROXY), not a
+    // backend.
+    match (&spec.egress, spec.network) {
+        (Some(egress), _) => {
+            argv.push("--env".to_owned());
+            argv.push("MYSBX_KRUN_NET=restricted".to_owned());
+            argv.push("--network".to_owned());
+            argv.push("restricted".to_owned());
+            // The channel: the broker's socket as the launcher's
+            // bwrap view binds it (lib.rs ro-binds the broker
+            // directory; the relay child connects the socket per
+            // VMM connection) and the guest-visible vsock port.
+            argv.push("--egress-socket".to_owned());
+            argv.push(egress.socket.clone());
+            argv.push("--egress-port".to_owned());
+            argv.push(egress.port.to_string());
+        }
+        (None, true) => {
+            argv.push("--env".to_owned());
+            argv.push("MYSBX_MICROVM_NET=1".to_owned());
+        }
+        (None, false) => {}
     }
     // The nested-virt marker (docs/design/config.md D27): the guest
     // init REFUSES the run early when the VM was booted without
@@ -153,8 +182,10 @@ pub fn microvm_ch_argv(
     // trust rides the staged slots above.
     // `network = false` (the qemu twin's arm): NO net device at all
     // — the launcher attaches none, the bwrap wrap unshare-nets
-    // the chain.
-    if !spec.network {
+    // the chain. A brokered run reached here only WITH the channel
+    // (spec_of's gate), so the restricted arm above — not `none` —
+    // is the non-shared spelling it carries.
+    if !spec.network && spec.egress.is_none() {
         argv.push("--network".to_owned());
         argv.push("none".to_owned());
     }

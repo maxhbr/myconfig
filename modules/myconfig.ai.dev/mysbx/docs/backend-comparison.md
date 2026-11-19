@@ -25,7 +25,7 @@ snapshots; use this page for the current seven-backend comparison.
 | `podman-krun` | Rootless Podman with crun's libkrun VM handler; payload is guest root | Image-owned store; no implicit host-store bind | Guest socket proxy through the container network namespace |
 | `krun` | Host bubblewrap, then an in-process libkrun VM and file server; payload is guest root | Host or baked store, as selected below | libkrun TSI socket proxy through the launcher's namespace; under `proxy-only`: the explicit egress vsock (one mapped port, no net device) |
 | `microvm-qemu` | Host bubblewrap, QEMU and separate virtiofsd file servers; payload is guest root | The same host/baked choice and guest init as direct krun | SLiRP user-mode NAT; under `proxy-only`: `restrict=on` plus one `guestfwd` (forwards-only) |
-| `microvm-ch` | Host bubblewrap, cloud-hypervisor and separate virtiofsd file servers; payload is guest root | The same host/baked choice and guest init as direct krun | passt over vhost-user, on SLiRP's address plan |
+| `microvm-ch` | Host bubblewrap, cloud-hypervisor and separate virtiofsd file servers; payload is guest root | The same host/baked choice and guest init as direct krun | passt over vhost-user, on SLiRP's address plan; under `proxy-only`: the hybrid vsock (the passt NIC dropped, one mapped port through the VMM's mux socket and the egress relay) |
 
 These are different boundaries, not a proven security ranking. VM host
 processes run as the invoking user. A guest-kernel, VMM or file-server
@@ -91,11 +91,10 @@ layered **nono** backend enforce it (nono adds `--block-net` and one
 `--allow-connect-port` for the relay, so UDP, raw sockets and
 io_uring are denied too — the pinned nono 0.82.0's own baselines,
 audited in backends.md D1; bd myconfig-n8kv.4); **podman-gvisor**,
-**microvm-qemu** and **krun** enforce it too (their transports
-below); the podman-krun and microvm-ch backends REFUSE it (exit 70)
-because their net device always keeps a gateway route — with one
-PERMANENT refusal and one lift: `podman-krun`'s refusal is PERMANENT
-(bd myconfig-n8kv.2 C6: libkrun's TSI is an unfiltered proxy and
+**microvm-qemu**, **krun** and **microvm-ch** enforce it too (their
+transports below); the podman-krun backend REFUSES it (exit 70)
+because its net device always keeps a gateway route — a
+PERMANENT refusal (bd myconfig-n8kv.2 C6: libkrun's TSI is an unfiltered proxy and
 AF_UNIX sockets do not cross virtio-fs, so no default-deny transport
 exists there), **podman-gvisor no longer refuses it** (bd
 myconfig-n8kv.2 C5, bd myconfig-eov2: the run is created with
@@ -125,9 +124,16 @@ VMM's muxer itself connects the socket per guest connection (no
 host relay binary), and the baked static guest
 `mysbx-vsock-bridge` serves the payload's `127.0.0.1:<litellm
 port>` endpoint URLs over AF_VSOCK under the
-`MYSBX_KRUN_NET=restricted` marker); the remaining
-backend's possible lift is tracked as a bd myconfig-n8kv.2's
-child. Under the
+`MYSBX_KRUN_NET=restricted` marker); **microvm-ch no longer
+refuses it either** (bd myconfig-n8kv.2 C2, bd myconfig-fo1r: the
+passt NIC is dropped and `--vsock cid=3,socket=<run>/vsock.sock`
+is the ONLY device — the guest gets no net device at all; its one
+mapped port rides CH's own hybrid-vsock convention (the VMM
+connects `<mux socket>_<port>` per guest connection), where the
+egress relay listens in its `--vsock-listener` mode and forwards
+to the per-run broker's socket; the guest is the same no-NIC
+vsock-bridge class the krun twin defined — every VM backend now
+enforces the profile). Under the
 profile the forwarded environment narrows to the technical base, a
 credential-shaped `[env]`/`[nix]` name is refused, and a dropped
 credential name gets the fixed `mysbx-proxy-only` placeholder.

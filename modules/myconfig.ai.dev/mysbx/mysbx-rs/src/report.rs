@@ -203,6 +203,19 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
                     e.socket,
                     e.socket_dir,
                 )),
+                // The microvm-ch channel is the hybrid vsock (bd
+                // myconfig-fo1r — C2): the same no-NIC guest shape
+                // as the krun twin's, but the host half is a relay
+                // LISTENER the VMM connects to (CH's mux socket
+                // convention), not the VMM's own connect — named
+                // so the two vsock fences stay distinguishable.
+                Some(e) if r.backend == "microvm-ch" => p(format!(
+                    "network:        proxy-only (no net device; 127.0.0.1:{} -> {}/{} via the guest vsock bridge and the host relay from {})",
+                    e.port,
+                    crate::bwrap::EGRESS_DIR,
+                    e.socket,
+                    e.socket_dir,
+                )),
                 Some(e) => p(format!(
                     "network:        proxy-only (unshared netns; 127.0.0.1:{} -> {}/{} via the relay from {})",
                     e.port,
@@ -1136,8 +1149,10 @@ mod tests {
         // gateway through ONE guestfwd mapping, and krun fences a
         // guest with NO net device at all (bd myconfig-ild7 — C3)
         // whose baked bridge serves 127.0.0.1 over the explicit
-        // vsock — the same Report code renders all of them, the
-        // backend name picks the transport.
+        // vsock — microvm-ch (bd myconfig-fo1r — C2) is the same
+        // no-NIC shape with the host relay listener the VMM
+        // connects — the same Report code renders all of them,
+        // the backend name picks the transport.
         let (repo, mut merged, host) = fixture_report();
         merged.network = crate::config::Network::ProxyOnly;
         let socket_dir = "/run/user/1000/mysbx-egress/1234";
@@ -1169,6 +1184,10 @@ mod tests {
             ("bubblewrap", "unshared netns; 127.0.0.1:4000"),
             ("microvm-qemu", "restricted NIC; 10.0.2.2:4000"),
             ("krun", "no net device; 127.0.0.1:4000"),
+            (
+                "microvm-ch",
+                "via the guest vsock bridge and the host relay",
+            ),
         ] {
             let joined = lines(&Report {
                 repo: &repo,
@@ -1202,7 +1221,10 @@ mod tests {
                 joined.contains(&format!(
                     "/run/mysbx-egress/litellm.sock via the relay from {socket_dir}"
                 )) || joined.contains(&format!("via the guestfwd relay from {socket_dir}"))
-                    || joined.contains(&format!("via the guest vsock bridge from {socket_dir}")),
+                    || joined.contains(&format!("via the guest vsock bridge from {socket_dir}"))
+                    || joined.contains(&format!(
+                        "via the guest vsock bridge and the host relay from {socket_dir}"
+                    )),
                 "{backend} names the channel source: {joined}"
             );
         }

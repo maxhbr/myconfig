@@ -266,7 +266,16 @@ pub const REGISTRY: &[Backend] = &[
         detach_refused: false,
         waypipe_refused: true,
         allowlist: Allowlist::Refused,
-        network_proxy_only: false,
+        // Enforced since bd myconfig-fo1r (n8kv.2 C2): the passt
+        // NIC is dropped entirely — the guest gets NO net device,
+        // only a virtio-vsock whose ONE mapped port the VMM
+        // delivers to the egress relay's listener next to the
+        // vsock mux socket (the network.nix rootless precedent),
+        // which forwards to the per-run broker. The baked guest
+        // bridge serves the payload's 127.0.0.1:<port> endpoint
+        // URLs over the vsock — the same no-NIC fence shape as
+        // the krun twin's.
+        network_proxy_only: true,
         network_public: false,
     },
 ];
@@ -397,11 +406,15 @@ mod tests {
             // of its own. krun joins since bd myconfig-ild7
             // (n8kv.2 C3): the explicit vsock carries exactly ONE
             // mapped port onto the broker — no net device exists at
-            // all, the strictest fence of the table.
+            // all, the strictest fence of the table. microvm-ch
+            // joins since bd myconfig-fo1r (n8kv.2 C2): the hybrid
+            // vsock carries the same ONE mapped port through the
+            // launcher's relay — the passt NIC is gone entirely.
             let proxy_only_expected = b.always_on
                 || b.name == "podman-gvisor"
                 || b.name == "microvm-qemu"
-                || b.name == "krun";
+                || b.name == "krun"
+                || b.name == "microvm-ch";
             assert_eq!(
                 b.network_proxy_only, proxy_only_expected,
                 "`{}`: network_proxy_only must match config.md D20's table",

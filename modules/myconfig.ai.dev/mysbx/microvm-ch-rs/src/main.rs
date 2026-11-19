@@ -21,7 +21,13 @@
 //!   10.0.2.3) so the shared guest init's static config and the
 //!   10.0.2.2 model-endpoint pins carry over unchanged (bd
 //!   myconfig-9wkp.5). `--network none` attaches NO net device at
-//!   all.
+//!   all. `--network restricted` (bd myconfig-fo1r — n8kv.2 C2)
+//!   drops the passt child and attaches ONLY `--vsock
+//!   cid=3,socket=<run>/vsock.sock`: the guest gets no NIC, and
+//!   its one mapped port is delivered by the VMM to the egress
+//!   relay's listener at `<mux socket>_<port>`, which forwards to
+//!   the per-run egress broker (the network.nix rootless
+//!   precedent's own convention).
 //! - `nested=off` is FORCED on the CPU line unless `--nested-virt`
 //!   — CH defaults nested ON (the opposite of qemu), and a plain
 //!   run must not silently expose VMX/SVM (D27's contract).
@@ -36,7 +42,8 @@
 //!
 //! 1. one virtiofsd per device (the root INCLUDED — CH has no
 //!    in-process virtiofs server), sockets in a per-run temp dir
-//! 2. one passt child per run (shared networking)
+//! 2. one passt child per run (shared networking), the egress
+//!    relay child of a restricted run (bd myconfig-fo1r)
 //! 3. wait for every socket
 //! 4. write the manifest records into the ro stage dir's slot
 //! 5. exec cloud-hypervisor: the kernel + cmdline (manifest
@@ -257,12 +264,57 @@ struct Config {
     env: Vec<(String, String)>,
     overlays: Vec<OverlayFile>,
     manifest: Option<PathBuf>,
-    network: bool,
+    network: Network,
     workdir: PathBuf,
     scratch: Option<PathBuf>,
     store_disk: Option<PathBuf>,
     payload: Vec<String>,
 }
+
+/// The network mode: `shared` keeps the passt child (one vhost-user
+/// passthrough with SLiRP's address plan), `none` attaches NO net
+/// device at all, and `restricted` (bd myconfig-fo1r — n8kv.2 C2)
+/// drops the passt child too and attaches ONLY a virtio-vsock device
+/// — the guest gets no NIC, no gateway route, nothing but the ONE
+/// mapped model port, which the VMM delivers to the egress relay's
+/// listener next to the vsock mux socket.
+#[derive(Debug, Clone, PartialEq)]
+enum Network {
+    Shared,
+    None,
+    /// The `--egress-socket`/`--egress-port` pair, filled in by the
+    /// post-parse validation (the flags may arrive in any order).
+    Restricted(Egress),
+}
+
+/// The restricted channel's two halves (the krun twin's `Egress`
+/// spelled for CH): the HOST-side Unix socket path of the per-run
+/// egress broker — as bound in the launcher's bwrap view (`lib.rs`
+/// ro-binds the broker directory at its own path, so the path the
+/// relay connects is the one this argv received) — and the guest-
+/// visible vsock port (the VMM connects
+/// `<mux socket>_<port>` per guest connection, the network.nix
+/// precedent's own convention).
+#[derive(Debug, Clone, PartialEq)]
+struct Egress {
+    port: u16,
+    socket: PathBuf,
+}
+
+impl Network {
+    fn is_shared(&self) -> bool {
+        matches!(self, Network::Shared)
+    }
+}
+
+/// The `Network::Restricted` placeholder the parse fills in at its
+/// end (the flags may arrive in any order, so the enum's slot cannot
+/// hold a half-parsed pair). Never reaches `main`: the totality
+/// check at the end of `parse_args_result` replaces it or refuses.
+const EGRESS_PLACEHOLDER: Egress = Egress {
+    port: 0,
+    socket: PathBuf::new(),
+};
 
 fn usage() -> ! {
     eprintln!(
@@ -270,7 +322,8 @@ fn usage() -> ! {
          --kernel BZIMAGE [--exit-channel] [--nested-virt] [--init PATH] \
          [--ro-device TAG=DIR] [--rw-device TAG=DIR] \
          [--ro-share TAG:SLOT@DEST] [--rw-share TAG:SLOT@DEST] \
-         [--manifest FILE] [--network shared|none] \
+         [--manifest FILE] [--network shared|none|restricted \
+         (--egress-port PORT --egress-socket PATH)] \
          [--scratch FILE] [--store-disk FILE] [--env K=V]... \
          [--krun-overlay TAG@PATH:MODE:B64]... [--chdir DIR] -- CMD [ARGS...]"
     );
@@ -358,12 +411,18 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
         env: Vec::new(),
         overlays: Vec::new(),
         manifest: None,
-        network: true,
+        network: Network::Shared,
         workdir: PathBuf::from("/"),
         scratch: None,
         store_disk: None,
         payload: Vec::new(),
     };
+    // The --egress pair's slots (bd myconfig-fo1r): collected
+    // anywhere in the argv, combined at the END of the parse so the
+    // flags are order-free and the totality check sees the pair as
+    // a unit — the krun twin's own shape.
+    let mut egress_port: Option<u16> = None;
+    let mut egress_socket: Option<PathBuf> = None;
     // The `--` split first: everything after it is the payload, never
     // a flag — the same rule the qemu twin applies.
     let payload: Vec<String>;
@@ -415,10 +474,35 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
                     "--krun-overlay" => add_overlay(&mut cfg, &value_of("--krun-overlay")?)?,
                     "--manifest" => cfg.manifest = Some(PathBuf::from(value_of("--manifest")?)),
                     "--network" => match value_of("--network")?.as_str() {
-                        "shared" => cfg.network = true,
-                        "none" => cfg.network = false,
-                        other => return Err(format!("--network `{other}` is not shared|none")),
+                        "shared" => cfg.network = Network::Shared,
+                        "none" => cfg.network = Network::None,
+                        // The restricted channel (bd myconfig-fo1r —
+                        // n8kv.2 C2): the slot fills at the end of
+                        // the parse, when the --egress pair is
+                        // known to be total.
+                        "restricted" => cfg.network = Network::Restricted(EGRESS_PLACEHOLDER),
+                        other => {
+                            return Err(format!(
+                                "--network `{other}` is not shared|none|restricted"
+                            ))
+                        }
                     },
+                    "--egress-port" => {
+                        let v = value_of("--egress-port")?;
+                        let port: u16 = v
+                            .parse()
+                            .map_err(|_| format!("--egress-port `{v}` is not a number"))?;
+                        if port == 0 {
+                            return Err(
+                                "--egress-port 0 is reserved — the channel needs a real port"
+                                    .to_owned(),
+                            );
+                        }
+                        egress_port = Some(port);
+                    }
+                    "--egress-socket" => {
+                        egress_socket = Some(PathBuf::from(value_of("--egress-socket")?));
+                    }
                     "--scratch" => cfg.scratch = Some(PathBuf::from(value_of("--scratch")?)),
                     "--store-disk" => {
                         cfg.store_disk = Some(PathBuf::from(value_of("--store-disk")?))
@@ -438,6 +522,50 @@ fn parse_args_result(mut args: impl Iterator<Item = String>) -> Result<Config, S
     if payload.is_empty() {
         return Err("no payload after `--`".to_owned());
     }
+    // The restricted channel's pair must be total (the krun twin's
+    // rule, bd myconfig-ild7): a restricted run without the port
+    // or the socket has no channel to serve, and a stray pair
+    // without `restricted` is argv noise the launcher never honors.
+    // The socket must exist and BE a socket — the relay connects it
+    // per VMM connection, a missing file is a dead channel, and a
+    // plain file would fail the relay's connect with a lie the
+    // user cannot diagnose from the VM's boot log.
+    cfg.network = match (cfg.network, egress_port, egress_socket) {
+        (Network::Restricted(_), Some(port), Some(socket)) => {
+            if !socket.is_absolute() {
+                return Err(format!(
+                    "--egress-socket expects an absolute path, got `{}`",
+                    socket.display()
+                ));
+            }
+            let meta = std::fs::metadata(&socket).map_err(|e| {
+                format!("--egress-socket {} is not reachable: {e}", socket.display())
+            })?;
+            use std::os::unix::fs::FileTypeExt;
+            if !meta.file_type().is_socket() {
+                return Err(format!(
+                    "--egress-socket {} is not a Unix socket",
+                    socket.display()
+                ));
+            }
+            Network::Restricted(Egress { port, socket })
+        }
+        (Network::Restricted(_), _, _) => {
+            return Err(
+                "--network restricted needs --egress-socket PATH and --egress-port PORT — \
+                 the channel IS the restricted mode's transport"
+                    .to_owned(),
+            );
+        }
+        (network, None, None) => network,
+        _ => {
+            return Err(
+                "--egress-socket and --egress-port are a pair with --network restricted — \
+                 name both, with the mode"
+                    .to_owned(),
+            );
+        }
+    };
     cfg.payload = payload;
     Ok(cfg)
 }
@@ -688,13 +816,32 @@ fn ch_argv(
     }
     // The network (bd myconfig-9wkp.5): passt serves the
     // vhost-user socket, CH connects as the client. No flag at all
-    // when `none` — CH attaches no net device.
-    if cfg.network {
-        let socket = socket_of("passt");
-        argv.push(format!(
-            "--net=vhost_user=on,socket={},vhost_mode=client,mac={NET_MAC}",
-            socket.display()
-        ));
+    // when `none` — CH attaches no net device. The RESTRICTED arm
+    // (bd myconfig-fo1r — n8kv.2 C2) attaches NO net device either —
+    // the passt child is never spawned — and adds the ONE device
+    // the profile rides: `--vsock cid=3,socket=<run>/vsock.sock`.
+    // The guest gets a virtio-vsock device (CID 3, the guest's own
+    // context id) whose host end is the VMM's muxer: a guest
+    // connection to CID 2 port N is delivered as the VMM
+    // CONNECTING to the Unix socket `<mux socket>_<N>` — the
+    // network.nix precedent's own convention — where the egress
+    // relay's listener sits (the launcher spawns it before CH and
+    // it forwards every connection to the per-run broker's
+    // socket). No NIC, no gateway route, one port: the fence IS
+    // the device list.
+    match &cfg.network {
+        Network::Shared => {
+            let socket = socket_of("passt");
+            argv.push(format!(
+                "--net=vhost_user=on,socket={},vhost_mode=client,mac={NET_MAC}",
+                socket.display()
+            ));
+        }
+        Network::None => {}
+        Network::Restricted(_) => {
+            let socket = socket_of("vsock");
+            argv.push(format!("--vsock=cid=3,socket={}", socket.display()));
+        }
     }
     // The scratch disk (bd myconfig-dak.7): the per-run sparse raw
     // file as a real virtio-blk drive, the same id the init finds it
@@ -894,10 +1041,18 @@ fn run(cfg: Config, boot_started: Instant) -> i32 {
     if cfg.verbose {
         eprintln!("mysbx-microvm-ch: payload: {:?}", cfg.payload);
         eprintln!("mysbx-microvm-ch: manifest: {:?}", cfg.manifest);
-        eprintln!(
-            "mysbx-microvm-ch: network: {}",
-            if cfg.network { "shared" } else { "none" }
-        );
+        // The network line names the channel too: a restricted run
+        // prints the broker socket and the port — the two halves of
+        // the fence a live probe greps for.
+        match &cfg.network {
+            Network::Shared => eprintln!("mysbx-microvm-ch: network: shared"),
+            Network::None => eprintln!("mysbx-microvm-ch: network: none"),
+            Network::Restricted(egress) => eprintln!(
+                "mysbx-microvm-ch: network: restricted (vsock port {} -> {})",
+                egress.port,
+                egress.socket.display()
+            ),
+        }
         eprintln!("mysbx-microvm-ch: scratch: {:?}", cfg.scratch);
         eprintln!("mysbx-microvm-ch: store-disk: {:?}", cfg.store_disk);
         eprintln!(
@@ -1026,30 +1181,92 @@ fn run(cfg: Config, boot_started: Instant) -> i32 {
     }
     // The passt child of shared networking (bd myconfig-9wkp.5):
     // spawned BEFORE CH (CH connects to the socket as the client)
-    // and killed with the run (the Daemons guard).
+    // and killed with the run (the Daemons guard). The restricted
+    // arm (bd myconfig-fo1r) spawns NO passt — the guest gets no
+    // NIC at all — and instead spawns the EGRESS RELAY, whose
+    // vsock-listener mode binds `<mux socket>_<port>` (the path
+    // CH's VMM connects per guest connection, the network.nix
+    // precedent's convention) and forwards each connection to the
+    // per-run broker's socket. The relay is pinned like every
+    // daemon binary (MYSBX_MICROVM_CH_EGRESS_RELAY — bwrap's
+    // --clearenv keeps the mysbx wrapper's pins from reaching
+    // here, so the pin rides the launcher's OWN wrapper); a
+    // missing pin fails the run CLOSED, never a restricted VM
+    // whose channel half does not exist. Both children live in
+    // the Daemons guard: whichever way the run ends, they die.
     let mut passt_log = DaemonLog::default();
-    if cfg.network {
-        let socket = socket_of("passt");
-        let argv = passt_argv(&passt, &socket);
-        if cfg.verbose {
-            eprintln!("mysbx-microvm-ch: spawning {:?}", argv);
-        }
-        match Command::new(&passt)
-            .args(&argv[1..])
-            .stdout(Stdio::null())
-            .stderr(Stdio::piped())
-            .spawn()
-        {
-            Ok(mut child) => {
-                passt_log = drain_stderr(&mut child, "passt".to_owned(), cfg.verbose);
-                daemons.children.push(child);
+    match &cfg.network {
+        Network::Shared => {
+            let socket = socket_of("passt");
+            let argv = passt_argv(&passt, &socket);
+            if cfg.verbose {
+                eprintln!("mysbx-microvm-ch: spawning {:?}", argv);
             }
-            Err(e) => {
-                eprintln!(
-                    "mysbx-microvm-ch: cannot spawn passt ({}): {e}",
-                    passt.display()
-                );
+            match Command::new(&passt)
+                .args(&argv[1..])
+                .stdout(Stdio::null())
+                .stderr(Stdio::piped())
+                .spawn()
+            {
+                Ok(mut child) => {
+                    passt_log = drain_stderr(&mut child, "passt".to_owned(), cfg.verbose);
+                    daemons.children.push(child);
+                }
+                Err(e) => {
+                    eprintln!(
+                        "mysbx-microvm-ch: cannot spawn passt ({}): {e}",
+                        passt.display()
+                    );
+                    return EXIT_SETUP;
+                }
+            }
+        }
+        Network::None => {}
+        Network::Restricted(egress) => {
+            let Some(relay) = pinned_bin("MYSBX_MICROVM_CH_EGRESS_RELAY", "egress relay") else {
                 return EXIT_SETUP;
+            };
+            // The listener path: CH's own convention — the VMM
+            // connects `<vsock mux socket>_<port>` for a guest
+            // connection to CID 2, port N. The mux socket path the
+            // argv names, the listener path the relay binds: one
+            // derivation (below), so they cannot drift.
+            let mux = socket_of("vsock");
+            let listen_at = format!("{}_{}", mux.display(), egress.port);
+            let argv = vec![
+                relay.to_string_lossy().into_owned(),
+                "--vsock-listener".to_owned(),
+                listen_at.clone(),
+                "--connect".to_owned(),
+                egress.socket.display().to_string(),
+            ];
+            if cfg.verbose {
+                eprintln!("mysbx-microvm-ch: spawning {:?}", argv);
+            }
+            match Command::new(&relay)
+                .args(&argv[1..])
+                .stdout(Stdio::null())
+                .stderr(Stdio::piped())
+                .spawn()
+            {
+                Ok(mut child) => {
+                    let log = drain_stderr(&mut child, "egress relay".to_owned(), cfg.verbose);
+                    // The listener must exist BEFORE CH starts: a
+                    // VM that boots faster than its channel half
+                    // would have its first model connection
+                    // refused — the same wait every daemon gets.
+                    if wait_for_socket(Path::new(&listen_at), "egress relay", &log).is_err() {
+                        return EXIT_SETUP;
+                    }
+                    daemons.children.push(child);
+                }
+                Err(e) => {
+                    eprintln!(
+                        "mysbx-microvm-ch: cannot spawn the egress relay ({}): {e}",
+                        relay.display()
+                    );
+                    return EXIT_SETUP;
+                }
             }
         }
     }
@@ -1064,7 +1281,8 @@ fn run(cfg: Config, boot_started: Instant) -> i32 {
             return EXIT_SETUP;
         }
     }
-    if cfg.network && wait_for_socket(&socket_of("passt"), "passt", &passt_log).is_err() {
+    if cfg.network.is_shared() && wait_for_socket(&socket_of("passt"), "passt", &passt_log).is_err()
+    {
         return EXIT_SETUP;
     }
     eprintln!(
@@ -1287,7 +1505,7 @@ mod tests {
             env: Vec::new(),
             overlays: Vec::new(),
             manifest: Some(PathBuf::from("/stage/ro/manifest")),
-            network: true,
+            network: Network::Shared,
             workdir: PathBuf::from("/home/synth/repo"),
             scratch: None,
             store_disk: None,
@@ -1510,7 +1728,7 @@ mod tests {
         // device; the bwrap wrap of the run pipeline unshare-nets
         // the chain, exactly like the qemu twin's arm.
         let mut cfg = test_cfg();
-        cfg.network = false;
+        cfg.network = Network::None;
         let argv = ch_argv(
             Path::new("/ch"),
             &cfg,
@@ -1519,6 +1737,93 @@ mod tests {
             None,
         );
         assert!(!argv.iter().any(|a| a.starts_with("--net=")));
+        assert!(!argv.iter().any(|a| a.starts_with("--vsock=")));
+    }
+
+    /// The restricted arm (bd myconfig-fo1r — n8kv.2 C2): NO --net
+    /// flag (the passt child is never spawned, the guest gets no
+    /// NIC), and the ONE --vsock device whose mux socket the egress
+    /// relay listens next to. The relay argv itself is main's
+    /// business (spawned before CH); the renderer's contract is
+    /// the device pair: cid=3, the per-run socket path.
+    #[test]
+    fn network_restricted_replaces_the_nic_with_the_vsock_device() {
+        let mut cfg = test_cfg();
+        cfg.network = Network::Restricted(Egress {
+            port: 4000,
+            socket: PathBuf::from("/run/user/1000/mysbx-egress/42/litellm.sock"),
+        });
+        let argv = ch_argv(
+            Path::new("/ch"),
+            &cfg,
+            &|t: &str| PathBuf::from(format!("/run/{t}.sock")),
+            None,
+            None,
+        );
+        assert!(
+            !argv.iter().any(|a| a.starts_with("--net=")),
+            "the restricted arm attaches no NIC: {argv:?}"
+        );
+        assert!(
+            argv.iter()
+                .any(|a| a == "--vsock=cid=3,socket=/run/vsock.sock"),
+            "the vsock device names the per-run mux socket: {argv:?}"
+        );
+    }
+
+    /// The restricted pair's parse-time totality (the krun twin's
+    /// rule): the pair and the mode belong together, the socket
+    /// must exist and BE a socket, and the port must be real —
+    /// every half-shaped combination is refused, never guessed.
+    #[test]
+    fn the_restricted_channel_parse_is_total() {
+        // A missing --rootfs/--kernel/payload guard: this test
+        // synthesizes the pair alone, so build a scratch socket
+        // the existence check can pass.
+        let dir = std::env::temp_dir().join(format!("mysbx-ch-egress-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let sock = dir.join("broker.sock");
+        let _ = std::fs::remove_file(&sock);
+        std::os::unix::net::UnixListener::bind(&sock).unwrap();
+        let sock_str = sock.to_string_lossy().into_owned();
+        let base = format!("--rootfs /r --kernel /k --egress-socket {sock_str} ");
+        let s = |extra: &str| -> Vec<String> {
+            format!("{base}{extra} -- /bin/true")
+                .split_whitespace()
+                .map(|t| t.to_owned())
+                .collect()
+        };
+        // The total pair parses into the restricted mode.
+        let cfg =
+            parse_args_result(s("--network restricted --egress-port 4000").into_iter()).unwrap();
+        assert!(matches!(
+            &cfg.network,
+            Network::Restricted(Egress { port: 4000, socket }) if socket == &sock
+        ));
+        // Every half shape is refused.
+        assert!(parse_args_result(s("--network restricted").into_iter()).is_err());
+        assert!(parse_args_result(s("--egress-port 4000").into_iter()).is_err());
+        assert!(parse_args_result(s("--network shared --egress-port 4000").into_iter()).is_err());
+        // A port of 0 and a non-socket path are refused.
+        assert!(parse_args_result(s("--network restricted --egress-port 0").into_iter()).is_err());
+        let not_socket = dir.join("plain");
+        std::fs::write(&not_socket, b"x").unwrap();
+        assert!(parse_args_result(
+            s(&format!(
+                "--network restricted --egress-port 4000 --egress-socket {}",
+                not_socket.display()
+            ))
+            .into_iter()
+        )
+        .is_err());
+        // A relative socket path is refused (the relay connects it
+        // from its own cwd, a relative path would be a lie).
+        assert!(parse_args_result(
+            s("--network restricted --egress-port 4000 --egress-socket rel.sock").into_iter()
+        )
+        .is_err());
+        let _ = std::fs::remove_file(&sock);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

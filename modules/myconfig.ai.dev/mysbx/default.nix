@@ -1678,8 +1678,19 @@ in
           # under bwrap).
           cloud-hypervisor = pkgs.cloud-hypervisor;
           inherit (pkgs) virtiofsd passt;
+          # The vsock-listener relay of the restricted channel (bd
+          # myconfig-fo1r): the SAME crate derivation the bwrap
+          # channel's relay pin uses, pinned into the launcher's
+          # OWN wrapper — under bwrap's --clearenv the mysbx
+          # wrapper's env pins never reach the launcher, so the
+          # pin rides the launcher wrapper (the qemu twin's
+          # MYSBX_MICROVM_QEMU_EGRESS_RELAY idiom). Null (the
+          # standalone default) keeps the wrapper pinless: a
+          # --network restricted run then fails closed naming
+          # the pin.
+          egressRelay = egressRelayCrate;
         };
-        defaultText = literalExpression "pkgs.callPackage ./nix/microvm-ch-launcher.nix { cloud-hypervisor = pkgs.cloud-hypervisor; virtiofsd = pkgs.virtiofsd; passt = pkgs.passt; }";
+        defaultText = literalExpression "pkgs.callPackage ./nix/microvm-ch-launcher.nix { cloud-hypervisor = pkgs.cloud-hypervisor; virtiofsd = pkgs.virtiofsd; passt = pkgs.passt; egressRelay = null; }";
         description = ''
           The mysbx-microvm-ch launcher of the cloud-hypervisor
           backend — the zero-dependency Rust binary
