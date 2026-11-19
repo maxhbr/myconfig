@@ -497,7 +497,7 @@ def make_handler(watcher, allow_write):
             sub = "add" if req["action"] == "add" else "remove"
             args = ["dep", sub, str(req["from"]), str(req["to"])]
             if sub == "add" and "type" in req:
-                args += [str(req["type"])]
+                args += ["--type", str(req["type"])]
             proc = run_bd_input(watcher.bd_bin, args, watcher.repo, "")
             self._write_result(proc, req["from"])
 
