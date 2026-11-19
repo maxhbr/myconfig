@@ -36,6 +36,20 @@ export function refreshSelection() {
 
 export function showDetails(issue) {
   window.SELECTED_ID = issue.id;
+  renderDetails(issue);
+  // the list record carries no comments; fetch the full detail and
+  // re-render if the user hasn't moved on to another issue meanwhile
+  fetch(`/api/beads/issue/${encodeURIComponent(issue.id)}`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((data) => {
+      if (!data || window.SELECTED_ID !== issue.id) return;
+      renderDetails(data.issue);
+    })
+    .catch(() => {});
+  return;
+}
+
+function renderDetails(issue) {
   const pane = document.getElementById("details");
   pane.innerHTML = "";
   pane.classList.add("open");
