@@ -178,6 +178,25 @@ text.edgelabel { fill: var(--muted); font-size: 9px; }
   color: var(--muted); font-size: 14px; margin-top: auto;
 }
 .lane.collapsed .col { display: none; }
+.board-separator {
+  display: flex; align-items: center; gap: 12px;
+  color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .5px;
+  padding: 10px 14px; background: var(--bg);
+  border-top: 2px solid var(--border); border-bottom: 1px solid var(--border);
+}
+.board-separator::before,
+.board-separator::after {
+  content: ""; flex: 1; height: 1px; background: var(--border);
+}
+.lane-closed .lane-head { opacity: .75; }
+.lane-closed .card { opacity: .55; }
+.lane-head .lane-closed-badge {
+  align-self: flex-start;
+  font-size: 10.5px; padding: 0 7px; line-height: 16px;
+  border-radius: 8px; color: var(--closed);
+  border: 1px solid var(--closed);
+  background: rgba(106, 191, 105, .12);
+}
 .card .card-chips span.blocked-chip {
   color: var(--blocked); border-color: var(--blocked);
 }

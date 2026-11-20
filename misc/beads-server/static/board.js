@@ -41,6 +41,14 @@ export function renderBoard() {
   named.sort((a, b) =>
     b.members.length - a.members.length ||
     a.rootId.localeCompare(b.rootId));
+  // demote lanes whose epic root is closed to the bottom, behind a separator
+  const rootClosed = (rootId) => {
+    const root = byIdMap.get(rootId);
+    return !!root && root.status === "closed";
+  };
+  const openLanes = [], closedLanes = [];
+  for (const lane of named)
+    (rootClosed(lane.rootId) ? closedLanes : openLanes).push(lane);
 
   const issueRank = (i) => {
     const statusRank = i.status === "in_progress" ? 0
@@ -72,11 +80,14 @@ export function renderBoard() {
   const buildLane = (laneRoot, members, ungroupedLane) => {
     const lane = h("div", "lane" + (ungroupedLane ? " ungrouped" : ""));
     const headEl = h("div", "lane-head");
+    const closed = laneRoot ? rootClosed(laneRoot) : false;
+    if (closed) lane.classList.add("lane-closed");
     if (laneRoot) {
       const root = byIdMap.get(laneRoot);
       const rootLink = h("span", "lane-root", laneRoot);
       if (root) rootLink.onclick = (ev) => { ev.stopPropagation(); window.showDetails(root); };
       headEl.append(rootLink);
+      if (closed) headEl.append(h("span", "lane-closed-badge", "✓ closed"));
       headEl.append(h("div", "lane-title", root ? root.title : ""));
     } else {
       headEl.append(h("div", "lane-title", "ungrouped"));
@@ -118,8 +129,13 @@ export function renderBoard() {
     }
   };
 
-  for (const { rootId, members } of named) buildLane(rootId, members, false);
+  for (const { rootId, members } of openLanes) buildLane(rootId, members, false);
   if (ungrouped.length) buildLane(null, ungrouped, true);
+  if (closedLanes.length) {
+    const sep = h("div", "board-separator", "closed epics");
+    board.append(sep);
+  }
+  for (const { rootId, members } of closedLanes) buildLane(rootId, members, false);
 
   for (const c of cols) {
     const ch = head.querySelector(`[data-col="${c.key}"] .count`);

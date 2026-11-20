@@ -235,6 +235,13 @@ def journal_loop(watcher, bd_bin, repo):
 
 def make_handler(watcher, allow_write):
     class BeadsHandler(SimpleHTTPRequestHandler):
+        def end_headers(self):
+            # static files live in the Nix store, where every mtime is
+            # 1: a Last-Modified-only response is heuristically cached
+            # "forever" and even revalidation 304s against the new build.
+            self.send_header("Cache-Control", "no-store")
+            super().end_headers()
+
         def check_loopback_host(self):
             """DNS rebinding defense for EVERY request, reads included:
             without a Host check a rebinding attacker becomes
