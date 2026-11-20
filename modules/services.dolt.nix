@@ -84,14 +84,19 @@ in
       wantedBy = [ "multi-user.target" ];
 
       serviceConfig = {
-        ExecStart = lib.concatStringsSep " " [
-          (lib.getExe' cfg.package "dolt")
-          "sql-server"
-          "--host=${cfg.host}"
-          "--port=${toString cfg.port}"
-          "--data-dir=${cfg.dataDir}"
-          "--remotesapi-port=${toString cfg.remotesapiPort}"
-        ];
+        # --remotesapi-port parses as uint, so -1 ("disabled") is only
+        # valid in a YAML config, not as a CLI flag: pass the flag only
+        # when a real port is set (flag omitted = listener disabled).
+        ExecStart = lib.concatStringsSep " " (
+          [
+            (lib.getExe' cfg.package "dolt")
+            "sql-server"
+            "--host=${cfg.host}"
+            "--port=${toString cfg.port}"
+            "--data-dir=${cfg.dataDir}"
+          ]
+          ++ lib.optional (cfg.remotesapiPort > 0) "--remotesapi-port=${toString cfg.remotesapiPort}"
+        );
         # static user, not DynamicUser: a rotating uid would lose write
         # access to data files copied in during a bd backup restore
         User = "dolt";
