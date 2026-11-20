@@ -1,0 +1,4 @@
+# config.md D30: `profile` is a string — a table is the wrong shape,
+# refused with the key named like every schema error.
+[profile]
+assistant = true

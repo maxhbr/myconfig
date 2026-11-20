@@ -1,0 +1,7 @@
+# The launcher profile (config.md D30, bd myconfig-011r): this
+# configuration requires the `assistant` launcher — a run started
+# through any other launcher (plain `mysbx` included) is refused
+# with exit 70. The profile names are host-defined
+# (`profiles.<name>` in the NixOS module); the crate validates the
+# `[a-z][a-z0-9-]*` shape only.
+profile = "assistant"

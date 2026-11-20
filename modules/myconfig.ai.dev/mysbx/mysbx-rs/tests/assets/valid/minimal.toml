@@ -21,6 +21,15 @@
 # parent = "../shared-mysbx.toml"
 #
 # backend = "bubblewrap"         # bubblewrap | nono | podman-gvisor | podman-krun | krun | microvm-qemu | microvm-ch
+#
+# The launcher profile (D30): when set, the run is REFUSED unless it
+# starts through that profile's launcher (mysbx-<profile>) — a repo
+# pinned to the assistant closure does not silently run with the
+# base one. A consistency contract, not a security boundary: the
+# actual tool closure is the launcher's own.
+#
+# profile = "assistant"
+#
 # network = "shared"             # none | proxy-only | shared (D20; the bool
 #                                # false/true stay aliases of none/shared); a
 #                                # sidecar may tighten, never widen

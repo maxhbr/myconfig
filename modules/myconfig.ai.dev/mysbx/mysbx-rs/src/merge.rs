@@ -90,6 +90,17 @@ pub struct Merged {
     /// neither layer named one (docs/design/cli.md D7: never
     /// auto-detected).
     pub backend: Option<String>,
+    /// The launcher profile the merged configuration requires
+    /// (docs/design/config.md D30): resolved once from the layers'
+    /// tri-state values, like `backend` — the sidecar wins when both
+    /// layers name one, and `None` means neither did (the gate
+    /// admits every launcher). Unlike `network` there is no
+    /// narrowing rule: the key is not an access grant, it names
+    /// which launcher binary must have started the run — a
+    /// disagreement between the layers is resolved, not refused
+    /// (the user config may host-wide demand a profile the sidecar
+    /// narrows per repo, and vice versa).
+    pub profile: Option<String>,
     /// The effective network policy (docs/design/config.md D20),
     /// resolved once from the layers' tri-state values — the stricter
     /// explicit value, with the shared default applied, so nothing
@@ -531,6 +542,10 @@ fn fold_two(
         cpus: later.cpus.or(earlier.cpus),
         pids_limit: later.pids_limit.or(earlier.pids_limit),
         store: later.store.or(earlier.store),
+        // profile (config.md D30): the later (child) layer wins
+        // where it decided, like `backend` — the same sidecar-wins
+        // rule `merge` applies.
+        profile: later.profile.or(earlier.profile),
         // The chain is consumed by the fold: the folded layer has no
         // parent of its own.
         parent: None,
@@ -1221,6 +1236,11 @@ pub fn merge(
         // decided: the built-in default is resolved per run
         // (`Merged::resolved_store`), backend- and pin-shaped.
         store: sidecar.store.or(user.store),
+        // profile (config.md D30): the later layer wins where it
+        // decided, like `backend` — the key names a launcher, not
+        // an access grant, so a disagreement is resolved (sidecar
+        // wins), never refused.
+        profile: sidecar.profile.or(user.profile),
     })
 }
 
@@ -2973,6 +2993,74 @@ mod tests {
         assert_eq!(via_fold.listen_ports, direct.listen_ports);
         // Mounts concatenate ancestor-first in both, too.
         assert_eq!(via_fold.mounts, direct.mounts);
+    }
+
+    #[test]
+    fn profile_folds_sidecar_wins_and_the_fold_matches_the_merge() {
+        // config.md D30 (bd myconfig-011r): `profile` is resolved,
+        // never refused — like `backend`, the later layer wins where
+        // it decided, in `merge` (user→sidecar) and in `fold_two`
+        // (ancestor→child) alike.
+        let merged = merge(
+            cfg("profile = \"base\"\n"),
+            cfg("profile = \"assistant\"\n"),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert_eq!(merged.profile.as_deref(), Some("assistant"));
+        // Either layer alone decides.
+        let merged = merge(
+            cfg(""),
+            cfg("profile = \"assistant\"\n"),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert_eq!(merged.profile.as_deref(), Some("assistant"));
+        let merged = merge(
+            cfg("profile = \"assistant\"\n"),
+            cfg(""),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert_eq!(merged.profile.as_deref(), Some("assistant"));
+        // Neither layer: the gate admits every launcher.
+        let merged = merge(cfg(""), cfg(""), &user_file(), &sidecar_file(), &no_home()).unwrap();
+        assert_eq!(merged.profile, None);
+        // The parent-chain fold carries the same rule: the CHILD
+        // wins over the ancestor, the chain result folds into what
+        // `merge` consumes identically.
+        let folded = fold_two(
+            cfg("profile = \"base\"\n"),
+            cfg("profile = \"assistant\"\n"),
+            &user_file(),
+            &sidecar_file(),
+        )
+        .unwrap();
+        assert_eq!(folded.profile.as_deref(), Some("assistant"));
+        let via_fold = merge(
+            folded.clone(),
+            Config::default(),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        let direct = merge(
+            cfg("profile = \"base\"\n"),
+            cfg("profile = \"assistant\"\n"),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert_eq!(via_fold.profile, direct.profile);
+        assert_eq!(via_fold.profile.as_deref(), Some("assistant"));
     }
 
     // ---- git-dirs approval list (review-2 item 1) ------------------------

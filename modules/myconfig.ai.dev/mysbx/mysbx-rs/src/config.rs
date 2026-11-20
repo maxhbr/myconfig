@@ -667,6 +667,22 @@ pub struct Config {
     /// load time (see the chain loader in `crate::merge`). `None` on a
     /// folded chain result — the chain is consumed by the fold.
     pub parent: Option<String>,
+    /// The launcher profile this configuration requires (`profile`,
+    /// docs/design/config.md D30): a free-form name with the
+    /// `[a-z][a-z0-9-]*` grammar (the module layer's
+    /// `validProfileName` spelling — profile names are host-defined,
+    /// not a crate enum). `None` means "not decided by this layer";
+    /// either layer may set it and the sidecar wins when both do
+    /// (like `backend`/`multiplexer`: the key grants no host access,
+    /// it names which launcher binary must have started the run).
+    /// ENFORCED at start: the run is refused (exit 70) unless the
+    /// invocation actually is that profile's launcher
+    /// (`mysbx-<profile>`, detected via the `MYSBX_PROFILE` env pin
+    /// with an argv[0] fallback for the unwrapped crate — see
+    /// `crate::profile`). It is a consistency contract, not a
+    /// security boundary: the actual tool closure is the wrapper's
+    /// pinned `MYSBX_TOOLS_PATH` either way.
+    pub profile: Option<String>,
 }
 
 impl Default for Config {
@@ -692,6 +708,7 @@ impl Default for Config {
             pids_limit: None,
             store: None,
             parent: None,
+            profile: None,
         }
     }
 }
@@ -728,6 +745,7 @@ impl Config {
     pub const KEYS: &'static [&'static str] = &[
         "parent",
         "backend",
+        "profile",
         "network",
         "nested-virt",
         "multiplexer",
@@ -772,6 +790,26 @@ impl Config {
         for (key, value) in root {
             match key.as_str() {
                 "backend" => config.backend = Some(string(value, "backend")?.to_owned()),
+                // The launcher profile (config.md D30): a free-form
+                // name with the same grammar the module layer's
+                // `validProfileName` spells — shape only, not a crate
+                // enum (profile names are host-defined). `once` is
+                // refused here too: it would collide with the base
+                // once entry's argv[0] spelling (the fallback detector
+                // would misparse `mysbx-once` as profile `once`).
+                "profile" => {
+                    let name = string(value, "profile")?;
+                    if crate::profile::valid_name(name) {
+                        config.profile = Some(name.to_owned());
+                    } else {
+                        return Err(Error::Schema(
+                            "top level: `profile` must be a lowercase profile name matching \
+                             [a-z][a-z0-9-]* and not the reserved `once` — it names the \
+                             mysbx-<profile> launcher this configuration requires"
+                                .to_owned(),
+                        ));
+                    }
+                }
                 "network" => config.network = Some(network(value)?),
                 "nested-virt" => {
                     config.nested_virt = Some(boolean(value, "nested-virt")?)
@@ -1330,6 +1368,34 @@ fn unknown(at: &str, key: &str) -> Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn profile_parses_as_a_grammar_validated_name() {
+        // config.md D30 (bd myconfig-011r): a free-form profile name
+        // with the `[a-z][a-z0-9-]*` grammar, NOT a crate enum — the
+        // crate validates shape only. `once` is reserved (it would
+        // collide with the base once entry's argv[0] spelling).
+        let c = Config::parse("profile = \"assistant\"\n").unwrap();
+        assert_eq!(c.profile.as_deref(), Some("assistant"));
+        let c = Config::parse("profile = \"agent-42\"\n").unwrap();
+        assert_eq!(c.profile.as_deref(), Some("agent-42"));
+        assert_eq!(Config::parse("").unwrap().profile, None);
+        // Every refusal is a Schema error naming the key.
+        for text in [
+            "profile = \"\"\n",
+            "profile = \"Assistant\"\n",
+            "profile = \"-x\"\n",
+            "profile = \"a b\"\n",
+            "profile = \"once\"\n",
+            "profile = 42\n",
+            "profile = true\n",
+        ] {
+            let e = Config::parse(text).unwrap_err();
+            let msg = e.to_string();
+            assert!(matches!(e, Error::Schema(_)), "{text}: {msg}");
+            assert!(msg.contains("profile"), "{text}: {msg}");
+        }
+    }
 
     #[test]
     fn empty_config_is_all_defaults() {

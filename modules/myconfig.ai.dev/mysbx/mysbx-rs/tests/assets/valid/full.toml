@@ -8,6 +8,14 @@
 parent = "parent.toml"
 
 backend = "bwrap"
+
+# The launcher profile (config.md D30): a run of this configuration
+# is refused (exit 70) unless it starts through the `assistant`
+# launcher — the mysbx-assistant binary of `profiles.<name>`. A
+# consistency contract, not a security boundary: the tool closure
+# is the launcher's own either way.
+profile = "assistant"
+
 network = true
 
 # Nested virtualization (config.md D27): hand a `microvm-qemu` run

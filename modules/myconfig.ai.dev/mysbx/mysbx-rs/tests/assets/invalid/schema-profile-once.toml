@@ -1,0 +1,4 @@
+# config.md D30: `profile` must name a launcher — a profile named
+# `once` would collide with the base once entry's argv[0] spelling
+# (`mysbx-once`), so the value is refused with the key named.
+profile = "once"

@@ -153,6 +153,12 @@ fn spawn_with_args<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> C
         // on the machine's runtime dir. Tests that exercise the
         // runtime-root refusal set it themselves.
         .env_remove("XDG_RUNTIME_DIR")
+        // The launcher identity pin (config.md D30, bd
+        // myconfig-011r): wrapper-provided, so a test run sees none
+        // unless it pins it itself — a wrapped mysbx on the test
+        // runner's PATH would otherwise leak the runner's own
+        // profile into every test.
+        .env_remove("MYSBX_PROFILE")
         // Keep the host's TERM & co. out of the result: the forwarded set
         // must come only from variables the test actually sets. The list
         // is the same constant the pipeline reads — not a hand copy that
@@ -877,6 +883,159 @@ fn a_user_layer_parent_chain_reaches_the_run() {
             inv.home.join("data").display()
         )),
         "{report}"
+    );
+}
+
+// ---- the profile launcher gate (config.md D30) ---------------------------
+
+#[test]
+fn a_profile_sidecar_refuses_a_plain_run_and_admits_the_matching_pin() {
+    // The gate's both halves: a sidecar naming `profile = "assistant"`
+    // refuses a run without the launcher identity (exit 70, the
+    // message names the required launcher and the fix), and a run
+    // WITH the pin (what the mysbx-assistant wrapper's MYSBX_PROFILE
+    // provides — cargo cannot fake argv[0]) passes the gate and
+    // reaches the dry-run argv.
+    let (inv, _, sidecar) = fixture("profile-gate", &["--dry-run"]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nprofile = \"assistant\"\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 70, "stdout: {stdout}");
+    assert!(stdout.is_empty(), "nothing is created: {stdout}");
+    assert!(
+        stderr.contains("mysbx-assistant"),
+        "the message names the required launcher: {stderr}"
+    );
+    assert!(
+        stderr.contains("profile = \"assistant\""),
+        "the message names the configured key: {stderr}"
+    );
+    assert!(
+        stderr.contains("remove/comment the `profile` key"),
+        "the message offers the fix: {stderr}"
+    );
+    // The matching pin is admitted — the run reaches the argv print.
+    let mut admitted = spawn(&inv);
+    admitted.env("MYSBX_PROFILE", "assistant");
+    let out = admitted.output().unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(String::from_utf8_lossy(&out.stdout).contains("bwrap"));
+}
+
+#[test]
+fn a_profile_sidecar_refuses_a_mismatched_pin_naming_both() {
+    // A pin naming ANOTHER profile is the mismatch case: the
+    // message names BOTH the configured one and the launcher the
+    // run actually started through.
+    let (inv, _, sidecar) = fixture("profile-mismatch", &["--dry-run"]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nprofile = \"assistant\"\n",
+    )
+    .unwrap();
+    let mut cmd = spawn(&inv);
+    cmd.env("MYSBX_PROFILE", "dev");
+    let out = cmd.output().unwrap();
+    assert_eq!(out.status.code(), Some(70));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("mysbx-assistant"), "{stderr}");
+    assert!(
+        stderr.contains("mysbx-dev"),
+        "the mismatch names both: {stderr}"
+    );
+}
+
+#[test]
+fn the_profile_gate_folds_sidecar_wins_and_dry_run_audits_the_refusal() {
+    // The layering (D30): either layer may set `profile`, the
+    // SIDECAR wins on conflict — a user layer demanding `dev`
+    // does not override the repo's `assistant` — and a `--dry-run`
+    // audits the refusal (still 70, nothing created) instead of
+    // skipping the gate.
+    let (inv, _, sidecar) = fixture("profile-fold", &["--dry-run"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(inv.xdg.join("mysbx/config.toml"), "profile = \"dev\"\n").unwrap();
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nprofile = \"assistant\"\n",
+    )
+    .unwrap();
+    let (code, stdout, _) = run_binary(&inv);
+    assert_eq!(code, 70, "stdout: {stdout}");
+    let stderr_of = |pin: &str| {
+        let mut cmd = spawn(&inv);
+        cmd.env("MYSBX_PROFILE", pin);
+        let out = cmd.output().unwrap();
+        (
+            out.status.code(),
+            String::from_utf8_lossy(&out.stderr).into_owned(),
+        )
+    };
+    // pin=dev: the USER layer's name — the sidecar's assistant wins,
+    // so this is a mismatch.
+    let (code, stderr) = stderr_of("dev");
+    assert_eq!(code, Some(70), "{stderr}");
+    assert!(stderr.contains("mysbx-assistant"), "{stderr}");
+    // pin=assistant: admitted.
+    let (code, stderr) = stderr_of("assistant");
+    assert_eq!(code, Some(0), "{stderr}");
+}
+
+#[test]
+fn a_user_layer_profile_refuses_and_the_parent_chain_carries_it() {
+    // The user layer ALONE may demand a profile (the host-wide
+    // `config.profile` of the NixOS module renders exactly this), and
+    // it folds through the parent chain like any other key: an
+    // ancestor's `profile` reaches the merged config.
+    let (inv, _, _) = fixture("profile-user-layer", &["--dry-run"]);
+    let xdg_cfg = inv.xdg.join("mysbx");
+    std::fs::create_dir_all(&xdg_cfg).unwrap();
+    std::fs::write(xdg_cfg.join("base.toml"), "profile = \"assistant\"\n").unwrap();
+    std::fs::write(
+        xdg_cfg.join("config.toml"),
+        "backend = \"bubblewrap\"\nparent = \"base.toml\"\n",
+    )
+    .unwrap();
+    // Without a sidecar config the chain still folds: plain repo,
+    // the user layer alone demands assistant.
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 70, "stdout: {stdout}");
+    assert!(stderr.contains("mysbx-assistant"), "{stderr}");
+    let mut admitted = spawn(&inv);
+    admitted.env("MYSBX_PROFILE", "assistant");
+    let out = admitted.output().unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+#[test]
+fn a_run_without_any_profile_key_is_untouched_by_the_gate() {
+    // No `profile` key in either layer: the gate decides nothing —
+    // a pin set by the environment alone (a stray wrapper variable)
+    // is not a configured demand, so the run passes whatever
+    // identity it carries.
+    let (inv, _, sidecar) = fixture("profile-absent", &["--dry-run"]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"bubblewrap\"\n").unwrap();
+    let mut cmd = spawn(&inv);
+    cmd.env("MYSBX_PROFILE", "assistant");
+    let out = cmd.output().unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
     );
 }
 

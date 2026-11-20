@@ -1,0 +1,4 @@
+# config.md D30: `profile` must be a lowercase name matching
+# `[a-z][a-z0-9-]*` (the module's validProfileName grammar) — an
+# empty string is not a launcher name anyone can type.
+profile = ""

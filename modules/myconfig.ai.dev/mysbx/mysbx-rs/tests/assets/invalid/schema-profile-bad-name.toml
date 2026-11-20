@@ -1,0 +1,5 @@
+# config.md D30: `profile` must be a lowercase name matching
+# `[a-z][a-z0-9-]*` — uppercase and whitespace spellings name no
+# launcher (the binary would be `mysbx-<name>`, and profile names
+# never contain either).
+profile = "Assistant"

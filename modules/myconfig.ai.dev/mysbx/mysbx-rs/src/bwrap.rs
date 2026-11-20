@@ -2741,6 +2741,7 @@ mod tests {
             cpus: None,
             pids_limit: None,
             store: None,
+            profile: None,
             multiplexer: Multiplexer::None,
             display: Display::Off,
         }

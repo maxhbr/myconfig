@@ -48,6 +48,7 @@ fn every_asset_is_exercised() {
         "valid/full.toml",
         "valid/minimal.toml",
         "valid/parent.toml",
+        "valid/profile.toml",
         "valid/relative-and-home-paths.toml",
         "valid/schema-network-proxy-only-with-allowlist.toml",
         "valid/syntax-zoo.toml",
@@ -78,6 +79,10 @@ fn every_asset_is_exercised() {
         "invalid/schema-network-value.toml",
         "invalid/schema-parent-empty.toml",
         "invalid/schema-parent-wrong-type.toml",
+        "invalid/schema-profile-bad-name.toml",
+        "invalid/schema-profile-empty.toml",
+        "invalid/schema-profile-once.toml",
+        "invalid/schema-profile-wrong-type.toml",
         "invalid/syntax-duplicate-key.toml",
         "invalid/syntax-missing-value.toml",
         "invalid/syntax-unterminated-string.toml",
@@ -177,6 +182,10 @@ fn full_config() {
     // loader, not by `Config::load`.
     assert_eq!(c.parent.as_deref(), Some("parent.toml"));
     assert_eq!(c.backend.as_deref(), Some("bwrap"));
+    // profile (D30): this configuration requires the assistant
+    // launcher — parsed as a plain string, the grammar was checked at
+    // parse time.
+    assert_eq!(c.profile.as_deref(), Some("assistant"));
     assert_eq!(c.network, Some(mysbx::config::Network::Shared));
     // nested-virt (D27): tri-state like `network` — this layer denies.
     assert_eq!(c.nested_virt, Some(false));
@@ -234,6 +243,39 @@ fn full_config() {
     let text = std::fs::read_to_string(asset("valid/full.toml")).unwrap();
     for key in Config::KEYS {
         assert!(text.contains(key), "full.toml does not use `{key}`");
+    }
+}
+
+#[test]
+fn profile_names_its_launcher() {
+    // config.md D30 (bd myconfig-011r): a valid asset naming a
+    // profile — the run requires the mysbx-assistant launcher.
+    let c = load_ok("valid/profile.toml");
+    assert_eq!(c.profile.as_deref(), Some("assistant"));
+    assert_eq!(
+        c,
+        Config {
+            profile: Some("assistant".into()),
+            ..Config::default()
+        }
+    );
+}
+
+#[test]
+fn profile_refusals_name_the_key() {
+    // The invalid assets: every refusal is a Schema error naming
+    // `profile` — the operator must know WHICH key of their file is
+    // the problem (config.md D11).
+    for rel in [
+        "invalid/schema-profile-empty.toml",
+        "invalid/schema-profile-bad-name.toml",
+        "invalid/schema-profile-once.toml",
+        "invalid/schema-profile-wrong-type.toml",
+    ] {
+        let e = load_err(rel);
+        let msg = e.to_string();
+        assert!(matches!(e, Error::Schema(_)), "{rel}: {msg}");
+        assert!(msg.contains("profile"), "{rel}: {msg}");
     }
 }
 

@@ -39,6 +39,7 @@ pub mod microvm_qemu;
 pub mod nono;
 pub mod once;
 pub mod podman_gvisor;
+pub mod profile;
 pub mod repo;
 pub mod report;
 pub mod result;
@@ -2643,6 +2644,25 @@ fn sandbox_pipeline(
             return EXIT_INFRASTRUCTURE;
         }
     };
+
+    // 4-ab. the profile launcher gate (config.md D30, bd
+    // myconfig-011r): the merged `profile` names the launcher this
+    // configuration requires — a run started through any OTHER
+    // launcher (plain `mysbx` included) is refused. The detection is
+    // the `MYSBX_PROFILE` env pin the wrapper sets per flavor (the
+    // argv[0] fallback covers the unwrapped crate only; once-mode
+    // relies on the pin alone — the once.rs lesson, argv[0] does not
+    // survive a wrapper chain). Like every 4-series refusal this
+    // sits BEFORE the session clone and BEFORE the `--dry-run`
+    // early return, so a dry run audits the refusal too — and it
+    // covers all run modes, including the INNER of a detached run
+    // (the pin is inherited through the wrapper re-exec).
+    if let Some(wanted) = merged.profile.as_deref() {
+        let invoked = profile::invoked();
+        if invoked.as_deref() != Some(wanted) {
+            return profile::refuse(wanted, invoked.as_deref());
+        }
+    }
 
     // 4h. the podman backends' `--detach` refusal (detach.md B9,
     // bd myconfig-cad): the container name is per repo root and
@@ -8212,6 +8232,15 @@ const SIDECAR_TEMPLATE_ROOT: &str = r#"# mysbx sidecar config
 # parent = "../shared-mysbx.toml"
 #
 # backend = "bubblewrap"         # bubblewrap | nono | podman-gvisor | podman-krun | krun | microvm-qemu | microvm-ch
+#
+# The launcher profile (D30): when set, the run is REFUSED unless it
+# starts through that profile's launcher (mysbx-<profile>, bd
+# myconfig-xl93) — a repo pinned to the assistant closure does not
+# silently run with the base one. A consistency contract, not a
+# security boundary: the actual tool closure is the launcher's own.
+#
+# profile = "assistant"
+#
 # network = "shared"             # none | proxy-only | shared (D20; the bool
 #                                # false/true stay aliases of none/shared); a
 #                                # sidecar may tighten, never widen

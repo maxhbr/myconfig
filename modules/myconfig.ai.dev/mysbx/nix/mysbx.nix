@@ -173,6 +173,20 @@
 #                     passes `null`) means no gate: every backend the
 #                     crate knows is selectable, the historical
 #                     contract of a hand-run build.
+#   MYSBX_PROFILE    the launcher identity of this wrapper (config.md
+#                     D30, bd myconfig-011r): a flavor wrapper pins
+#                     its profile name so the crate's start-time gate
+#                     can tell a `mysbx-<profile>` run from a base
+#                     one when the merged config sets `profile`.
+#                     The base wrapper pins nothing — unset means
+#                     the base launcher, exactly the identity the
+#                     gate compares against. NOT to be confused with
+#                     MYSBX_NONO_PROFILE (a nono backend operator
+#                     knob naming the backend's profile file): this
+#                     variable names the INVOCATION, not a backend
+#                     setting, and overriding it changes only which
+#                     launcher the gate admits — never the tool
+#                     closure, which is embedded in this binary.
 #
 # All these pins are absolute store paths — nothing is left to host lookup.
 # (MYSBX_NONO_PROFILE is an operator knob among them, like
@@ -294,6 +308,17 @@
   # sets carries the mode without argv[0] (which a makeBinaryWrapper
   # chain cannot — each `exec` resets it).
   binName ? "mysbx",
+  # The launcher profile this wrapper IS (config.md D30, bd
+  # myconfig-011r): `null` (the base wrapper) pins nothing; a flavor
+  # passes its own name and the wrapper sets `MYSBX_PROFILE`, the pin
+  # the crate's profile gate (mysbx-rs/src/profile.rs) reads to tell
+  # its launcher apart from the base. Unrelated to MYSBX_NONO_PROFILE
+  # (a nono operator knob): this pin is the INVOCATION identity, not
+  # a backend setting — an invocation may override it, which only
+  # affects the consistency gate, never what runs inside the sandbox
+  # (the tool closure is this wrapper's own MYSBX_TOOLS_PATH either
+  # way).
+  profile ? null,
   # The multiplexer entry scripts, keyed by the `multiplexer` value
   # they are the payload of (../docs/design/config.md D17): an attrset
   # like `{ tmux = <drv>; workmux = <drv>; orca = <drv>; }`, built by ../default.nix
@@ -863,6 +888,15 @@ let
   # caller passes no alacritty — the fallback PATH lookup of the
   # unwrapped crate applies then.
   terminalPin = if alacritty != null then "--set MYSBX_TERMINAL '${lib.getExe alacritty}'" else "";
+  # The profile pin (config.md D30, bd myconfig-011r): the launcher
+  # identity the crate's profile gate reads. Empty for the base
+  # wrapper (a blank slot on the continued wrapProgram line, the
+  # `nodeMajorPin` idiom); a flavor pins its own name. `--set`, not
+  # `--set-default`: the pin is a fact about the binary, not an
+  # operator knob — an invocation that overrides it only re-labels
+  # the launcher the gate compares against, and the actual closure is
+  # embedded in the binary anyway.
+  profilePin = if profile != null then "--set MYSBX_PROFILE '${profile}'" else "";
   # C7b (n8kv idea 13, bd myconfig-f23e): the declared nodejs major
   # of the tools closure and the generated credential-free `.npmrc`.
   # The null arm is the empty string like `terminalPin`, so a blank
@@ -1150,6 +1184,7 @@ symlinkJoin {
       ${muxEntryPins} \
       ${podmanMuxEntryPins} \
       ${terminalPin} \
+      ${profilePin} \
       ${podmanPins} \
       ${krunPins} \
       ${waypipePins} \
@@ -1220,6 +1255,7 @@ symlinkJoin {
       toolsEnv
       sandboxNixConfDir
       binName
+      profile
       ;
     # The backends the wrapper pins in MYSBX_ENABLED_BACKENDS (null
     # for the callPackage default, which pins nothing): the module
