@@ -253,11 +253,31 @@ fn a_channel_with_a_table_renders_like_a_plain_brokered_run_on_the_builder() {
             )
             .expect("the plain brokered channel renders on microvm-ch")
         };
+        // The launcher argv is byte-identical: the table rides the
+        // broker's own argv (spawned host-side), not the VM's. The
+        // guest env differs ONLY by the E8 injection below — all
+        // six names of it, each an `--env NAME=VALUE` PAIR.
         let strip = |argv: &[String]| -> Vec<String> {
-            argv.iter()
-                .filter(|a| !a.starts_with("HTTP_PROXY") && !a.starts_with("http_proxy"))
-                .cloned()
-                .collect()
+            let injected = |value: &str| {
+                value.starts_with("HTTP_PROXY")
+                    || value.starts_with("http_proxy")
+                    || value.starts_with("HTTPS_PROXY")
+                    || value.starts_with("https_proxy")
+                    || value.starts_with("NO_PROXY")
+                    || value.starts_with("no_proxy")
+                    || value.starts_with("NODE_USE_ENV_PROXY=")
+            };
+            let mut out: Vec<String> = Vec::new();
+            let mut i = 0;
+            while i < argv.len() {
+                if argv[i] == "--env" && i + 1 < argv.len() && injected(&argv[i + 1]) {
+                    i += 2;
+                } else {
+                    out.push(argv[i].clone());
+                    i += 1;
+                }
+            }
+            out
         };
         assert_eq!(strip(&argv), strip(&plain));
     }
