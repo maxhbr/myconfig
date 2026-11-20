@@ -22,8 +22,10 @@ for implemented support, known gaps and validation limits.
 ### D1: Two configuration layers plus flags
 
 1. built-in defaults
-2. user config — `$XDG_CONFIG_HOME/mysbx/config.toml`
-3. sidecar config — `<repo>.mysbx/config.toml`
+2. user config — `$XDG_CONFIG_HOME/mysbx/config.toml`, with its
+   own `parent` chain loaded first (D29)
+3. sidecar config — `<repo>.mysbx/config.toml`, with its own
+   `parent` chain loaded first (D29)
 4. command-line flags
 
 Later layers override earlier ones. No project-local config *inside* the
@@ -2042,3 +2044,49 @@ regression test asserts that both the foreground and the detached
 and the bullets below it. The podman tiers carry the proxy-name
 residual above; the three podman bullets are the residual risk that
 stays documented instead of closed.
+
+### D29: `parent` — configuration inheritance
+
+Either layer may name another TOML file it inherits from:
+
+```toml
+parent = "../shared-mysbx.toml"
+```
+
+The value is a path in the D8 spellings — absolute, `~/…` (against
+the invoking user's home), or relative to the directory of the file
+that declares it. Chains are supported: each parent may name its own
+parent, and the whole chain is loaded ancestors-first, then folded
+into ONE layer before the merge — `merge` and every backend stay
+untouched, and the fold applies the same overwrite rules between
+every adjacent (ancestor, child) pair as D7 applies between (user,
+sidecar): the child may introduce keys and may tighten `network` /
+`nested-virt`, but may not override an ancestor-set `[env]` or `[nix]`
+key and may not widen what an ancestor narrowed. Per-file facts
+survive the fold: a parent's relative `[[mounts]]` and `git-dirs`
+paths resolve against the parent's own directory.
+
+**A missing parent is a hard error.** Unlike the absent base layer
+(an empty layer), a `parent` is an explicit reference; a dangling
+one is a broken reference, and an unreadable or schema-broken parent
+is a hard error naming the file.
+
+**Cycles are refused.** The walk is iterative (no recursion, so a
+long chain cannot overflow the stack first) and keeps a seen-set of
+CANONICAL paths per chain: a file that re-enters its own chain —
+through a symlink or `..` spelling as much as a direct self-reference
+— is a hard error listing the chain. The seen-set is per chain: the
+same file may legally appear in BOTH chains (a sidecar parent
+pointing at the user config's own parent), because the two chains
+are independent sequences. Sharing a file with unique-valued keys
+(`[env]`) still trips the merge's override refusal — the merge
+cannot see that both layers inherited the key — so a shared parent
+carries additive keys (lists), not unique-valued ones.
+
+**A parent inside the repo is refused (D3).** The sandbox can write
+the repo, so repo content must not decide the configuration: a
+parent whose canonical path is inside the repo the sidecar belongs
+to is a hard error. The repo root is derived from the sidecar's
+`.mysbx`-suffixed directory name (D2); a sidecar without the suffix
+(a once-run's ephemeral `<temp>/sidecar`) has no derivable repo, and
+the check is skipped rather than guessed.

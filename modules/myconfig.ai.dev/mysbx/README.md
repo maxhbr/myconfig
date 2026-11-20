@@ -305,6 +305,21 @@ stays in charge of what you leave commented).
 
 It is deliberately placed outside of the repo and the sandbox.
 
+Either layer may also inherit from another TOML file
+([`config.md` D29](./docs/design/config.md)):
+
+```toml
+parent = "../shared-mysbx.toml"
+```
+
+The parent is loaded directly before the file that names it (chains
+are supported), paths are absolute, `~/…` or relative to the naming
+file's own directory, and the same overwrite rules apply between the
+pair as between the host-wide and the repo layer: the child may add
+keys and tighten the network, never override or widen. A missing
+parent is a hard error, cycles are refused, and a parent inside the
+repo is refused (the sandbox can write the repo).
+
 The directory has room for:
 - state files
 - mounts for ~/.share
