@@ -385,6 +385,158 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
+/// Fold one adjacent (ancestor, child) pair of the parent chain
+/// (docs/design/config.md D29) into a single `Config` — the SAME
+/// per-key rules `merge` applies to (user, sidecar): the child plays
+/// the sidecar's role (it may introduce keys, it must not override
+/// ancestor-set ones, it may tighten `network`/`nested-virt`, never
+/// widen), so one chain folds into exactly the layer shape `merge`
+/// already consumes. The result's `parent` is `None` — the chain is
+/// consumed by the fold.
+///
+/// Deliberately NOT a shared helper with `merge` (the bead's review
+/// constraint): `merge` also applies the Shared/off/store DEFAULTS and
+/// canonicalizes against the host; folding a chain must keep every
+/// tri-state `None` untouched so the LATER merge decides defaults.
+fn fold_two(
+    earlier: Config,
+    later: Config,
+    earlier_file: &Path,
+    later_file: &Path,
+) -> Result<Config, Error> {
+    if let (Some(earlier_net), Some(later_net)) = (earlier.network, later.network) {
+        if later_net > earlier_net {
+            return Err(Error::NetworkUpgrade {
+                message: format!(
+                    "{}: network = \"{}\" widens the network the parent config {} set to \"{}\" — a child may tighten the network, never widen it (docs/design/config.md D20, D29)",
+                    later_file.display(),
+                    later_net,
+                    earlier_file.display(),
+                    earlier_net,
+                ),
+            });
+        }
+    }
+    if earlier.nested_virt == Some(false) && later.nested_virt == Some(true) {
+        return Err(Error::NestedVirtUpgrade {
+            message: format!(
+                "{}: nested-virt = true re-enables the nested virtualization the parent config {} denied with `nested-virt = false` — a child may deny it, never re-enable it (docs/design/config.md D27, D29)",
+                later_file.display(),
+                earlier_file.display(),
+            ),
+        });
+    }
+    for (key, value) in &later.env {
+        if let Some(earlier_value) = earlier.env.get(key) {
+            return Err(Error::EnvOverride {
+                key: key.clone(),
+                message: format!(
+                    "{}: [env] {} = {:?} overrides the parent config {}, which sets it to {:?} — a child may introduce new variables but must not override parent-set ones (docs/design/config.md D29)",
+                    later_file.display(),
+                    key,
+                    value,
+                    earlier_file.display(),
+                    earlier_value,
+                ),
+            });
+        }
+    }
+    for (key, value) in &later.nix {
+        if let Some(earlier_value) = earlier.nix.get(key) {
+            return Err(Error::EnvOverride {
+                key: format!("nix.{key}"),
+                message: format!(
+                    "{}: [nix] {} = {:?} overrides the parent config {}, which sets it to {:?} — a child may introduce new settings but must not override parent-set ones (docs/design/config.md D29)",
+                    later_file.display(),
+                    key,
+                    value,
+                    earlier_file.display(),
+                    earlier_value,
+                ),
+            });
+        }
+    }
+    let dedupe = |earlier_list: &[String], later_list: &[String]| -> Vec<String> {
+        let mut seen: Vec<&str> = Vec::new();
+        earlier_list
+            .iter()
+            .chain(later_list.iter())
+            .filter(|e| {
+                if seen.contains(&e.as_str()) {
+                    false
+                } else {
+                    seen.push(e.as_str());
+                    true
+                }
+            })
+            .cloned()
+            .collect()
+    };
+    let dedupe_ports = |earlier_list: &[u16], later_list: &[u16]| -> Vec<u16> {
+        let mut seen: Vec<u16> = Vec::new();
+        earlier_list
+            .iter()
+            .chain(later_list.iter())
+            .filter(|p| {
+                if seen.contains(p) {
+                    false
+                } else {
+                    seen.push(**p);
+                    true
+                }
+            })
+            .copied()
+            .collect()
+    };
+    let mut env = earlier.env;
+    env.extend(later.env);
+    let mut nix = earlier.nix;
+    nix.extend(later.nix);
+    Ok(Config {
+        backend: later.backend.or(earlier.backend),
+        network: match (earlier.network, later.network) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (Some(a), None) | (None, Some(a)) => Some(a),
+            (None, None) => None,
+        },
+        nested_virt: match (earlier.nested_virt, later.nested_virt) {
+            (Some(true), _) | (_, Some(true)) => Some(true),
+            (Some(false), _) | (_, Some(false)) => Some(false),
+            (None, None) => None,
+        },
+        multiplexer: later.multiplexer.or(earlier.multiplexer),
+        display: later.display.or(earlier.display),
+        // mounts and git-dirs: plain concat, earlier first — the later
+        // bind/entry wins inside the sandbox, exactly like the sidecar's
+        // over the user's. Paths are already canonicalized per file.
+        mounts: {
+            let mut m = earlier.mounts;
+            m.extend(later.mounts);
+            m
+        },
+        env,
+        nix,
+        git_dirs: {
+            let mut g = earlier.git_dirs;
+            g.extend(later.git_dirs);
+            g
+        },
+        state_dirs: dedupe(&earlier.state_dirs, &later.state_dirs),
+        forward_env: dedupe(&earlier.forward_env, &later.forward_env),
+        allow_domains: dedupe(&earlier.allow_domains, &later.allow_domains),
+        connect_ports: dedupe_ports(&earlier.connect_ports, &later.connect_ports),
+        listen_ports: dedupe_ports(&earlier.listen_ports, &later.listen_ports),
+        memory: later.memory.or(earlier.memory),
+        scratch_size: later.scratch_size.or(earlier.scratch_size),
+        cpus: later.cpus.or(earlier.cpus),
+        pids_limit: later.pids_limit.or(earlier.pids_limit),
+        store: later.store.or(earlier.store),
+        // The chain is consumed by the fold: the folded layer has no
+        // parent of its own.
+        parent: None,
+    })
+}
+
 /// Load the user config and the sidecar config for `repo`'s sidecar
 /// directory. The user config lives at
 /// `$XDG_CONFIG_HOME/mysbx/config.toml`, falling back to
@@ -398,18 +550,37 @@ pub fn load_layers(
 ) -> Result<LoadedLayers, Error> {
     let user_path = user_config_path(home, xdg_config_home);
     let sidecar_path = sidecar_dir.join("config.toml");
+    // The repo the sidecar belongs to (D2: `<repo>.mysbx`), for the D3
+    // containment refusal of `parent` — a file the sandbox can write
+    // must not decide the configuration. Derived by stripping the
+    // `.mysbx` suffix; a sidecar dir without the suffix has no derivable
+    // repo, and the check degrades to "skipped" rather than guessing.
+    let repo_root: Option<PathBuf> = sidecar_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .and_then(|n| n.strip_suffix(".mysbx"))
+        .map(|n| sidecar_dir.with_file_name(n));
+    let user = load_layer_chain(&user_path, "user", home, repo_root.as_deref())?;
+    let sidecar = load_layer_chain(&sidecar_path, "sidecar", home, repo_root.as_deref())?;
     Ok(LoadedLayers {
-        user: (load_optional(&user_path, "user")?, user_path),
-        sidecar: (load_optional(&sidecar_path, "sidecar")?, sidecar_path),
+        user: (user.config, user.top),
+        sidecar: (sidecar.config, sidecar.top),
+        user_parents: user.parents,
+        sidecar_parents: sidecar.parents,
     })
 }
 
 /// The two loaded layers with the exact paths they were loaded from, so
 /// callers pass truthful file paths to [`merge`] (whose violation messages
-/// name them) without re-implementing the `$XDG_CONFIG_HOME` fallback.
+/// name them) without re-implementing the `$XDG_CONFIG_HOME` fallback —
+/// plus each layer's parent-chain ancestors (docs/design/config.md D29),
+/// in load order (deepest ancestor first), for the consumers that must
+/// attribute a key to the file that wrote it.
 pub struct LoadedLayers {
     pub user: (Config, PathBuf),
     pub sidecar: (Config, PathBuf),
+    pub user_parents: Vec<PathBuf>,
+    pub sidecar_parents: Vec<PathBuf>,
 }
 
 // `Debug` is required by tests that `unwrap_err()` a `load_layers` result.
@@ -417,9 +588,170 @@ impl std::fmt::Debug for LoadedLayers {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LoadedLayers")
             .field("user", &self.user.1)
+            .field("user_parents", &self.user_parents)
             .field("sidecar", &self.sidecar.1)
+            .field("sidecar_parents", &self.sidecar_parents)
             .finish()
     }
+}
+
+/// One layer's configuration, folded from its whole parent chain
+/// (docs/design/config.md D29): [`ChainLoaded::config`] behaves exactly
+/// like a single-file layer — `merge` and every consumer downstream stay
+/// untouched — while [`ChainLoaded::parents`] records which files took
+/// part, in load order.
+pub struct ChainLoaded {
+    pub config: Config,
+    /// The chain's own file, the path the caller named (not canonicalized
+    /// — `LoadedLayers` passes it on to `merge` verbatim).
+    pub top: PathBuf,
+    /// The chain's ancestors in load order: the deepest ancestor first,
+    /// the top's own parent last — the sequence the files were read in.
+    /// Empty when the top file names no parent.
+    pub parents: Vec<PathBuf>,
+}
+
+// Required by the tests that `unwrap_err()` a chain load.
+impl std::fmt::Debug for ChainLoaded {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ChainLoaded")
+            .field("top", &self.top)
+            .field("parents", &self.parents)
+            .finish()
+    }
+}
+
+/// Load one layer WITH its parent chain (docs/design/config.md D29):
+/// the top file's `parent` names another TOML loaded directly before
+/// itself, chains are supported, and the same overwrite rules apply
+/// between every adjacent (ancestor, child) pair as between the user
+/// config and the sidecar — the child may tighten, never widen, and may
+/// not override a key the ancestor set.
+///
+/// An absent top file is the all-defaults layer with no chain (the
+/// existing `load_optional` rule); an explicitly NAMED parent that is
+/// missing, unreadable or schema-broken is a hard error — unlike the
+/// absent base layer, a parent is referenced, so its absence is a
+/// broken reference, not an empty layer.
+///
+/// `repo_root` enables the D3 containment refusal: a parent whose
+/// canonical path is inside the repo is content the sandbox can write,
+/// so it must not decide the configuration. `None` skips the check
+/// (the caller has no repo context); a `repo_root` that cannot be
+/// canonicalized skips it too — never a false refusal.
+pub fn load_layer_chain(
+    start: &Path,
+    layer: &str,
+    home: &Path,
+    repo_root: Option<&Path>,
+) -> Result<ChainLoaded, Error> {
+    if !start.exists() {
+        return Ok(ChainLoaded {
+            config: Config::default(),
+            top: start.to_path_buf(),
+            parents: Vec::new(),
+        });
+    }
+    // The walk is ITERATIVE: a chain may be arbitrarily deep, and a
+    // recursive walk would overflow the stack on a maliciously long
+    // one before any cycle detection could even run.
+    let mut walk: Vec<(Config, PathBuf)> = Vec::new();
+    // Cycle detection by CANONICAL path: the same file reached through
+    // two spellings (a symlink, `..`) is still the same file, and the
+    // seen-set is per chain — the same file may legally appear in BOTH
+    // chains (a sidecar parent pointing at the user config's parent
+    // shares it, without being a cycle).
+    let mut seen: Vec<PathBuf> = Vec::new();
+    let repo_canon = repo_root.and_then(|r| std::fs::canonicalize(r).ok());
+    let mut current = start.to_path_buf();
+    loop {
+        let canon = std::fs::canonicalize(&current).map_err(|e| {
+            Error::Load(format!(
+                "{} ({} config): cannot canonicalize: {e}",
+                current.display(),
+                layer
+            ))
+        })?;
+        if seen.contains(&canon) {
+            let mut chain: Vec<String> = seen.iter().map(|p| p.display().to_string()).collect();
+            chain.push(canon.display().to_string());
+            return Err(Error::Load(format!(
+                "{} ({} config): parent chain is a cycle: {} — every parent is loaded before its child, so a file cannot be its own ancestor (docs/design/config.md D29)",
+                current.display(),
+                layer,
+                chain.join(" -> ")
+            )));
+        }
+        seen.push(canon);
+        let mut cfg = load_optional(&current, layer)?;
+        // Per-file facts are preserved during the fold: a parent's
+        // RELATIVE paths resolve against the parent's own directory,
+        // not the top file's — so each file's mounts and git-dirs are
+        // canonicalized HERE, against the file being read. merge()
+        // canonicalizes again, idempotently for absolute paths.
+        cfg.mounts = canonicalize_layer(&cfg, &current, home)?
+            .into_iter()
+            .map(|(canon, m)| Mount {
+                path: canon.to_string_lossy().into_owned(),
+                dest: m.dest,
+                mode: m.mode,
+                file: m.file,
+            })
+            .collect();
+        cfg.git_dirs = canonicalize_git_dirs(&cfg, &current, home)?
+            .into_iter()
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect();
+        let parent_raw = cfg.parent.take();
+        walk.push((cfg, current.clone()));
+        match parent_raw {
+            Some(raw) => {
+                let dir = current.parent().unwrap_or(Path::new("."));
+                let resolved = resolve_path(&raw, home, dir);
+                let parent_canon = std::fs::canonicalize(&resolved).map_err(|e| {
+                    Error::Load(format!(
+                        "{} ({} config): parent `{}` cannot be resolved (resolved to {}: {e}) — an explicitly named parent must exist and be readable, unlike the absent base layer (docs/design/config.md D29)",
+                        current.display(),
+                        layer,
+                        raw,
+                        resolved.display()
+                    ))
+                })?;
+                if let Some(root) = &repo_canon {
+                    if parent_canon.starts_with(root) {
+                        return Err(Error::Load(format!(
+                            "{} ({} config): parent {} is inside the repository {} — the sandbox can write the repo, so repo content must not decide the configuration (docs/design/config.md D3, D29)",
+                            current.display(),
+                            layer,
+                            parent_canon.display(),
+                            root.display()
+                        )));
+                    }
+                }
+                current = parent_canon;
+            }
+            None => break,
+        }
+    }
+    // The walk collected child -> ancestor; the LOAD order is the
+    // reverse, and the fold must follow the load order.
+    walk.reverse();
+    let top = walk.last().expect("start exists").1.clone();
+    let parents = walk[..walk.len() - 1]
+        .iter()
+        .map(|(_, p)| p.clone())
+        .collect();
+    let mut iter = walk.into_iter();
+    let (mut folded, mut earlier_file) = iter.next().expect("start exists");
+    for (cfg, file) in iter {
+        folded = fold_two(folded, cfg, &earlier_file, &file)?;
+        earlier_file = file;
+    }
+    Ok(ChainLoaded {
+        config: folded,
+        top,
+        parents,
+    })
 }
 
 /// The user config path (docs/design/config.md D6): `$XDG_CONFIG_HOME` if
@@ -2228,6 +2560,399 @@ mod tests {
         assert_eq!(merged.mounts.len(), 2);
         assert_eq!(merged.mounts[0].path, granted.to_string_lossy());
         assert_eq!(merged.mounts[1].path, below.to_string_lossy());
+    }
+
+    // ---- the parent chain (docs/design/config.md D29) -------------------
+
+    /// A minimal chain fixture: writes `name.toml` with the given body
+    /// into `base` and returns its path.
+    fn write_cfg(base: &Path, name: &str, body: &str) -> PathBuf {
+        let p = base.join(name);
+        std::fs::write(&p, body).unwrap();
+        p
+    }
+
+    #[test]
+    fn chain_order_ancestor_first_and_parents_recorded() {
+        // The whole point of D29: the parent is loaded BEFORE its child
+        // and the fold is ancestor-first, so the child overrides the
+        // scalars the parent set and keeps what only the parent set.
+        let base = tmpdir("chain-order");
+        let parent = write_cfg(
+            &base,
+            "parent.toml",
+            "backend = \"nono\"\n[env]\nFROM_PARENT = \"yes\"\n",
+        );
+        let child = write_cfg(
+            &base,
+            "child.toml",
+            "parent = \"parent.toml\"\nbackend = \"bwrap\"\n[env]\nFROM_CHILD = \"yes\"\n",
+        );
+        let loaded = load_layer_chain(&child, "user", &no_home(), None).unwrap();
+        assert_eq!(loaded.top, child);
+        assert_eq!(loaded.parents, vec![parent]);
+        assert_eq!(loaded.config.backend.as_deref(), Some("bwrap"));
+        assert_eq!(loaded.config.env.len(), 2);
+        assert_eq!(loaded.config.parent, None, "the chain is consumed");
+    }
+
+    #[test]
+    fn grandparent_deep_chain_loads_ancestor_first() {
+        // Chains are supported: grandparent -> parent -> child, folded
+        // ancestor-first — the child keeps every ancestor's keys and
+        // the nearest child wins the SCALARS (an `[env]` key may never
+        // be overridden, only introduced).
+        let base = tmpdir("chain-grandparent");
+        write_cfg(&base, "gp.toml", "backend = \"nono\"\n[env]\nA = \"gp\"\n");
+        write_cfg(
+            &base,
+            "p.toml",
+            "parent = \"gp.toml\"\nbackend = \"podman-gvisor\"\n[env]\nB = \"p\"\n",
+        );
+        write_cfg(
+            &base,
+            "c.toml",
+            "parent = \"p.toml\"\nbackend = \"bwrap\"\n[env]\nC = \"c\"\n",
+        );
+        let loaded = load_layer_chain(&base.join("c.toml"), "user", &no_home(), None).unwrap();
+        assert_eq!(loaded.config.backend.as_deref(), Some("bwrap"));
+        assert_eq!(loaded.config.env["A"], "gp");
+        assert_eq!(loaded.config.env["B"], "p");
+        assert_eq!(loaded.config.env["C"], "c");
+        assert_eq!(
+            loaded.parents,
+            vec![base.join("gp.toml"), base.join("p.toml")]
+        );
+    }
+
+    #[test]
+    fn relative_parent_resolves_against_the_declaring_files_dir() {
+        // A relative `parent` resolves against the directory of the file
+        // that NAMES it — the same per-file rule D8 gives `[[mounts]]`
+        // paths — never against the cwd.
+        let base = tmpdir("chain-relative");
+        let sub = dir(&base, &["sub"]);
+        write_cfg(&sub, "base.toml", "[env]\nX = \"base\"\n");
+        write_cfg(&sub, "child.toml", "parent = \"base.toml\"\n");
+        let loaded = load_layer_chain(&sub.join("child.toml"), "user", &no_home(), None).unwrap();
+        assert_eq!(loaded.parents, vec![sub.join("base.toml")]);
+        assert_eq!(loaded.config.env.get("X").map(String::as_str), Some("base"));
+    }
+
+    #[test]
+    fn tilde_parent_resolves_against_home() {
+        // The `~/` spelling expands against the invoking user's home,
+        // exactly like a `~/` mount path.
+        let base = tmpdir("chain-tilde");
+        let home = dir(&base, &["home"]);
+        dir(&home, &[".config", "mysbx"]);
+        write_cfg(
+            &home.join(".config").join("mysbx"),
+            "shared.toml",
+            "[env]\nX = \"shared\"\n",
+        );
+        write_cfg(
+            &base,
+            "child.toml",
+            "parent = \"~/.config/mysbx/shared.toml\"\n",
+        );
+        let loaded = load_layer_chain(&base.join("child.toml"), "user", &home, None).unwrap();
+        assert_eq!(
+            loaded.config.env.get("X").map(String::as_str),
+            Some("shared")
+        );
+    }
+
+    #[test]
+    fn parents_relative_mounts_canonicalize_against_the_parents_dir() {
+        // Per-file facts survive the fold: a mount written in the
+        // PARENT resolves against the parent's own directory, never
+        // the child's.
+        let base = tmpdir("chain-mounts");
+        let granted = dir(&base, &["shared"]);
+        write_cfg(
+            &base,
+            "parent.toml",
+            &format!("[[mounts]]\npath = \"shared\"\nmode = \"ro\"\n"),
+        );
+        write_cfg(&base, "child.toml", "parent = \"parent.toml\"\n");
+        let loaded = load_layer_chain(&base.join("child.toml"), "user", &no_home(), None).unwrap();
+        assert_eq!(loaded.config.mounts.len(), 1);
+        assert_eq!(
+            PathBuf::from(&loaded.config.mounts[0].path),
+            granted.canonicalize().unwrap()
+        );
+        // The folded mount keeps the in-sandbox dest untouched (it is
+        // not canonicalized against the host — see canonicalize_layer).
+        assert_eq!(loaded.config.mounts[0].dest, None);
+    }
+
+    #[test]
+    fn missing_parent_is_a_hard_error_naming_child_and_resolved_path() {
+        // Unlike an absent base layer, a parent is EXPLICITLY referenced:
+        // its absence is a broken reference and must fail loudly.
+        let base = tmpdir("chain-missing");
+        let child = write_cfg(&base, "child.toml", "parent = \"ghost.toml\"\n");
+        let e = load_layer_chain(&child, "user", &no_home(), None).unwrap_err();
+        let msg = e.to_string();
+        assert!(msg.contains("child.toml"), "{msg}");
+        assert!(msg.contains("ghost.toml"), "{msg}");
+        assert!(msg.contains("cannot be resolved"), "{msg}");
+    }
+
+    #[test]
+    fn cycles_terminate_with_an_error_that_lists_the_chain() {
+        // A -> B -> A and a self-parent both terminate: the canonical-
+        // path seen-set catches the repeat on the NEXT visit.
+        let base = tmpdir("chain-cycle");
+        write_cfg(&base, "a.toml", "parent = \"b.toml\"\n");
+        write_cfg(&base, "b.toml", "parent = \"a.toml\"\n");
+        let e = load_layer_chain(&base.join("a.toml"), "user", &no_home(), None).unwrap_err();
+        assert!(e.to_string().contains("cycle"), "{}", e);
+        write_cfg(&base, "self.toml", "parent = \"self.toml\"\n");
+        let e = load_layer_chain(&base.join("self.toml"), "user", &no_home(), None).unwrap_err();
+        assert!(e.to_string().contains("cycle"), "{}", e);
+    }
+
+    #[test]
+    fn cycle_through_a_symlink_is_caught_by_the_canonical_seen_set() {
+        // The same file under two spellings is still the same file: the
+        // seen-set compares canonical paths, so a symlink loop cannot
+        // sneak a cycle past it.
+        let base = tmpdir("chain-cycle-symlink");
+        write_cfg(&base, "real.toml", "parent = \"alias.toml\"\n");
+        std::os::unix::fs::symlink(base.join("real.toml"), base.join("alias.toml")).unwrap();
+        let e = load_layer_chain(&base.join("real.toml"), "user", &no_home(), None).unwrap_err();
+        assert!(e.to_string().contains("cycle"), "{}", e);
+    }
+
+    #[test]
+    fn parent_inside_the_repo_is_refused() {
+        // D3: the sandbox can write the repo, so repo content must not
+        // decide the configuration — a parent resolved INTO the repo
+        // is refused, naming both paths.
+        let base = tmpdir("chain-repo");
+        let repo = dir(&base, &["repo"]);
+        let sd = dir(&base, &["repo.mysbx"]);
+        let inside = write_cfg(&repo, "evil.toml", "[env]\nX = \"repo\"\n");
+        write_cfg(
+            &sd,
+            "config.toml",
+            &format!("parent = \"{}\"\n", inside.display()),
+        );
+        let e = load_layer_chain(&sd.join("config.toml"), "sidecar", &no_home(), Some(&repo))
+            .unwrap_err();
+        let msg = e.to_string();
+        assert!(msg.contains("inside the repository"), "{msg}");
+        assert!(msg.contains("evil.toml"), "{msg}");
+    }
+
+    #[test]
+    fn parent_env_override_is_a_hard_error_naming_both_files() {
+        // The child may ADD `[env]` keys but must not override a
+        // parent-set one — the same asymmetry the sidecar owes the
+        // user config.
+        let base = tmpdir("chain-env-override");
+        write_cfg(&base, "parent.toml", "[env]\nEDITOR = \"vi\"\n");
+        write_cfg(
+            &base,
+            "child.toml",
+            "parent = \"parent.toml\"\n[env]\nEDITOR = \"nvim\"\n",
+        );
+        let e = load_layer_chain(&base.join("child.toml"), "user", &no_home(), None).unwrap_err();
+        let msg = e.to_string();
+        assert!(msg.contains("EDITOR"), "{msg}");
+        assert!(msg.contains("parent.toml"), "{msg}");
+        assert!(msg.contains("child.toml"), "{msg}");
+    }
+
+    #[test]
+    fn parent_nix_override_is_a_hard_error_naming_both_files() {
+        // [nix] gets the same asymmetry as [env].
+        let base = tmpdir("chain-nix-override");
+        write_cfg(&base, "parent.toml", "[nix]\nsandbox = \"false\"\n");
+        write_cfg(
+            &base,
+            "child.toml",
+            "parent = \"parent.toml\"\n[nix]\nsandbox = \"true\"\n",
+        );
+        let e = load_layer_chain(&base.join("child.toml"), "user", &no_home(), None).unwrap_err();
+        assert!(e.to_string().contains("nix.sandbox"), "{e}");
+    }
+
+    #[test]
+    fn parent_network_widening_is_a_hard_error() {
+        // The child may tighten `network`, never widen it — a parent's
+        // `none` is a decision the child cannot undo.
+        let base = tmpdir("chain-network");
+        write_cfg(&base, "parent.toml", "network = \"none\"\n");
+        write_cfg(
+            &base,
+            "child.toml",
+            "parent = \"parent.toml\"\nnetwork = \"shared\"\n",
+        );
+        let e = load_layer_chain(&base.join("child.toml"), "user", &no_home(), None).unwrap_err();
+        let msg = e.to_string();
+        assert!(msg.contains("widens the network"), "{msg}");
+        assert!(msg.contains("parent.toml"), "{msg}");
+    }
+
+    #[test]
+    fn parent_nested_virt_reenable_is_a_hard_error() {
+        // Same narrowing rule as network: a parent's `nested-virt =
+        // false` cannot be re-enabled by the child.
+        let base = tmpdir("chain-nestedvirt");
+        write_cfg(&base, "parent.toml", "nested-virt = false\n");
+        write_cfg(
+            &base,
+            "child.toml",
+            "parent = \"parent.toml\"\nnested-virt = true\n",
+        );
+        let e = load_layer_chain(&base.join("child.toml"), "user", &no_home(), None).unwrap_err();
+        assert!(e.to_string().contains("nested-virt"), "{e}");
+    }
+
+    #[test]
+    fn user_chain_folds_before_the_sidecar_in_load_layers() {
+        // The user config's own chain is folded into the user layer
+        // BEFORE the merge sees it; the parents are exposed for the
+        // attribution consumers.
+        let base = tmpdir("chain-user-layer");
+        let home = dir(&base, &["home"]);
+        let xdg = dir(&base, &["xdg"]);
+        dir(&xdg, &["mysbx"]);
+        write_cfg(
+            &xdg.join("mysbx"),
+            "shared.toml",
+            "allow-domains = [\"a.example\"]\n[env]\nFROM_ANCESTOR = \"yes\"\n",
+        );
+        write_cfg(
+            &xdg.join("mysbx"),
+            "config.toml",
+            "parent = \"shared.toml\"\nallow-domains = [\"b.example\"]\n[env]\nFROM_USER = \"yes\"\n",
+        );
+        let sd = dir(&base, &["fake-repo.mysbx"]);
+        write_cfg(&sd, "config.toml", "network = \"none\"\n");
+        let layers = load_layers(&home, Some(&xdg.to_string_lossy()), &sd).unwrap();
+        assert_eq!(
+            layers.user_parents,
+            vec![xdg.join("mysbx").join("shared.toml")]
+        );
+        assert!(layers.sidecar_parents.is_empty());
+        let merged = merge(
+            layers.user.0.clone(),
+            layers.sidecar.0.clone(),
+            &layers.user.1,
+            &layers.sidecar.1,
+            &home,
+        )
+        .unwrap();
+        assert_eq!(merged.env.len(), 2);
+        assert_eq!(merged.allow_domains, vec!["a.example", "b.example"]);
+    }
+
+    #[test]
+    fn the_same_file_may_appear_in_both_chains() {
+        // The seen-set is per chain: the same ancestor may be named by
+        // BOTH chains — here the user config's parent and the sidecar's
+        // parent are the same `shared.toml` — without tripping cycle
+        // detection. The fold puts its keys into both layers, and the
+        // merge accepts it for every ADDITIVE key: the lists
+        // concatenate (user first) and dedupe, so a shared entry
+        // appears twice and survives. A unique-valued key (`[env]`)
+        // would collide — the merge cannot see that both layers
+        // INHERITED it, it sees the sidecar overriding a user-set
+        // variable — which is the documented shape of the rule:
+        // share additive keys, not unique-valued ones.
+        let base = tmpdir("chain-shared-file");
+        let home = dir(&base, &["home"]);
+        let xdg = dir(&base, &["xdg"]);
+        dir(&xdg, &["mysbx"]);
+        write_cfg(
+            &xdg.join("mysbx"),
+            "shared.toml",
+            "allow-domains = [\"shared.example\"]\n",
+        );
+        write_cfg(
+            &xdg.join("mysbx"),
+            "config.toml",
+            "parent = \"shared.toml\"\n",
+        );
+        let sd = dir(&base, &["fake-repo.mysbx"]);
+        write_cfg(
+            &sd,
+            "config.toml",
+            "parent = \"../xdg/mysbx/shared.toml\"\n",
+        );
+        let layers = load_layers(&home, Some(&xdg.to_string_lossy()), &sd).unwrap();
+        assert_eq!(
+            layers.user_parents,
+            vec![xdg.join("mysbx").join("shared.toml")]
+        );
+        // The sidecar's parent is stored in its RESOLVED (canonical)
+        // spelling — see `load_layer_chain`.
+        assert_eq!(
+            layers.sidecar_parents,
+            vec![std::fs::canonicalize(xdg.join("mysbx").join("shared.toml")).unwrap()]
+        );
+        let merged = merge(
+            layers.user.0,
+            layers.sidecar.0,
+            &layers.user.1,
+            &layers.sidecar.1,
+            &home,
+        )
+        .unwrap();
+        assert_eq!(merged.allow_domains, vec!["shared.example"]);
+    }
+
+    #[test]
+    fn fold_two_matches_merges_per_key_resolution() {
+        // The fold rules are the merge rules, minus the defaults and
+        // the host canonicalization: for a chain of two files the
+        // folded user layer merged with an empty sidecar must equal a
+        // direct merge of (ancestor, child).
+        let base = tmpdir("chain-fold-equivalence");
+        let granted = dir(&base, &["granted"]);
+        let ancestor = cfg(&format!(
+            "backend = \"nono\"\nnetwork = \"none\"\n\
+             state-dirs = [\"s1\"]\nforward-env = [\"X\"]\n\
+             allow-domains = [\"a.example\"]\nconnect-ports = [80]\n\
+             [[mounts]]\npath = \"{}\"\nmode = \"ro\"\n\
+             [env]\nA = \"1\"\n",
+            granted.display()
+        ));
+        let child = cfg("network = \"none\"\n\
+             state-dirs = [\"s1\", \"s2\"]\nforward-env = [\"X\", \"Y\"]\n\
+             allow-domains = [\"a.example\", \"b.example\"]\nlisten-ports = [443]\n\
+             [env]\nB = \"2\"\n");
+        let folded = fold_two(
+            ancestor.clone(),
+            child.clone(),
+            &user_file(),
+            &sidecar_file(),
+        )
+        .unwrap();
+        let via_fold = merge(
+            folded,
+            Config::default(),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        let direct = merge(ancestor, child, &user_file(), &sidecar_file(), &no_home()).unwrap();
+        assert_eq!(via_fold.backend, direct.backend);
+        assert_eq!(via_fold.network, direct.network);
+        assert_eq!(via_fold.env, direct.env);
+        assert_eq!(via_fold.nix, direct.nix);
+        assert_eq!(via_fold.state_dirs, direct.state_dirs);
+        assert_eq!(via_fold.forward_env, direct.forward_env);
+        assert_eq!(via_fold.allow_domains, direct.allow_domains);
+        assert_eq!(via_fold.connect_ports, direct.connect_ports);
+        assert_eq!(via_fold.listen_ports, direct.listen_ports);
+        // Mounts concatenate ancestor-first in both, too.
+        assert_eq!(via_fold.mounts, direct.mounts);
     }
 
     // ---- git-dirs approval list (review-2 item 1) ------------------------
