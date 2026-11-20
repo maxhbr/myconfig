@@ -42,7 +42,6 @@
     ../shared.deployedServices.nix
     ./services.caddy.nix
     ./services.forgejo.nix
-    ./services.dolt.nix
     ./services.gitolite.nix
     (
       { ... }:
