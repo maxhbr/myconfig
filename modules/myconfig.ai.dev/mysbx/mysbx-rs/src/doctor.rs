@@ -2026,14 +2026,20 @@ fn effective_config() -> Result<(merge::Merged, Check), String> {
             // the effective configuration is the user layer plus the
             // defaults, and the check line says exactly that.
             let (merged, state) = if crate::once::active() {
+                // Once-mode ignores the host sidecar (cli.md D22), but
+                // the USER layer still loads WITH its parent chain
+                // (config.md D29) — the ancestors are part of the user
+                // layer, not the sidecar they might live next to. The
+                // repo-root containment check is skipped for the same
+                // reason a real once-run skips it: its ephemeral
+                // sidecar (`<temp>/sidecar`) has no `.mysbx` suffix,
+                // so no repo root is derivable from it.
                 let user_path = merge::user_config_path(home, xdg.as_deref());
-                let user = if user_path.exists() {
-                    Config::load(&user_path).map_err(|e| e.to_string())?
-                } else {
-                    Config::default()
-                };
-                let merged = merge::merge(user, Config::default(), &user_path, &user_path, home)
+                let user = merge::load_layer_chain(&user_path, "user", home, None)
                     .map_err(|e| e.to_string())?;
+                let merged =
+                    merge::merge(user.config, Config::default(), &user.top, &user.top, home)
+                        .map_err(|e| e.to_string())?;
                 (merged, "once-mode: sidecar ignored, user layer only")
             } else {
                 let layers = merge::load_layers(home, xdg.as_deref(), &repo.sidecar)
@@ -2057,13 +2063,13 @@ fn effective_config() -> Result<(merge::Merged, Check), String> {
             Ok((merged, Check::ok("configuration", scope)))
         }
         Err(err) => {
+            // No repo: the user layer with its parent chain, plus the
+            // defaults. The repo-root containment check has no repo to
+            // guard here, so it is skipped (never a false refusal).
             let user_path = merge::user_config_path(home, xdg.as_deref());
-            let user = if user_path.exists() {
-                Config::load(&user_path).map_err(|e| e.to_string())?
-            } else {
-                Config::default()
-            };
-            let merged = merge::merge(user, Config::default(), &user_path, &user_path, home)
+            let user = merge::load_layer_chain(&user_path, "user", home, None)
+                .map_err(|e| e.to_string())?;
+            let merged = merge::merge(user.config, Config::default(), &user.top, &user.top, home)
                 .map_err(|e| e.to_string())?;
             let check = match err {
                 repo::Error::HomeDir(_) | repo::Error::RootDir => Check::ok(

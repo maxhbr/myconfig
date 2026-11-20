@@ -2383,22 +2383,25 @@ fn sandbox_pipeline(
     let user_config_exists = user_config_path.exists();
     let sidecar_config_exists = sidecar_config_path.exists();
     let user_mount_count = layers.user.0.mounts.len();
+    // The parent chains (config.md D29), in load order, for the report
+    // and the per-file attribution below.
+    let mut parent_configs: Vec<std::path::PathBuf> = layers.user_parents.clone();
+    parent_configs.extend(layers.sidecar_parents.iter().cloned());
     // `home` is also what `~/…` mount paths expand against (config.md
     // D8) — on the HOST, before bwrap runs, so the sandbox's own
     // (cleared) environment never enters the resolution.
     // The D28 credential-name refusals name the FILE each offending key
-    // came from, but the merge consumes the layers — so the per-layer
-    // offenders are recorded here, before it.
+    // came from, but the merge consumes the layers — so the per-file
+    // offenders are recorded here, before it. Every file of both CHAINS
+    // takes part (config.md D29): an offence folded out of a parent
+    // names the parent that wrote it, not the top file that inherited it.
     let mut credential_offences: Vec<(std::path::PathBuf, String, String)> = Vec::new();
-    for (path, layer) in [
-        (&user_config_path, &layers.user.0),
-        (&sidecar_config_path, &layers.sidecar.0),
-    ] {
-        if let Some(bad) = credential_env_key(&layer.env) {
+    for (path, cfg) in layers.user_files.iter().chain(layers.sidecar_files.iter()) {
+        if let Some(bad) = credential_env_key(&cfg.env) {
             credential_offences.push((path.clone(), "env".to_owned(), bad.to_owned()));
         }
         for key in ["access-tokens", "netrc-file"] {
-            if layer.nix.contains_key(key) {
+            if cfg.nix.contains_key(key) {
                 credential_offences.push((path.clone(), "nix".to_owned(), key.to_owned()));
             }
         }
@@ -5116,6 +5119,7 @@ fn sandbox_pipeline(
             user_config_exists,
             sidecar_config: &sidecar_config_path,
             sidecar_config_exists,
+            parent_configs: &parent_configs,
             merged: &merged,
             backend_from_cli: cli_set_backend,
             user_mount_count,
@@ -8158,7 +8162,9 @@ fn multiplexer_template(user_value: Option<config::Multiplexer>) -> String {
 /// anyway), `None` when it cannot be read or parsed.
 ///
 /// Reads the same path `merge::load_layers` reads — via
-/// [`merge::user_config_path`], never a second fallback of its own.
+/// [`merge::user_config_path`], never a second fallback of its own —
+/// and through the same CHAIN loader (config.md D29): a parent may
+/// decide the multiplexer the user file itself never mentions.
 fn user_layer_multiplexer() -> Option<config::Multiplexer> {
     let home = std::env::var_os("HOME").unwrap_or_default();
     let xdg = std::env::var("XDG_CONFIG_HOME").ok();
@@ -8169,8 +8175,8 @@ fn user_layer_multiplexer() -> Option<config::Multiplexer> {
         // effective default is the plain shell.
         return Some(config::Multiplexer::None);
     }
-    match config::Config::load(&path) {
-        Ok(c) => Some(c.multiplexer.unwrap_or(config::Multiplexer::None)),
+    match merge::load_layer_chain(&path, "user", std::path::Path::new(&home), None) {
+        Ok(c) => Some(c.config.multiplexer.unwrap_or(config::Multiplexer::None)),
         Err(_) => None,
     }
 }

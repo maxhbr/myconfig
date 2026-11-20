@@ -29,7 +29,7 @@ use crate::host_hostname;
 use crate::merge::Merged;
 use crate::repo::Repo;
 use crate::session::Session;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Everything the report shows. Borrowed, so building it costs nothing
 /// and cannot drift from the values the pipeline actually uses.
@@ -49,6 +49,11 @@ pub struct Report<'a> {
     pub user_config_exists: bool,
     pub sidecar_config: &'a Path,
     pub sidecar_config_exists: bool,
+    /// The parent-chain ancestors that took part in this run's
+    /// configuration, in load order (user chain first, then sidecar
+    /// chain, deepest ancestor first within each — the sequence the
+    /// files were read in). Empty when no layer names a parent.
+    pub parent_configs: &'a [PathBuf],
     /// The merged, effective configuration.
     pub merged: &'a Merged,
     /// Whether `merged.backend` was set by `--backend` for THIS run
@@ -156,6 +161,12 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         r.sidecar_config.display(),
         present(r.sidecar_config_exists)
     ));
+    // The parent chains (config.md D29): the report names every file
+    // that decided the run — an inherited key is invisible otherwise,
+    // its writer never opened by the operator.
+    for path in r.parent_configs {
+        p(format!("parent config:   {} (loaded)", path.display()));
+    }
     p(format!(
         "backend:        {}{}",
         r.merged.backend.as_deref().unwrap_or("(none)"),
@@ -940,6 +951,7 @@ mod tests {
             user_config_exists: true,
             sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
             sidecar_config_exists: false,
+            parent_configs: &[],
             merged: &merged,
             backend_from_cli: false,
             user_mount_count: 1,
@@ -1058,6 +1070,7 @@ mod tests {
             user_config_exists: true,
             sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
             sidecar_config_exists: true,
+            parent_configs: &[],
             merged: &merged,
             backend_from_cli: false,
             user_mount_count: 1,
@@ -1115,6 +1128,7 @@ mod tests {
             user_config_exists: true,
             sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
             sidecar_config_exists: true,
+            parent_configs: &[],
             merged: &merged,
             backend_from_cli: false,
             user_mount_count: 1,
@@ -1204,6 +1218,7 @@ mod tests {
                 user_config_exists: true,
                 sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
                 sidecar_config_exists: false,
+                parent_configs: &[],
                 merged: &merged,
                 backend_from_cli: false,
                 user_mount_count: 1,
@@ -1277,6 +1292,7 @@ mod tests {
             user_config_exists: true,
             sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
             sidecar_config_exists: true,
+            parent_configs: &[],
             merged: &merged,
             backend_from_cli: false,
             user_mount_count: 1,
@@ -1335,6 +1351,7 @@ mod tests {
             user_config_exists: false,
             sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
             sidecar_config_exists: true,
+            parent_configs: &[],
             merged: &merged,
             backend_from_cli: false,
             user_mount_count: 2,
@@ -1399,6 +1416,7 @@ mod tests {
             user_config_exists: true,
             sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
             sidecar_config_exists: true,
+            parent_configs: &[],
             merged: &merged,
             backend_from_cli: false,
             user_mount_count: 2,
@@ -1460,6 +1478,7 @@ mod tests {
             user_config_exists: true,
             sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
             sidecar_config_exists: true,
+            parent_configs: &[],
             merged: &merged,
             backend_from_cli: false,
             user_mount_count: 2,
@@ -1527,6 +1546,7 @@ mod tests {
                     user_config_exists: true,
                     sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
                     sidecar_config_exists: false,
+                    parent_configs: &[],
                     merged: &merged,
                     backend_from_cli: false,
                     user_mount_count: 1,
@@ -1623,6 +1643,7 @@ mod tests {
                 user_config_exists: true,
                 sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
                 sidecar_config_exists: false,
+                parent_configs: &[],
                 merged: &merged,
                 backend_from_cli: false,
                 user_mount_count: 1,
@@ -1719,6 +1740,7 @@ mod tests {
                 user_config_exists: true,
                 sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
                 sidecar_config_exists: false,
+                parent_configs: &[],
                 merged: &merged,
                 backend_from_cli: false,
                 user_mount_count: 1,
@@ -1770,6 +1792,7 @@ mod tests {
             user_config_exists: true,
             sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
             sidecar_config_exists: false,
+            parent_configs: &[],
             merged: &with_env,
             backend_from_cli: false,
             user_mount_count: 1,
@@ -1806,6 +1829,7 @@ mod tests {
             user_config_exists: true,
             sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
             sidecar_config_exists: false,
+            parent_configs: &[],
             merged: &merged,
             backend_from_cli: false,
             user_mount_count: 1,
@@ -1876,6 +1900,7 @@ mod tests {
             user_config_exists: true,
             sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
             sidecar_config_exists: false,
+            parent_configs: &[],
             merged: &merged,
             backend_from_cli: false,
             user_mount_count: 1,
@@ -1937,6 +1962,7 @@ mod tests {
             user_config_exists: true,
             sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
             sidecar_config_exists: true,
+            parent_configs: &[],
             merged: &merged,
             backend_from_cli: false,
             user_mount_count: 1,
@@ -2001,6 +2027,7 @@ mod tests {
             user_config_exists: true,
             sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
             sidecar_config_exists: true,
+            parent_configs: &[],
             merged: &merged,
             backend_from_cli: false,
             user_mount_count: 1,
@@ -2093,6 +2120,7 @@ mod tests {
             user_config_exists: true,
             sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
             sidecar_config_exists: true,
+            parent_configs: &[],
             merged: &merged,
             backend_from_cli: false,
             user_mount_count: 1,

@@ -567,6 +567,8 @@ pub fn load_layers(
         sidecar: (sidecar.config, sidecar.top),
         user_parents: user.parents,
         sidecar_parents: sidecar.parents,
+        user_files: user.files,
+        sidecar_files: sidecar.files,
     })
 }
 
@@ -581,6 +583,12 @@ pub struct LoadedLayers {
     pub sidecar: (Config, PathBuf),
     pub user_parents: Vec<PathBuf>,
     pub sidecar_parents: Vec<PathBuf>,
+    /// Every file of each chain with its own parsed config, in load
+    /// order (ancestors first, the top file LAST) — for the
+    /// attribution consumers that must name the file that wrote a
+    /// key. The top file is included; an absent layer has no files.
+    pub user_files: Vec<(PathBuf, Config)>,
+    pub sidecar_files: Vec<(PathBuf, Config)>,
 }
 
 // `Debug` is required by tests that `unwrap_err()` a `load_layers` result.
@@ -609,6 +617,12 @@ pub struct ChainLoaded {
     /// the top's own parent last — the sequence the files were read in.
     /// Empty when the top file names no parent.
     pub parents: Vec<PathBuf>,
+    /// Every file of the chain with its OWN parsed config, in load order
+    /// — ancestors first, the top file LAST. The fold collapses the
+    /// configs into [`Self::config`], but attribution consumers (the
+    /// credential offences, the report) must name the file that WROTE a
+    /// key, not the top file that inherited it.
+    pub files: Vec<(PathBuf, Config)>,
 }
 
 // Required by the tests that `unwrap_err()` a chain load.
@@ -650,6 +664,7 @@ pub fn load_layer_chain(
             config: Config::default(),
             top: start.to_path_buf(),
             parents: Vec::new(),
+            files: Vec::new(),
         });
     }
     // The walk is ITERATIVE: a chain may be arbitrarily deep, and a
@@ -741,6 +756,10 @@ pub fn load_layer_chain(
         .iter()
         .map(|(_, p)| p.clone())
         .collect();
+    let files = walk
+        .iter()
+        .map(|(cfg, p)| (p.clone(), cfg.clone()))
+        .collect();
     let mut iter = walk.into_iter();
     let (mut folded, mut earlier_file) = iter.next().expect("start exists");
     for (cfg, file) in iter {
@@ -751,6 +770,7 @@ pub fn load_layer_chain(
         config: folded,
         top,
         parents,
+        files,
     })
 }
 
