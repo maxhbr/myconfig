@@ -39,6 +39,7 @@
     }
     ./programs.opencode.nix
     ./myconfig.agentUsers.nix
+    ./myconfig.ai.dev.mysbx.nix
     ../shared.deployedServices.nix
     ./services.caddy.nix
     ./services.forgejo.nix
