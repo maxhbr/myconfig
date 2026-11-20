@@ -1,7 +1,7 @@
 # beads-server — implementation plan
 
-Status: planned, not started. Nothing but documentation exists in this
-directory yet.
+Status: implemented. All eight phases (their beads) are done; this
+file is the historical design record.
 
 Tracker epic: **myconfig-93lp** (`bd show myconfig-93lp`). Each phase below is
 a child bead of that epic; the bead is the work item, this file is the design.
@@ -109,9 +109,13 @@ The verdict is recorded in `README.md` when Phase 0 closes.
   request.
 - Details lazily: `bd show <id> --json --include-comments`, cached per
   `(id, revision)`.
-- Invocations run with `cwd=<repo>` and `BEADS_DIR=<repo>/.beads` (what the
-  viewer does today), with one retry without `BEADS_DIR` if bd answers
-  `unsafe location`. The active mode is reported by `/api/health`.
+- Invocations run with `cwd=<repo>` and no `BEADS_DIR` (plain workspace
+  discovery, what this repo needs); one retry with
+  `BEADS_DIR=<repo>/.beads` if workspace discovery fails. The Phase 0
+  spike inverted the original assumption — on this repo `BEADS_DIR` is
+  refused (`unsafe location`) while discovery works; on a scratch dir
+  `BEADS_DIR` works (see README.md). The active mode is reported by
+  `/api/health`.
 - Derived indices, rebuilt per snapshot (cheap pure functions):
   - `labelSet` — from `labels || []`, never `labels.length`
   - `clusterRoot` — port of `parentOf` / `computeClusters` from

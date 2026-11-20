@@ -552,10 +552,9 @@
             hostName = "iso";
           } [ ];
 
-          # Single-page web viewer rendering the bd (beads) issue DB as a
-          # dependency graph. `nix run .#beads-viewer` starts the server.
-          packages.beads-viewer = nixpkgs.legacyPackages.${system}.callPackage ./misc/beads-viewer { };
-          apps.beads-viewer = inputs.flake-utils.lib.mkApp { drv = self.packages.${system}.beads-viewer; };
+          # Live kanban board over the bd (beads) issue DB.
+          packages.beads-server = nixpkgs.legacyPackages.${system}.callPackage ./misc/beads-server { };
+          apps.beads-server = inputs.flake-utils.lib.mkApp { drv = self.packages.${system}.beads-server; };
 
           # `nix fmt` — nixfmt for Nix, rustfmt for the
           # hand-written Rust crate in `modules/`
@@ -674,6 +673,9 @@
                   # wrapper (`compute-commit-attribution-trailer.sh`); shfmt is
                   # not covered by writeShellApplication's own shellcheck pass.
                   "modules/myconfig.ai.dev/skills/commit/compute-commit-attribution-trailer.sh"
+                  # The beads-server bd shim: a plain script executed by the
+                  # unittest suites (bd myconfig-y294).
+                  "misc/beads-server/tests/fake-bd.sh"
                 ];
               in
               pkgs.stdenv.mkDerivation {
@@ -687,6 +689,34 @@
                 checkPhase = ''
                   shfmt -d -s -i 4 -ci ${files}
                   shellcheck -x ${files}
+                '';
+                installPhase = ''
+                  mkdir "$out"
+                '';
+              };
+
+            # beads-server unittest suites (bd myconfig-y294): the Python
+            # stdlib suites run against tests/fake-bd.sh, so they need
+            # neither Dolt nor network access.
+            beads-server-tests =
+              let
+                pkgs = inputs.nixpkgs.legacyPackages."${system}";
+              in
+              pkgs.stdenv.mkDerivation {
+                name = "beads-server-tests";
+                src = ./misc/beads-server;
+                doCheck = true;
+                nativeBuildInputs = [
+                  pkgs.python3
+                  pkgs.jq.bin
+                  pkgs.bash.out
+                  pkgs.nodejs
+                ];
+                checkPhase = ''
+                  patchShebangs tests/fake-bd.sh
+                  python3 tests/test_bdcache.py
+                  python3 tests/test_http.py
+                  node --test tests/test_*.mjs
                 '';
                 installPhase = ''
                   mkdir "$out"

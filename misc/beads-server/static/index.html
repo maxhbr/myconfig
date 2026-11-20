@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>beads-server</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6' fill='%234a9eff'/></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>beads-server</h1>
+  <div id="stale-indicator" title="live updates interrupted; data may be stale">stale</div>
+  <div id="status-count"></div>
+  <div class="spacer"></div>
+  <div id="toolbar">
+    <label>view
+      <select id="view-mode">
+        <option value="board">board</option>
+        <option value="graph">graph</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="toggle-closed"> closed</label>
+    <label id="label-deps"><input type="checkbox" id="toggle-deps" checked> edges</label>
+    <label><input type="checkbox" id="toggle-blocked"> blocked only</label>
+    <label>type
+      <select id="filter-type"><option value="">all</option></select>
+    </label>
+    <label>status
+      <select id="filter-status"><option value="">all</option></select>
+    </label>
+    <label>priority
+      <select id="filter-priority"><option value="">all</option></select>
+    </label>
+    <label>assignee
+      <select id="filter-assignee"><option value="">all</option></select>
+    </label>
+    <label>lane
+      <select id="filter-lane"><option value="">all</option></select>
+    </label>
+    <select id="presets"></select>
+    <button id="new-bead" title="create a bead">+ new</button>
+    <input type="search" id="search" placeholder="search title/id…">
+    <label title="also search issue descriptions (heavier)">
+      <input type="checkbox" id="toggle-search-desc"> desc
+    </label>
+  </div>
+  <div id="label-picker"></div>
+</header>
+<div class="legend" id="legend"></div>
+<div id="edit-banner" hidden></div>
+<div id="focus-banner">
+  <span id="focus-text"></span>
+  <button id="focus-clear">clear focus</button>
+</div>
+<main>
+  <div id="board" hidden></div>
+  <div id="graph-wrap" hidden>
+    <div class="controls" id="graph-controls">
+      <button id="zoom-in" title="zoom in">+</button>
+      <button id="zoom-out" title="zoom out">−</button>
+      <button id="zoom-fit" title="fit">⛶</button>
+    </div>
+  </div>
+  <aside id="details"></aside>
+</main>
+
+<div id="toast"></div>
+<div id="loading" hidden></div>
+<div id="error" hidden></div>
+
+<script src="vendor/dagre-0.8.5.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

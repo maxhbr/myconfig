@@ -10,40 +10,42 @@
 
 let
   app = stdenv.mkDerivation {
-    pname = "beads-viewer-app";
+    pname = "beads-server-app";
     version = "0.1.0";
 
     src = ./.;
 
     installPhase = ''
       runHook preInstall
-      mkdir -p $out/lib/beads-viewer
-      cp index.html dagre-0.8.5.js dagre-0.8.5.LICENSE server.py $out/lib/beads-viewer/
+      mkdir -p $out/share/beads-server
+      cp server.py bdcache.py $out/share/beads-server/
+      cp -r static $out/share/beads-server/static
       runHook postInstall
     '';
 
     meta = {
-      description = "Static assets of the beads-viewer web app";
+      description = "Assets of the beads-server web app";
       platforms = lib.platforms.unix;
     };
   };
 in
 writeShellApplication {
-  name = "beads-viewer";
+  name = "beads-server";
   runtimeInputs = [
     beads
     python3
   ];
   runtimeEnv = {
-    BEADS_VIEWER_APP = "${app}/lib/beads-viewer";
+    BEADS_SERVER_APP = "${app}/share/beads-server";
+    BD_DISABLE_METRICS = "1";
   };
   text = ''
-    exec python "$BEADS_VIEWER_APP/server.py" "$@"
+    exec python3 -u "$BEADS_SERVER_APP/server.py" "$@"
   '';
 
   meta = {
-    description = "Single-page web viewer rendering bd (beads) issues as a dependency graph";
-    mainProgram = "beads-viewer";
+    description = "Live kanban board over the bd (beads) issue database";
+    mainProgram = "beads-server";
     license = lib.licenses.mit;
     platforms = lib.platforms.unix;
   };
