@@ -12,6 +12,7 @@ AI workstation with AMD Radeon 8060S GPU (Framework Laptop 16).
 | llama-cpp-33657 | 33657 | llama-server router (container, Vulkan0-only) |
 | comfyui | 8188 | ComfyUI (via `run-comfyui` script) |
 | caddy (reverse proxy) | 443 | WireGuard tunnel access |
+| dolt sql-server | 3307 | MySQL-compatible, bd (beads) backend |
 | litellm | (dynamic) | LiteLLM proxy |
 | open-webui | (dynamic) | Open WebUI |
 
@@ -26,6 +27,26 @@ Caddy routes available at port 443:
 - `/open-webui/*` → Open WebUI
 - `/comfyui/*` → ComfyUI
 - (default) → llama-server (port 33656)
+
+## bd (beads) via the Dolt SQL server
+
+`services.dolt.nix` runs a `dolt sql-server` on `thing.wg0:3307` (MySQL
+wire protocol) as the shared bd backend. Point bd at it in server mode:
+
+```bash
+export BEADS_DOLT_SERVER_HOST=thing.wg0.maxhbr.local \
+       BEADS_DOLT_SERVER_PORT=3307
+bd dolt test
+```
+
+Setting the port also tells bd the server is externally managed, so bd
+never spawns its own. To migrate an existing embedded project:
+
+```bash
+bd backup init /tmp/beads-backup && bd backup sync
+bd init --server && bd backup restore --force /tmp/beads-backup
+# then, on thing: cp -r .beads/dolt/<project> /var/lib/dolt/<project>
+```
 
 ## Key Features
 
