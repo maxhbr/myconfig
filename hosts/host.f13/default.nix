@@ -214,7 +214,7 @@ in
                             --class "Alacritty:${name}" \
                             --command "${tmuxSessionScript}" "$@"
                   elif [[ "${terminal}" == "wezterm" ]]; then
-                    exec wezterm -v start \
+                    exec wezterm start \
                             --always-new-process \
                             --class "wezterm-et-${host}${suffix}" \
                             -- "${tmuxSessionScript}" "$@"
