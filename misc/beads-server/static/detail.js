@@ -7,7 +7,7 @@ import {
 } from "./core.js";
 import {
   canWrite, inlinePriority, inlineStatus, inlineText, inlineAssignee,
-  descriptionEditor, commentComposer, labelEditor, clearDraftProbes,
+  descriptionEditor, commentComposer, labelEditor, clearDraftProbes, toast,
 } from "./edit.js";
 
 function chip(text, bg) {
@@ -101,6 +101,16 @@ function toastConflict(fresh) {
   setTimeout(() => el.remove(), 6000);
 }
 
+// read-only title doubles as a copy button; the editable variant is
+// an input, where click must keep placing the caret
+function copyId(ev, issue) {
+  const id = (issue && issue.id) || ev.currentTarget.dataset.id;
+  navigator.clipboard.writeText(id).then(
+    () => toast(`copied: ${id}`),
+    () => toast("copy failed"),
+  );
+}
+
 function renderDetails(issue) {
   const pane = document.getElementById("details");
   pane.dataset.readOnly = String(!canWrite());
@@ -125,7 +135,11 @@ function renderDetails(issue) {
   }
   pane.append(close, h2);
 
-  pane.append(chip(issue.id));
+  const idChip = chip(issue.id);
+  idChip.title = "click to copy the id";
+  idChip.style.cursor = "copy";
+  idChip.onclick = (ev) => copyId(ev, issue);
+  pane.append(idChip);
   const focusChip = chip("◀ focus");
   focusChip.style.cursor = "pointer";
   focusChip.onclick = () => window.setFocus(issue.id);

@@ -8,14 +8,16 @@ import {
 import { state } from "./filters.js";
 import { makeDraggable, makeDropTarget } from "./edit.js";
 
-// collapsed lanes live here (cluster root id -> true); ungrouped = null key
-const collapsed = new Set();
-export function isCollapsed(laneRoot) {
-  return collapsed.has(laneRoot);
+// lane collapse state: root id -> explicit user decision (boolean);
+// absent = follow the default, which collapses closed epic lanes.
+const overrides = new Map();
+export function isCollapsed(laneRoot, closedDefault) {
+  return overrides.has(laneRoot)
+    ? overrides.get(laneRoot)
+    : !!closedDefault;
 }
-export function toggleLane(laneRoot) {
-  if (collapsed.has(laneRoot)) collapsed.delete(laneRoot);
-  else collapsed.add(laneRoot);
+export function toggleLane(laneRoot, closedDefault) {
+  overrides.set(laneRoot, !isCollapsed(laneRoot, closedDefault));
 }
 
 export function renderBoard() {
@@ -92,8 +94,8 @@ export function renderBoard() {
     } else {
       headEl.append(h("div", "lane-title", "ungrouped"));
     }
-    headEl.append(h("div", "lane-toggle", collapsed.has(laneRoot) ? "▸" : "▾"));
-    headEl.onclick = () => { toggleLane(laneRoot); renderBoard(); };
+    headEl.append(h("div", "lane-toggle", isCollapsed(laneRoot, closed) ? "▸" : "▾"));
+    headEl.onclick = () => { toggleLane(laneRoot, closed); renderBoard(); };
 
     const stats = { open: 0, in_progress: 0, blocked: 0, deferred: 0, closed: 0 };
     for (const m of members) {
@@ -111,7 +113,7 @@ export function renderBoard() {
     lane.append(headEl);
     board.append(lane);
 
-    if (collapsed.has(laneRoot)) {
+    if (isCollapsed(laneRoot, closed)) {
       lane.classList.add("collapsed");
       return; // cards hidden, lane head stays for toggling back
     }
