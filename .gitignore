@@ -2,6 +2,7 @@ hostname
 hostid
 *.iso
 *.log
+_tmp
 /_logs/
 /__out/
 *.orig
