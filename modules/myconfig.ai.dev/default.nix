@@ -25,8 +25,7 @@ let
 in
 {
   options.myconfig.ai.dev = {
-    enable =
-      lib.mkEnableOption "myconfig.ai.dev (AI developer tooling: agent CLIs, sandbox tiers, mysbx, workmux, skills, hermes-agent)";
+    enable = lib.mkEnableOption "myconfig.ai.dev (AI developer tooling: agent CLIs, sandbox tiers, mysbx, workmux, skills, hermes-agent)";
 
     defaultHugeModel = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
@@ -96,8 +95,7 @@ in
           tokenSpeed.enable = true;
         };
         hermes = {
-          model.default =
-            lib.mkIf (cfg.defaultHugeModel != null) (lib.mkDefault cfg.defaultHugeModel);
+          model.default = lib.mkIf (cfg.defaultHugeModel != null) (lib.mkDefault cfg.defaultHugeModel);
         };
         claude-code.enable = true;
         codex.enable = true;

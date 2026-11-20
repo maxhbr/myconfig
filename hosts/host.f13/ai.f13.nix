@@ -26,7 +26,10 @@
             # The assistant flavor (bd myconfig-xl93): a `mysbx-assistant`
             # launcher with himalaya on the sandbox PATH, for agents that
             # read the Maildir a repo sidecar mounts read-only.
-            profiles.assistant.extraTools = [ pkgs.himalaya pkgs.dstask ];
+            profiles.assistant.extraTools = [
+              pkgs.himalaya
+              pkgs.dstask
+            ];
             microvm-qemu.enable = true;
             microvm-ch.enable = true;
           };

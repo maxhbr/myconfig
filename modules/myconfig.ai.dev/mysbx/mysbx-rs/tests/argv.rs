@@ -186,9 +186,17 @@ fn node_env_proxy_injects_on_a_paired_run_with_a_new_enough_node() {
     let mut params = proxy_only_params();
     params.egress = Some(paired_channel());
     params.node_major = Some(mysbx::bwrap::NODE_ENV_PROXY_MIN_MAJOR);
-    let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params).unwrap();
+    let argv = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
     assert!(
-        argv.windows(3).any(|w| w[0] == "--setenv" && w[1] == "NODE_USE_ENV_PROXY" && w[2] == "1"),
+        argv.windows(3)
+            .any(|w| w[0] == "--setenv" && w[1] == "NODE_USE_ENV_PROXY" && w[2] == "1"),
         "a paired run with node >= {} carries NODE_USE_ENV_PROXY=1: {argv:?}",
         mysbx::bwrap::NODE_ENV_PROXY_MIN_MAJOR
     );
@@ -203,7 +211,14 @@ fn node_env_proxy_absent_without_a_node_pin() {
     cfg.connect_ports = vec![443];
     let mut params = proxy_only_params();
     params.egress = Some(paired_channel());
-    let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params).unwrap();
+    let argv = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
     assert!(
         !argv.contains(&"NODE_USE_ENV_PROXY".to_string()),
         "no node pin means no NODE_USE_ENV_PROXY: {argv:?}"
@@ -219,7 +234,14 @@ fn node_env_proxy_absent_on_an_old_node() {
     let mut params = proxy_only_params();
     params.egress = Some(paired_channel());
     params.node_major = Some(mysbx::bwrap::NODE_ENV_PROXY_MIN_MAJOR - 1);
-    let argv = bwrap_argv(&cfg, &synth_repo(), &Payload::Shell, &host_env(&[]), &params).unwrap();
+    let argv = bwrap_argv(
+        &cfg,
+        &synth_repo(),
+        &Payload::Shell,
+        &host_env(&[]),
+        &params,
+    )
+    .unwrap();
     assert!(
         !argv.contains(&"NODE_USE_ENV_PROXY".to_string()),
         "an old node major gets no NODE_USE_ENV_PROXY: {argv:?}"
@@ -265,7 +287,9 @@ fn the_npmrc_pin_binds_read_only_at_the_sandbox_home() {
     .unwrap();
     assert!(
         argv.windows(3).any(|w| {
-            w[0] == "--ro-bind" && w[1] == "/synth/store/npmrc-mysbx" && w[2] == "/mysbx-home/.npmrc"
+            w[0] == "--ro-bind"
+                && w[1] == "/synth/store/npmrc-mysbx"
+                && w[2] == "/mysbx-home/.npmrc"
         }),
         "the npmrc pin binds ro at $HOME/.npmrc: {argv:?}"
     );
