@@ -92,10 +92,19 @@ in
           "--data-dir=${cfg.dataDir}"
           "--remotesapi-port=${toString cfg.remotesapiPort}"
         ];
+        # static user, not DynamicUser: a rotating uid would lose write
+        # access to data files copied in during a bd backup restore
+        User = "dolt";
+        Group = "dolt";
         StateDirectory = "dolt";
-        DynamicUser = true;
         Restart = "on-failure";
       };
     };
+
+    users.users.dolt = {
+      isSystemUser = true;
+      group = "dolt";
+    };
+    users.groups.dolt = { };
   };
 }
