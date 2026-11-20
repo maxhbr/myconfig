@@ -1,6 +1,12 @@
 # Every key of the schema, as a sidecar config would use them (`Config::KEYS`
 # in src/config.rs pins the set). The repo itself is not part of the schema —
 # it is implicit (config.md D13).
+#
+# The parent chain (config.md D29): this file inherits from `parent.toml`
+# (same directory), which is loaded directly before it. Paths use the
+# D8 spellings: absolute, `~/…`, or relative to this file's directory.
+parent = "parent.toml"
+
 backend = "bwrap"
 network = true
 

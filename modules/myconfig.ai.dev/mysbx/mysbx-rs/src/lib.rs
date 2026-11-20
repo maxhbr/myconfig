@@ -8198,6 +8198,13 @@ const SIDECAR_TEMPLATE_ROOT: &str = r#"# mysbx sidecar config
 # /mysbx-home: HOME is /mysbx-home inside the sandbox, so a config
 # bound at its host path is invisible there (config.md D14).
 #
+# The parent chain (config.md D29): inherit from another TOML loaded
+# directly before this file. Paths in the D8 spellings — absolute,
+# `~/…`, or relative to this file's own directory. A missing parent
+# is a hard error; a parent inside the repo is refused (D3).
+#
+# parent = "../shared-mysbx.toml"
+#
 # backend = "bubblewrap"         # bubblewrap | nono | podman-gvisor | podman-krun | krun | microvm-qemu | microvm-ch
 # network = "shared"             # none | proxy-only | shared (D20; the bool
 #                                # false/true stay aliases of none/shared); a

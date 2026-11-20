@@ -657,6 +657,16 @@ pub struct Config {
     /// no `network`-style narrowing rule); `baked` warns and falls
     /// back to `host` on backends that cannot attach a store disk.
     pub store: Option<Store>,
+    /// The parent configuration this file inherits from (`parent`,
+    /// docs/design/config.md D29): a path in the D8 spellings
+    /// (absolute, `~/…`, or relative to this file's own directory)
+    /// naming another TOML loaded directly BEFORE this file, with
+    /// the same overwrite rules between the pair as between the
+    /// user config and the sidecar. Chains are supported; a missing,
+    /// unreadable, cycling or repo-inside parent is a hard error at
+    /// load time (see the chain loader in `crate::merge`). `None` on a
+    /// folded chain result — the chain is consumed by the fold.
+    pub parent: Option<String>,
 }
 
 impl Default for Config {
@@ -681,6 +691,7 @@ impl Default for Config {
             cpus: None,
             pids_limit: None,
             store: None,
+            parent: None,
         }
     }
 }
@@ -715,6 +726,7 @@ impl Config {
     /// key a fresh operator never sees (see `SIDECAR_TEMPLATE_ROOT` in
     /// `lib.rs`, and the test that compares the two).
     pub const KEYS: &'static [&'static str] = &[
+        "parent",
         "backend",
         "network",
         "nested-virt",
@@ -813,6 +825,15 @@ impl Config {
                 "pids-limit" => config.pids_limit = Some(pids_limit(value)?),
                 "store" => {
                     config.store = Some(Store::parse(string(value, "store")?, "store")?)
+                }
+                // parent (D29): a path in the D8 spellings, naming
+                // another TOML loaded directly before this file. The
+                // chain loader (merge.rs) resolves and validates it;
+                // here it is only the PATH SHAPE that is checked —
+                // non-empty, `~` only as a `~/` prefix — the same check
+                // every `[[mounts]]` path gets.
+                "parent" => {
+                    config.parent = Some(host_path(string(value, "parent")?, "parent")?)
                 }
                 // The config key D22 replaced: the sandbox's own SSH
                 // keypair is ALWAYS generated now, so the key decides
@@ -1707,6 +1728,39 @@ mod tests {
                 Config::parse(&format!("[[mounts]]\npath = \"/a\"\ndest = \"{d}\"\n")).unwrap_err();
             assert!(e.to_string().contains("must be absolute"), "{d}: {e}");
         }
+    }
+
+    #[test]
+    fn parent_parses_as_a_path_and_rejects_other_shapes() {
+        // D29: a single string in the D8 spellings — absolute, `~/…`,
+        // or relative to the declaring file's own directory (the
+        // loader resolves that last one, not the parser). Only the
+        // path SHAPE is checked here, exactly like a `[[mounts]]`
+        // path; the loader adds existence, cycle and containment.
+        for raw in [
+            "/etc/mysbx/base.toml",
+            "~/config/mysbx/base.toml",
+            "base.toml",
+        ] {
+            let c = Config::parse(&format!("parent = \"{raw}\"\n")).unwrap();
+            assert_eq!(c.parent.as_deref(), Some(raw), "input {raw:?}");
+        }
+        // A wrong type names the key, like every other schema error.
+        let e = Config::parse("parent = 3\n").unwrap_err();
+        let msg = e.to_string();
+        assert!(matches!(e, Error::Schema(_)), "{msg}");
+        assert!(msg.contains("parent"), "{msg}");
+        // The same `host_path` shape rules as `[[mounts]]` paths: an
+        // empty string decides nothing and must fail loudly (a typo'd
+        // `parent = ""` would otherwise silently load no parent), and
+        // `~`-but-not-`~/` is the one rejected `~` spelling.
+        let e = Config::parse("parent = \"\"\n").unwrap_err();
+        assert!(e.to_string().contains("must not be empty"), "{e}");
+        let e = Config::parse("parent = \"~user/base.toml\"\n").unwrap_err();
+        assert!(
+            e.to_string().contains("only the `~/` prefix is supported"),
+            "{e}"
+        );
     }
 
     #[test]

@@ -47,6 +47,7 @@ fn every_asset_is_exercised() {
         "valid/empty.toml",
         "valid/full.toml",
         "valid/minimal.toml",
+        "valid/parent.toml",
         "valid/relative-and-home-paths.toml",
         "valid/schema-network-proxy-only-with-allowlist.toml",
         "valid/syntax-zoo.toml",
@@ -75,6 +76,8 @@ fn every_asset_is_exercised() {
         "invalid/schema-workmux-key-removed.toml",
         "invalid/schema-wrong-type.toml",
         "invalid/schema-network-value.toml",
+        "invalid/schema-parent-empty.toml",
+        "invalid/schema-parent-wrong-type.toml",
         "invalid/syntax-duplicate-key.toml",
         "invalid/syntax-missing-value.toml",
         "invalid/syntax-unterminated-string.toml",
@@ -169,6 +172,10 @@ fn network_accepts_the_string_values_and_the_bool_aliases() {
 #[test]
 fn full_config() {
     let c = load_ok("valid/full.toml");
+    // parent (D29): the every-key asset inherits from a sibling —
+    // parsed as a raw path string here; the chain is folded by the
+    // loader, not by `Config::load`.
+    assert_eq!(c.parent.as_deref(), Some("parent.toml"));
     assert_eq!(c.backend.as_deref(), Some("bwrap"));
     assert_eq!(c.network, Some(mysbx::config::Network::Shared));
     // nested-virt (D27): tri-state like `network` — this layer denies.
@@ -384,6 +391,14 @@ fn invalid_schema_is_reported_with_the_offending_key() {
         (
             "invalid/schema-port-out-of-range.toml",
             "expected a port between 1 and 65535",
+        ),
+        (
+            "invalid/schema-parent-empty.toml",
+            "parent: must not be empty",
+        ),
+        (
+            "invalid/schema-parent-wrong-type.toml",
+            "parent: expected a string",
         ),
     ];
     for (rel, needle) in cases {

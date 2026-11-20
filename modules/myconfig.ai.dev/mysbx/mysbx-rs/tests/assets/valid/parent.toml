@@ -1,0 +1,8 @@
+# The parent of full.toml (config.md D29): a minimal file — the child
+# overrides or extends everything it cares about, and this file only
+# supplies the baseline the child stays silent on.
+backend = "bubblewrap"
+network = "none"
+
+[env]
+PARENT_ONLY = "from-the-parent"

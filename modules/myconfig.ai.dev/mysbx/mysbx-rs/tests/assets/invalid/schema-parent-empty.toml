@@ -1,0 +1,4 @@
+# `parent` names another TOML file loaded directly before this one
+# (config.md D29). An EMPTY path would load nothing — indistinguishable
+# from a typo, so it is a hard error, like every other empty path key.
+parent = ""

@@ -1,0 +1,4 @@
+# `parent` is a single path STRING (config.md D29): an array would name
+# several parents and D29 deliberately has no such key — chains are
+# written by making each parent name ITS parent.
+parent = ["/etc/mysbx/a.toml", "/etc/mysbx/b.toml"]
