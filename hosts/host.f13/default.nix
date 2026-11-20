@@ -183,28 +183,59 @@ in
                     sleep 5
                   done
                 '';
-              mkAlacrittyTmuxSession =
-                host: useWg: ports:
+              # wezterm runs --hold via `wezterm start --hold`-style config
+              # lookup: no flag exists on the CLI, so the wrapper exports the
+              # title through the same mechanism as alacritty and relies on
+              # exit_behavior being CloseOnCleanExit (the default).
+              mkTerminalSession =
+                terminal: host: useWg: ports:
                 let
-                  scriptName = "alacritty-et-${host}${if useWg then "-wg0" else ""}";
+                  suffix = if useWg then "-wg0" else "";
                   name = "${host}-tmux-session";
                   tmuxSessionScript = lib.getExe (mkTmuxSession host useWg ports);
                 in
-                pkgs.writeShellScriptBin scriptName ''
+                pkgs.writeShellScriptBin "${terminal}-et-${host}${suffix}" ''
                   set -euo pipefail
                   set -x
-                  # the new alacritty window is its own terminal, not a tmux
+                  # the new terminal window is its own terminal, not a tmux
                   # pane — drop the inherited tmux markers so the et script
                   # does not refuse to run and tools inside see the truth
                   unset TMUX TMUX_P
-                  # --hold keeps the window open after the session ends, so
-                  # the last output (connection errors, exit status) stays
-                  # readable instead of vanishing with the window
-                  exec alacritty -v \
-                          --hold \
-                          --title "${name}" \
-                          --class "Alacritty:${name}" \
-                          --command "${tmuxSessionScript}" "$@"
+                  # alacritty --hold keeps the window open after the session
+                  # ends, so the last output (connection errors, exit status)
+                  # stays readable instead of vanishing with the window.
+                  # wezterm has no CLI equivalent; its default
+                  # exit_behavior ("CloseOnCleanExit") already keeps failed
+                  # sessions open.
+                  if [[ "${terminal}" == "alacritty" ]]; then
+                    exec alacritty -v \
+                            --hold \
+                            --title "${name}" \
+                            --class "Alacritty:${name}" \
+                            --command "${tmuxSessionScript}" "$@"
+                  elif [[ "${terminal}" == "wezterm" ]]; then
+                    exec wezterm -v start \
+                            --always-new-process \
+                            --class "wezterm-et-${host}${suffix}" \
+                            -- "${tmuxSessionScript}" "$@"
+                  else
+                    echo "unknown terminal: ${terminal}" >&2
+                    exit 1
+                  fi
+                '';
+              mkAlacrittyTmuxSession =
+                host: useWg: ports:
+                mkTerminalSession "alacritty" host useWg ports;
+              mkWeztermTmuxSession =
+                host: useWg: ports:
+                mkTerminalSession "wezterm" host useWg ports;
+              # Alias so the launcher entry is terminal-agnostic for now; one
+              # of the two variants can be dropped later.
+              mkGuiTmuxSession =
+                host: useWg: ports:
+                pkgs.writeShellScriptBin "gui-et-${host}${if useWg then "-wg0" else ""}" ''
+                  set -euo pipefail
+                  exec wezterm-et-${host}${if useWg then "-wg0" else ""} "$@"
                 '';
               mkAlacrittySshSession =
                 host:
@@ -275,7 +306,32 @@ in
               (mkAlacrittySshSession "nuc")
               (mkAlacrittySshSession "thing")
               (mkAlacrittySshSession "workstation")
-            ];
+            ]
+            ++ (
+              let
+                hosts' = [
+                  "p14"
+                  "nuc"
+                  "thing"
+                  "workstation"
+                ];
+                variants = [
+                  {
+                    useWg = false;
+                  }
+                  {
+                    useWg = true;
+                  }
+                ];
+              in
+              builtins.concatMap (
+                host:
+                builtins.concatMap (v: [
+                  (mkWeztermTmuxSession host v.useWg [ ])
+                  (mkGuiTmuxSession host v.useWg [ ])
+                ]) variants
+              ) hosts'
+            );
         }
       ];
       myconfig.desktop.wayland.launcherCommands = [
@@ -291,7 +347,21 @@ in
         "alacritty-ssh-nuc-wg0"
         "alacritty-ssh-thing-wg0"
         "alacritty-ssh-workstation-wg0"
-      ];
+      ]
+      ++ (builtins.concatMap
+        (h: [
+          "wezterm-et-${h}"
+          "wezterm-et-${h}-wg0"
+          "gui-et-${h}"
+          "gui-et-${h}-wg0"
+        ])
+        [
+          "p14"
+          "nuc"
+          "thing"
+          "workstation"
+        ]
+      );
     }
     # {
     #   fileSystems."/home/${user}/imgwork2" = {

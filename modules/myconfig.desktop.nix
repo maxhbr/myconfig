@@ -29,6 +29,7 @@ in
           sxiv
           # kitty
           alacritty
+          wezterm
           mupdf
           evince
           foliate
