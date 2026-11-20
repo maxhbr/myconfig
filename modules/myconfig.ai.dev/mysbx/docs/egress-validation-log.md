@@ -982,3 +982,77 @@ credential-free `.npmrc` carries no credential to probe):
   own `~/.npmrc` stays unbound — the same reasoning as the
   generated nix.conf (review-2 item 3).
 
+
+## 2026-11-20 · microvm-qemu, the merged phase-C arc against the host's own LiteLLM (post-merge revalidation)
+
+Host: a microvm-qemu session on `thing` itself (rootless qemu
+11.1.2, kernel 6.12.117, the run's own /dev/kvm — nested virt,
+`MYSBX_MICROVM_NESTED_VIRT=1`), validating the rebuilt wrapper
+produced from main `55d0968e0b` (fresh 26-derivation build,
+`nixosConfigurations.test-thing.config…mysbx.package`). Unlike the
+2026-11-19 C4 entry this host HAS a real networked upstream: the
+host LiteLLM answers `/health` with HTTP 200 through the SLiRP
+gateway (`10.0.2.2:4000`), so the channel was probed against the
+real deployment, not a stand-in echo server. Probe corpus: the
+`mysbx-once` runs with a scratch user config (`backend =
+"microvm-qemu"`, the profile under test); once-mode's temp sidecar
+holds the decision log, read before teardown.
+
+### §1 the restricted guest — PASS
+
+- `/proc/net/route`: exactly one route, `10.0.2.2/32` on eth0, NO
+  default route; `/etc/resolv.conf` reads
+  `# no nameserver: restricted (mysbx proxy-only)`.
+- Mapped port: guest `10.0.2.2:4000` connects (bash /dev/tcp).
+- Unmapped `10.0.2.2:80`: Connection refused. Outside `1.1.1.1:80`:
+  Network unreachable. Both fail closed.
+- The dry-run argv pins the C4 renderer exactly: the launcher gets
+  `--network restricted --egress-socket <run-dir>/litellm.sock
+  --egress-port 4000`, qemu renders `restrict=on,guestfwd=…`, and
+  the guest env carries `MYSBX_MICROVM_NET=restricted` plus the
+  `MYSBX_EGRESS_PROXY=http://10.0.2.2:4000` spellings
+  (`MYCONFIG_LITELLM_BASE_URL`, `OPENAI_BASE_URL`,
+  `OPENCODE_CONFIG_CONTENT`).
+
+### §2 the full chain, guest to broker — PASS
+
+A guest payload connecting to `10.0.2.2:4000` traverses
+guest → guestfwd → relay → per-run broker; the broker's
+`decisions.jsonl` (once-mode temp sidecar, read before teardown)
+records `listen` then `allow` for the guest's uid-0 pid. The
+upstream `unreachable` event in the same log is correct
+once-mode behavior (the once guest has no LiteLLM on ITS loopback
+— the broker's `--upstream 127.0.0.1:4000` names the VM's own
+loopback, served only in a persistent host-configured run); the
+host-side `/health` 200 through the same SLiRP gateway proves the
+other half of the round trip.
+
+### §3 the C7a pairing on this backend — PASS
+
+`allow-domains = ["example.com"]` + `connect-ports = [443]` under
+`network = "proxy-only"` now threads to the broker argv
+(`--allow-domain example.com --allow-connect-port 443`), where the
+pre-C7a build refused the pairing. Domains-only (no ports) still
+refuses with the E10 port-axis message — the fail-closed gate
+held.
+
+### §4 the decision records — PASS
+
+`network = "public"` on microvm-qemu refuses BY DESIGN with the
+nakf reason (SLiRP `restrict=on` cannot express the lane);
+`public` + allowlist keys refuses as a second policy (D21 mutual
+exclusion). `mysbx-once doctor`: every microvm-qemu check OK
+(backend, /dev/kvm, nested virt, launcher, rootfs, baked store
+disk, kernel, launcher probe), unconfigured backends cleanly
+named.
+
+### Notes
+
+- This entry revalidates the MERGED arc (C4 + C7a + the fvi/zzmj
+  decision records) against the wrapper a real host build produces,
+  with the host's own LiteLLM reachable — the "live round trip on
+  a networked host" gap the 2026-11-19 offline entries named.
+- One deliberate residue: the once-mode `unreachable` upstream
+  event is expected and logged (the broker never silently drops);
+  it doubles as evidence the decision log separates admission
+  from transport failure.
