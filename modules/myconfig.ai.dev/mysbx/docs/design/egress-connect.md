@@ -88,8 +88,12 @@ The decision:
   (`merged.network == ProxyOnly`, lib.rs credential gate) and keep
   applying to the paired run unchanged.
 - The layered nono backend keeps its own D21 enforcement for
-  `shared`; `proxy-only` + keys on nono stays refused in this bead.
-  The registry enum (E12) leaves room to extend the pairing there.
+  `shared`; `proxy-only` + keys on nono stays refused — DECIDED,
+  permanently (open decision 12, bd myconfig-zzmj: the user picked
+  option A, nono's own proxy stays its ONLY allowlist lane). One
+  mechanism per tier; nono's audited semantics (backends.md D1)
+  unchanged. The registry enum (E12) keeps the room, but the choice
+  to use it is closed.
 
 ## E8: two lanes on one socket; the relay is untouched
 
@@ -471,7 +475,12 @@ Two shapes are REFUSED, never accepted-and-ignored (D21):
 - `listen-ports` beyond the existing refusals (listen-ports-only
   stays refused; the key riding along with allow-domains remains
   in-sandbox loopback, unchanged by this design).
-- The layered nono backend's `proxy-only` + keys pairing.
+- ~~The layered nono backend's `proxy-only` + keys pairing.~~ DECIDED
+  (bd myconfig-zzmj): option A — nono's own proxy is nono's ONLY
+  allowlist lane; keys are valid under `shared` only, `proxy-only` +
+  keys stays refused permanently. One mechanism per tier; the
+  refusal is the merge-time gate that already exists (the
+  `NonosEgress` registry row never pairs with the profile).
 - The `"public"` value on the VM transports — decided, not pending:
   refused by design (bd myconfig-nakf; the lane itself is E14).
   Datagram/raw denial (bd myconfig-n8kv.4), TLS interception and

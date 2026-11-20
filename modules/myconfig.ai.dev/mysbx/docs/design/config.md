@@ -1301,7 +1301,10 @@ the enforcing `bubblewrap`, `podman-gvisor`, `microvm-qemu`,
 `krun` and `microvm-ch`, the profile is mutually exclusive with D21's
 hostname/port allowlists: those keys describe what a sandbox with a
 *shared* network may reach, so next to `network = "proxy-only"` they
-are a refused run (exit `70`) — decided at MERGE time, where the
+are a refused run (exit `70`) — on nono by permanent decision (bd
+myconfig-zzmj: its own proxy stays its only allowlist lane), on the
+others because the pairing is the broker-lane backends' mechanism.
+Both refusals are decided at MERGE time, where the
 merged backend and network are both known, never by a file-local
 schema check (review finding 5 on 53a6c680b3-era code: the same-file
 check looked at the backend declared in the same file, so a
@@ -1404,7 +1407,7 @@ a security bug:
 
 | backend | an allowlist means |
 | --- | --- |
-| `nono` | enforced (bd myconfig-6di.2, layered bd myconfig-6di.4.4): `--allow-domain` / `--allow-connect-port` / `--listen-port` per merged entry, in merged order; DNS is resolved by nono's own proxy, so no implicit `connect-ports` 53/853 is added; `listen-ports` WITHOUT `allow-domains`/`connect-ports` is refused (with only listen ports nono reports "outbound allowed", bd myconfig-a14) and URL/path-form entries are refused (no TLS interception here) |
+| `nono` | enforced (bd myconfig-6di.2, layered bd myconfig-6di.4.4): `--allow-domain` / `--allow-connect-port` / `--listen-port` per merged entry, in merged order; DNS is resolved by nono's own proxy, so no implicit `connect-ports` 53/853 is added; `listen-ports` WITHOUT `allow-domains`/`connect-ports` is refused (with only listen ports nono reports "outbound allowed", bd myconfig-a14) and URL/path-form entries are refused (no TLS interception here). This is nono's ONLY allowlist lane — DECIDED permanently (open decision 12, bd myconfig-zzmj: option A): the keys pair with `network = "shared"` only, and `proxy-only` + keys stays refused |
 | `bubblewrap` | enforced through the per-run egress broker's CONNECT lane, and only when the wrapper pinned one (`MYSBX_EGRESS_BROKER`, docs/design/egress-connect.md E7/E10, bd myconfig-ew9s): the keys select broker policy next to `network = "proxy-only"`, and the broker resolves, admits and dials per row. Without a broker pinned the run is refused, never advisory — and keys next to a merely shared network are refused too (the proxy would be advisory, `curl --noproxy '*'` walks past it) |
 | `podman-gvisor` | enforced through the same broker CONNECT lane as bubblewrap since bd myconfig-ger7 (n8kv.2 C7a): the profile's `--network none` + in-image-relay channel terminates at the per-run broker, whose table polices the keys — same pairing rules (proxy-only + pin), same refusals (shared-network keys, no pin) |
 | `podman-krun` | refused — libkrun's TSI is an UNFILTERED proxy: the VMM dials whatever the guest connects to, from the container's own netns (pasta by default, the empty netns under `network = false`); no per-domain or per-port hook exists in the muxer (verified against the sources, bd myconfig-6di.5.5) |

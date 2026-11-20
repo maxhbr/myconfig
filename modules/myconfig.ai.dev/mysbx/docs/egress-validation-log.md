@@ -934,10 +934,11 @@ connecting process.
   nc raw CONNECT lines, the gVisor probe used bash /dev/tcp —
   no proxy-aware client was needed to prove the lane, matching
   the "relay is a dumb pipe" contract.
-- The nono lane question (decision 12) is NOT answered here:
-  nono keeps its own allowlist enforcement for `shared`, and
-  `proxy-only` + keys stays refused on it (bd myconfig-zzmj
-  holds the open decision).
+- The nono lane question (decision 12) is now CLOSED by the user's
+  decision (bd myconfig-zzmj, option A): nono keeps its own
+  allowlist enforcement for `shared` as its ONLY allowlist lane,
+  and `proxy-only` + keys stays refused on it — permanently, no
+  implementation to validate.
 
 
 ## C7b: toolchain proxy variables + credential-free npmrc (bd myconfig-f23e)
