@@ -730,6 +730,156 @@ fn verbose_report_covers_the_run_configuration() {
     assert!(report.contains("dry run"), "{report}");
 }
 
+// ---- the parent chain (config.md D29) ------------------------------------
+
+#[test]
+fn sidecar_parent_chain_reaches_the_dry_run_report_and_argv() {
+    // A three-file sidecar chain (grandparent -> parent -> sidecar):
+    // every file contributes something the report and the argv must
+    // show — the env from the grandparent, the mount from the parent,
+    // the backend from the child — and every ancestor is named as a
+    // `parent config:` line, in load order.
+    let (inv, _repo, sidecar) = fixture("sidecar-chain", &["--verbose", "--dry-run"]);
+    std::fs::write(
+        sidecar.join("grandparent.toml"),
+        "network = false\n[env]\nGRANDPARENT_VAR = \"gp\"\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(sidecar.join("mounted")).unwrap();
+    std::fs::write(
+        sidecar.join("parent.toml"),
+        format!(
+            "parent = \"grandparent.toml\"\n\
+             [[mounts]]\npath = \"mounted\"\ndest = \"/inside\"\nmode = \"ro\"\n"
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "parent = \"parent.toml\"\nbackend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let report = report_lines(&stdout).join("\n");
+    // The ancestors are named, deepest first, as loaded.
+    assert!(
+        report.contains(&format!(
+            "parent config:   {} (loaded)",
+            sidecar.join("grandparent.toml").display()
+        )),
+        "{report}"
+    );
+    assert!(
+        report.contains(&format!(
+            "parent config:   {} (loaded)",
+            sidecar.join("parent.toml").display()
+        )),
+        "{report}"
+    );
+    // The load order: grandparent before parent.
+    let gp = report.find("grandparent.toml").unwrap();
+    let p = report.find("parent.toml").unwrap();
+    assert!(gp < p, "load order is ancestors first: {report}");
+    // The env key from the grandparent survived the fold; the mount
+    // from the parent (canonicalized against the PARENT's dir — the
+    // same sidecar dir here); the backend from the child.
+    assert!(report.contains("GRANDPARENT_VAR=gp  [config]"), "{report}");
+    // mounts: the parent's mount, canonicalized against the PARENT's
+    // own directory, with an explicit `dest` (the fixture lives under
+    // /tmp, a protected sandbox path).
+    assert!(
+        report.contains(&format!(
+            "  ro {} -> /inside  [sidecar config]",
+            sidecar.join("mounted").display()
+        )),
+        "{report}"
+    );
+    assert!(report.contains("backend:        bubblewrap"), "{report}");
+    // The argv (below the report) carries the folded env too.
+    assert!(stdout.contains("GRANDPARENT_VAR"), "{stdout}");
+    assert!(stdout.contains("--setenv"), "{stdout}");
+}
+
+#[test]
+fn a_missing_parent_refuses_the_run() {
+    // An explicitly named parent must exist (D29): a dangling one is
+    // a broken reference, refused with the file and resolved path
+    // named — not an empty layer.
+    let (inv, _, sidecar) = fixture("sidecar-chain-missing", &["--dry-run"]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nparent = \"ghost.toml\"\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(stdout.is_empty(), "stdout: {stdout}");
+    assert!(stderr.contains("ghost.toml"), "stderr: {stderr}");
+    assert!(stderr.contains("cannot be resolved"), "stderr: {stderr}");
+}
+
+#[test]
+fn a_cyclic_parent_chain_refuses_the_run_instead_of_hanging() {
+    // A -> B -> A: the cycle is caught by the canonical-path seen-set
+    // and refused; the test would TIME OUT if the walk ever regressed
+    // into a loop.
+    let (inv, _, sidecar) = fixture("sidecar-chain-cycle", &["--dry-run"]);
+    std::fs::write(
+        sidecar.join("a.toml"),
+        "backend = \"bubblewrap\"\nparent = \"b.toml\"\n",
+    )
+    .unwrap();
+    std::fs::write(sidecar.join("b.toml"), "parent = \"a.toml\"\n").unwrap();
+    std::fs::write(sidecar.join("config.toml"), "parent = \"a.toml\"\n").unwrap();
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 70, "stdout: {stdout}");
+    assert!(stderr.contains("cycle"), "stderr: {stderr}");
+}
+
+#[test]
+fn a_user_layer_parent_chain_reaches_the_run() {
+    // The USER layer's own chain folds before the merge: a parent of
+    // the user config contributes an env key and a mount, and the
+    // report names the ancestor.
+    let (inv, _, _) = fixture_user_backend("user-chain", &["--verbose", "--dry-run"]);
+    let xdg_cfg = inv.xdg.join("mysbx");
+    std::fs::create_dir_all(&xdg_cfg).unwrap();
+    std::fs::create_dir_all(inv.home.join("data")).unwrap();
+    std::fs::write(
+        xdg_cfg.join("shared.toml"),
+        format!(
+            "[[mounts]]\npath = \"~/data\"\ndest = \"/data\"\nmode = \"ro\"\n[env]\nANCESTOR_VAR = \"a\"\n"
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        xdg_cfg.join("config.toml"),
+        "backend = \"bubblewrap\"\nparent = \"shared.toml\"\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let report = report_lines(&stdout).join("\n");
+    assert!(
+        report.contains(&format!(
+            "parent config:   {} (loaded)",
+            xdg_cfg.join("shared.toml").display()
+        )),
+        "{report}"
+    );
+    assert!(report.contains("ANCESTOR_VAR=a  [config]"), "{report}");
+    // The mount carries an explicit `dest` because the fixture lives
+    // under /tmp, a protected sandbox path.
+    assert!(
+        report.contains(&format!(
+            "  ro {} -> /data  [user config]",
+            inv.home.join("data").display()
+        )),
+        "{report}"
+    );
+}
+
 // ---- the implicit worktrees sibling bind ---------------------------------
 
 #[test]
@@ -11536,14 +11686,13 @@ fn node_env_proxy_is_injected_and_reserved_on_a_paired_run() {
         "the injected value is 1, after [env]: {stdout}"
     );
     assert!(
-        !lines.windows(3).any(|w| w[0] == "--setenv"
-            && w[1] == "NODE_USE_ENV_PROXY" && w[2] == "0"),
+        !lines
+            .windows(3)
+            .any(|w| w[0] == "--setenv" && w[1] == "NODE_USE_ENV_PROXY" && w[2] == "0"),
         "the configured override never reaches the payload: {stdout}"
     );
     assert!(
-        stdout.contains(
-            "NODE_USE_ENV_PROXY=0  [config, ignored — set by the proxy]"
-        ),
+        stdout.contains("NODE_USE_ENV_PROXY=0  [config, ignored — set by the proxy]"),
         "the dropped override is marked in the report: {stdout}"
     );
     assert!(
