@@ -129,7 +129,18 @@ nix run .#beads-server [-- --repo PATH --allow-write --port 8339]
   from `GET /api/session` sent as `X-Beads-Server-Token`
 
 The board: lanes = epics (parent-child clusters), columns =
-status, cards carry type/priority/blocker chips. The details pane
+status, cards carry type/priority/blocker chips. The graph view lays
+beads out by dependency (dagre). The history view is a live activity
+feed of changes the server observed since it started (field diffs,
+revision numbers — no commit identity); its per-row `history` button
+opens a popup with the bead's committed history from `bd history`
+(commit hashes and dates; no actor, because the events journal is
+disabled for this workspace and the server never enables it). The
+details pane carries the same `🕘 history` chip next to `◀ focus`.
+
+Every bead is also a deep link: `http://localhost:8339/<id>` boots
+straight into the focused graph view with the details pane open —
+including the inline history section, both loaded asynchronously. The details pane
 shows the parent chain and both dependency directions. Drag cards
 between columns to change status (with `--allow-write`); the URL
 hash (e.g. `#labels=mysbx`) is a bookmarkable filter view; presets
@@ -146,6 +157,8 @@ description drafts stay in the pane for explicit saving.
 |---|---|---|
 | `/api/beads` | GET | issues and dependency indices from one `{generation, revision}` |
 | `/api/beads/issue/<id>` | GET | one issue with comments |
+| `/api/beads/issue/<id>/history` | GET | field-level commit history (`bd history`), newest first |
+| `/api/activity` | GET | changes observed since server start, newest first |
 | `/api/indices` | GET | reverse deps, blocker counts, label counts |
 | `/api/health` | GET | revision, issue count, bd mode, error count |
 | `/api/capabilities` | GET | `{generation, write}` |

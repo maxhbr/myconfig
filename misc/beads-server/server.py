@@ -16,6 +16,7 @@ Usage:
 # SPDX-License-Identifier: MIT
 
 import argparse
+import copy
 import json
 import os
 import queue
@@ -36,6 +37,79 @@ HERE = Path(__file__).resolve().parent / "static"
 
 PROBE_TICKS = 15          # every Nth tick: authoritative bd count probe
 SSE_HEARTBEAT = 15.0      # seconds between SSE heartbeat comments
+ACTIVITY_CAP = 500         # retained activity-feed entries
+
+# fields shown in /api/activity and the history popup; description & co
+# are diffed as changed/exist, their text never rides along
+ACTIVITY_FIELDS = (
+    "status", "title", "priority", "assignee", "issue_type", "type",
+    "parent", "close_reason", "labels",
+)
+HISTORY_FIELDS = ACTIVITY_FIELDS + ("description", "notes", "acceptance_criteria")
+
+
+def _field_changes(old, new, fields):
+    """Field-level diff of two issue dicts over `fields`, preserving
+    issue order: `labels` compares as sorted lists, everything else
+    with plain (in)equality. Returns [{field, from, to}]."""
+    changes = []
+    for field in fields:
+        a = old.get(field) if old else None
+        b = new.get(field)
+        if field == "labels":
+            a = sorted(a or [])
+            b = sorted(b or [])
+        if a != b:
+            changes.append({"field": field, "from": a, "to": b})
+    return changes
+
+
+def diff_history(entries, fields):
+    """Reduce bd's per-commit snapshots to field-level changes.
+
+    entries is `bd history <id> --json` — one full issue snapshot per
+    commit, newest first. Each output entry shows what its commit
+    actually changed, diffed against the successor (the next list
+    element); the oldest entry is the creation. Enrichment-only
+    rewrites leave no diffed change and are dropped, except the
+    creation commit.
+
+    bd history omits bd list fields (dependencies, owner) and reports
+    created_at/updated_at as zero timestamps — only `fields` are
+    diffed, so none of that leaks in as a change.
+    """
+    out = []
+    for i, entry in enumerate(entries):
+        new = entry.get("Issue") or {}
+        old = entries[i + 1].get("Issue") if i + 1 < len(entries) else None
+        changes = _field_changes(old, new, fields)
+        if not changes and old is not None:
+            continue  # no-op commit: rewrote the record without touching diffed fields
+        out.append({
+            "commit": entry.get("CommitHash", ""),
+            "date": entry.get("CommitDate", ""),
+            "committer": entry.get("Committer", ""),
+            "issue": new.get("id"),
+            "changes": changes,
+        })
+    return out
+
+
+def issue_history(bd_bin, repo, issue_id):
+    """`bd history <id> --json` as field-level changes, or None.
+
+    bd prints `null` (not `[]`) for ids with no commit history, and
+    exits 0 for unknown ids likewise; both map to None here.
+    """
+    try:
+        raw = run_bd_json(
+            bd_bin, ["history", issue_id, "--json"], repo, timeout=120
+        )
+    except BdError:
+        return None
+    if not isinstance(raw, list):
+        return None
+    return diff_history(raw, HISTORY_FIELDS)
 
 
 
@@ -59,6 +133,17 @@ class Watcher:
         self._refetching = False  # single-flight guard
         self.bd_mode = self._probe_mode()
         self.listeners = []  # {"q": Queue, "rev": int} per SSE client
+        # activity feed since server start, newest first, capped at
+        # ACTIVITY_CAP; written under self.lock
+        self.activity = []
+        self._known_fields = {}  # id -> {ACTIVITY_FIELDS} of the live snapshot
+        self.started = time.time()
+        # baseline for field diffs; the start snapshot itself is NOT
+        # activity — the feed shows only changes observed after start
+        for issue in self.cache.issues:
+            self._known_fields[issue["id"]] = {
+                f: issue.get(f) for f in ACTIVITY_FIELDS
+            }
         self.capture_fingerprint()
 
     def _probe_mode(self):
@@ -126,6 +211,7 @@ class Watcher:
                 with self.lock:
                     self.cache.commit_refetch()
                     self.bd_mode = bd_mode
+                    self.record_activity(delta)
                 self.capture_fingerprint()
                 self._publish(delta)
             finally:
@@ -139,6 +225,55 @@ class Watcher:
                 self._fingerprints[str(p)] = (st.st_mtime_ns, st.st_size)
             except OSError:
                 pass
+
+    # --------------------------------------------------------- activity feed
+
+    def record_activity(self, delta):
+        """Turn a committed delta into feed entries (newest first).
+
+        Called from _refetch after commit_refetch(), before _publish,
+        under self.lock. The field diff is coarser than bd history's
+        (dependencies are not diffed — lane/blocked state is derived
+        and reaches clients as derived upserts — and there is no commit
+        identity), so entries carry revision and wall-clock time.
+        """
+        if delta.get("error"):
+            return
+        now = time.time()
+        seen = set()  # the derived-completion duplicate of an upsert
+        for issue in delta.get("upserted", []):
+            if issue["id"] in seen:
+                continue
+            seen.add(issue["id"])
+            known = self._known_fields.get(issue["id"])
+            if known is None:
+                kind = "created"
+                changes = []
+            else:
+                changes = _field_changes(known, issue, ACTIVITY_FIELDS)
+                kind = "changed" if changes else "touched"
+            self._known_fields[issue["id"]] = {
+                f: issue.get(f) for f in ACTIVITY_FIELDS
+            }
+            self.activity.insert(0, {
+                "revision": self.cache.revision,
+                "time": now,
+                "id": issue["id"],
+                "title": issue.get("title", ""),
+                "kind": kind,
+                "changes": changes,
+            })
+        for issue_id in delta.get("removed", []):
+            self._known_fields.pop(issue_id, None)
+            self.activity.insert(0, {
+                "revision": self.cache.revision,
+                "time": now,
+                "id": issue_id,
+                "title": "",
+                "kind": "deleted",
+                "changes": [],
+            })
+        del self.activity[ACTIVITY_CAP:]
 
     # ------------------------------------------------------------ SSE fan-out
 
@@ -266,6 +401,10 @@ def make_handler(watcher, allow_write):
                 self._send_json(payload)
             elif match := re.match(r"^/api/beads/issue/([^/]+)$", path):
                 self._send_issue(unquote(match.group(1)))
+            elif match := re.match(r"^/api/beads/issue/([^/]+)/history$", path):
+                self._send_issue_history(unquote(match.group(1)))
+            elif path == "/api/activity":
+                self._send_activity()
             elif path == "/api/health":
                 with watcher.lock:
                     payload = {
@@ -291,6 +430,18 @@ def make_handler(watcher, allow_write):
                 self._send_json({"generation": watcher.generation, "token": watcher.token})
             elif path == "/api/session":
                 self.send_error(403, "editing disabled: start with --allow-write")
+            elif (
+                re.fullmatch(r"/[^/]+", path)
+                and len(path) > 1
+                and not (HERE / path.lstrip("/")).is_file()
+            ):
+                # deep link like /myconfig-6di.5: serve the SPA shell,
+                # the app resolves the id client-side (any unknown
+                # single-segment path is a candidate bead id, the pane
+                # shows "unknown bead" if it is not); real static files
+                # keep precedence so /app.js etc. never hit this branch
+                self.path = "/index.html"
+                super().do_GET()
             else:
                 super().do_GET()
 
@@ -369,6 +520,34 @@ def make_handler(watcher, allow_write):
                 self.send_error(404, f"unknown bead {issue_id}")
             else:
                 self._send_json({"revision": watcher.cache.revision, "issue": issue})
+
+        def _send_issue_history(self, issue_id):
+            """Field-level history of one bead, straight from bd — no
+            lock held: the db is immutable history, and a lock-held bd
+            subprocess would stall every read endpoint for ~0.5 s."""
+            with watcher.lock:
+                known = issue_id in watcher.cache.by_id
+            if not known:
+                self.send_error(404, f"unknown bead {issue_id}")
+                return
+            history = issue_history(watcher.bd_bin, watcher.repo, issue_id)
+            self._send_json({
+                "generation": watcher.generation,
+                "revision": watcher.cache.revision,
+                "id": issue_id,
+                "history": history,
+            })
+
+        def _send_activity(self):
+            with watcher.lock:
+                activity = copy.copy(watcher.activity)
+                started = watcher.started
+            self._send_json({
+                "generation": watcher.generation,
+                "revision": watcher.cache.revision,
+                "since": started,
+                "activity": activity,
+            })
 
         # ---------------------------------------------------------- writing
 

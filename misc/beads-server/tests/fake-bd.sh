@@ -9,6 +9,7 @@
 #   list --all --limit 0 --json
 #   show <id...> --json [--include-comments]
 #   count --json
+#   history <id> --json   (from <db>.history, when present)
 #   update <id> [--status S] [--priority P] [--assignee A] [--title T]
 #          [--body-file -] [--if-status S]
 #   comment <id> --stdin
@@ -57,6 +58,23 @@ case $cmd in
         done
         jq --argjson ids "$(printf '%s\n' "${ids[@]}" | jq -R . | jq -s .)" \
             'map(select(.id as $i | $ids | index($i)))' "$db"
+        ;;
+    history)
+        # <db>.history mirrors bd's output: a per-commit array of full
+        # issue snapshots, NEWEST first, empty/absent file → null
+        id=""
+        for arg in "$@"; do
+            case $arg in
+                --json | --limit | --events) ;;
+                [0-9]*) ;;
+                *) id=$arg ;;
+            esac
+        done
+        if [ -s "$db.history" ]; then
+            jq --arg id "$id" 'map(select(.Issue.id == $id))' "$db.history"
+        else
+            echo null
+        fi
         ;;
     update)
         id=$1

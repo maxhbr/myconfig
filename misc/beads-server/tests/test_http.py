@@ -90,6 +90,11 @@ class ServerCase(unittest.TestCase):
         with urllib.request.urlopen(self.base + path, timeout=10) as r:
             return r.status, json.loads(r.read())
 
+    def get_raw(self, path):
+        with urllib.request.urlopen(self.base + path, timeout=10) as r:
+            self._last_content_type = r.headers.get("Content-Type", "")
+            return r.status, r.read()
+
     def post(self, path, body, headers=None):
         req = urllib.request.Request(
             self.base + path,
@@ -440,6 +445,144 @@ class TestSse(ServerCase):
         # client's card strands outside its lane with a stale chip
         self.assertIn("cluster_root", raw)
         self.assertIn("is_blocked", raw)
+
+
+class TestHistoryApi(ServerCase):
+    def test_deep_link_serves_spa_shell(self):
+        self.boot(allow_write=False)
+        status, body = self.get_raw("/t-1")
+        self.assertEqual(status, 200)
+        self.assertIn(b"beads-server", body)  # index.html, not JSON
+        self.assertIn("text/html", self._last_content_type)
+        # static files keep precedence over the SPA fallback
+        status, body = self.get_raw("/app.js")
+        self.assertEqual(status, 200)
+        self.assertIn(b"viewMode", body)
+        # unknown id also serves the shell; the client resolves it
+        status, _ = self.get_raw("/t-doesnotexist")
+        self.assertEqual(status, 200)
+
+    def test_deep_link_unknown_ids_do_not_crash_api(self):
+        self.boot(allow_write=False)
+        # a deleted bead: /api paths still work alongside the fallback
+        status, data = self.get("/api/beads")
+        self.assertEqual(status, 200)
+
+    def test_activity_empty_at_start(self):
+        self.boot(allow_write=False)
+        status, data = self.get("/api/activity")
+        self.assertEqual(status, 200)
+        self.assertEqual(data["activity"], [])
+        self.assertTrue(data["since"] > 0)
+
+    def test_activity_records_change(self):
+        self.boot(allow_write=False)
+        issues = json.loads(json.dumps(ISSUES))
+        issues[0]["status"] = "in_progress"
+        issues[0]["updated_at"] = "2026-01-02T00:00:00Z"
+        (self.repo / ".beads" / "issues.json").write_text(json.dumps(issues))
+        self.watcher._refetch()
+        status, data = self.get("/api/activity")
+        self.assertEqual(status, 200)
+        # the start snapshot seeds the field-diff baseline without
+        # feed entries, so only the observed change is in the feed
+        self.assertEqual(len(data["activity"]), 1)
+        newest = data["activity"][0]
+        self.assertEqual(newest["id"], "t-1")
+        self.assertEqual(newest["kind"], "changed")
+        self.assertEqual(
+            newest["changes"],
+            [{"field": "status", "from": "open", "to": "in_progress"}],
+        )
+
+    def test_activity_records_created_and_deleted(self):
+        self.boot(allow_write=False)
+        issues = json.loads(json.dumps(ISSUES))
+        issues.append({"id": "t-3", "title": "Three", "status": "open",
+                       "priority": 2, "comment_count": 0})
+        del issues[1]
+        (self.repo / ".beads" / "issues.json").write_text(json.dumps(issues))
+        self.watcher._refetch()
+        _, data = self.get("/api/activity")
+        kinds = {(e["id"], e["kind"]) for e in data["activity"]}
+        self.assertEqual(kinds, {("t-2", "deleted"), ("t-3", "created")})
+
+    def test_activity_capped(self):
+        from server import ACTIVITY_CAP
+        self.boot(allow_write=False)
+        issues = json.loads(json.dumps(ISSUES))
+        for i in range(ACTIVITY_CAP + 10):
+            issues[0]["status"] = "open" if i % 2 else "in_progress"
+            issues[0]["updated_at"] = f"2026-01-0{1 + i % 8}T00:00:0{i % 9}Z"
+            (self.repo / ".beads" / "issues.json").write_text(json.dumps(issues))
+            self.watcher._refetch()
+        _, data = self.get("/api/activity")
+        self.assertEqual(len(data["activity"]), ACTIVITY_CAP)
+
+    def test_issue_history_from_bd(self):
+        self.boot(allow_write=False)
+        hist = [
+            {"CommitHash": "c2", "Committer": "beads", "CommitDate": "2026-01-02T10:00:00Z",
+             "Issue": {"id": "t-1", "title": "One", "status": "closed", "priority": 1,
+                       "issue_type": "task"}},
+            {"CommitHash": "c1", "Committer": "beads", "CommitDate": "2026-01-01T10:00:00Z",
+             "Issue": {"id": "t-1", "title": "One", "status": "open", "priority": 1,
+                       "issue_type": "task"}},
+        ]
+        (self.repo / ".beads" / "issues.json.history").write_text(json.dumps(hist))
+        status, data = self.get("/api/beads/issue/t-1/history")
+        self.assertEqual(status, 200)
+        self.assertEqual(data["id"], "t-1")
+        self.assertEqual(len(data["history"]), 2)
+        newest, oldest = data["history"]
+        self.assertEqual(newest["commit"], "c2")
+        self.assertEqual(
+            newest["changes"],
+            [{"field": "status", "from": "open", "to": "closed"}],
+        )
+        self.assertEqual(oldest["commit"], "c1")
+        # the oldest entry is the creation: everything differs from nothing
+        fields = {c["field"] for c in oldest["changes"]}
+        self.assertIn("status", fields)
+        self.assertIn("priority", fields)
+
+    def test_issue_history_drops_noop_commits(self):
+        self.boot(allow_write=False)
+        hist = [
+            {"CommitHash": "c3", "Committer": "beads", "CommitDate": "2026-01-03T10:00:00Z",
+             "Issue": {"id": "t-1", "title": "One", "status": "open", "priority": 2,
+                       "issue_type": "task"}},
+            # c2 is the no-op: identical to its OLDER neighbor c1 in
+            # every diffed field (bd emits newest first, each commit
+            # diffs against the snapshot before it)
+            {"CommitHash": "c2", "Committer": "beads", "CommitDate": "2026-01-02T10:00:00Z",
+             "Issue": {"id": "t-1", "title": "One", "status": "open", "priority": 1,
+                       "issue_type": "task"}},
+            {"CommitHash": "c1", "Committer": "beads", "CommitDate": "2026-01-01T10:00:00Z",
+             "Issue": {"id": "t-1", "title": "One", "status": "open", "priority": 1,
+                       "issue_type": "task"}},
+        ]
+        (self.repo / ".beads" / "issues.json.history").write_text(json.dumps(hist))
+        _, data = self.get("/api/beads/issue/t-1/history")
+        commits = [e["commit"] for e in data["history"]]
+        self.assertEqual(commits, ["c3", "c1"])  # c2 changed nothing
+
+    def test_issue_history_unknown_id_is_404(self):
+        self.boot(allow_write=False)
+        try:
+            status, _ = self.get("/api/beads/issue/t-42/history")
+        except urllib.error.HTTPError as e:
+            self.assertEqual(e.code, 404)
+        else:
+            self.fail("expected 404")
+
+    def test_issue_history_null_history(self):
+        # bd prints null (not []) for ids with no commit history; the
+        # shim does the same with no .history file
+        self.boot(allow_write=False)
+        status, data = self.get("/api/beads/issue/t-1/history")
+        self.assertEqual(status, 200)
+        self.assertIsNone(data["history"])
 
 
 if __name__ == "__main__":

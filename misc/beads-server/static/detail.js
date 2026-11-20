@@ -9,6 +9,7 @@ import {
   canWrite, inlinePriority, inlineStatus, inlineText, inlineAssignee,
   descriptionEditor, commentComposer, labelEditor, clearDraftProbes, toast,
 } from "./edit.js";
+import { showHistoryPopup, loadHistorySection } from "./history.js";
 
 function chip(text, bg) {
   const c = document.createElement("span");
@@ -35,7 +36,7 @@ export function refreshSelection() {
 }
 
 let detailRequest = 0;
-export function showDetails(issue) {
+export function showDetails(issue, { withHistory = false } = {}) {
   const request = ++detailRequest;
   window.SELECTED_ID = issue.id;
   const pane = document.getElementById("details");
@@ -52,10 +53,11 @@ export function showDetails(issue) {
     .then((r) => (r.ok ? r.json() : null))
     .then((data) => {
       if (request !== detailRequest || window.SELECTED_ID !== issue.id) return;
-      renderDetails(data ? data.issue : issue);
+      renderDetails(data ? data.issue : issue, { withHistory });
     })
     .catch(() => {
-      if (request === detailRequest && window.SELECTED_ID === issue.id) renderDetails(issue);
+      if (request === detailRequest && window.SELECTED_ID === issue.id)
+        renderDetails(issue, { withHistory });
     });
 }
 
@@ -111,7 +113,7 @@ function copyId(ev, issue) {
   );
 }
 
-function renderDetails(issue) {
+function renderDetails(issue, { withHistory = false } = {}) {
   const pane = document.getElementById("details");
   pane.dataset.readOnly = String(!canWrite());
   clearDraftProbes(); // the previous pane's probes die with its DOM
@@ -144,6 +146,14 @@ function renderDetails(issue) {
   focusChip.style.cursor = "pointer";
   focusChip.onclick = () => window.setFocus(issue.id);
   pane.append(focusChip);
+  const histChip = chip("🕘 history");
+  histChip.style.cursor = "pointer";
+  histChip.title = "commit history of " + issue.id + " (bd history)";
+  histChip.onclick = (ev) => {
+    ev.stopPropagation();
+    showHistoryPopup(issue.id, ev.currentTarget);
+  };
+  pane.append(histChip);
   if (canWrite()) {
     const statuses = [...new Set(DATA.issues.map((i) => i.status))];
     pane.append(inlineStatus(issue, statuses));
@@ -304,6 +314,15 @@ function renderDetails(issue) {
     section(`comments (${issue.comment_count})`, wrap);
   }
   if (canWrite()) section("add a comment", commentComposer(issue));
+
+  // Deep-link mode only: the inline history section loads async and
+  // appends after the pane is built, so a slow bd history never blocks
+  // the pane and no re-render is triggered when it arrives.
+  if (withHistory) {
+    const box = h("div");
+    section("history", box);
+    loadHistorySection(issue.id, box);
+  }
 
   refreshSelection(); // update selection highlight
 }

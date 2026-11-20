@@ -9,6 +9,7 @@ import { connect, fetchSnapshot } from "./live.js";
 import { init as initEdit, newBeadDialog } from "./edit.js";
 import { renderBoard } from "./board.js";
 import { renderGraph, zoomBy, resetView } from "./graph.js";
+import { renderHistory } from "./history.js";
 import { showDetails, refreshSelection, enableReadOnlyDetails } from "./detail.js";
 import * as filters from "./filters.js";
 const { state, matches, writeToHash, readFromHash } = filters;
@@ -29,6 +30,7 @@ window.visibleIssues = visibleIssues;
 function viewMode() {
   return document.getElementById("view-mode").value;
 }
+export { viewMode };
 
 function render() {
   NODES = DATA.issues.filter(matches);
@@ -37,9 +39,12 @@ function render() {
 
   const board = document.getElementById("board");
   const graphWrap = document.getElementById("graph-wrap");
+  const historyWrap = document.getElementById("history-wrap");
   const isBoard = viewMode() === "board";
+  const isHistory = viewMode() === "history";
   board.hidden = !isBoard;
-  graphWrap.hidden = isBoard;
+  graphWrap.hidden = isBoard || isHistory;
+  historyWrap.hidden = !isHistory;
   document.getElementById("graph-controls").hidden = isBoard;
   document.getElementById("label-deps").style.display = isBoard ? "" : "none";
 
@@ -53,6 +58,7 @@ function render() {
   }
 
   if (isBoard) renderBoard();
+  else if (isHistory) renderHistory();
   else renderGraph(FOCUS !== null ? focusNodes() : NODES);
 }
 window.render = render;
@@ -83,6 +89,16 @@ export function setFocus(id) {
   render();
 }
 window.setFocus = setFocus;
+
+function deepLinkTarget() {
+  // /<id> deep link: a single path segment that is an existing bead.
+  // Resolved on the loaded snapshot only — a deep link to a
+  // not-yet-known id is not a deep link.
+  const path = decodeURIComponent(location.pathname.replace(/\/+$/, ""));
+  if (!path.includes("/") || path.startsWith("/api")) return null;
+  const id = path.slice(1);
+  return DATA.issues.some((i) => i.id === id) ? id : null;
+}
 
 function renderFiltered() {
   writeToHash();
@@ -269,7 +285,9 @@ async function load() {
   syncToolbarFromState();
   buildPresets();
 
-  window.addEventListener("resize", () => { if (viewMode() === "graph") render(); });
+  window.addEventListener("resize", () => {
+    if (viewMode() === "graph") render();
+  });
   document.getElementById("view-mode").onchange = render;
   document.getElementById("toggle-deps").onchange = render;
 
@@ -322,6 +340,19 @@ async function load() {
   // the details pane decide draggability/controls from canWrite(), and
   // they would otherwise stay read-only until the next redraw
   await initEdit(DATA.generation);
+
+  // deep link first: it picks the view (focused graph) and the pane,
+  // so the initial render must already reflect it
+  const target = deepLinkTarget();
+  if (target) {
+    FOCUS = target;
+    document.getElementById("view-mode").value = "graph";
+    // swap the route for the bare app: a reload must not re-resolve a
+    // deep link whose bead may since have been deleted
+    history.replaceState(null, "", "/#");
+    showDetails(DATA.issues.find((i) => i.id === target), { withHistory: true });
+  }
+
   render();
   connect(DATA.revision, DATA.generation, () => {
     rebuildFilterOptions();
