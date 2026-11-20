@@ -445,6 +445,7 @@ let
   # /etc/nix/nix.conf pin).
   // lib.optionalAttrs (cfg.config.nix != { }) { nix = cfg.config.nix; }
   // lib.optionalAttrs (cfg.config.backend != null) { inherit (cfg.config) backend; }
+  // lib.optionalAttrs (cfg.config.profile != null) { inherit (cfg.config) profile; }
   // lib.optionalAttrs (cfg.config.gitDirs != [ ]) { git-dirs = cfg.config.gitDirs; }
   // lib.optionalAttrs (cfg.config.stateDirs != [ ]) { state-dirs = cfg.config.stateDirs; }
   # The D21 allowlist keys (bd myconfig-xob): seeded host-wide, enforced
@@ -495,21 +496,28 @@ let
   # `package` AND every flavor of `profiles.<name>` below — a flavor
   # shares every backend pin with the base by construction and can
   # never drift from it (enabled backends, CA bundle,
-  # vmStoreExtraRoots, waypipe, mux entries). Four arguments vary:
+  # vmStoreExtraRoots, waypipe, mux entries). Five arguments vary:
   # `extraTools` (the sandbox `PATH` closure), `backends` (the
   # MYSBX_ENABLED_BACKENDS pin — a flavor pins the host's set WITHOUT
   # the podman backends), `binName` (a flavor's binary is
-  # `mysbx-<profile>`, so it does not collide in home.packages) and
+  # `mysbx-<profile>`, so it does not collide in home.packages),
   # `vmStoreBaked` — the base follows `vm.store.enable`, a FLAVOR is
   # always `false`: a per-flavor baked store disk would multiply the
   # ~7 GiB erofs image per profile, so a VM run under a flavor keeps
   # the host-store share (`store` resolves to "host") and an explicit
   # `store = "baked"` is refused at launch (no MYSBX_VM_STORE_DISK pin
-  # to resolve it through).
+  # to resolve it through) — and `profile` (config.md D30, bd
+  # myconfig-011r): `null` for the base, a flavor's own name, pinned
+  # as `MYSBX_PROFILE` for the start-time launcher gate.
   mkWrapper =
-    extraTools: backends: binName: vmStoreBaked:
+    extraTools: backends: binName: vmStoreBaked: profile:
     pkgs.callPackage ./nix/mysbx.nix {
-      inherit extraTools binName vmStoreBaked;
+      inherit
+        extraTools
+        binName
+        vmStoreBaked
+        profile
+        ;
       enabledBackends = backends;
       inherit muxEntries;
       alacritty = cfg.terminal.package;
@@ -624,7 +632,13 @@ let
   # — `$`, backticks and quotes inside a `"…${binName}…"` would
   # otherwise expand in the build sandbox. The hyphen cannot start a
   # name, so `mysbx-<profile>` keeps its two-part shape.
-  validProfileName = name: builtins.match "[a-z][a-z0-9-]*" name != null;
+  validProfileName =
+    name:
+    # `once` would collide with the base once entry's argv[0]
+    # spelling (the crate's profile fallback parses `mysbx-once`;
+    # the schema refuses the value too, so the two spellings stay
+    # in sync).
+    name != "once" && builtins.match "[a-z][a-z0-9-]*" name != null;
 
   profileWrappers = lib.mapAttrs (
     name: profile:
@@ -634,7 +648,7 @@ let
       mkWrapper (cfg.extraTools ++ profile.extraTools) (lib.subtractLists [
         "podman-gvisor"
         "podman-krun"
-      ] enabledBackends) "mysbx-${name}" false
+      ] enabledBackends) "mysbx-${name}" false name
   ) cfg.profiles;
 in
 {
@@ -658,8 +672,8 @@ in
       # passed as `enabledBackends`). `null` pins nothing — the contract
       # nix/mysbx.nix already documents for a hand-overridden image or a
       # host that runs `bubblewrap`/`nono` only.
-      default = mkWrapper cfg.extraTools enabledBackends "mysbx" cfg.vm.store.enable;
-      defaultText = literalExpression "mkWrapper cfg.extraTools enabledBackends \"mysbx\" cfg.vm.store.enable — the shared ./nix/mysbx.nix pin block of `mkWrapper` in this module's let";
+      default = mkWrapper cfg.extraTools enabledBackends "mysbx" cfg.vm.store.enable null;
+      defaultText = literalExpression "mkWrapper cfg.extraTools enabledBackends \"mysbx\" cfg.vm.store.enable null — the shared ./nix/mysbx.nix pin block of `mkWrapper` in this module's let";
       description = ''
         The `mysbx` package to install (built from ./mysbx-rs in this repo).
       '';
@@ -750,6 +764,13 @@ in
         (`<repo>.mysbx/config.toml`) is shared by all launchers, so
         per-repo mounts and `[env]` stay per-repo.
 
+        A configuration MAY however demand a launcher: the `profile`
+        config key (config.md D30, bd myconfig-011r) — set host-wide
+        via `config.profile`, per repo in the sidecar — refuses a
+        run (exit 70) that starts through any OTHER launcher, so a
+        repo pinned to a profile's closure cannot silently run with
+        the base one. Each flavor wrapper pins its own name as
+        `MYSBX_PROFILE`, the identity the gate compares against.
         The podman backends (`podman-gvisor`, `podman-krun`) are NOT
         available under a profile launcher and a selection of one is
         refused at launch (`--backend podman-gvisor` names a backend
@@ -1964,6 +1985,29 @@ in
             default = "bubblewrap";
             description = "Sandbox backend (`bubblewrap`, `podman-gvisor`, `nono`, `podman-krun`, `krun`, `microvm-qemu` or `microvm-ch`); `null` leaves the choice to the sidecar.";
           };
+          profile = mkOption {
+            type = types.nullOr (types.strMatching "[a-z][a-z0-9-]*");
+            default = null;
+            example = "assistant";
+            description = ''
+              The launcher profile every sandbox of this user
+              REQUIRES (./docs/design/config.md D30, bd
+              myconfig-011r): rendered into the generated user
+              config as the `profile` key, which the crate enforces
+              at start — a run is refused (exit 70) unless it was
+              started through that profile's launcher
+              (`mysbx-<profile>`, `profiles.<name>`, bd
+              myconfig-xl93). `null` (the default) demands nothing:
+              every launcher is admitted. This is how a host pins
+              a profile host-wide; a repo sidecar may still set its
+              own `profile` (the sidecar wins on conflict, like
+              `backend`).
+
+              The named profile must exist in `profiles` — an eval
+              assertion throws otherwise, because demanding a
+              launcher nothing provides would refuse every run.
+            '';
+          };
           network = mkOption {
             type = types.either types.bool (
               types.enum [
@@ -2454,6 +2498,23 @@ in
             (podman-gvisor, podman-krun), .krun.enable (krun),
             .microvm-qemu.enable (microvm-qemu) or .microvm-ch.enable
             (microvm-ch), or select another backend.
+          '';
+        }
+        {
+          # The host-wide `config.profile` (config.md D30, bd
+          # myconfig-011r) must name a launcher this host actually
+          # provides: demanding a profile nothing provides would
+          # refuse every run of this user at start time — a build
+          # error, caught here at eval time instead.
+          assertion =
+            cfg.config.profile == null || builtins.elem cfg.config.profile (builtins.attrNames cfg.profiles);
+          message = ''
+            myconfig.ai.dev.mysbx.config.profile is
+            "${toString cfg.config.profile}", but no such profile
+            exists — set
+            myconfig.ai.dev.mysbx.profiles."${toString cfg.config.profile}".extraTools
+            (the profile becomes the mysbx-${toString cfg.config.profile}
+            launcher), or set config.profile to null.
           '';
         }
         {

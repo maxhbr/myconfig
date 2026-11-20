@@ -73,6 +73,17 @@ a profile (they run one shared OCI image), and a profile never builds
 a guest-own store disk — a VM run under a profile keeps the
 host-store share, an explicit `store = "baked"` is refused.
 
+A configuration may also DEMAND a launcher: the `profile` config key
+([`config.md` D30](./docs/design/config.md), bd myconfig-011r), set
+host-wide (`config.profile` in the NixOS module, rendered into the
+generated user config) or per repo in the sidecar. A run of such a
+configuration is refused (exit 70) unless it starts through
+`mysbx-<profile>` — each flavor wrapper pins its own name as
+`MYSBX_PROFILE`, the identity the start-time gate compares against.
+It is a consistency contract, not a security boundary: the tool
+closure is the launcher's own either way. Either layer may set the
+key; the sidecar wins on conflict, like `backend`.
+
 `mysbx --session <name>` (global flag, run forms only) switches the
 run to the CLONE session of that name
 ([`docs/design/workspace.md`](./docs/design/workspace.md) D1-D5): the
@@ -296,6 +307,10 @@ The `config.toml` file in the sidecar defines
 - resource limits (`memory`, `cpus`, `pids-limit` —
   [`config.md` D23](./docs/design/config.md)): enforced by the podman
   backends, warned about by the others
+- the required launcher (`profile` —
+  [`config.md` D30](./docs/design/config.md)): a run of this
+  configuration must start through the named `mysbx-<profile>`
+  launcher (refused, exit 70, otherwise)
 - ...
 
 `mysbx init` writes a `config.toml` that lists **every** schema key as a

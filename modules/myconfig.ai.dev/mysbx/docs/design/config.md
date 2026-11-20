@@ -104,6 +104,10 @@ config that can execute is config that can escape.
 - which terminal multiplexer the interactive payload is
   (`multiplexer`, see D17) — the one key where the sidecar overrides
   the user config's value outright, because it grants no host access
+- which launcher the run must start through (`profile`, see D30):
+  the repo may demand its `mysbx-<profile>` launcher, and the
+  start-time gate refuses every other invocation (sidecar wins over
+  the user layer, exactly like `backend`)
 
 It does not decide the repo itself: the repo is implicit and always mounted
 read-write (see D13).
@@ -2090,3 +2094,74 @@ to is a hard error. The repo root is derived from the sidecar's
 `.mysbx`-suffixed directory name (D2); a sidecar without the suffix
 (a once-run's ephemeral `<temp>/sidecar`) has no derivable repo, and
 the check is skipped rather than guessed.
+
+### D30: `profile` — the launcher a configuration requires, enforced at start
+
+Either layer may name the profile launcher every run of it must
+start through (bd myconfig-011r):
+
+```toml
+profile = "assistant"
+```
+
+The value is a free-form name with a grammar, not a closed enum —
+profile names are host-defined (the NixOS module's
+`profiles.<name>`, bd myconfig-xl93, whose own `validProfileName`
+spells the same `[a-z][a-z0-9-]*` rule the crate validates here):
+lowercase alphanumeric with internal hyphens. `once` is refused —
+it would collide with the base once entry's argv[0] spelling, and
+a profile that collides with an existing binary name cannot work.
+
+**The gate is start-time, not config-time.** The merged `profile`
+refuses the run (exit 70, cli.md D8) unless the invocation actually
+IS that profile's launcher. It sits at step 4b — post-merge, before
+the session clone and before the `--dry-run` early return — so a
+dry run audits the refusal too, and it covers every run mode,
+including the inner of a detached run and once-mode runs. The verbs
+that never start a sandbox (`ssh-pubkey`, `doctor`, `init`, `edit`,
+`status`) bypass the gate by construction: they never reach step 4b.
+That is intended — the gate polices SANDBOX STARTS, not
+administrative reads — and must not be "fixed" into a global check.
+
+**Invocation identity is an env pin, not argv[0].** argv[0] does not
+survive a makeBinaryWrapper chain (each `exec` resets it to the
+literal program path — the `once.rs` lesson, cli.md D22), so the Nix
+wrapper pins `MYSBX_PROFILE` on every flavor launcher it builds; the
+base wrapper pins nothing, and an unset variable IS the base
+launcher's identity. The argv[0] `mysbx-<name>` parse stays as the
+fallback for the unwrapped crate, where argv[0] really is the
+symlink the operator typed; under once-mode (`once::active()`) only
+the pin counts, because a flavor's once entry `mysbx-<profile>-once`
+would misparse. `MYSBX_PROFILE` is unrelated to
+`MYSBX_NONO_PROFILE` (a nono backend operator knob naming that
+backend's own profile file): the two share a word, nothing else.
+
+**A consistency contract, not a security boundary.** The invoking
+user can set `MYSBX_PROFILE` themselves (the same trust level as
+`MYSBX_ONCE`); overriding it changes only which launcher the gate
+admits, never what runs inside the sandbox — the actual tool closure
+is the launcher wrapper's embedded `MYSBX_TOOLS_PATH` either way
+(D14). What the gate protects is the accident barrier (D9): a repo
+configured for the assistant launcher does not silently run with
+the base closure because the operator typed the wrong binary.
+
+**Layering: either layer, sidecar wins, no hard error.** Like
+`backend` and `multiplexer` the key is not an access grant, so
+there is no `network`-style narrowing rule and no `[env]`-style
+override refusal: whichever layer is later in the merge order wins
+when both decide (the sidecar; in a parent chain, the child — D29),
+and the fold carries the resolved value into the merge. A
+disagreement is resolved, not refused, deliberately: a user layer
+may demand a profile host-wide and a single repo's sidecar may
+narrow the demand per repo, exactly as it overrides `backend`.
+
+**The NixOS module wires both ends.** Each flavor wrapper pins its
+own name (`profile = <name>` in ./nix/mysbx.nix, exposed as
+`passthru.profile`), and the new `config.profile` option (null
+default, `strMatching "[a-z][a-z0-9-]*"`) renders the key into the
+generated user config — this is how a host enforces a profile
+host-wide. An eval assertion demands a configured profile exist in
+`profiles`: demanding a launcher nothing provides would refuse
+every run of the user. With `config.profile = null` the generated
+config text is byte-identical to the pre-D30 one (the key renders
+only when set), and the base wrapper's behaviour is unchanged.

@@ -118,6 +118,16 @@ let
     nono = pkgs.nono;
     ssh-keygen = pkgs.openssh;
   };
+  # The profile-key gate's wrappers (config.md D30, bd
+  # myconfig-011r): a flavor (`profile = "assistant"`) and the base
+  # (`profile = null`), both wrapped for REAL — the gate is a
+  # start-time refusal, so the check must drive the binaries the
+  # makeBinaryWrapper chain produced, not grep their bytes.
+  pkgFlavor = pkgs.callPackage ../nix/mysbx.nix {
+    binName = "mysbx-assistant";
+    profile = "assistant";
+  };
+  pkgBase = pkgs.callPackage ../nix/mysbx.nix { };
   # The wrapper script of the full package — the file postBuild
   # produced; its content carries every `--set` pin.
   wrapped = pkgs.runCommand "mysbx-wrapped-content" { } ''
@@ -2676,6 +2686,106 @@ in
                 echo "$argv" | grep -q "^$prof$" \
                   || fail "the argv does not carry the pinned profile"
                 mkdir "$out"
+      '';
+
+  # The profile-key gate over the REAL wrappers (config.md D30, bd
+  # myconfig-011r): a synthetic repo whose sidecar demands `profile =
+  # "assistant"` must ADMIT the flavor wrapper's dry run (its
+  # MYSBX_PROFILE pin matches) and REFUSE the base wrapper's (exit
+  # 70, plain launcher) — proving the pin travels the actual
+  # makeBinaryWrapper chain and the gate reads it. A sidecar
+  # demanding `other` refuses the flavor too (a mismatch names
+  # both). The same repo without any profile key leaves both
+  # launchers admitted — the key is what arms the gate, not the
+  # launcher.
+  mysbx-profile-wrapper-test =
+    pkgs.runCommand "mysbx-profile-wrapper-test"
+      {
+        nativeBuildInputs = [
+          pkgFlavor
+          pkgBase
+          pkgs.git
+        ];
+      }
+      ''
+        fail() {
+          echo "mysbx-profile-wrapper-test: $*" >&2
+          exit 1
+        }
+
+        sidecar_repo() {
+          repo="$TMPDIR/repo-$1"
+          mkdir -p "$repo" "$TMPDIR/repo-$1.mysbx"
+          cat > "$TMPDIR/repo-$1.mysbx/config.toml" <<CONFIG
+        backend = "bubblewrap"
+        profile = "$1"
+        CONFIG
+          git -C "$repo" init -q
+          git -C "$repo" config user.email t@invalid
+          git -C "$repo" config user.name t
+          touch "$repo/README"
+          git -C "$repo" add README
+          git -C "$repo" commit -qm init
+          echo "$repo"
+        }
+
+        run_dry() {
+          bin="$1"; repo="$2"
+          ( cd "$repo" && HOME="$TMPDIR/home" "$bin" --dry-run )
+        }
+        # stdenv runs with `set -e`: a refusal (exit 70) is an
+        # EXPECTED outcome half the time, so every run_dry that may
+        # refuse runs under `|| true` and reads its own code.
+        mkdir -p "$TMPDIR/home"
+
+        # The flavor is admitted by its own name.
+        repo=$(sidecar_repo assistant)
+        argv=$(run_dry "${pkgFlavor}/bin/mysbx-assistant" "$repo" 2>"$TMPDIR/err") \
+          || fail "the flavor wrapper was refused by its own profile: $(cat "$TMPDIR/err")"
+        echo "$argv" | head -1 | grep -q bwrap \
+          || fail "the admitted flavor dry run printed no bwrap argv: $argv"
+
+        # The BASE wrapper is refused by the same sidecar: the pin
+        # travels the real wrapper chain, and its ABSENCE is the
+        # base launcher's identity.
+        code=0
+        run_dry "${pkgBase}/bin/mysbx" "$repo" >"$TMPDIR/out" 2>"$TMPDIR/err" \
+          || code=$?
+        [ "$code" = 70 ] \
+          || fail "the base wrapper was not refused by profile = assistant (exit $code)"
+        grep -q "mysbx-assistant" "$TMPDIR/err" \
+          || fail "the refusal does not name the required launcher: $(cat "$TMPDIR/err")"
+        test ! -s "$TMPDIR/out" \
+          || fail "the refused run printed an argv anyway"
+
+        # A sidecar demanding ANOTHER profile refuses the flavor too.
+        repo2=$(sidecar_repo other)
+        code=0
+        run_dry "${pkgFlavor}/bin/mysbx-assistant" "$repo2" >"$TMPDIR/out" 2>"$TMPDIR/err" \
+          || code=$?
+        [ "$code" = 70 ] \
+          || fail "the flavor wrapper was not refused by profile = other (exit $code)"
+        grep -q "mysbx-other" "$TMPDIR/err" \
+          || fail "the mismatch refusal does not name the configured launcher: $(cat "$TMPDIR/err")"
+        grep -q "mysbx-assistant" "$TMPDIR/err" \
+          || fail "the mismatch refusal does not name the started launcher: $(cat "$TMPDIR/err")"
+
+        # A repo WITHOUT the key admits both launchers.
+        repo3="$TMPDIR/repo-plain"
+        mkdir -p "$repo3" "$TMPDIR/repo-plain.mysbx"
+        printf 'backend = "bubblewrap"\n' > "$TMPDIR/repo-plain.mysbx/config.toml"
+        git -C "$repo3" init -q
+        git -C "$repo3" config user.email t@invalid
+        git -C "$repo3" config user.name t
+        touch "$repo3/README"
+        git -C "$repo3" add README
+        git -C "$repo3" commit -qm init
+        run_dry "${pkgBase}/bin/mysbx" "$repo3" >/dev/null 2>"$TMPDIR/err" \
+          || fail "the base wrapper was refused without any profile key: $(cat "$TMPDIR/err")"
+        run_dry "${pkgFlavor}/bin/mysbx-assistant" "$repo3" >/dev/null 2>"$TMPDIR/err" \
+          || fail "the flavor wrapper was refused without any profile key: $(cat "$TMPDIR/err")"
+
+        mkdir "$out"
       '';
 
   mysbx-tests = crate.overrideAttrs (old: {

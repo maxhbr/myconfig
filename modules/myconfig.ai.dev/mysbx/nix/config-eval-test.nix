@@ -825,7 +825,11 @@ let
   #     `mysbx-<profile>-once` (the base's `mysbx-once` stays unique);
   #   * the podman backends are OUT of the flavor's
   #     MYSBX_ENABLED_BACKENDS pin even on a host that enables them
-  #     (the base keeps them).
+  #     (the base keeps them);
+  #   * the profile key's pin is per flavor (config.md D30, bd
+  #     myconfig-011r): passthru.profile is "assistant" on the
+  #     flavor and null on the base — the MYSBX_PROFILE the wrapper
+  #     sets, the identity the start-time gate compares against.
   profilesGate =
     let
       host = [
@@ -906,6 +910,10 @@ let
       ])
     then
       throw "mysbx generated-config test: the BASE wrapper lost the podman backends the host enables"
+    else if flavor.passthru.profile != "assistant" then
+      throw "mysbx generated-config test: the flavor wrapper does not pin its own profile name (passthru.profile)"
+    else if base.passthru.profile != null then
+      throw "mysbx generated-config test: the BASE wrapper pins a profile — the base launcher has none"
     else
       "ok";
 
