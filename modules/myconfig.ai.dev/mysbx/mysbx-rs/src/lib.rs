@@ -300,6 +300,7 @@ pub fn run(args: Vec<String>) -> i32 {
             if (flags.multiplexer.is_some()
                 || (flags.backend.is_some() && other != "run")
                 || (flags.session.is_some() && other != "run" && other != "attach")
+                || (flags.sidecar.is_some() && other != "run")
                 || ((flags.result || flags.timeout.is_some()) && other != "run")
                 || ((!flags.ro.is_empty() || !flags.rw.is_empty()) && other != "run")
                 || flags.detach
@@ -391,6 +392,16 @@ pub fn run(args: Vec<String>) -> i32 {
         // plain print (the `status` precedent). Both arms sit BEFORE the
         // generic run-scoped refusal below, which is what makes the
         // before-the-verb spellings reach the verb at all.
+        // `diagnose` sits outside the big refusal arm's verb list
+        // (its flags are its own, D29); a run-scoped `--sidecar`
+        // before the verb must not fall through to it and be
+        // silently ignored — refused like every other non-run verb
+        // (cli.md D30).
+        Some("diagnose") if flags.sidecar.is_some() => {
+            eprintln!("mysbx: --sidecar is not valid with `diagnose`");
+            eprintln!("try `mysbx --help`");
+            2
+        }
         Some("diagnose") => {
             match rest.get(1).map(String::as_str) {
                 Some("egress") => diagnose::run(&rest[2..], flags.verbose),
@@ -555,6 +566,10 @@ pub fn run(args: Vec<String>) -> i32 {
 ///   the clone (and its branch handoff) would vanish with the root,
 ///   and the session registry is host state once-mode must not
 ///   touch.
+/// * `--sidecar` names a HOST sidecar directory, but the once run's
+///   sidecar is the temp root — the named directory would be read by
+///   no one and written by no one; refusing says that instead of
+///   accepting and ignoring.
 /// * `--result`/`--timeout` write result.json into the temp
 ///   sidecar — deleted with it before anyone could read it. No
 ///   consumable outcome, refused rather than accepted-and-deleted.
@@ -578,6 +593,8 @@ pub fn run(args: Vec<String>) -> i32 {
 fn once_gate(flags: &Flags, rest: &[String]) -> Option<i32> {
     let what: Option<String> = if flags.session.is_some() {
         Some("--session is refused in once-mode".to_owned())
+    } else if flags.sidecar.is_some() {
+        Some("--sidecar is refused in once-mode".to_owned())
     } else if flags.result {
         Some("--result is refused in once-mode".to_owned())
     } else if flags.timeout.is_some() {
@@ -646,6 +663,17 @@ pub struct Flags {
     /// the live mode, the default — and there is NO TOML surface for
     /// it (D1): the flag is the whole switch.
     pub session: Option<String>,
+    /// The `--sidecar <path>` override (cli.md D30): the sidecar
+    /// directory of THIS invocation, replacing the derived
+    /// `<repo>.mysbx` sibling — the repository itself is still the
+    /// one the cwd resolves to, and nothing downstream knows which of
+    /// the two produced the sidecar. The raw spelling as typed; the
+    /// pipeline resolves it with the same treatment as a `--ro`/`--rw`
+    /// path (D16/D8) and re-runs the git-metadata guard's sidecar half
+    /// against it. `None` means the flag was not given and the
+    /// sidecar is derived, as always. Bare form and `run` only —
+    /// every other verb refuses the flag, and so does once-mode.
+    pub sidecar: Option<String>,
     /// The `--detach` flag (docs/design/detach.md B2, cli.md D21):
     /// start the bare form's run under a host-side `dtach` master
     /// and return once the sandbox runs (B4). Bare form only — with
@@ -760,6 +788,8 @@ impl Flags {
             "--backend"
         } else if self.session.is_some() {
             "--session"
+        } else if self.sidecar.is_some() {
+            "--sidecar"
         } else if !self.ro.is_empty() {
             "--ro"
         } else if !self.rw.is_empty() {
@@ -1030,6 +1060,44 @@ fn split_global_flags_traced(args: &[String]) -> Result<(Flags, Selections, &[St
                     return Err(2);
                 }
                 flags.session = Some(value.clone());
+                // The value argument is consumed with the flag.
+                rest = tail.split_first().map(|(_, t)| t).unwrap_or(&[]);
+                continue;
+            }
+            "--sidecar" => {
+                // cli.md D30: the sidecar directory of THIS
+                // invocation, overriding the derived `<repo>.mysbx`
+                // sibling. The same value treatment as `--ro`/`--rw`
+                // (D16): the three path spellings — absolute, `~/…`
+                // and relative to the cwd — resolved and
+                // canonicalized by the pipeline, which knows the home;
+                // a `~` that is not the `~/` prefix is the parser's
+                // own refusal. Not repeatable (D5): one run has
+                // exactly one sidecar.
+                if flags.sidecar.is_some() {
+                    eprintln!("mysbx: repeated flag: --sidecar");
+                    eprintln!("try `mysbx --help`");
+                    return Err(2);
+                }
+                let value = match tail.split_first() {
+                    Some((v, _)) => v,
+                    None => {
+                        eprintln!("mysbx: --sidecar requires a path");
+                        eprintln!("try `mysbx --help`");
+                        return Err(2);
+                    }
+                };
+                if value.is_empty() {
+                    eprintln!("mysbx: --sidecar must not be empty");
+                    eprintln!("try `mysbx --help`");
+                    return Err(2);
+                }
+                if value.starts_with('~') && !value.starts_with("~/") {
+                    eprintln!("mysbx: --sidecar: only the `~/` prefix is supported, not `~` alone or `~user`: `{value}`");
+                    eprintln!("try `mysbx --help`");
+                    return Err(2);
+                }
+                flags.sidecar = Some(value.clone());
                 // The value argument is consumed with the flag.
                 rest = tail.split_first().map(|(_, t)| t).unwrap_or(&[]);
                 continue;
@@ -1334,6 +1402,39 @@ fn run_command(global: Flags, selections: &Selections, args: &[String]) -> i32 {
                 flags.session = Some(value);
                 idx += 2;
             }
+            "--sidecar" => {
+                // cli.md D30: the same flag after the verb, the same
+                // position rule as `--ro`/`--rw` (D10/D16) — one rule
+                // for every run-scoped flag, both spellings one run.
+                // Not repeatable in EITHER position (D5); the `~`
+                // grammar refusal is identical to the one before the
+                // verb.
+                if flags.sidecar.is_some() {
+                    eprintln!("mysbx run: repeated flag: --sidecar");
+                    eprintln!("usage: {RUN_USAGE}");
+                    return 2;
+                }
+                let value = match args.get(idx + 1) {
+                    Some(v) => v.clone(),
+                    None => {
+                        eprintln!("mysbx run: --sidecar requires a path");
+                        eprintln!("usage: {RUN_USAGE}");
+                        return 2;
+                    }
+                };
+                if value.is_empty() {
+                    eprintln!("mysbx run: --sidecar must not be empty");
+                    eprintln!("usage: {RUN_USAGE}");
+                    return 2;
+                }
+                if value.starts_with('~') && !value.starts_with("~/") {
+                    eprintln!("mysbx run: --sidecar: only the `~/` prefix is supported, not `~` alone or `~user`: `{value}`");
+                    eprintln!("usage: {RUN_USAGE}");
+                    return 2;
+                }
+                flags.sidecar = Some(value);
+                idx += 2;
+            }
             "--" => {
                 idx += 1;
                 break;
@@ -1391,7 +1492,7 @@ fn run_command(global: Flags, selections: &Selections, args: &[String]) -> i32 {
 /// accepted set without opening the help (the same pairing rule
 /// usage.txt follows, D5).
 const RUN_USAGE: &str =
-    "mysbx run [--dry-run] [--verbose] [--result] [--timeout <seconds>] [--backend <name>] [--session <name>] [--ro <path>]... [--rw <path>]... -- COMMAND...";
+    "mysbx run [--dry-run] [--verbose] [--result] [--timeout <seconds>] [--backend <name>] [--session <name>] [--sidecar <path>] [--ro <path>]... [--rw <path>]... -- COMMAND...";
 
 /// How a sandbox run hands the terminal — and the exit code — over
 /// (cli.md D8/D17): exec, or wait-and-record.
@@ -2319,6 +2420,43 @@ fn sandbox_pipeline(
             return EXIT_INFRASTRUCTURE;
         }
     };
+    // 1b. the `--sidecar <path>` override (cli.md D30): the named
+    // directory replaces the derived `<repo>.mysbx` for THIS
+    // invocation — the repository is still the one the cwd resolves
+    // to, and everything after this line (the config layer and its
+    // parent chain, the state-dirs, the session clones, result.json,
+    // the egress logs, the run report) follows `repo.sidecar` and
+    // needs no change of its own. The same path treatment as
+    // `--ro`/`--rw` (D16/D8): `~/…` expands against $HOME, a relative
+    // path against the cwd, the result must exist — and the
+    // home-exposure refusal applies as well (a sidecar that IS or
+    // CONTAINS the home is refused, review-3 item 4). The
+    // git-metadata guard's sidecar half is re-run against the
+    // REPLACED sidecar: `resolve` checked it with the derived one
+    // (review-2 item 1).
+    if let Some(raw) = &flags.sidecar {
+        let cwd = match std::env::current_dir() {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("mysbx: cannot determine current directory: {e}");
+                return EXIT_INFRASTRUCTURE;
+            }
+        };
+        // `resolve_cwd` above refused a missing `$HOME`, so it is set.
+        let home = std::env::var_os("HOME").expect("resolve_cwd requires $HOME");
+        let sidecar = match merge::resolve_cli_path(raw, "--sidecar", Path::new(&home), &cwd) {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("mysbx: {e}");
+                return EXIT_INFRASTRUCTURE;
+            }
+        };
+        if let Err(e) = repo::check_git_dirs_against_sidecar(&repo.git_dirs, &sidecar) {
+            eprintln!("mysbx: {e}");
+            return EXIT_INFRASTRUCTURE;
+        }
+        repo.sidecar = sidecar;
+    }
     // 1a-once. the temp-root redirect of once-mode (cli.md D22): the
     // sidecar the rest of the pipeline sees is the EPHEMERAL one and
     // the worktrees sibling the TEMP directory, so the host's
@@ -9249,11 +9387,29 @@ mod tests {
                 timeout: None,
                 result: false,
                 session: None,
+                sidecar: None,
                 detach: false,
                 detachable: false,
             }
         );
         assert_eq!(rest, &s(&["run"])[..]);
+
+        // cli.md D30: the `--sidecar` override parses like the other
+        // run-scoped flags — value consumed with the flag, the verb
+        // left in `rest`; a `~` that is not the `~/` prefix is
+        // refused here, repeats are refused here.
+        let args = s(&["--sidecar", "/elsewhere", "run"]);
+        let (flags, rest) = split_global_flags(&args).unwrap();
+        assert_eq!(flags.sidecar.as_deref(), Some("/elsewhere"));
+        assert_eq!(rest, &s(&["run"])[..]);
+        assert_eq!(split_global_flags(&s(&["--sidecar"])), Err(2));
+        assert_eq!(split_global_flags(&s(&["--sidecar", ""])), Err(2));
+        assert_eq!(split_global_flags(&s(&["--sidecar", "~"])), Err(2));
+        assert_eq!(split_global_flags(&s(&["--sidecar", "~user/x"])), Err(2));
+        assert_eq!(
+            split_global_flags(&s(&["--sidecar", "/a", "--sidecar", "/b"])),
+            Err(2)
+        );
 
         let args = s(&["--dry-run", "--verbose"]);
         let (flags, rest) = split_global_flags(&args).unwrap();

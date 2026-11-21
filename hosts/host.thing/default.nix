@@ -174,7 +174,7 @@
           enable = true;
         };
         dev.hermes = {
-          enable = false;
+          enable = true;
           service = {
             enable = true;
             microvm = {

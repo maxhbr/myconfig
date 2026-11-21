@@ -18517,3 +18517,242 @@ fn ptsname_of(master_fd: std::os::fd::RawFd) -> Result<std::path::PathBuf, std::
         &name[..end],
     )))
 }
+
+// ---------------------------------------------------------------------------
+// The --sidecar override (cli.md D30)
+// ---------------------------------------------------------------------------
+
+/// [`fixture`] plus a second, INITIALIZED sidecar directory at
+/// `base/elsewhere` — the target of the `--sidecar` override: a
+/// sibling of the repo that is NOT the derived `<repo>.mysbx`, so an
+/// argv that names it could only have come from the flag.
+fn fixture_alt_sidecar(name: &str) -> (Invocation, PathBuf, PathBuf, PathBuf) {
+    // [`fixture_user_backend`], not [`fixture`]: a dry run needs a
+    // backend from SOME layer (D7), and the user layer keeps the
+    // sidecar config — the NAMED one and the derived one — empty.
+    let (inv, repo, sidecar) = fixture_user_backend(name, &[]);
+    let alt = repo.parent().unwrap().join("elsewhere");
+    std::fs::create_dir_all(&alt).unwrap();
+    init_sidecar(&alt);
+    (inv, repo, sidecar, alt)
+}
+
+/// The dry-run argv binds the state of the NAMED sidecar, and the
+/// derived one is not in the argv at all (cli.md D30).
+#[test]
+fn sidecar_override_dry_run_binds_the_named_sidecar() {
+    let (inv, _repo, derived, alt) = fixture_alt_sidecar("sidecar-override-dry");
+    let alt_s = alt.to_string_lossy().into_owned();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run", "--sidecar", &alt_s]);
+    assert_eq!(code, 0, "stdout: {stdout}\nstderr: {stderr}");
+    // The state bind follows the NAMED sidecar ...
+    assert!(
+        stdout.contains(&format!("--bind\n{alt_s}/state/.ssh\n/mysbx-home/.ssh")),
+        "the state bind uses the named sidecar: {stdout}"
+    );
+    // ... and the derived sidecar is bound nowhere.
+    assert!(
+        !stdout.contains(&*derived.to_string_lossy()),
+        "the derived sidecar is not bound: {stdout}"
+    );
+}
+
+/// The `## ` report's `sidecar:` line names the NAMED sidecar too —
+/// the report describes the run the flag made, not the run that would
+/// have happened without it (cli.md D30).
+#[test]
+fn sidecar_override_report_names_the_named_sidecar() {
+    let (inv, _repo, _derived, alt) = fixture_alt_sidecar("sidecar-override-report");
+    let alt_s = alt.to_string_lossy().into_owned();
+    let (code, stdout, stderr) =
+        run_binary_with(&inv, &["--verbose", "--dry-run", "--sidecar", &alt_s]);
+    assert_eq!(code, 0, "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stdout.contains(&format!("## sidecar:        {alt_s} (exists)")),
+        "the report names the named sidecar: {stdout}"
+    );
+}
+
+/// The AFTER-the-verb position (D10/D16): `run --sidecar` is the same
+/// run as `--sidecar run`, and the override applies there too.
+#[test]
+fn sidecar_override_after_the_verb_binds_the_named_sidecar() {
+    let (inv, _repo, derived, alt) = fixture_alt_sidecar("sidecar-override-run-verb");
+    let alt_s = alt.to_string_lossy().into_owned();
+    let (code, stdout, stderr) = run_binary_with(
+        &inv,
+        &["--dry-run", "run", "--sidecar", &alt_s, "--", "echo", "hi"],
+    );
+    assert_eq!(code, 0, "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stdout.contains(&format!("--bind\n{alt_s}/state/.ssh\n/mysbx-home/.ssh")),
+        "the state bind uses the named sidecar: {stdout}"
+    );
+    assert!(
+        !stdout.contains(&*derived.to_string_lossy()),
+        "the derived sidecar is not bound: {stdout}"
+    );
+}
+
+/// A NAMED sidecar without its `config.toml` gets D13's refusal —
+/// `mysbx init`, naming the NAMED directory (cli.md D30): the override
+/// changes which sidecar is required, not whether one is.
+#[test]
+fn sidecar_override_without_config_is_refused_with_the_init_hint() {
+    let (inv, _repo, _derived) = fixture_user_backend("sidecar-override-uninited", &[]);
+    let alt = inv.cwd.parent().unwrap().join("elsewhere");
+    std::fs::create_dir_all(&alt).unwrap(); // exists, no config.toml
+    let alt_s = alt.to_string_lossy().into_owned();
+    let (code, _stdout, stderr) = run_binary_with(&inv, &["--dry-run", "--sidecar", &alt_s]);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(stderr.contains("mysbx init"), "stderr: {stderr}");
+    assert!(
+        stderr.contains(&alt_s),
+        "the message names the named sidecar: {stderr}"
+    );
+}
+
+/// A path that does not exist is a canonicalize error naming the raw
+/// spelling, exit 70 (D8's treatment, cli.md D30).
+#[test]
+fn sidecar_override_of_a_missing_path_is_a_canonicalize_error() {
+    let (inv, _repo, _derived, _alt) = fixture_alt_sidecar("sidecar-override-missing");
+    let (code, _stdout, stderr) = run_binary_with(&inv, &["--dry-run", "--sidecar", "no-such-dir"]);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(stderr.contains("cannot canonicalize"), "stderr: {stderr}");
+    assert!(
+        stderr.contains("no-such-dir"),
+        "the message names the raw path: {stderr}"
+    );
+}
+
+/// The home-exposure refusal applies to the flag as to a `[[mounts]]`
+/// entry (review-3 item 4, cli.md D30): a sidecar that IS the home is
+/// refused.
+#[test]
+fn sidecar_override_of_the_home_is_refused() {
+    let (inv, _repo, _derived, _alt) = fixture_alt_sidecar("sidecar-override-home");
+    let home_s = inv.home.to_string_lossy().into_owned();
+    let (code, _stdout, stderr) = run_binary_with(&inv, &["--dry-run", "--sidecar", &home_s]);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(stderr.contains("home directory"), "stderr: {stderr}");
+}
+
+/// The parser's own refusals (cli.md D30, D5): a missing or empty
+/// value, a `~` that is not the `~/` prefix, and a repeat — in either
+/// position, and across positions.
+#[test]
+fn sidecar_override_parse_errors_are_usage_errors() {
+    let (inv, _repo, _derived, alt) = fixture_alt_sidecar("sidecar-override-parse");
+    let alt_s = alt.to_string_lossy().into_owned();
+
+    let (code, _o, e) = run_binary_with(&inv, &["--dry-run", "--sidecar"]);
+    assert_eq!(code, 2, "stderr: {e}");
+    assert!(e.contains("requires a path"), "stderr: {e}");
+
+    let (code, _o, e) = run_binary_with(&inv, &["--dry-run", "--sidecar", ""]);
+    assert_eq!(code, 2, "stderr: {e}");
+    assert!(e.contains("must not be empty"), "stderr: {e}");
+
+    let (code, _o, e) = run_binary_with(&inv, &["--dry-run", "--sidecar", "~"]);
+    assert_eq!(code, 2, "stderr: {e}");
+    assert!(e.contains("`~/` prefix"), "stderr: {e}");
+
+    // The after-verb spelling: the same refusals, the run usage.
+    let (code, _o, e) = run_binary_with(
+        &inv,
+        &["--dry-run", "run", "--sidecar", "~user", "--", "true"],
+    );
+    assert_eq!(code, 2, "stderr: {e}");
+    assert!(e.contains("`~/` prefix"), "stderr: {e}");
+
+    let (code, _o, e) = run_binary_with(
+        &inv,
+        &["--dry-run", "--sidecar", &alt_s, "--sidecar", &alt_s],
+    );
+    assert_eq!(code, 2, "stderr: {e}");
+    assert!(e.contains("repeated flag"), "stderr: {e}");
+
+    let (code, _o, e) = run_binary_with(
+        &inv,
+        &[
+            "--sidecar",
+            &alt_s,
+            "run",
+            "--sidecar",
+            &alt_s,
+            "--",
+            "true",
+        ],
+    );
+    assert_eq!(code, 2, "stderr: {e}");
+    assert!(e.contains("repeated flag"), "stderr: {e}");
+}
+
+/// Every non-run verb refuses the flag (the `--ro`/`--rw` scope, D16;
+/// cli.md D30) — including `diagnose`, which sits outside the big
+/// refusal arm's verb list and gets its own explicit refusal.
+#[test]
+fn sidecar_override_is_refused_for_every_non_run_verb() {
+    let (inv, _repo, _derived, alt) = fixture_alt_sidecar("sidecar-override-refused");
+    let alt_s = alt.to_string_lossy().into_owned();
+    for verb in [
+        "init",
+        "edit",
+        "status",
+        "attach",
+        "ssh-pubkey",
+        "fetch",
+        "merge",
+        "push",
+        "diff",
+        "session",
+        "worktree",
+        "doctor",
+        "version",
+        "help",
+        "gui",
+        "podman-load-image",
+        "gvisor-load-image",
+    ] {
+        let (code, _o, e) = run_binary_with(&inv, &["--sidecar", &alt_s, verb]);
+        assert_eq!(code, 2, "verb {verb}, stderr: {e}");
+        assert!(
+            e.contains(&format!("--sidecar is not valid with `{verb}`")),
+            "verb {verb}, stderr: {e}"
+        );
+    }
+    let (code, _o, e) = run_binary_with(&inv, &["--sidecar", &alt_s, "diagnose", "egress"]);
+    assert_eq!(code, 2, "stderr: {e}");
+    assert!(
+        e.contains("--sidecar is not valid with `diagnose`"),
+        "stderr: {e}"
+    );
+}
+
+/// `mysbx-once` refuses the flag (D22, cli.md D30): the once run's
+/// sidecar is the temp root, so a named host directory would be read
+/// by no one and written by no one. Both positions: the gate at
+/// `run()` level sees the before-verb spelling, the second gate inside
+/// `run_command` the after-verb one.
+#[test]
+fn once_refuses_the_sidecar_override() {
+    let (inv, _repo, _sidecar) = fixture_uninited("once-sidecar-refused", &[]);
+    let alt = inv.cwd.parent().unwrap().join("elsewhere");
+    std::fs::create_dir_all(&alt).unwrap();
+    let alt_s = alt.to_string_lossy().into_owned();
+
+    let (code, _o, e) = run_once(&inv, &["--sidecar", &alt_s, "--dry-run"]);
+    assert_eq!(code, 70, "stderr: {e}");
+    assert!(
+        e.contains("--sidecar is refused in once-mode"),
+        "stderr: {e}"
+    );
+
+    let (code, _o, e) = run_once(&inv, &["run", "--sidecar", &alt_s, "--", "true"]);
+    assert_eq!(code, 70, "stderr: {e}");
+    assert!(
+        e.contains("--sidecar is refused in once-mode"),
+        "stderr: {e}"
+    );
+}

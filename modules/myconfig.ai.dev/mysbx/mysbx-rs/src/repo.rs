@@ -560,18 +560,29 @@ fn guarded(repo: Repo, home: Option<&Path>) -> Result<Repo, Error> {
                 gitdir: gitdir.to_owned(),
             });
         }
-        // The sidecar is mysbx's own trusted state — the file that
-        // decides what may be bound at all (config.md D2). Binding it
-        // (or anything containing it, or anything inside it) would let
-        // the payload rewrite its own policy, so a `.git` pointer at
-        // the sidecar is refused in EVERY direction, not approvable.
-        if gitdir.starts_with(&repo.sidecar) || repo.sidecar.starts_with(gitdir) {
+    }
+    check_git_dirs_against_sidecar(&repo.git_dirs, &repo.sidecar)?;
+    Ok(repo)
+}
+
+/// The sidecar half of the git-metadata guard (review-2 item 1),
+/// public because the `--sidecar` override (cli.md D30) re-runs it
+/// against the NAMED directory: `resolve` checked the rule with the
+/// derived `<repo>.mysbx`, and a replaced sidecar must pass the same
+/// rule. The sidecar is mysbx's own trusted state — the file that
+/// decides what may be bound at all (config.md D2). Binding it (or
+/// anything containing it, or anything inside it) would let the
+/// payload rewrite its own policy, so a `.git` pointer at the sidecar
+/// is refused in EVERY direction, not approvable.
+pub fn check_git_dirs_against_sidecar(git_dirs: &[PathBuf], sidecar: &Path) -> Result<(), Error> {
+    for gitdir in git_dirs {
+        if gitdir.starts_with(sidecar) || sidecar.starts_with(gitdir) {
             return Err(Error::GitDirForbidden {
                 gitdir: gitdir.to_owned(),
             });
         }
     }
-    Ok(repo)
+    Ok(())
 }
 
 #[cfg(test)]
@@ -607,6 +618,37 @@ mod tests {
         let home = base.join(FAKE_HOME_SUB);
         touch_dir(&home);
         home
+    }
+
+    #[test]
+    fn the_git_dirs_guard_against_a_replaced_sidecar_refuses_both_directions() {
+        // cli.md D30: the `--sidecar` override re-runs this half with
+        // the NAMED sidecar. A `.git` pointer INSIDE the new sidecar,
+        // or the new sidecar INSIDE a git dir, is refused in every
+        // direction — exactly like the derived sidecar's.
+        let sidecar = PathBuf::from("/elsewhere/sidecar");
+        assert!(matches!(
+            check_git_dirs_against_sidecar(
+                &[PathBuf::from("/elsewhere/sidecar/state/git")],
+                &sidecar
+            ),
+            Err(Error::GitDirForbidden { .. })
+        ));
+        assert!(matches!(
+            check_git_dirs_against_sidecar(&[PathBuf::from("/elsewhere")], &sidecar),
+            Err(Error::GitDirForbidden { .. })
+        ));
+        // An unrelated git dir passes: the guard is about the SIDE,
+        // not about the tree in general.
+        assert!(
+            check_git_dirs_against_sidecar(&[PathBuf::from("/somewhere/.git")], &sidecar).is_ok()
+        );
+        // A lookalike spelling is not containment: whole components,
+        // the home-guard's discipline.
+        assert!(
+            check_git_dirs_against_sidecar(&[PathBuf::from("/elsewhere/sidecar-2")], &sidecar)
+                .is_ok()
+        );
     }
 
     #[test]

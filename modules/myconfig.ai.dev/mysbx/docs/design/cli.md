@@ -941,6 +941,56 @@ the counts without parsing the human lines. The shape is
 once run does not use, so it reports what the host recorded — the `doctor`
 precedent, which is also allowed for the same reason.
 
+### D30: `--sidecar <path>` overrides the sidecar directory for one invocation
+
+The sidecar is DERIVED — always `<repo>.mysbx`, the sibling of the
+resolved repository (repo.rs, config.md D13) — and this flag is the one
+place an operator names a DIFFERENT directory for ONE invocation:
+`mysbx --sidecar /elsewhere` and `mysbx run --sidecar /elsewhere --
+CMD` run against `/elsewhere`'s configuration, state and clones while
+the repository stays the one the cwd resolves to. The next run derives
+the sidecar again; the flag writes nothing to the repository and there
+is no TOML surface for it — the flag is the whole switch, the
+`--session` precedent (D1's workspace model).
+
+**Scope: the two sandbox forms.** Bare form and `run -- CMD` — the only
+verbs with a run whose state root the sidecar IS. Every other verb
+rejects the flag (the `--ro`/`--rw` scope, D16): `init`/`edit` still
+create and edit the DERIVED sidecar (a custom location is a hand-written
+`config.toml` today), `status`/`session`/the handoff verbs read the
+derived one, and `attach`'s registry key is the workspace itself — the
+repo and the session — not the sidecar's path. `diagnose` sits outside
+the big refusal arm's verb list (its flags are its own, D29), so its
+`--sidecar` refusal is its own explicit arm: a flag the group does not
+know is refused there too, never silently dropped.
+
+**Position and spelling: one rule, like every run-scoped flag.** Before
+the verb and after it for `run` (D10/D16), never twice in one
+invocation, in either position (D5). The value takes the same three
+path spellings a `--ro`/`--rw` path accepts (D16/D8) — absolute,
+`~/…` expanded against $HOME, or relative to the cwd — and must
+EXIST: the run requires an initialized sidecar (D13), so a named
+directory without its `config.toml` is refused with the same `mysbx
+init` hint a missing derived sidecar gives, and a nonexistent path is a
+canonicalize error naming it. The home-exposure refusal applies
+unchanged (review-3 item 4): the sidecar may neither BE the home
+directory nor contain it.
+
+**Guards re-run, not assumed.** `resolve_cwd` ran its git-metadata
+half of the guard with the DERIVED sidecar (review-2 item 1: a `.git`
+pointer at the sidecar is refused in every direction, not approvable);
+the override re-runs exactly that half against the NAMED directory
+before anything reads it. Everything downstream — the config layer and
+its parent chain (config.md D29), the state-dirs, the session clones,
+`result.json`, the egress logs, the ssh keypair, the `## ` run report's
+`sidecar:` line — follows `repo.sidecar` and needs no change of its
+own.
+
+**`mysbx-once` refuses it (D22):** the once run's sidecar is the temp
+root by construction; a named host directory would be read by no one
+and written by no one, and accept-and-ignore is the failure mode the
+gate exists to prevent.
+
 ## Non-goals
 
 - No mysbx daemon — the dtach master is per run and ends with it —
