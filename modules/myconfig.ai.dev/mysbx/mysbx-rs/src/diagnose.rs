@@ -5,8 +5,12 @@
 //!
 //! The broker writes one JSON object per decision to
 //! `<sidecar>/egress/<pid>/decisions.jsonl`; the payload cannot reach
-//! that file (it is outside the directory the sandbox binds). This verb
-//! is the other half of that design: what the broker recorded must be
+//! that file (it is outside the directory the sandbox binds). The sweep
+//! merges each gone run's file into the durable
+//! `<sidecar>/egress/log.jsonl` before removing its directory
+//! (docs/design/egress.md E7), so this verb reads BOTH: the surviving
+//! `<pid>/` directories and `log.jsonl` grouped by pid. This verb is
+//! the other half of that design: what the broker recorded must be
 //! readable afterwards, or the log is a write-only artefact.
 //!
 //! The verb only READS. It starts no sandbox, mutates nothing and needs no
@@ -226,9 +230,14 @@ fn render_json(log: &RunLog) -> String {
     )
 }
 
-/// Read every `<pid>/decisions.jsonl` under `root`, newest pid first.
-/// A missing root is an empty list (no run has written one yet); any
-/// other read failure is an error the caller reports.
+/// Read every run the egress root still knows about, newest pid first:
+/// each surviving `<pid>/decisions.jsonl` directory, plus the runs the
+/// sweep already reclaimed, reconstructed from the durable `log.jsonl`
+/// grouped on the `pid` field (docs/design/egress.md E7). A pid that
+/// has both is reported from the directory — the live record wins over
+/// the consolidated history. A missing root is an empty list (no run
+/// has written one yet); any other read failure is an error the caller
+/// reports.
 fn read_logs(root: &Path) -> Result<Vec<RunLog>, String> {
     let entries = match std::fs::read_dir(root) {
         Ok(entries) => entries,
@@ -255,6 +264,35 @@ fn read_logs(root: &Path) -> Result<Vec<RunLog>, String> {
             path,
         });
     }
+    // `log.jsonl` carries the runs the sweep already reclaimed; its
+    // lines carry the run's pid (E4), so grouping on the `pid` field
+    // reconstructs the same per-run summary a live directory holds
+    // (E7). A surviving directory is the live record, so its pid wins
+    // over the history on overlap.
+    let durable = root.join("log.jsonl");
+    let text = match std::fs::read_to_string(&durable) {
+        Ok(text) => text,
+        // No sweep has consolidated under this sidecar yet: no run was
+        // reclaimed, so there is no history to add.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(e) => return Err(format!("cannot read {}: {e}", durable.display())),
+    };
+    let mut history: Vec<RunLog> = Vec::new();
+    for decision in text.lines().filter_map(parse_line) {
+        let Some(pid) = decision.pid else {
+            continue;
+        };
+        match history.iter_mut().find(|log| log.pid == pid) {
+            Some(log) => log.decisions.push(decision),
+            None if logs.iter().any(|log| log.pid == pid) => {}
+            None => history.push(RunLog {
+                pid,
+                decisions: vec![decision],
+                path: durable.clone(),
+            }),
+        }
+    }
+    logs.extend(history);
     logs.sort_by(|a, b| b.pid.cmp(&a.pid));
     Ok(logs)
 }
@@ -458,5 +496,120 @@ mod tests {
             logs.iter().map(|log| log.pid).collect::<Vec<_>>(),
             vec![99, 11]
         );
+    }
+
+    #[test]
+    fn a_missing_log_jsonl_leaves_the_per_run_dirs_unchanged() {
+        // The old shape: no `log.jsonl` was ever consolidated (E7).
+        let root =
+            std::env::temp_dir().join(format!("mysbx-diagnose-durable-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dir = root.join("7");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("decisions.jsonl"),
+            r#"{"ts":1,"pid":7,"event":"listen","why":"dir only"}"#,
+        )
+        .unwrap();
+        let logs = read_logs(&root).unwrap();
+        let _ = std::fs::remove_dir_all(&root);
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].pid, 7);
+        assert_eq!(logs[0].channel(), Some("dir only"));
+        assert_eq!(logs[0].path, dir.join("decisions.jsonl"));
+    }
+
+    #[test]
+    fn gone_pids_come_from_log_jsonl_grouped_by_pid() {
+        // Only `log.jsonl` survives: the sweep reclaimed both directories.
+        let root = std::env::temp_dir().join(format!("mysbx-diagnose-hist-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("log.jsonl"),
+            concat!(
+                r#"{"ts":1,"pid":5,"event":"listen","why":"a -> 127.0.0.1:1"}"#,
+                "\n",
+                r#"{"ts":2,"pid":5,"event":"allow","why":"pid 6 -> 127.0.0.1:1"}"#,
+                "\n",
+                r#"{"ts":3,"pid":9,"event":"listen","why":"b -> 127.0.0.1:2"}"#,
+                "\n",
+            ),
+        )
+        .unwrap();
+        let logs = read_logs(&root).unwrap();
+        let _ = std::fs::remove_dir_all(&root);
+        assert_eq!(
+            logs.iter().map(|log| log.pid).collect::<Vec<_>>(),
+            vec![9, 5]
+        );
+        assert_eq!(logs[0].channel(), Some("b -> 127.0.0.1:2"));
+        assert_eq!(logs[1].count("allow"), 1);
+        // The reconstructed run names the durable file as its source.
+        assert_eq!(logs[1].path, root.join("log.jsonl"));
+    }
+
+    #[test]
+    fn a_surviving_dir_wins_over_log_jsonl_for_the_same_pid() {
+        // The dir is the live record; its pid's history lines are ignored.
+        let root =
+            std::env::temp_dir().join(format!("mysbx-diagnose-overlap-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dir = root.join("5");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("decisions.jsonl"),
+            r#"{"ts":9,"pid":5,"event":"listen","why":"from the dir"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("log.jsonl"),
+            concat!(
+                r#"{"ts":1,"pid":5,"event":"listen","why":"stale history"}"#,
+                "\n",
+                r#"{"ts":2,"pid":5,"event":"allow","why":"stale too"}"#,
+                "\n",
+                r#"{"ts":3,"pid":9,"event":"listen","why":"b -> 127.0.0.1:2"}"#,
+                "\n",
+            ),
+        )
+        .unwrap();
+        let logs = read_logs(&root).unwrap();
+        let _ = std::fs::remove_dir_all(&root);
+        assert_eq!(
+            logs.iter().map(|log| log.pid).collect::<Vec<_>>(),
+            vec![9, 5]
+        );
+        // pid 5 comes from the dir alone.
+        assert_eq!(logs[1].decisions.len(), 1);
+        assert_eq!(logs[1].channel(), Some("from the dir"));
+        // pid 9 still appears from the history.
+        assert_eq!(logs[0].path, root.join("log.jsonl"));
+    }
+
+    #[test]
+    fn foreign_lines_in_log_jsonl_are_skipped_not_fatal() {
+        let root = std::env::temp_dir().join(format!("mysbx-diagnose-bad-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("log.jsonl"),
+            concat!(
+                "not json at all\n",
+                r#"{"ts":1,"pid":5,"event":"all"#,
+                "\n",
+                // A line without a parsable pid cannot be grouped.
+                r#"{"ts":1,"event":"allow","why":"no pid"}"#,
+                "\n",
+                r#"{"ts":2,"pid":5,"event":"allow","why":"pid 6 -> 127.0.0.1:1"}"#,
+                "\n",
+            ),
+        )
+        .unwrap();
+        let logs = read_logs(&root).unwrap();
+        let _ = std::fs::remove_dir_all(&root);
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].pid, 5);
+        assert_eq!(logs[0].count("allow"), 1);
     }
 }

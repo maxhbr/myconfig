@@ -912,6 +912,12 @@ carries the meaning. `egress` is not a target the verb acts on, it is WHICH
 diagnosis is asked for — a later `diagnose <something-else>` (a policy
 diff, a detach ledger) joins without growing the top-level verb list.
 
+**Two sources, one report.** The surviving `<pid>/` directories, plus
+the durable `egress/log.jsonl` grouped by pid — the sweep consolidates
+each gone run's log there before reclaiming its directory (E7), so a
+finished run stays readable; a pid that has both is reported from the
+directory, the live record over the consolidated history.
+
 **Read-only, and that is the contract.** No sandbox starts, no sidecar file
 is written, no wrapper pin is required. It therefore works on exactly the
 host state an operator brings to it: a broker that already exited, a

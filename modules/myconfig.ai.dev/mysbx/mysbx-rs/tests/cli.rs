@@ -12238,6 +12238,40 @@ fn diagnose_egress_is_read_only_and_reports_an_empty_sidecar() {
 }
 
 #[test]
+fn diagnose_egress_reads_the_durable_log_jsonl_for_gone_runs() {
+    // cli.md D29 / egress.md E7: a run the sweep already reclaimed lives
+    // on in `egress/log.jsonl`; its summary is reconstructed by grouping
+    // on the `pid` field, and `--run` selects it like a surviving one.
+    let (inv, _repo, sidecar) = fixture("diagnose-egress-history", &[]);
+    std::fs::create_dir_all(sidecar.join("egress")).unwrap();
+    std::fs::write(
+        sidecar.join("egress").join("log.jsonl"),
+        concat!(
+            r#"{"ts":1,"pid":4242,"event":"listen","why":"/run/user/1000/mysbx-egress/4242/litellm.sock -> 127.0.0.1:4000"}"#,
+            "\n",
+            r#"{"ts":2,"pid":4242,"event":"allow","why":"pid 9 uid 0 -> 127.0.0.1:4000"}"#,
+            "\n",
+            r#"{"ts":3,"pid":9,"event":"listen","why":"chan 9"}"#,
+            "\n",
+        ),
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_command(spawn_with_args(&inv, &["diagnose", "egress"]));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("run 4242"), "{stdout}");
+    assert!(stdout.contains("1 admissions"), "{stdout}");
+    assert!(stdout.contains("run 9"), "{stdout}");
+    // The history-filtered form: `--run` selects a reconstructed run.
+    let (code, one, stderr) = run_command(spawn_with_args(
+        &inv,
+        &["diagnose", "egress", "--run", "9", "--json"],
+    ));
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(one.contains("\"pid\":9,"), "{one}");
+    assert!(!one.contains("4242"), "{one}");
+}
+
+#[test]
 fn diagnose_is_allowed_in_a_once_run() {
     // cli.md D29/D22: `diagnose` reads the HOST sidecar, which a once run
     // does not use, so it is allowed — the `doctor` precedent. A refused
