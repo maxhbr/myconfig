@@ -112,6 +112,7 @@ let
         else
           [ cfg.model.default ];
     };
+    externalSkillDirs = cfg.skills.externalDirs;
   };
 in
 {
@@ -150,6 +151,27 @@ in
           LiteLLM on `thing`'s wg0 IP when no local proxy is present.
           Override per-host to point at a different OpenAI-compatible
           endpoint.
+        '';
+      };
+    };
+
+    # Deliberately NOT under `service` either, same reason as `model`: the
+    # sandbox tiers (mysbx, ai.microvm agents) run the hermes CLI against
+    # the same skills view as the host CLI.
+    skills = {
+      externalDirs = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = ''
+          Extra skill directories hermes scans in addition to
+          `$HERMES_HOME/skills`, written to the `skills.external_dirs`
+          key of `~/.hermes/config.yaml` by the launchers' repair-merge
+          seeder (union-merged with entries already in the config, never
+          removed). Entries support `~` and `''${VAR}` expansion; relative
+          paths resolve against HERMES_HOME. `myconfig.ai.dev.skills`
+          points this at the framework-synced `~/.agents/skills` — the
+          location every other harness reads but hermes does not scan on
+          its own.
         '';
       };
     };

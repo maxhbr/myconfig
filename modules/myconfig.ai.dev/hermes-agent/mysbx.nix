@@ -68,6 +68,7 @@ let
     # `providers` view would just duplicate the LiteLLM model list on every
     # launch's merge.
     providerEntry = null;
+    externalSkillDirs = cfg.skills.externalDirs;
   };
   inherit (seeding) seed;
 

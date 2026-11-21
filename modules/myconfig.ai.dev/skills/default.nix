@@ -108,6 +108,17 @@ let
   # agent can pin a fast/cheap model for its sub-agents. Only applied on
   # hosts with pi-coding-agent enabled.
   handcraftedAgents = config.myconfig.ai.dev.skills.handcraftedAgents;
+
+  # Whether the shared `~/.agents/skills` discovery directory is populated
+  # on this host: with the framework (`cfg.enable`) that is the `agents`
+  # target — on when pi-coding-agent is enabled, unless a host forces it
+  # off via `targets.agents.enable`; without the framework it is the
+  # handcrafted fallback `home.file` entries (also pi-gated).
+  agentsSkillsDeployed =
+    if cfg.enable then
+      (cfg.targets.agents.enable or harnessEnabled.pi)
+    else
+      (harnessEnabled.pi && handcrafted != { });
 in
 {
   imports = [
@@ -272,6 +283,21 @@ in
         }
       ];
     }
+    # Make hermes see the synced skills: it scans only `$HERMES_HOME/skills`
+    # plus the `skills.external_dirs` entries of its config — NOT the
+    # `~/.agents/skills` Agent Skills location every other harness reads.
+    # Pointing it there keeps a single owner of the directory (the
+    # framework sync) instead of rsyncing a second copy into hermes' own
+    # skills root, which hermes itself writes to (bundled copy, hub
+    # installs, agent-created skills). The launchers' repair-merge seeder
+    # (../hermes-agent/seed-cli-config.nix) writes the option into
+    # `~/.hermes/config.yaml` on the host and in every sandbox tier.
+    (lib.mkIf
+      (agentsSkillsDeployed && (config.myconfig.ai.dev ? hermes) && config.myconfig.ai.dev.hermes.enable)
+      {
+        myconfig.ai.dev.hermes.skills.externalDirs = lib.mkDefault [ "~/.agents/skills" ];
+      }
+    )
     (lib.mkIf cfg.enable {
       home-manager.sharedModules = [
         agentSkillsHmModule

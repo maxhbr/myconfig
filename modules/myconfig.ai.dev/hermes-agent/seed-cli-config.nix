@@ -38,6 +38,10 @@
 #     `base_url`/`api_key`/`models` re-asserted, so the model picker knows
 #     the proxy and its model list; OTHER provider entries the user added
 #     are never touched.
+#   * `skills.external_dirs` is UNION-merged: the seeded entries (when
+#     `externalSkillDirs != []`) are appended to whatever the config
+#     already lists, and nothing is ever removed — same repair shape as
+#     the providers rule above.
 #   * everything else (hooks, toolsets, display, the aoe blocks, …) is
 #     preserved byte-for-byte in shape — the file is rewritten via
 #     `yaml.safe_dump`, but only the keys above change.
@@ -57,6 +61,10 @@
   # sandbox tier (which must stay minimal). Shape:
   #   { key = "f13-litellm"; name = "LiteLLM (f13)"; models = [ … ]; }
   providerEntry ? null,
+  # Extra skill directories to union-merge into the config's
+  # `skills.external_dirs` (empty list = leave the skills section
+  # untouched).
+  externalSkillDirs ? [ ],
 }:
 let
   mergePy =
@@ -76,7 +84,7 @@ let
         import yaml
         from pathlib import Path
 
-        route_json, provider_json, config_path = sys.argv[1], sys.argv[2], Path(sys.argv[3])
+        route_json, provider_json, skills_json, config_path = sys.argv[1], sys.argv[2], sys.argv[3], Path(sys.argv[4])
         # `route_json`/`provider_json` are FILE paths (see the `routeFile`
         # comment), not inline JSON strings.
         with open(route_json) as f:
@@ -85,6 +93,10 @@ let
         if provider_json != "null":
             with open(provider_json) as f:
                 provider = json.load(f)
+        skills_dirs = None
+        if skills_json != "null":
+            with open(skills_json) as f:
+                skills_dirs = json.load(f)
 
         config = {}
         if config_path.exists():
@@ -133,6 +145,18 @@ let
             providers[provider["key"]] = entry
             config["providers"] = providers
 
+        if skills_dirs is not None:
+            skills = config.get("skills")
+            if not isinstance(skills, dict):
+                skills = {}
+            dirs = skills.get("external_dirs") or []
+            if isinstance(dirs, str):
+                dirs = [dirs]
+            elif not isinstance(dirs, list):
+                dirs = []
+            skills["external_dirs"] = dirs + [d for d in skills_dirs if d not in dirs]
+            config["skills"] = skills
+
         tmp = str(config_path) + ".hermes-seed-merge.tmp"
         with open(tmp, "w") as f:
             yaml.safe_dump(config, f, default_flow_style=False, sort_keys=False)
@@ -159,6 +183,9 @@ let
         models = providerEntry.models;
       }
   );
+  skillsFile = pkgs.writeText "hermes-seed-skills.json" (
+    if externalSkillDirs == [ ] then "null" else builtins.toJSON externalSkillDirs
+  );
 
   seedScript = ''
     hermes_home="''${HERMES_HOME:-$HOME/.hermes}"
@@ -169,15 +196,16 @@ let
       # the LiteLLM route into it. Never a destructive rewrite.
       # (`writePython3` emits a single executable AT $out — no `bin/`
       # inside — so the script is referenced directly, not via getExe.)
-      ${mergePy} ${routeFile} ${providerFile} "$config" || true
+      ${mergePy} ${routeFile} ${providerFile} ${skillsFile} "$config" || true
     else
       mkdir -p "$hermes_home"
       (umask 077 && cat ${seedConfig} >"$config")
     fi
   '';
 
-  # The seeded fresh-home config: model route only, so every other key keeps
-  # the upstream default. `provider = "custom"` + a non-empty
+  # The seeded fresh-home config: model route (and the extra skill
+  # directories, when seeded) only, so every other key keeps the upstream
+  # default. `provider = "custom"` + a non-empty
   # `base_url`/`api_key` is also what `main.py` `_has_any_provider_configured`
   # accepts, so no first-run setup wizard appears in a fresh sandbox home.
   seedConfig = (pkgs.formats.yaml { }).generate "hermes-mysbx-config.yaml" (
@@ -196,6 +224,9 @@ let
         api_key = apiKey;
         models = providerEntry.models;
       };
+    }
+    // lib.optionalAttrs (externalSkillDirs != [ ]) {
+      skills.external_dirs = externalSkillDirs;
     }
   );
 in
