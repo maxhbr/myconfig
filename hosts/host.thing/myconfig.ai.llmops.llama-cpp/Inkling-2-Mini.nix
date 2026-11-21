@@ -19,6 +19,16 @@
 # via the Q8_0 mmproj projector on the :mmproj variants (validated against
 # the pinned build: `inkling2v` projector loads and ingests images).
 #
+# Loop guardrails: the model card warns the model "sometimes became stuck in
+# long reasoning loops" and recommends output-token limits. The reasoning
+# budget is the direct fix — it counts tokens inside the
+# <|content_thinking|> block and, when exhausted, force-feeds the
+# end-of-thinking tag (with a wrap-up note) so the answer still completes.
+# It is a server-side default: clients may override it per request via
+# `reasoning_budget_tokens`. --n-predict is only a fallback cap for clients
+# that send no max_tokens (LiteLLM always sends one); reasoning-budget then
+# binds the thinking part of the same budget.
+#
 # DSpark speculative decoding is WIRED BUT OFF: the only published drafter
 # (unsloth dspark-Inkling-2-Mini-Q8_0.gguf, arch `dflash`) fails to load on
 # mainline with a vocab-padding shape mismatch (markov_w1 expects the
@@ -85,6 +95,20 @@ let
         "0"
         "--min-p"
         "0.0"
+        # Cap runaway thinking: once 6144 tokens are spent inside the
+        # thinking block, the sampler injects the wrap-up message and the
+        # end tag, so the model must produce its final answer (it keeps
+        # generating within the remaining response budget). LiteLLM caps
+        # total output at contextWindow/4 = 8192, so thinking + answer
+        # still fit.
+        "--reasoning-budget"
+        "6144"
+        "--reasoning-budget-message"
+        "Reasoning budget exhausted. Summarize what you established and give the final answer now."
+        # Server-side output cap for clients that send no max_tokens;
+        # per-request max_tokens/n_predict still overrides it.
+        "--n-predict"
+        "16384"
       ]
       ++ lib.optionals dspark [
         "--spec-type"
