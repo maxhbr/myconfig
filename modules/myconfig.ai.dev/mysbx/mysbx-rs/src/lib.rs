@@ -7837,6 +7837,15 @@ fn ensure_egress_run_dir(dir: &std::path::Path) -> Result<(), String> {
 /// debris an exec-mode run leaves behind (nothing of the host outlives the
 /// exec to clean it). A name that does not parse as a pid is not ours and
 /// stays untouched, and this run's own entry is never swept.
+///
+/// A directory holding a `decisions.jsonl` is removed only after its
+/// lines are merged into `root`'s durable `log.jsonl`
+/// (docs/design/egress.md E7): the per-run files are that log's
+/// write-ahead buffers, so the sweep never destroys an unread decision
+/// record. A merge that fails keeps the directory — debris beats a
+/// lost log, and a later run retries. Both call sites share this: the
+/// XDG run-directory root carries no `decisions.jsonl`, so it sweeps
+/// exactly as before.
 fn sweep_pid_dirs(root: &std::path::Path) {
     let Ok(entries) = std::fs::read_dir(root) else {
         return;
@@ -7847,9 +7856,73 @@ fn sweep_pid_dirs(root: &std::path::Path) {
             continue;
         };
         if stale_pid != std::process::id() && pid_gone(stale_pid) {
-            let _ = std::fs::remove_dir_all(entry.path());
+            let dir = entry.path();
+            let run_log = dir.join("decisions.jsonl");
+            if !run_log.exists() {
+                let _ = std::fs::remove_dir_all(&dir);
+                continue;
+            }
+            match consolidate_egress_log(root, &run_log) {
+                Ok(()) => {
+                    let _ = std::fs::remove_dir_all(&dir);
+                }
+                Err(e) => eprintln!("mysbx: {e}"),
+            }
         }
     }
+}
+
+/// Merge one per-run `decisions.jsonl` into `root`'s durable `log.jsonl`
+/// (docs/design/egress.md E7). Byte-exact full-line append with dedupe:
+/// a line already in `log.jsonl` is never re-appended (every line carries
+/// its run's pid, E4, so cross-run collisions cannot hide a dupe), no
+/// line is sorted, filtered or rewritten — the merge copies bytes, in
+/// file order, appended at the end. `log.jsonl` is created 0600, the
+/// [`DecisionLog`] precedent (it names peers and runs). Best-effort in
+/// the sweep's own shape: an unreadable per-run file is an error the
+/// caller prints and keeps the directory for, never a failed run.
+fn consolidate_egress_log(root: &std::path::Path, run_log: &std::path::Path) -> Result<(), String> {
+    let durable = root.join("log.jsonl");
+    let existing: Vec<String> = match std::fs::read_to_string(&durable) {
+        Ok(text) => text.lines().map(str::to_owned).collect(),
+        // `log.jsonl` lives in the same `egress/` root but is a plain
+        // file, so the sweep's pid-name parse never touches it; the
+        // merge reads per-run files only — it is never its own input.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(e) => return Err(format!("cannot read {}: {e}", durable.display())),
+    };
+    let fresh = std::fs::read_to_string(run_log)
+        .map_err(|e| format!("cannot read {}: {e}", run_log.display()))?;
+    let mut new_lines: Vec<&str> = Vec::new();
+    for line in fresh.lines() {
+        // Dedupe against `log.jsonl` only (a partial merge retried):
+        // this file's own bytes are copied verbatim, duplicates
+        // included — the merge never interprets content (E7).
+        if !existing.iter().any(|known| known == line) {
+            new_lines.push(line);
+        }
+    }
+    if new_lines.is_empty() {
+        return Ok(());
+    }
+    {
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut out = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .mode(0o600)
+            .open(&durable)
+            .map_err(|e| format!("cannot open {}: {e}", durable.display()))?;
+        for line in new_lines {
+            out.write_all(line.as_bytes())
+                .and_then(|()| out.write_all(b"\n"))
+                .map_err(|e| format!("cannot append to {}: {e}", durable.display()))?;
+        }
+        out.flush()
+            .map_err(|e| format!("cannot flush {}: {e}", durable.display()))?;
+    }
+    Ok(())
 }
 
 /// The recursive socket audit of the podman-gvisor proxy-only lift
@@ -7989,8 +8062,9 @@ fn start_egress_broker(
         <std::fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o700),
     )
     .map_err(|e| format!("cannot chmod {} to 0700: {e}", log_dir.display()))?;
-    // The log outlives its run for `mysbx diagnose egress` to read, so the
-    // directories of gone pids are the sidecar debris the next run sweeps
+    // The log outlives its run for `mysbx diagnose egress` to read: the
+    // sweep first merges every gone pid's lines into the durable
+    // `egress/log.jsonl` (E7) and only then removes the directories
     // (the waypipe token-directory rule, config.md D18).
     sweep_pid_dirs(&log_root);
     let log_path = log_dir.join("decisions.jsonl");
@@ -10502,6 +10576,134 @@ mod tests {
         assert_eq!(run(vec!["run".into(), "--".into()]), 2);
         assert_eq!(run(vec!["run".into(), "--dry-run".into()]), 2);
         assert_eq!(run(vec!["run".into(), "--verbose".into()]), 2);
+    }
+
+    // ---- the sweep-before-read consolidation (docs/design/egress.md E7) --
+
+    /// One consolidation fixture: an `egress/` root in the temp tree with
+    /// a gone pid's `decisions.jsonl` (or absent/chmod 000, per the test),
+    /// cleaned up by the caller.
+    fn consolidation_root(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "mysbx-consolidate-{name}-{}-{}",
+            std::process::id(),
+            format!("{:?}", std::thread::current().id())
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("create the egress root");
+        dir
+    }
+
+    #[test]
+    fn the_sweep_merges_a_gone_pids_log_into_log_jsonl_before_removing_it() {
+        // E7: a gone pid's directory is deleted only AFTER its lines are
+        // in the durable `log.jsonl` — the per-run files are the write-
+        // ahead buffers of that log, and a sweep without the merge
+        // destroys the record `mysbx diagnose egress` reads (D29).
+        let root = consolidation_root("merge");
+        let gone = root.join("999999");
+        std::fs::create_dir_all(&gone).expect("create the gone pid's dir");
+        let line_a = r#"{"ts":1794583068,"pid":9671,"event":"listen","why":"upstream"}"#;
+        let line_b = r#"{"ts":1794583069,"pid":9671,"event":"allow","why":"peer"}"#;
+        std::fs::write(
+            gone.join("decisions.jsonl"),
+            format!("{line_a}\n{line_b}\n"),
+        )
+        .expect("write the gone pid's log");
+        // A live pid's entry (this test's own pid) and a non-pid entry:
+        // neither is swept (the pid-probe and name-parse rules).
+        let live = root.join(std::process::id().to_string());
+        std::fs::create_dir_all(&live).expect("create the live pid's dir");
+        std::fs::write(
+            live.join("decisions.jsonl"),
+            r#"{"ts":1,"pid":1,"event":"listen","why":"live"}"#.to_owned() + "\n",
+        )
+        .expect("write the live pid's log");
+        let stranger = root.join("not-a-pid");
+        std::fs::create_dir_all(&stranger).expect("create the non-pid entry");
+        // The existing `log.jsonl` carries `line_a` ALREADY (a previous
+        // sweep's work, or a merged crash-retried directory): the merge
+        // must not append it twice.
+        std::fs::write(root.join("log.jsonl"), format!("{line_a}\n"))
+            .expect("write the existing log.jsonl");
+
+        sweep_pid_dirs(&root);
+
+        assert!(!gone.exists(), "the gone pid's directory must be removed");
+        assert!(live.is_dir(), "the live pid's directory must survive");
+        assert!(stranger.is_dir(), "the non-pid entry must survive");
+        let merged =
+            std::fs::read_to_string(root.join("log.jsonl")).expect("read the merged log.jsonl");
+        assert_eq!(
+            merged,
+            format!("{line_a}\n{line_b}\n"),
+            "every line exactly once, appended in file order"
+        );
+
+        // The second sweep is a no-op: the gone directory is already
+        // gone, and a re-created twin would not double-append either.
+        sweep_pid_dirs(&root);
+        let again = std::fs::read_to_string(root.join("log.jsonl"))
+            .expect("read the merged log.jsonl again");
+        assert_eq!(
+            merged, again,
+            "the second sweep must leave log.jsonl byte-identical"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_sweep_retries_a_directory_whose_log_it_could_not_merge() {
+        // E7: a gone pid's directory whose `decisions.jsonl` cannot be
+        // read survives the sweep — deleting it would lose the log for
+        // good — and the sweep itself does not fail the run.
+        let root = consolidation_root("unreadable");
+        let gone = root.join("999999");
+        std::fs::create_dir_all(&gone).expect("create the gone pid's dir");
+        let log = gone.join("decisions.jsonl");
+        std::fs::write(&log, "irrelevant, never read\n").expect("write the log");
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&log, std::fs::Permissions::from_mode(0o000))
+                .expect("chmod the log unreadable");
+        }
+        std::fs::write(root.join("log.jsonl"), "").expect("create the durable log");
+
+        sweep_pid_dirs(&root);
+
+        assert!(gone.is_dir(), "the unreadable directory must survive");
+        assert_eq!(
+            std::fs::read_to_string(root.join("log.jsonl")).expect("read the durable log"),
+            "",
+            "nothing was merged from a file the sweep could not read"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn log_jsonl_is_created_owner_only() {
+        // E7: `log.jsonl` names peers and runs like the per-run
+        // `DecisionLog` file, so it is 0600 at creation.
+        let root = consolidation_root("mode");
+        let gone = root.join("999999");
+        std::fs::create_dir_all(&gone).expect("create the gone pid's dir");
+        std::fs::write(
+            gone.join("decisions.jsonl"),
+            r#"{"ts":1,"pid":9671,"event":"listen","why":""}"#.to_owned() + "\n",
+        )
+        .expect("write the gone pid's log");
+
+        sweep_pid_dirs(&root);
+
+        {
+            use std::os::unix::fs::MetadataExt;
+            let mode = std::fs::metadata(root.join("log.jsonl"))
+                .expect("log.jsonl exists after the sweep")
+                .mode()
+                & 0o777;
+            assert_eq!(mode, 0o600, "log.jsonl must be created 0600");
+        }
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     // ---- the waypipe channel's host half (docs/design/config.md D18) ----

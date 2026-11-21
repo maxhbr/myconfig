@@ -221,7 +221,8 @@ idea 9 wants the log out of the payload's reach. It goes to the sidecar's
 run directory keeps exactly one entry, the socket. The log directory is
 sidecar debris like the waypipe token directories (config.md D18): the
 next run of the same repo sweeps the entries of gone pids, and a refused
-or dry run creates none.
+or dry run creates none — since E7, that sweep consolidates each gone
+pid's lines into the durable `log.jsonl` first.
 
 **The line format is fixed here** (bd myconfig-n8kv.1.4). One JSON object
 per line, appended with a single `write_all` of the whole line plus a
@@ -332,6 +333,72 @@ What went dead, named so the removal commit can be checked against it:
 
 The TCP half of the forwarder is NOT part of this: it serves the podman
 backends (bd myconfig-jq2) and is hardened separately in n8kv.15.
+
+### E7: The sweep consolidates before it deletes — `egress/log.jsonl` is the durable record
+
+The sweep that clears the sidecar's `egress/` debris (E4's paragraph:
+"the next run of the same repo sweeps the entries of gone pids") was,
+alone, a contract violation. `mysbx diagnose egress` (cli.md D29) reads
+the per-run `decisions.jsonl` files back — its own contract says what
+the broker recorded must be readable afterwards — but the sweep runs at
+the START of every broker-backed run, so run B's startup destroyed run
+A's log before anyone had read it. For every run except the one still
+alive, the log was a write-only artefact. The rule closes that:
+
+**Merge before delete.** A gone pid's `<pid>/` directory is removed only
+AFTER its `decisions.jsonl` lines are merged into the sidecar's durable
+log, `egress/log.jsonl` (a plain file in the same `egress/` root). A
+directory whose merge fails is NOT removed: the debris survives a
+failed consolidation — deleting it would lose the log for good — and a
+later run retries. The failure itself is visible (a stderr line), not
+silent.
+
+The merge's three load-bearing properties:
+
+- **Idempotent.** Dedupe on the FULL JSON line, byte-exact. A line
+  already present in `log.jsonl` is never re-appended. This is safe
+  because every line carries its run's pid (E4's format), so two
+different runs can never produce the same line — a full-line collision
+would be a broker bug, not a merge hazard. A retried consolidation
+  therefore cannot double-append.
+- **Append-only, in file order.** `log.jsonl` only grows: new lines are
+  appended at the end, in the order the per-run file holds them (the
+  broker appends chronologically, E4, so the order survives the merge).
+  No sorting, no filtering, no interpreting, no rewriting — the merge
+  copies bytes.
+- **`log.jsonl` is never an input.** It lives in the same `egress/` root
+  but is a plain file, not a `<pid>/` directory, so the sweep's rule that
+  a name which does not parse as a pid stays untouched already protects
+  it. The merge reads per-run `decisions.jsonl` files only.
+
+`log.jsonl` is created 0600 by the consolidator, the `DecisionLog`
+precedent: it names peers and runs (E4's `pid` and `why` fields), so
+nothing else on the host reads it. The `egress/` root is already 0700
+(E3's directory rule).
+
+**The durability claim.** `log.jsonl` is THE durable record of what left
+the machine through the channel; the per-run `<pid>/` directories are
+its write-ahead buffers — they exist only for the run's lifetime and
+the sweep that reclaims them also persists them. A dry run changes
+nothing: the sweep runs only on real runs (`start_egress_broker` is
+never reached in a dry run — E5's mkdir sentinel is the test), so the
+consolidation is part of a real run's startup only.
+
+**Retention is a host decision, not ours.** `log.jsonl` is NEVER pruned
+automatically — it grows for as long as the host keeps the sidecar,
+and truncating or rotating it is a separate decision for the operator
+(the file is plain JSONL; anything that reads it can also archive it).
+Stating that explicitly is the contract: silent automatic pruning
+would reintroduce the very failure this rule fixes, one sweep later.
+
+**The diagnose reader story.** `mysbx diagnose egress` (D29) reads the
+per-run directories it finds; `log.jsonl` is its source for every run
+whose directory the sweep already reclaimed — which is every finished
+run except survivors of failed consolidations. Grouping `log.jsonl`'s
+lines on the `pid` field reconstructs the same per-run summaries the
+reader builds from a live directory (E4 guarantees every line carries
+the pid), so the minimum viable reader is: the surviving `<pid>/`
+directories, plus `log.jsonl` grouped by pid.
 
 ## Not decided here
 
