@@ -285,6 +285,12 @@ in
     # tmpfs home.
     myconfig.ai.dev.mysbx = lib.mkIf config.myconfig.ai.dev.mysbx.enable {
       extraTools = [ pkgs.opencode ];
+      # The agent registry entry (bd myconfig-fv4h): `opencode` is a
+      # SELECTABLE kind — `mysbx --opencode` or `default-agent =
+      # "opencode"` in a layer. The default stays whatever
+      # `defaultAgent` names (pi on myconfig hosts); this only makes
+      # the choice available.
+      agents.opencode.command = "opencode";
       config.mounts = mysbxOpencodeMounts;
       config.stateDirs = [
         ".local/share/opencode"

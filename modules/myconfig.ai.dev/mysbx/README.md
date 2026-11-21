@@ -500,14 +500,22 @@ another sandbox of the same repository — no mount may land on it, no
 `state-dirs` entry may persist it, and `TMUX_TMPDIR` is set after
 `[env]` like `HOME` and `PATH` (`docs/design/config.md` D16/D17).
 
-`myconfig.ai.dev.mysbx.defaultAgent` names the agent every interactive
-session starts, on the multiplexers that have the concept: `herdr`
-starts it as the initial command of the relocated workspace,
-`workmux` in a vertical split below the dashboard. The default `null`
-starts none, and `tmux`, `aoe` and `orca` ignore it either way. The
-module setting the option must also add the agent's package to
-`myconfig.ai.dev.mysbx.extraTools` — the sandbox PATH is the only
-PATH in there, so a command not in `extraTools` does not exist.
+The agent an interactive session starts is runtime configuration
+(`docs/design/config.md` D32). The registry is
+`myconfig.ai.dev.mysbx.agents.<kind> = { command, args }` — a module
+registering a kind adds its package to
+`myconfig.ai.dev.mysbx.extraTools` too (the sandbox PATH is the only
+PATH in there, so a command not in `extraTools` does not exist). The
+default is the flat `default-agent = "<kind>"` key the generated user
+config seeds from `myconfig.ai.dev.mysbx.defaultAgent`, overridable
+per repository by the sidecar layer and per invocation by
+`mysbx --agent <kind>`, the `--<kind>` shorthands (`mysbx --pi`) or
+`--no-agent` (`docs/design/cli.md` D32). The entry scripts are
+agent-agnostic: the resolved kind, command and arguments reach them
+as `MYSBX_AGENT_*` env, and `herdr` starts that agent in the
+relocated workspace's root pane, `workmux` in a vertical split below
+the dashboard. The default `null` starts none, and `tmux`, `aoe` and
+`orca` ignore the env either way.
 
 In a detached run (`mysbx --detach`/`--detachable`,
 [`docs/design/detach.md`](docs/design/detach.md)) the entry does not

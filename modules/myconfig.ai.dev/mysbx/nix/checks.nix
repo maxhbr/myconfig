@@ -1225,6 +1225,109 @@ in
         touch $out
       '';
 
+  # The agent registry pins of the wrapper (bd myconfig-fv4h,
+  # ../docs/design/config.md D32): the sorted kind list
+  # (`MYSBX_AGENT_NAMES`) and the rendered registry file
+  # (`MYSBX_AGENTS_FILE`) must reach the wrapped binary — the CLI's
+  # `--<kind>` arms match the NAMES pin and `resolve_agent` parses the
+  # file, so a missing or malformed pin is a refused run, never a
+  # silent shell. The wrapper here is built with the same callPackage
+  # shape as ../default.nix's `mkWrapper` (a minimal host: no podman,
+  # no krun, one registered kind pair), and the check greps the
+  # makeBinaryWrapper result the disabled-backends test's idiom uses.
+  # The MODULE side of the pin (test-f13's `agents` carrying both
+  # `pi` and `opencode`, seeded `default-agent = "pi"`) is pinned at
+  # eval time by the generated-config check's `agentOn` scenario and
+  # by the registry assertions — this derivation owns the WRAPPER
+  # half.
+  mysbx-agent-pins-test =
+    let
+      agents = {
+        opencode.command = "opencode";
+        pi = {
+          command = "pi";
+          args = [ "--continue" ];
+        };
+      };
+      agentsFile = (pkgs.formats.toml { }).generate "mysbx-agents.toml" (
+        lib.mapAttrs (
+          _: agent:
+          {
+            inherit (agent) command;
+          }
+          // lib.optionalAttrs (agent.args or [ ] != [ ]) {
+            inherit (agent) args;
+          }
+        ) agents
+      );
+      pkg = pkgs.callPackage ../nix/mysbx.nix {
+        enabledBackends = [
+          "bubblewrap"
+          "nono"
+        ];
+        agentNames = lib.concatStringsSep " " (lib.sort builtins.lessThan (lib.attrNames agents));
+        inherit agentsFile;
+        podmanImage = null;
+        podmanShell = null;
+        podmanPastaSpec = null;
+        podmanEnv = { };
+        krunRuntime = null;
+        krunLauncher = null;
+        krunRootfs = null;
+        microvmQemuLauncher = null;
+        microvmQemuRootfs = null;
+        microvmQemuKernel = null;
+        microvmQemuEnv = { };
+        microvmChLauncher = null;
+        microvmChRootfs = null;
+        microvmChKernel = null;
+        microvmChEnv = { };
+        podmanWaypipe = null;
+        podmanMuxEntries = { };
+        nono = pkgs.nono;
+        ssh-keygen = pkgs.openssh;
+      };
+      content = pkgs.runCommand "mysbx-agent-pins-content" { } ''
+        cat "${pkg}/bin/mysbx" > $out
+      '';
+    in
+    pkgs.runCommand "mysbx-agent-pins-test"
+      {
+        inherit agentsFile;
+        nativeBuildInputs = [ pkgs.gnugrep ];
+      }
+      ''
+        fail() {
+          echo "mysbx-agent-pins-test: $*" >&2
+          exit 1
+        }
+
+        # 1. the NAMES pin: SORTED (an unsorted attrNames would churn
+        #    the drv on every registry edit) and whitespace-separated.
+        grep -aF -- "--set 'MYSBX_AGENT_NAMES' 'opencode pi'" ${content} \
+          || fail "the wrapper does not pin the sorted MYSBX_AGENT_NAMES list"
+
+        # 2. the FILE pin: the store path of the generated registry,
+        #    and the registry itself parses and carries both kinds with
+        #    the right commands (and `args` only when non-empty).
+        grep -aF -- "--set 'MYSBX_AGENTS_FILE' '${agentsFile}'" ${content} \
+          || fail "the wrapper does not pin MYSBX_AGENTS_FILE"
+        grep -qxF '[pi]' "$agentsFile" \
+          || fail "the registry lost the pi kind"
+        grep -qxF 'command = "pi"' "$agentsFile" \
+          || fail "the registry lost pi's command"
+        grep -qxF -- 'args = ["--continue"]' "$agentsFile" \
+          || fail "the registry lost pi's args"
+        grep -qxF '[opencode]' "$agentsFile" \
+          || fail "the registry lost the opencode kind"
+        # opencode registered no args: the key must be absent, not empty.
+        if sed -n '/^\[opencode\]/,/^\[/p' "$agentsFile" | grep -q '^args'; then
+          fail "an args key appeared for a kind that registered none"
+        fi
+
+        touch $out
+      '';
+
   # The herdr entry's worktree-placement contract (bd myconfig-i6h):
   # the entry must point herdr's `[worktrees] directory` at the
   # workmux `<repo>__worktrees` sibling — the same registry
@@ -1385,11 +1488,16 @@ in
           fail "an un-paced 0.1s API poll survived in the relocation subshell"
         fi
 
-        # This check builds the entry WITHOUT defaultAgent: no agent
-        # start may appear anywhere then (bd myconfig-hjwx.5).
-        if grep -q 'herdr agent start' "$entry"; then
-          fail "the entry starts an agent although defaultAgent is null"
-        fi
+        # The agent start is ENV-gated now (bd myconfig-fv4h, config.md
+        # D32): the block is always PRESENT in the rendered entry but
+        # runs only with `MYSBX_AGENT_KIND`/`MYSBX_AGENT_COMMAND` set
+        # (the argv builder resolves the agent, never the entry
+        # itself). Pin the gate statically here; the no-agent
+        # behavioral runs below prove an unset env reaches none of it.
+        grep -q 'MYSBX_AGENT_KIND' "$entry" \
+          || fail "the entry no longer reads the resolved agent env"
+        grep -qF '[ -n "''${MYSBX_AGENT_KIND:-}" ] && [ -n "''${MYSBX_AGENT_COMMAND:-}" ]' "$entry" \
+          || fail "the agent block is not gated on the resolved-agent env"
 
         # Scratch HOME for the live part of the check — nothing under
         # the builder's real HOME is read or written.
@@ -1910,15 +2018,27 @@ in
         mkdir "$out"
       '';
 
-  # The defaultAgent wiring of the two agent-capable entries (bd
-  # myconfig-hjwx.5): both are built WITH and WITHOUT a defaultAgent,
-  # and the rendered scripts must differ exactly as the epic pins
-  # them — herdr starts the agent over the socket API inside the
-  # relocation subshell (1s retry pacing), workmux opens a vertical
-  # split below the dashboard and sends the command to the pane the
-  # split created, and without the option neither entry mentions
-  # any of it (byte-identical to the pre-option scripts, which
-  # mysbx-herdr-entry-test and this check's grep guards pin).
+  # The agent-agnostic entry wiring (bd myconfig-fv4h, config.md D32):
+  # both agent-capable entries are built ONCE, exactly as the wrapper
+  # pins them, and must carry the agent start as an ENV-GATED block —
+  # the resolved agent arrives at RUN time as `MYSBX_AGENT_*` (one
+  # variable per argument: quoted reads only, no eval), never as a
+  # literal command baked at build time. Proven three ways:
+  #
+  #   1. statically: the gate, the quoted `$MYSBX_AGENT_KIND` reads,
+  #      the 1s retry pacing (nono token bucket, bd myconfig-27o)
+  #      and the `${!name}` argument loop are all present, and no
+  #      agent command (pi, opencode) is baked into either script;
+  #   2. behaviorally, herdr: the entry's OWN agent block
+  #      (sed-extracted, the placement-block precedent of
+  #      `mysbx-herdr-entry-test`) runs against a stub `herdr` that
+  #      records its argv — with `MYSBX_AGENT_*` set it starts the
+  #      agent with the kind, pane and every argument verbatim; with
+  #      the env unset it never calls the stub;
+  #   3. behaviorally, workmux: the entry runs a real `tmux` server
+  #      (a private TMUX_TMPDIR) with a stub `workmux` on PATH — with
+  #      `MYSBX_AGENT_*` set the split pane receives the command and
+  #      runs it; with the env unset no second pane is created.
   mysbx-default-agent-test =
     let
       cfg = self.nixosConfigurations.test-f13.config.myconfig.ai.dev.mysbx;
@@ -1926,102 +2046,194 @@ in
         workmux = pkgs.writeShellScriptBin "workmux" "exit 0";
         herdr = pkgs.writeShellScriptBin "herdr" "exit 0";
       };
-      agent = {
-        kind = "pi";
-        command = "pi";
-        args = [ "--continue" ];
-      };
-      herdrOn = pkgs.callPackage ./herdr-entry.nix {
-        herdr = stubs.herdr;
-        tmux = cfg.tmux.package;
-        defaultAgent = agent;
-      };
-      herdrOff = pkgs.callPackage ./herdr-entry.nix {
+      herdrEntry = pkgs.callPackage ./herdr-entry.nix {
         herdr = stubs.herdr;
         tmux = cfg.tmux.package;
       };
-      workmuxOn = pkgs.callPackage ./workmux-entry.nix {
-        workmux = stubs.workmux;
-        tmux = cfg.tmux.package;
-        defaultAgent = agent;
-      };
-      workmuxOff = pkgs.callPackage ./workmux-entry.nix {
+      workmuxEntry = pkgs.callPackage ./workmux-entry.nix {
         workmux = stubs.workmux;
         tmux = cfg.tmux.package;
       };
+      # The stub the sent argv runs: a command that records its own
+      # argv (one word per line) into $AGENT_MARKER, so the pane-run
+      # proves the arguments survived the env hop verbatim.
+      fakeAgent = pkgs.writeShellScriptBin "fake-agent" ''
+        printf '%s\n' "$0" "$@" > "''${AGENT_MARKER:?}"
+      '';
     in
-    pkgs.runCommand "mysbx-default-agent-test" { } ''
-      fail() {
-        echo "mysbx-default-agent-test: $*" >&2
-        exit 1
+    pkgs.runCommand "mysbx-default-agent-test"
+      {
+        nativeBuildInputs = with pkgs; [
+          bashInteractive
+          gnugrep
+          gnused
+          cfg.tmux.package
+        ];
       }
+      ''
+                fail() {
+                  echo "mysbx-default-agent-test: $*" >&2
+                  exit 1
+                }
 
-      herdr_on='${lib.getExe herdrOn}'
-      herdr_off='${lib.getExe herdrOff}'
-      workmux_on='${lib.getExe workmuxOn}'
-      workmux_off='${lib.getExe workmuxOff}'
-      for e in "$herdr_on" "$herdr_off" "$workmux_on" "$workmux_off"; do
-        test -x "$e" || fail "entry not executable: $e"
-        bash -n "$e" || fail "bash -n rejects $e"
-      done
+                herdr_entry='${lib.getExe herdrEntry}'
+                workmux_entry='${lib.getExe workmuxEntry}'
+                for e in "$herdr_entry" "$workmux_entry"; do
+                  test -x "$e" || fail "entry not executable: $e"
+                  bash -n "$e" || fail "bash -n rejects $e"
+                done
 
-      # herdr WITH the option: the agent start lives INSIDE the
-      # relocation subshell (a foreground start would block the
-      # exec and leave the TUI blank), names the kind twice, the
-      # captured root pane, and the literal args after `--`.
-      sed -n '/^($/,/^) >\/dev\/null 2>&1 &$/p' "$herdr_on" > herdr_sub.txt
-      grep -q 'herdr agent start' herdr_sub.txt \
-        || fail "the relocation subshell does not start the agent"
-      grep -q -- '--kind pi' herdr_sub.txt \
-        || fail "the agent start does not name the kind"
-      grep -q -- '-- --continue' herdr_sub.txt \
-        || fail "the agent start does not pass the literal args"
-      grep -q -- '--pane "$pane_id"' herdr_sub.txt \
-        || fail "the agent start does not target the captured root pane"
-      grep -qF "jq -r '.result.root_pane.pane_id // empty'" herdr_sub.txt \
-        || fail "the pane capture does not read .result.root_pane.pane_id"
-      grep -q '^        sleep 1$' herdr_sub.txt \
-        || fail "the agent start retry is not paced at 1s"
-      if grep -q 'sleep 0.1' herdr_sub.txt; then
-        fail "an un-paced 0.1s API poll survived in the relocation subshell"
-      fi
-      # herdr WITHOUT the option: no agent start anywhere.
-      if grep -q 'herdr agent start' "$herdr_off"; then
-        fail "the herdr entry starts an agent although defaultAgent is null"
-      fi
-      if grep -q 'pane_id=' "$herdr_off"; then
-        fail "the herdr entry captures a pane although defaultAgent is null"
-      fi
+                # (1a) The env gate, in both entries.
+                for e in "$herdr_entry" "$workmux_entry"; do
+                  grep -qF '[ -n "''${MYSBX_AGENT_KIND:-}" ] && [ -n "''${MYSBX_AGENT_COMMAND:-}" ]' "$e" \
+                    || fail "the agent block of $e is not gated on the resolved-agent env"
+                done
 
-      # workmux WITH the option: the vertical split, the gate, and
-      # the command sent to the pane the split created.
-      grep -qF "split-window -v -P -F" "$workmux_on" \
-        || fail "the workmux entry does not split vertically"
-      grep -qF "#{pane_id}" "$workmux_on" \
-        || fail "the split does not capture the pane id"
-      grep -q '@workmux_agent_started' "$workmux_on" \
-        || fail "the agent split is not gated on @workmux_agent_started"
-      grep -q -- 'send-keys -t "$agent_pane" pi --continue Enter' "$workmux_on" \
-        || fail "the agent command is not sent to the split pane"
-      # workmux WITHOUT the option: no split at all.
-      if grep -q 'split-window' "$workmux_off"; then
-        fail "the workmux entry splits although defaultAgent is null"
-      fi
-      if grep -q '@workmux_agent_started' "$workmux_off"; then
-        fail "the workmux entry gates an agent although defaultAgent is null"
-      fi
+                # (1b) Quoted reads, never a baked command: the only
+                # spellings of the command and the args are the env
+                # variables, and no agent binary name is baked in.
+                for e in "$herdr_entry" "$workmux_entry"; do
+                  grep -q 'MYSBX_AGENT_COMMAND' "$e" || fail "$e does not read MYSBX_AGENT_COMMAND"
+                  grep -q 'MYSBX_AGENT_ARGC' "$e" || fail "$e does not read MYSBX_AGENT_ARGC"
+                  grep -qF 'MYSBX_AGENT_ARG$agent_i' "$e" || fail "$e does not walk MYSBX_AGENT_ARG<n>"
+                  grep -qF '"''${!agent_arg_var}"' "$e" || fail "$e does not use bash indirection for the args"
+                  if grep -qE '(^|[^[:alnum:]_-])pi([^[:alnum:]_-]|$)' "$e"; then
+                    fail "$e bakes a literal agent name (agent-agnostic since bd myconfig-fv4h)"
+                  fi
+                  if grep -q 'eval ' "$e"; then
+                    fail "$e evals (the argv must arrive as quoted env reads)"
+                  fi
+                done
 
-      mkdir "$out"
-    '';
+                # The env-gated agent block of the herdr entry, as it
+                # renders: from the gate line to the block's closing
+                # `fi` at the loop tail.
+                agent_gate_block="$(sed -n '/MYSBX_AGENT_KIND:-/,/^fi$/p' "$herdr_entry")"
+                printf '%s\n' "$agent_gate_block" | grep -q 'MYSBX_AGENT_COMMAND' \
+                  || fail "the herdr agent block does not read the resolved command"
+
+                # (1c) herdr keeps the 1s retry pacing of the agent start
+                # (nono token bucket, bd myconfig-27o).
+                printf '%s\n' "$agent_gate_block" | grep -q 'sleep 1' \
+                  || fail "the herdr agent start retry is not paced at 1s"
+
+                # (2) herdr, behaviorally: extract the entry's OWN agent
+                # block (from the env gate to its closing fi, the innermost
+                # `pane_id` guard included) and run it with a stub `herdr`
+                # that records its argv.
+                agent_block="$agent_gate_block"
+                printf '%s\n' "$agent_block" | grep -q 'herdr agent start' \
+                  || fail "the extracted herdr block does not start the agent"
+                stub_dir="$(mktemp -d)"
+                cat > "$stub_dir/herdr" <<'STUB'
+        #!/usr/bin/env bash
+        printf '%s\n' "$@" >> "''${HERDR_CALLS:?}"
+        STUB
+                chmod +x "$stub_dir/herdr"
+
+                mkdir -p "$(mktemp -d)/ws"
+                htmp="$(mktemp -d)"
+                calls="$htmp/calls"
+                # WITH the resolved agent: kind, pane and args verbatim.
+                (
+                  export PATH="$stub_dir:$PATH"
+                  export HERDR_CALLS="$calls"
+                  export MYSBX_AGENT_KIND=fake-agent
+                  export MYSBX_AGENT_COMMAND=fake-agent
+                  export MYSBX_AGENT_ARGC=2
+                  export MYSBX_AGENT_ARG1=--continue
+                  export MYSBX_AGENT_ARG2="two words"
+                  export pane_id=%42
+                  cd "$(mktemp -d)" && bash -c "$agent_block"
+                ) || fail "the herdr agent block failed with the env set"
+                grep -qxF -- 'fake-agent' "$calls" || fail "the agent start does not name the kind"
+                grep -qxF -- '--kind' "$calls" || fail "the agent start does not pass --kind"
+                grep -qxF -- '%42' "$calls" || fail "the agent start does not target the captured pane"
+                grep -qxF -- '--continue' "$calls" || fail "the first arg was not forwarded"
+                grep -qxF -- 'two words' "$calls" || fail "the second arg was not forwarded verbatim"
+                # WITHOUT the resolved agent: the stub is never called.
+                rm -f "$calls"
+                (
+                  export PATH="$stub_dir:$PATH"
+                  export HERDR_CALLS="$calls"
+                  unset MYSBX_AGENT_KIND MYSBX_AGENT_COMMAND MYSBX_AGENT_ARGC \
+                        MYSBX_AGENT_ARG1 MYSBX_AGENT_ARG2
+                  export pane_id=%42
+                  cd "$(mktemp -d)" && bash -c "$agent_block"
+                ) || fail "the herdr agent block failed with the env unset"
+                test ! -e "$calls" || fail "herdr was called although no agent resolved"
+
+                # (3) workmux, behaviorally: a real tmux server on a private
+                # socket, a stub workmux and the fake agent on PATH, the
+                # entry exec'd as the sandbox would (the final attach fails
+                # without a terminal — AFTER the bootstrap and the agent
+                # split, so its exit code is irrelevant; the pane's work is
+                # what is asserted).
+                wtmp="$(mktemp -d)"
+                mkdir -p "$wtmp/home" "$wtmp/socket"
+                export AGENT_PATH="${
+                  lib.makeBinPath [
+                    stubs.workmux
+                    fakeAgent
+                  ]
+                }"
+                # WITH the resolved agent: the split pane receives the
+                # command and runs it (the marker appears with the args).
+                env -i \
+                  PATH="$AGENT_PATH" \
+                  HOME="$wtmp/home" \
+                  TMUX_TMPDIR="$wtmp/socket" \
+                  AGENT_MARKER="$wtmp/marker" \
+                  MYSBX_AGENT_KIND=fake-agent \
+                  MYSBX_AGENT_COMMAND=fake-agent \
+                  MYSBX_AGENT_ARGC=1 \
+                  MYSBX_AGENT_ARG1=--continue \
+                  "$workmux_entry" >/dev/null 2>&1 || true
+                for _ in $(seq 1 50); do
+                  test -e "$wtmp/marker" && break
+                  sleep 0.1
+                done
+                test -e "$wtmp/marker" \
+                  || fail "the split pane did not run the resolved agent command"
+                grep -qxF -- '--continue' "$wtmp/marker" \
+                  || fail "the split pane did not receive the agent args verbatim"
+
+                # WITHOUT the resolved agent: a fresh socket, no split, no
+                # marker — the pre-D32 behavior.
+                rm -rf "$wtmp/socket" "$wtmp/marker"
+                mkdir -p "$wtmp/socket"
+                env -i \
+                  PATH="$AGENT_PATH" \
+                  HOME="$wtmp/home" \
+                  TMUX_TMPDIR="$wtmp/socket" \
+                  AGENT_MARKER="$wtmp/marker" \
+                  "$workmux_entry" >/dev/null 2>&1 || true
+                sleep 1
+                test ! -e "$wtmp/marker" \
+                  || fail "an agent ran although no agent resolved"
+                for sess in $(tmux -S "$wtmp/socket/socket" list-sessions -F '#{session_name}' 2>/dev/null); do
+                  started="$(tmux -S "$wtmp/socket/socket" show-options -t "=$sess:" -qv @workmux_agent_started 2>/dev/null)"
+                  test "$started" != 1 \
+                    || fail "@workmux_agent_started was set although no agent resolved"
+                done
+
+                mkdir "$out"
+      '';
 
   #   mysbx-default-agent-test
-  #                 the defaultAgent wiring of the two agent-capable
-  #                 entry scripts (bd myconfig-hjwx): built with and
-  #                 without the option, the herdr entry must start the
-  #                 agent over the socket API inside the relocation
-  #                 subshell (1s retry pacing) and the workmux entry in
-  #                 a gated vertical split below the dashboard, while a
-  #                 null config renders neither any of it.
+  #                 the agent-agnostic entry wiring (bd myconfig-fv4h,
+  #                 config.md D32): both agent-capable entries are built
+  #                 ONCE and must carry the agent start as an ENV-GATED
+  #                 block reading MYSBX_AGENT_* (quoted reads, no eval,
+  #                 1s pacing) — proven statically, behaviorally against
+  #                 a stub herdr recording its argv, and behaviorally on
+  #                 a real tmux server with the env set and unset.
+  #
+  #   mysbx-agent-pins-test
+  #                 the agent registry pins of the wrapper (bd
+  #                 myconfig-fv4h): MYSBX_AGENT_NAMES is the SORTED kind
+  #                 list and MYSBX_AGENTS_FILE the generated registry the
+  #                 CLI resolves `default-agent`/`--agent` against.
   #
   # The pi integration's mounts, evaluated against the REAL reference
   # host (`test-f13` enables both mysbx and pi-coding-agent, hosts/

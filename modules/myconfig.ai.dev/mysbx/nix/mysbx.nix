@@ -335,6 +335,15 @@
   # `MYSBX_PODMAN_MUX_ENTRY_<VALUE>` pin of both podman backends; the
   # store path is the same inside the image as on the host.
   podmanMuxEntries ? { },
+  # The agent registry pins (bd myconfig-fv4h, ../docs/design/
+  # config.md D32): `agentNames` is the whitespace-separated, SORTED
+  # kind list (`MYSBX_AGENT_NAMES` — the `--<kind>` shorthand arms
+  # match it), `agentsFile` the path of the rendered registry
+  # (`MYSBX_AGENTS_FILE` — `[<kind>] command = "…"`, the CLI's
+  # `resolve_agent` parses it). Empty/null pins nothing: every agent
+  # selection is then a refused run, like an unpinned multiplexer.
+  agentNames ? "",
+  agentsFile ? null,
   # The gVisor agent OCI image of the podman-gvisor backend
   # (../docs/podman-load-image.md, bd myconfig-6di.1): `null` pins
   # nothing — `backend = "podman-gvisor"` is a refused run and
@@ -883,6 +892,18 @@ let
       name: entry: "--set MYSBX_PODMAN_MUX_ENTRY_${lib.toUpper name} '${lib.getExe entry}'"
     ) (lib.filterAttrs (_: entry: entry != null) podmanMuxEntries)
   );
+  # The agent registry pins (bd myconfig-fv4h, config.md D32): the
+  # kind list feeds the `--<kind>` shorthand arms, the file the
+  # kind→command resolution. `lib.escapeShellArg` keeps a hostile kind
+  # (a shell metacharacter would be caught by the module assertion's
+  # grammar, this is the wrapper's own defense in depth) from
+  # repointing the pin; `MYSBX_AGENT_NAMES` empty-means-unset in the
+  # CLI (the `env_opt` rule), so an unset kind list pins "no agents
+  # installable" honestly.
+  agentNamesPin =
+    if agentNames != "" then "--set MYSBX_AGENT_NAMES ${lib.escapeShellArg agentNames}" else "";
+  agentsFilePin =
+    if agentsFile != null then "--set MYSBX_AGENTS_FILE ${lib.escapeShellArg agentsFile}" else "";
   # The `mysbx gui` terminal pin (docs/design/cli.md D15): an absolute
   # store path, the same wrapper idiom as MYSBX_BWRAP. Empty when the
   # caller passes no alacritty — the fallback PATH lookup of the
@@ -1183,6 +1204,8 @@ symlinkJoin {
       ${npmrcPin} \
       ${muxEntryPins} \
       ${podmanMuxEntryPins} \
+      ${agentNamesPin} \
+      ${agentsFilePin} \
       ${terminalPin} \
       ${profilePin} \
       ${podmanPins} \

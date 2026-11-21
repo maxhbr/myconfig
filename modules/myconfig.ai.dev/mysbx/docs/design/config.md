@@ -2169,3 +2169,57 @@ host-wide. An eval assertion demands a configured profile exist in
 every run of the user. With `config.profile = null` the generated
 config text is byte-identical to the pre-D30 one (the key renders
 only when set), and the base wrapper's behaviour is unchanged.
+
+### D32: `default-agent` — the agent an interactive session starts
+
+Either layer may name the agent kind the interactive session of
+THIS host or repo starts (bd myconfig-fv4h):
+
+```toml
+default-agent = "pi"
+```
+
+The value is a FLAT STRING naming a kind of the pinned registry —
+never a command and never arguments: D4's "configuration that names
+a command is configuration that executes" applies in full, so the
+command/argv live only in the NixOS registry
+(`myconfig.ai.dev.mysbx.agents.<kind>.command`/`.args`), rendered by
+the module into a store file the wrapper pins as
+`MYSBX_AGENTS_FILE`, and the kind list itself as
+`MYSBX_AGENT_NAMES`. A key naming more than the kind would be host
+configuration the sandbox could read but not reach — the same gap
+D17 keeps the multiplexer value free of.
+
+**Grammar and resolution.** The kind must match
+`[a-z][a-z0-9_-]{0,31}` — a value failing it is a usage error (2)
+before the registry is consulted; a well-formed kind the pinned
+registry does not carry is a refused run (70) naming the carried
+set, the `backend` refusal's shape. Resolution happens at step 3ab
+of the interactive pipeline, after the merge and before the argv
+build, so `--dry-run` reports the agent a real run would start.
+
+**Precedence: one run beats the layers, the sidecar beats the
+user layer.** `--agent <kind>` (and its `--<kind>` shorthands)
+override both layers for one invocation, `--no-agent` starts the
+session without one, and any two selections in one invocation are a
+usage error naming both (cli.md D32). Between the layers the later
+one wins (the sidecar; in a parent chain, the child — D29), exactly
+as `backend` and `multiplexer` resolve.
+
+**Scope: interactive payloads only.** A `run -- CMD` starts no
+agent — the command IS the payload — and every verb refuses the
+flags. The resolved agent reaches the entry scripts as
+`MYSBX_AGENT_KIND`, `MYSBX_AGENT_COMMAND`, `MYSBX_AGENT_ARGC` and
+`MYSBX_AGENT_ARG1..N`, emitted by every backend's argv builder as
+part of the `[env]` segment so no layer can spoof them; the entries
+are agent-agnostic (one build serves every choice) and start the
+agent only when the env is set — the no-agent run keeps the
+byte-identical argv the checks pin.
+
+**The NixOS module wires the defaults.** `defaultAgent` (null
+default) renders the key into the generated user config only when
+set — a host without a default seeds nothing and the generated
+text is byte-identical to the pre-D32 one. Eval assertions
+demand a configured kind be registered, match the grammar, and
+not collide with a reserved CLI word (the `--<kind>` shorthand
+must not shadow `--backend`, `--multiplexer` or the flag words).

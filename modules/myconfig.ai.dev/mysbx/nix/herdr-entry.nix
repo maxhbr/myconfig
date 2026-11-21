@@ -78,11 +78,6 @@
   # The herdr package that runs inside the sandbox
   # (`myconfig.ai.dev.mysbx.herdr.package`).
   herdr,
-  # The agent every session starts (../default.nix `defaultAgent`):
-  # `null` starts none. Not a session-config key — herdr has no option
-  # for an initial command (verified against its `--default-config`),
-  # only the socket API, which the relocation subshell below uses.
-  defaultAgent ? null,
 }:
 let
   muxLib = import ./mux-entry-lib.nix { inherit lib; };
@@ -103,72 +98,95 @@ let
     new_cwd = "follow"
   '';
 
+  # The agent start tail of the relocation subshell (bd
+  # myconfig-fv4h, config.md D32): when the argv builder resolved an
+  # agent for this run (`MYSBX_AGENT_KIND` and friends are set),
+  # start it in the new workspace's ROOT pane over the socket API —
+  # herdr has no config key for an initial command. The block is
+  # AGENT-AGNOSTIC: the command and its arguments arrive as
+  # `MYSBX_AGENT_COMMAND`/`MYSBX_AGENT_ARG1..N` (one variable per
+  # argument, so nothing here ever word-splits or evals), and without
+  # an agent the tail is the plain create-and-retry loop, so a no-agent
+  # run keeps the byte-identical behavior the checks pin. The pane id
+  # comes from the `workspace create` JSON answer,
+  # `.result.root_pane.pane_id` (`pane split` answers a DIFFERENT
+  # shape, `.result.pane.pane_id`).
+  #
+  # `agent start` needs the pane's shell at its interactive prompt,
+  # so `agent_not_ready` right after the create is expected and
+  # retried — at a 1 s cadence, never faster: every `herdr` CLI costs
+  # mediated bind/connect tokens (nono bucket, bd myconfig-27o).
+  # NOTE: `--kind` and the agent NAME both take the resolved kind —
+  # the argv pin and herdr's own registry agree on the spelling.
+  # The agent start tail of the relocation subshell (bd
+  # myconfig-fv4h, config.md D32): when the argv builder resolved an
+  # agent for this run (`MYSBX_AGENT_KIND` and friends are set), start
+  # it in the new workspace's ROOT pane over the socket API — herdr
+  # has no config key for an initial command. The block is
+  # AGENT-AGNOSTIC: the command and its arguments arrive as
+  # `MYSBX_AGENT_COMMAND`/`MYSBX_AGENT_ARG1..N` (one variable per
+  # argument, quoted reads only — no word splitting, no eval; the
+  # indirection is bash's `''${!name}` expansion), so one script
+  # serves every registry kind and no rebuild is needed to change the
+  # choice. The pane id comes from the `workspace create` JSON answer,
+  # `.result.root_pane.pane_id` (`pane split` answers a DIFFERENT
+  # shape, `.result.pane.pane_id`).
+  #
+  # `agent start` must stay in this background subshell because a
+  # foreground one blocks up to its 30 s readiness timeout before the
+  # `exec` below and leaves the TUI blank. It needs the pane's shell
+  # at its interactive prompt, so `agent_not_ready` right after the
+  # create is expected and retried — at a 1 s cadence, never faster:
+  # every `herdr` CLI costs mediated bind/connect tokens (nono
+  # bucket, bd myconfig-27o).
+  agentStartTail = ''
+    if [ -n "''${MYSBX_AGENT_KIND:-}" ] && [ -n "''${MYSBX_AGENT_COMMAND:-}" ] && [ -n "$pane_id" ]; then
+        # Quoted reads only — the argv arrives as one variable per
+        # argument, so nothing here word-splits or evals.
+        agent_argv=("$MYSBX_AGENT_COMMAND")
+        agent_argc="''${MYSBX_AGENT_ARGC:-0}"
+        agent_i=1
+        while [ "$agent_argc" -ge "$agent_i" ]; do
+            agent_arg_var="MYSBX_AGENT_ARG$agent_i"
+            agent_argv+=("''${!agent_arg_var}")
+            agent_i=$((agent_i + 1))
+        done
+        for _ in $(seq 1 10); do
+            herdr agent start "$MYSBX_AGENT_KIND" \
+                --kind "$MYSBX_AGENT_KIND" \
+                --pane "$pane_id" \
+                -- "''${agent_argv[@]}" \
+                >/dev/null 2>&1 && break
+            sleep 1
+        done
+    fi
+  '';
+
   # The relocation tail of the subshell — create the repo-rooted
-  # workspace, close the stale ones, and (with a defaultAgent) start
-  # the agent in the new workspace's ROOT pane. Without a
-  # defaultAgent the create loop stays the plain create-and-retry
-  # loop, so a `null` config keeps rendering the byte-identical
-  # script the checks pin. The pane id comes from the
-  # `workspace create` JSON answer, `.result.root_pane.pane_id`
-  # (`pane split` answers a DIFFERENT shape, `.result.pane.pane_id`).
-  relocationTail =
-    if defaultAgent == null then
-      ''
-        for _ in $(seq 1 5); do
-                herdr workspace create \
-                    --cwd "$repo_root" \
-                    --label "$(basename "$repo_root")" \
-                    --focus >/dev/null 2>&1 && break
-                sleep 1
-            done
-            for ws in "''${initial_ws[@]}"; do
-                for _ in $(seq 1 3); do
-                    herdr workspace close "$ws" >/dev/null 2>&1 && break
-                    sleep 1
-                done
-            done''
-    else
-      ''
-        pane_id=""
-            for _ in $(seq 1 5); do
-                if out="$(herdr workspace create \
-                    --cwd "$repo_root" \
-                    --label "$(basename "$repo_root")" \
-                    --focus 2>/dev/null)"; then
-                    # shellcheck disable=SC2034 # read by the agent start block
-                    pane_id="$(printf '%s' "$out" | jq -r '.result.root_pane.pane_id // empty' 2>/dev/null)"
-                    break
-                fi
-                sleep 1
-            done
-            for ws in "''${initial_ws[@]}"; do
-                for _ in $(seq 1 3); do
-                    herdr workspace close "$ws" >/dev/null 2>&1 && break
-                    sleep 1
-                done
-            done
-            # Start the default agent in the new workspace's root pane.
-            # herdr has no config key for an initial command, so this is
-            # the socket API; it must stay in this background subshell
-            # because a foreground `agent start` blocks up to its 30 s
-            # readiness timeout before the `exec` below and leaves the
-            # TUI blank. `agent start` needs the pane's shell at its
-            # interactive prompt, so `agent_not_ready` right after the
-            # create is expected and retried — at a 1 s cadence, never
-            # faster: every `herdr` CLI costs mediated bind/connect
-            # tokens (nono bucket, bd myconfig-27o).
-            if [ -n "$pane_id" ]; then
-                for _ in $(seq 1 10); do
-                    herdr agent start ${lib.escapeShellArg defaultAgent.kind} \
-                        --kind ${lib.escapeShellArg defaultAgent.kind} \
-                        --pane "$pane_id" \
-                        ${
-                          lib.optionalString (defaultAgent.args != [ ]) "-- ${lib.escapeShellArgs defaultAgent.args}"
-                        } \
-                        >/dev/null 2>&1 && break
-                    sleep 1
-                done
-            fi'';
+  # workspace, close the stale ones, and start the resolved agent (if
+  # any) in the new workspace's ROOT pane. The pane id is always
+  # captured now (jq is already in the closure for the id extraction);
+  # with no agent the extra capture is inert and the create/close
+  # loops keep the exact pacing they had before D32.
+  relocationTail = ''
+    pane_id=""
+    for _ in $(seq 1 5); do
+        if out="$(herdr workspace create \
+            --cwd "$repo_root" \
+            --label "$(basename "$repo_root")" \
+            --focus 2>/dev/null)"; then
+            pane_id="$(printf '%s' "$out" | jq -r '.result.root_pane.pane_id // empty' 2>/dev/null)"
+            break
+        fi
+        sleep 1
+    done
+    for ws in "''${initial_ws[@]}"; do
+        for _ in $(seq 1 3); do
+            herdr workspace close "$ws" >/dev/null 2>&1 && break
+            sleep 1
+        done
+    done
+    ${agentStartTail}'';
 in
 writeShellApplication {
   name = "mysbx-herdr-entry";

@@ -65,10 +65,13 @@ generated `agents`. Notable pinned defaults:
 - `nerdfont = true` — avoids the interactive "Nerdfont Setup" prompt that would
   otherwise block non-interactive worktree creation.
 - `agent = "pi"` — only on hosts that enable pi; inside an mysbx sandbox
-  this key is **derived** from `myconfig.ai.dev.mysbx.defaultAgent`
-  instead (see [`../mysbx/README.md`](../mysbx/README.md)): the
-  in-sandbox agent map carries only the sandbox default agent, so the
-  derived key wins over a host-set `settings.agent` there.
+  the agent surface is **runtime configuration** (bd myconfig-fv4h, see
+  [`../mysbx/README.md`](../mysbx/README.md)): this key is derived from
+  `myconfig.ai.dev.mysbx.defaultAgent` and the in-sandbox agent map
+  carries every kind of `myconfig.ai.dev.mysbx.agents` (plain binaries,
+  no nested launchers), so a `mysbx --<kind>` run or a layer's
+  `default-agent` selects any of them; the derived key wins over a
+  host-set `settings.agent` there.
 - `panes = [ { command = "<agent>"; focus = true; } ]` — a single focused pane
   running the selected agent, so `workmux add` always launches an agent instead
   of falling back to a bare shell.

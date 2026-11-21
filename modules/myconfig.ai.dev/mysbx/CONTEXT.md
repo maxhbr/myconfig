@@ -101,6 +101,16 @@ refuses the value, and an allowlist next to it is refused everywhere
 (the lane's rule IS the deny set).
 _Avoid_: internet mode, no-LAN mode, unrestricted network
 
+**Agent kind**:
+One entry of the pinned agent registry — the harness an interactive
+session may start inside the sandbox (pi, opencode, …). The kind names
+a REGISTRY entry, never a command: the command and its arguments live
+in `myconfig.ai.dev.mysbx.agents.<kind>` and reach the entry scripts as
+the `MYSBX_AGENT_*` env (config.md D32). The session's kind is the
+layers' `default-agent` key, overridden per run by `--agent <kind>`,
+the `--<kind>` shorthands or `--no-agent` (cli.md D32).
+_Avoid_: default agent setting, agent command, harness
+
 **Egress forwarder**:
 The host-side, port-scoped `systemd-socket-proxyd` listener
 (`myconfig.ai.dev.litellm-forwarder`) that makes the loopback-only LiteLLM

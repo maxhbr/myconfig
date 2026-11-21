@@ -1859,10 +1859,13 @@ in
       # major to gate the NODE_USE_ENV_PROXY injection. mkDefault: a
       # host that pins `nodeMajor` itself wins over this derivation.
       nodeMajor = lib.mkDefault (lib.toInt (lib.versions.major piNodeJs.version));
-      defaultAgent = lib.mkDefault {
-        kind = "pi";
-        command = "pi";
-      };
+      # The agent registry entry (bd myconfig-fv4h, ../mysbx/docs/
+      # design/config.md D32): `pi` is a SELECTABLE kind — the CLI
+      # resolves `default-agent = "pi"` (seeded below) or `--pi`
+      # against this command. The bare name resolves from the sandbox
+      # PATH (`extraTools` above carries the package).
+      agents.pi.command = lib.mkDefault "pi";
+      defaultAgent = lib.mkDefault "pi";
       config.mounts = mysbxPiMounts;
       config.env.PI_JAIL_MARKER = "1";
       # The litellm endpoint of the podman-gvisor backend: pi's mounted

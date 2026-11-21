@@ -46,9 +46,6 @@
   # (`myconfig.ai.dev.mysbx.workmux.package`, normally
   # `myconfig.ai.dev.workmux.package`).
   workmux,
-  # The agent every session starts (../default.nix `defaultAgent`):
-  # `null` starts none.
-  defaultAgent ? null,
 }:
 let
   # The socket validation, the session name and the pane-shell pin are
@@ -56,22 +53,46 @@ let
   # the bootstrap below is workmux's own.
   muxLib = import ./mux-entry-lib.nix { inherit lib; };
 
-  # The vertical split that starts the session's default agent below
-  # the dashboard — workmux's own `split: vertical` shape, but applied
-  # to the session the entry boots (the declarative `panes` layout only
-  # affects `workmux add` for NEW worktrees). Gated on its own session
-  # option for the same reason as the bootstrap: a half-created session
-  # or a second attach must not start a second copy. `-P -F '#{pane_id}'`
-  # captures the pane THIS split created, so send-keys can never land
-  # in the dashboard pane.
+  # The vertical split that starts the session's resolved agent
+  # below the dashboard — workmux's own `split: vertical` shape, but
+  # applied to the session the entry boots (the declarative `panes`
+  # layout only affects `workmux add` for NEW worktrees). Gated on
+  # its own session option for the same reason as the bootstrap: a
+  # half-created session or a second attach must not start a second
+  # copy. `-P -F '#{pane_id}'` captures the pane THIS split created,
+  # so send-keys can never land in the dashboard pane.
+  #
+  # AGENT-AGNOSTIC (bd myconfig-fv4h, config.md D32): the command and
+  # its arguments arrive as `MYSBX_AGENT_COMMAND`/`ARG1..N` (one
+  # variable per argument — quoted reads only, no word splitting, no
+  # eval; the indirection is bash's `${!name}` expansion), set by the
+  # argv builder whenever THIS run resolved an agent. Without one the
+  # block is skipped entirely, keeping the no-agent behavior the
+  # checks pin. The argv travels to the pane as ONE literal line
+  # (`send-keys -l`): shell-quoted with `printf %q` so an argument
+  # with spaces or a leading `--` survives the round trip through the
+  # pane's interactive prompt verbatim — `send-keys` without `-l`
+  # would treat every word as a KEY NAME and mangle both.
   agentBlock = ''
-
-    if [ "$(tmux show-options -t "=$session:" -qv @workmux_agent_started)" != 1 ]; then
-      tmux set-option -t "=$session:" @workmux_agent_started 1
-      agent_pane="$(tmux split-window -v -P -F '#{pane_id}' -t "=$session:")"
-      tmux send-keys -t "$agent_pane" ${
-        lib.escapeShellArgs ([ defaultAgent.command ] ++ defaultAgent.args)
-      } Enter
+    if [ -n "''${MYSBX_AGENT_KIND:-}" ] && [ -n "''${MYSBX_AGENT_COMMAND:-}" ]; then
+      if [ "$(tmux show-options -t "=$session:" -qv @workmux_agent_started)" != 1 ]; then
+        tmux set-option -t "=$session:" @workmux_agent_started 1
+        agent_pane="$(tmux split-window -v -P -F '#{pane_id}' -t "=$session:")"
+        agent_argv=("$MYSBX_AGENT_COMMAND")
+        agent_argc="''${MYSBX_AGENT_ARGC:-0}"
+        agent_i=1
+        while [ "$agent_argc" -ge "$agent_i" ]; do
+          agent_arg_var="MYSBX_AGENT_ARG$agent_i"
+          agent_argv+=("''${!agent_arg_var}")
+          agent_i=$((agent_i + 1))
+        done
+        agent_line=""
+        for agent_word in "''${agent_argv[@]}"; do
+          agent_line+="$(printf '%q ' "$agent_word")"
+        done
+        tmux send-keys -t "$agent_pane" -l -- "$agent_line"
+        tmux send-keys -t "$agent_pane" Enter
+      fi
     fi
   '';
 in
@@ -115,7 +136,7 @@ writeShellApplication {
       tmux set-option -t "=$session:" @workmux_bootstrapped 1
       tmux send-keys -t "=$session:" 'workmux sidebar --session; workmux dashboard' Enter
     fi
-    ${lib.optionalString (defaultAgent != null) agentBlock}
+    ${agentBlock}
     # In a detached run (`MYSBX_DETACHABLE=1`, detach.md B7) the gate
     # loops instead of exec'ing the client, so a `prefix d` inside the
     # session does not end the sandbox. The attach form is SHORT

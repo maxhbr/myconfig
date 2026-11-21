@@ -379,6 +379,16 @@ complete -c mysbx -n '__mysbx_no_verb' -l podman-gvisor -d 'Alias of --backend p
 complete -c mysbx -n '__mysbx_no_verb' -l nono -d 'Alias of --backend nono (bd myconfig-6tt)'
 complete -c mysbx -n '__mysbx_no_verb' -l podman-krun -d 'Alias of --backend podman-krun (bd myconfig-6tt)'
 complete -c mysbx -n '__mysbx_no_verb' -l krun -d 'Alias of --backend krun (bd myconfig-6tt)'
+# The agent selection (bd myconfig-fv4h, config.md D32): interactive
+# runs only, so `__mysbx_no_verb` like `--multiplexer`. The kind
+# list is what THIS build pinned (MYSBX_AGENT_NAMES); the shorthands
+# for kinds are not spelled out here — they are per-host, and the
+# long form plus the fish history teaches them the same way the
+# unknown-command refusal does.
+complete -c mysbx -n '__mysbx_no_verb' -l agent -x -a 'pi opencode' -d 'The agent the interactive session of THIS run starts (config.md D32)'
+complete -c mysbx -n '__mysbx_no_verb' -l no-agent -d 'Start the session without an agent, overriding a resolved default-agent'
+complete -c mysbx -n '__mysbx_no_verb' -l pi -d 'Alias of --agent pi (bd myconfig-fv4h)'
+complete -c mysbx -n '__mysbx_no_verb' -l opencode -d 'Alias of --agent opencode (bd myconfig-fv4h)'
 complete -c mysbx -n '__mysbx_no_verb' -l session -x -a '(__mysbx_sessions)' -d 'Run in the named session clone; the FIRST run creates it'
 complete -c mysbx -n '__mysbx_no_verb' -l sidecar -r -d 'The sidecar directory of THIS run (cli.md D30); overrides the derived <repo>.mysbx for one invocation'
 complete -c mysbx -n '__mysbx_no_verb' -l config -r -d 'The config file whose layer replaces the sidecar layer of THIS run (cli.md D31); the sidecar itself stays as derived or named'

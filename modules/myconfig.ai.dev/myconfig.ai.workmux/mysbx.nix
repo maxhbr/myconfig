@@ -44,21 +44,27 @@ let
   # with a fresh tmpfs home, losing the agent's configuration and
   # credentials.
   #
-  # The in-sandbox agent map is DERIVED from
-  # `myconfig.ai.dev.mysbx.defaultAgent` (the sandbox carries only the
-  # default agent — the host's other named agents are not in the
-  # sandbox's `extraTools` closure). The command is the bare name,
-  # resolved from the sandbox `PATH`: the module setting the option
-  # also adds its package to `extraTools`, so the binary the sandbox
-  # has is the binary this config names.
-  defaultAgent = aiCfg.mysbx.defaultAgent or null;
-  sandboxAgents = lib.optionalAttrs (defaultAgent != null) {
-    ${defaultAgent.kind} = lib.filterAttrs (_: v: v != null) {
-      type = defaultAgent.kind;
-      command = defaultAgent.command;
-      args = if defaultAgent.args == [ ] then null else defaultAgent.args;
-    };
-  };
+  # The in-sandbox agent map is DERIVED from the WHOLE mysbx agent
+  # registry (bd myconfig-fv4h, ../mysbx/docs/design/config.md D32):
+  # every kind the sandbox's `extraTools` closure carries is
+  # selectable at RUN time (`mysbx --<kind>`, or a layer's
+  # `default-agent`), and the session's started agent is the
+  # RUNTIME-resolved one — workmux's own `agent` key here is only the
+  # CONFIG file's default for windows workmux itself opens (the
+  # `workmux add` flow), not what the entry script starts. The
+  # command is the bare name, resolved from the sandbox `PATH`: the
+  # module registering the kind also adds its package to
+  # `extraTools`.
+  agentRegistry = aiCfg.mysbx.agents;
+  defaultAgent = aiCfg.mysbx.defaultAgent;
+  sandboxAgents = lib.mapAttrs (
+    kind: agent:
+    lib.filterAttrs (_: v: v != null) {
+      type = kind;
+      command = agent.command;
+      args = if agent.args == [ ] then null else agent.args;
+    }
+  ) agentRegistry;
 in
 {
   options.myconfig.ai.dev.workmux.mysbx = with lib; {
@@ -91,7 +97,10 @@ in
         agents = sandboxAgents;
       }
       // wmCfg.settings
-      // lib.optionalAttrs (defaultAgent != null) { agent = defaultAgent.kind; };
+      # The config file's own default — the RUNTIME agent the entry
+      # starts is the resolved one (the `MYSBX_AGENT_*` env), this
+      # key only feeds `workmux add`'s new-worktree windows.
+      // lib.optionalAttrs (defaultAgent != null) { agent = defaultAgent; };
       # The host's tmux configuration (`programs.tmux` writes
       # `/etc/tmux.conf`), so the in-sandbox server keeps the same
       # keybindings and theme. `null` when the host has none.

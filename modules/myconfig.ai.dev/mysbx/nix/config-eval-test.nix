@@ -242,6 +242,24 @@ let
     # And without it, the selection must be the plain shell: a host
     # without any integration keeps the pre-D16 payload.
     workmuxOff = generated [ { } ];
+    # The default-agent seed (bd myconfig-fv4h, config.md D32): a
+    # registered kind named by `defaultAgent` reaches the generated
+    # user layer as the flat `default-agent` string — and nothing
+    # else (no command in the TOML, D4).
+    agentOn = generated [
+      {
+        myconfig.ai.dev.mysbx = {
+          agents.pi.command = "pi";
+          defaultAgent = "pi";
+        };
+      }
+    ];
+    # Without a default the layer carries no key: a host that
+    # registers agents without a default keeps the pre-D32 TOML
+    # byte-identical.
+    agentOff = generated [
+      { myconfig.ai.dev.mysbx.agents.opencode.command = "opencode"; }
+    ];
     # The shared sandbox-tools hook (phase 2d): an `extraEnv` entry of
     # the hook must appear in the generated `[env]` table like any
     # baseline value, and a tier baseline key (RIPGREP_CONFIG_PATH) set
@@ -406,6 +424,34 @@ let
         myconfig.ai.dev.mysbx.config.backend = "podman-gvisor";
       }
     ];
+    # The default-agent registry gate (bd myconfig-fv4h): naming a
+    # kind the registry lacks fails the eval-time assertion, and so
+    # does a kind colliding with a reserved CLI word (it is also the
+    # `--<kind>` shorthand, so `krun` would shadow the backend flag).
+    agentUnknown = failedAssertions [
+      {
+        myconfig.ai.dev.mysbx = {
+          agents.pi.command = "pi";
+          defaultAgent = "opencode";
+        };
+      }
+    ];
+    agentReserved = failedAssertions [
+      { myconfig.ai.dev.mysbx.agents.krun.command = "anything"; }
+    ];
+    # The happy path must stay clean (the gate must not fire on a
+    # registered kind). The base eval's own unrelated assertion
+    # failures (the default multiplexer's none-package gate) are
+    # filtered out by the gate's `defaultAgent` match — the point is
+    # that the REGISTRY assertions stay silent.
+    agentRegisteredAsserts = failedAssertions [
+      {
+        myconfig.ai.dev.mysbx = {
+          agents.pi.command = "pi";
+          defaultAgent = "pi";
+        };
+      }
+    ];
   };
 
   # The eval-time results are checked HERE, while the check derivation
@@ -420,6 +466,9 @@ let
       backendDisabled = scenarios.backendKrunDisabled;
       qemuDisabled = scenarios.backendQemuDisabled;
       backendAvailable = scenarios.backendPodmanEnabledAsserts;
+      agentUnknown = scenarios.agentUnknown;
+      agentReserved = scenarios.agentReserved;
+      agentRegisteredAsserts = scenarios.agentRegisteredAsserts;
       names = builtins.concatStringsSep "\n" unavailable;
       orcaNames = builtins.concatStringsSep "\n" orcaUnavailable;
     in
@@ -435,6 +484,12 @@ let
       throw "mysbx generated-config test: selecting the opt-out `microvm-qemu` backend did not fail an assertion (failed: ${builtins.concatStringsSep "\n" qemuDisabled})"
     else if builtins.any (m: lib.hasInfix "backend" m) backendAvailable then
       throw "mysbx generated-config test: the backend gate fired for an OPTED-IN backend (failed: ${builtins.concatStringsSep "\n" backendAvailable})"
+    else if !(builtins.any (m: lib.hasInfix "defaultAgent" m) agentUnknown) then
+      throw "mysbx generated-config test: naming an unregistered agent kind did not fail an assertion (failed: ${builtins.concatStringsSep "\n" agentUnknown})"
+    else if !(builtins.any (m: lib.hasInfix "reserved CLI word" m) agentReserved) then
+      throw "mysbx generated-config test: a reserved-word agent kind did not fail an assertion (failed: ${builtins.concatStringsSep "\n" agentReserved})"
+    else if builtins.any (m: lib.hasInfix "defaultAgent" m) agentRegisteredAsserts then
+      throw "mysbx generated-config test: the registry gate fired for a REGISTERED kind (failed: ${builtins.concatStringsSep "\n" agentRegisteredAsserts})"
     else
       "ok";
   # The podman-gvisor pins that carry the host's LiteLLM endpoint into a
@@ -932,6 +987,8 @@ pkgs.runCommand "mysbx-generated-config-test"
       dftOverridden
       workmuxOn
       workmuxOff
+      agentOn
+      agentOff
       muxHerdr
       muxTmux
       muxOrca
@@ -1045,6 +1102,18 @@ pkgs.runCommand "mysbx-generated-config-test"
       || fail "the default must be the plain shell without the integration" "$workmuxOff"
     if grep -q workmux "$workmuxOff"; then
       fail "workmux must not appear without the integration" "$workmuxOff"
+    fi
+
+    # 5a. the default-agent seed (bd myconfig-fv4h, config.md D32):
+    #     the flat string and NOTHING else — a `command` in the TOML
+    #     would be configuration that can execute (D4).
+    grep -q '^default-agent = "pi"$' "$agentOn" \
+      || fail "the seeded default-agent is missing" "$agentOn"
+    if grep -q 'command = "pi"' "$agentOn"; then
+      fail "the agent command leaked into the generated TOML (D4)" "$agentOn"
+    fi
+    if grep -q 'default-agent' "$agentOff"; then
+      fail "a host without a default must not seed the key" "$agentOff"
     fi
 
     # 6. the other selections (D17) reach the generated layer verbatim,

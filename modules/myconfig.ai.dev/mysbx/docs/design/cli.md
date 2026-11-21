@@ -1062,6 +1062,39 @@ temp root's own by construction; a named host file would be read by
 no one and written by no one, and accept-and-ignore is the failure
 mode the gate exists to prevent.
 
+### D32: `--agent <kind>` selects the session's agent for one run
+
+The interactive session's agent is runtime configuration
+(config.md D32): the layers' `default-agent` names the kind, and
+THIS flag overrides them for one invocation — the next run reads
+the configuration again, the `--multiplexer`/`--backend` precedent
+(D14/D18). Three spellings, one selection: the long form, a
+`--<kind>` shorthand for every kind this build pinned
+(`MYSBX_AGENT_NAMES`), and `--no-agent` to start the session
+without one, overriding a resolved configuration key. Any two of
+them in one invocation are a usage error naming both (D5) —
+`--agent pi --pi` teaches the alias, not the flag soup.
+
+**Validation split: grammar against the value, registry against
+the build.** A value failing `[a-z][a-z0-9_-]{0,31}` is a usage
+error (2) — the registry is not consulted, the grammar is cheap and
+host-independent. A well-formed kind the pinned registry does not
+carry is a refused run (70, D8) naming the carried set: the
+`--<kind>` arms match `MYSBX_AGENT_NAMES`, so an unpinned
+`--no-such-kind` is the unknown-command usage error (2) — the
+honest answer, the spelling was never a flag of this build. The
+registry file (`MYSBX_AGENTS_FILE`) carries the command and the
+arguments; the flags never take a command (config.md D4).
+
+**Scope: the bare interactive form only.** The flag belongs before
+the verb, `run -- CMD` starts no agent (the command IS the payload)
+and refuses every spelling, and each verb does the same (D10's rule
+for session-scoped flags). Resolution sits in step 3ab
+— post-merge, pre-argv — so `--dry-run` names the agent a real run
+would start, and the resolved agent reaches the entry scripts as
+`MYSBX_AGENT_KIND`/`MYSBX_AGENT_COMMAND`/`MYSBX_AGENT_ARGC`/
+`MYSBX_AGENT_ARG1..N` through every backend's env segment.
+
 ## Non-goals
 
 - No mysbx daemon — the dtach master is per run and ends with it —

@@ -36,6 +36,51 @@ let
   # ./mysbx-rs/src/toml.rs parses.
   tomlFormat = pkgs.formats.toml { };
 
+  # The words an agent KIND may not reuse (bd myconfig-fv4h): every
+  # kind is also the `--<kind>` shorthand of `--agent`
+  # (mysbx-rs/src/lib.rs `split_global_flags`), so a kind named after a
+  # multiplexer value, a backend value or an existing flag spelling
+  # would shadow it — the multiplexer and backend shorthand arms sit
+  # around the agent arm, and a bare flag word would never reach the
+  # kind at all. The list mirrors the parser's own tokens; the Rust
+  # side needs no twin because it never sees a colliding name (this
+  # assertion is the guard).
+  RESERVED_AGENT_KINDS = [
+    # multiplexer values (config::Multiplexer::NAMES)
+    "tmux"
+    "workmux"
+    "herdr"
+    "aoe"
+    "orca"
+    "none"
+    # backend values (backends::NAMES)
+    "bubblewrap"
+    "podman-gvisor"
+    "nono"
+    "podman-krun"
+    "krun"
+    "microvm-qemu"
+    "microvm-ch"
+    # the CLI's own flag words (cli.md D9/D14/D16/D30/D31/D32)
+    "agent"
+    "no-agent"
+    "multiplexer"
+    "backend"
+    "session"
+    "sidecar"
+    "config"
+    "ro"
+    "rw"
+    "result"
+    "timeout"
+    "detach"
+    "detachable"
+    "dry-run"
+    "verbose"
+    "help"
+    "version"
+  ];
+
   # Baseline mounts: common agent-tooling host config, read-only.
   #
   # The three subtrees are rendered through the shared dereferenced-copy
@@ -299,9 +344,12 @@ let
   # to bash on a fish host (bd myconfig-l44).
   payloadShell = cfg.shell.path;
 
-  # Only herdr and workmux receive `defaultAgent` (as a callPackage
-  # argument): the other multiplexers have no agent concept for it to
-  # start anything in.
+  # The entry scripts are AGENT-AGNOSTIC (bd myconfig-fv4h): none
+  # receives a `defaultAgent` — the resolved agent reaches them at
+  # RUN time through the `MYSBX_AGENT_*` environment (every backend's
+  # argv builder emits it, resolved by the CLI from the config layers
+  # or the `--agent` flags), so one entry script serves every choice
+  # and no rebuild of the sandbox tier is needed to change it.
   muxEntries = {
     tmux = pkgs.callPackage ./nix/tmux-entry.nix {
       tmux = cfg.tmux.package;
@@ -313,7 +361,6 @@ let
           workmux = cfg.workmux.package;
           tmux = cfg.tmux.package;
           inherit payloadShell;
-          defaultAgent = cfg.defaultAgent;
         }
       else
         null;
@@ -323,7 +370,6 @@ let
           herdr = cfg.herdr.package;
           tmux = cfg.tmux.package;
           inherit payloadShell;
-          defaultAgent = cfg.defaultAgent;
         }
       else
         null;
@@ -433,6 +479,28 @@ let
     }
   );
 
+  # The agent registry of this host, rendered for the CLI's
+  # `MYSBX_AGENTS_FILE` pin (bd myconfig-fv4h, config.md D32):
+  # `[<kind>] command = "…"` (+ `args` when non-empty) — the exact
+  # shape `resolve_agent` in the crate parses. `args` is omitted for
+  # an empty list so a registry entry and its Rust twin agree on what
+  # "no arguments" looks like, and the whole table stays under the
+  # crate's own grammar (a command with a `\n` cannot be spelled: the
+  # formats renderer quotes/escapes it like any TOML string).
+  agentsFile = tomlFormat.generate "mysbx-agents.toml" (
+    lib.mapAttrs (
+      _: agent:
+      {
+        inherit (agent) command;
+      }
+      // lib.optionalAttrs (agent.args != [ ]) { inherit (agent) args; }
+    ) cfg.agents
+  );
+  # The `MYSBX_AGENT_NAMES` pin: sorted, because `attrNames` order is
+  # unspecified and the pin text flows into the wrapper derivation —
+  # an unsorted list would churn the drv hash on every registry edit.
+  agentNames = lib.sort builtins.lessThan (lib.attrNames cfg.agents);
+
   userConfigToml = {
     inherit (cfg.config) network multiplexer;
     display = cfg.config.display;
@@ -460,7 +528,14 @@ let
   // lib.optionalAttrs (cfg.config.memory != null) { inherit (cfg.config) memory; }
   // lib.optionalAttrs (cfg.config.scratchSize != null) { "scratch-size" = cfg.config.scratchSize; }
   // lib.optionalAttrs (cfg.config.cpus != null) { inherit (cfg.config) cpus; }
-  // lib.optionalAttrs (cfg.config.pidsLimit != null) { pids-limit = cfg.config.pidsLimit; };
+  // lib.optionalAttrs (cfg.config.pidsLimit != null) { pids-limit = cfg.config.pidsLimit; }
+  # The seeded `default-agent` (config.md D32, bd myconfig-fv4h): the
+  # option is DEMOTED to this seed — the user config layer it lands in
+  # is what a sidecar (`mysbx init` records the value, D32's
+  # recording rule) or the `--agent` flags override at RUN time.
+  # `null` seeds nothing: a host without a default keeps the
+  # pre-D32 behaviour (no agent starts, no key in the file).
+  // lib.optionalAttrs (cfg.defaultAgent != null) { "default-agent" = cfg.defaultAgent; };
   # The mysbx crate — the SAME derivation the wrapper builds around
   # (./nix/crate.nix): one definition, two consumers, so the in-image
   # relay and the `MYSBX_PODMAN_EGRESS_RELAY` pin can never drift
@@ -520,6 +595,11 @@ let
         ;
       enabledBackends = backends;
       inherit muxEntries;
+      # The agent registry pins (bd myconfig-fv4h, config.md D32):
+      # the SORTED kind names and the rendered registry the CLI
+      # resolves `default-agent`/`--agent` against.
+      agentNames = lib.concatStringsSep " " agentNames;
+      agentsFile = "${agentsFile}";
       alacritty = cfg.terminal.package;
       shell = cfg.shell.path;
       podmanImage = if cfg.podman.enable then cfg.podman.image else null;
@@ -881,28 +961,17 @@ in
       '';
     };
 
-    defaultAgent = mkOption {
-      type = types.nullOr (
+    agents = mkOption {
+      type = types.attrsOf (
         types.submodule {
           options = {
-            kind = mkOption {
-              type = types.str;
-              example = "pi";
-              description = ''
-                The agent's name: herdr's `agent start --kind` argument
-                AND the name it is registered under (workmux:
-                `agents.<kind>` in the in-sandbox config). herdr only
-                accepts a lowercase name (`[a-z][a-z0-9_-]{0,31}`), and
-                the kind IS that name here.
-              '';
-            };
             command = mkOption {
               type = types.str;
               example = "pi";
               description = ''
                 The executable to start. Must be on the sandbox PATH —
                 the sandbox never sees host binaries, so the module
-                setting this option must also add its package to
+                registering the agent must also add its package to
                 `extraTools`.
               '';
             };
@@ -914,15 +983,36 @@ in
           };
         }
       );
+      default = { };
+      description = ''
+        The agent REGISTRY of this host (bd myconfig-fv4h,
+        ./docs/design/config.md D32): every kind a mysbx run may
+        select through `default-agent` or `--agent`. The wrapper
+        pins the (sorted) kind names as `MYSBX_AGENT_NAMES` and the
+        rendered registry as `MYSBX_AGENTS_FILE`; the CLI resolves
+        the selected kind against them and hands the command to the
+        entry scripts as `MYSBX_AGENT_COMMAND`/`ARG1..N` — a
+        command/args never enters a TOML layer (D4: configuration
+        that can execute is configuration that can escape).
+
+        The agent PROGRAM modules register here
+        (../programs.pi-coding-agent sets `pi`,
+        ../programs.opencode sets `opencode`); `defaultAgent` names
+        one of these keys as the default.
+      '';
+    };
+
+    defaultAgent = mkOption {
+      type = types.nullOr types.str;
       default = null;
       description = ''
-        The agent every INTERACTIVE session of this user starts, on
-        the multiplexers that have the concept: herdr starts it as
-        the initial command of the workspace the entry relocates to
-        $PWD; workmux starts it in a vertical split below the
-        dashboard. tmux, aoe and orca ignore it; `mysbx run -- CMD`
-        is unaffected. `null` starts no agent (pre-existing
-        behaviour).
+        The KIND of the agent every INTERACTIVE session of this user
+        starts (bd myconfig-fv4h, ./docs/design/config.md D32): a
+        key of `agents`, a string — never a command. The value seeds
+        the generated user config layer's `default-agent` line (a
+        sidecar or the `--agent`/`--<kind>`/`--no-agent` flags
+        override it per repository / per run), and `null` seeds
+        nothing (pre-existing behaviour: no agent starts).
       '';
     };
 
@@ -2440,15 +2530,53 @@ in
           '';
         }
         {
-          # herdr accepts only that name shape for an agent, and the
-          # kind IS the name it is registered under.
-          assertion =
-            cfg.defaultAgent == null || builtins.match "[a-z][a-z0-9_-]{0,31}" cfg.defaultAgent.kind != null;
+          # The kind grammar (config.md D32): the TOML key and the CLI
+          # shorthand both accept `[a-z][a-z0-9_-]{0,31}` — the same
+          # grammar the crate's `valid_agent_kind` checks at RUN
+          # time; catching a bad key here names the registry entry
+          # at eval time instead of a refused run later.
+          assertion = lib.all (kind: builtins.match "[a-z][a-z0-9_-]{0,31}" kind != null) (
+            lib.attrNames cfg.agents
+          );
           message = ''
-            myconfig.ai.dev.mysbx.defaultAgent.kind is
-            "${toString (cfg.defaultAgent.kind or null)}", but herdr only
-            accepts a name matching "[a-z][a-z0-9_-]{0,31}" (and the kind
-            IS that name).
+            myconfig.ai.dev.mysbx.agents has a key that is not a valid
+            agent kind (the grammar is "[a-z][a-z0-9_-]{0,31}",
+            lowercase): ${
+              toString (
+                lib.filter (kind: builtins.match "[a-z][a-z0-9_-]{0,31}" kind == null) (lib.attrNames cfg.agents)
+              )
+            }.
+          '';
+        }
+        {
+          # config.md D32 (bd myconfig-fv4h): the kind must exist in
+          # the registry — `defaultAgent` names one of `agents`, so a
+          # typo is caught at EVAL time, not as a refused run later.
+          assertion = cfg.defaultAgent == null || cfg.agents ? ${cfg.defaultAgent};
+          message = ''
+            myconfig.ai.dev.mysbx.defaultAgent is "${cfg.defaultAgent}",
+            but myconfig.ai.dev.mysbx.agents has no such key
+            (available: ${toString (lib.sort builtins.lessThan (lib.attrNames cfg.agents))}).
+          '';
+        }
+        {
+          # The `--<kind>` shorthands (bd myconfig-fv4h): an agent kind
+          # must not collide with a flag word the CLI parses earlier
+          # or a value another shorthand family claims
+          # (mysbx-rs/src/lib.rs `split_global_flags`: the multiplexer
+          # arm first, then the agent arm, then the backend arm) —
+          # a kind named e.g. `krun` would shadow the backend flag
+          # and every user of it. One reserved list, asserted per
+          # registry key and per `defaultAgent`.
+          assertion = lib.all (kind: !builtins.elem kind RESERVED_AGENT_KINDS) (lib.attrNames cfg.agents);
+          message = ''
+            myconfig.ai.dev.mysbx.agents has a kind that collides with
+            a reserved CLI word (a multiplexer name, a backend name, or
+            a mysbx flag spelling): ${
+              toString (lib.filter (kind: builtins.elem kind RESERVED_AGENT_KINDS) (lib.attrNames cfg.agents))
+            }. The kind is also the `--<kind>` shorthand of
+            `--agent`, so a reserved word would shadow an existing
+            flag (docs/design/cli.md).
           '';
         }
         {
