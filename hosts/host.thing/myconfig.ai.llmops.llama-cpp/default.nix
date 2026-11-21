@@ -37,6 +37,12 @@ let
     inherit modelsPullDir;
   };
   nex_n25_mini = import ./Nex-N2.5-mini.nix { inherit modelsPullDir; };
+  # Inkling-2-Mini (ggml-org GGUF, inkling2_loop layout): needs a
+  # llama.cpp newer than the pinned nixpkgs v1.0.0 (see
+  # ../nixpkgs.overlays.llama-cpp-inkling.nix, which re-pins ALL
+  # backends). No serverPackage — the entries are ordinary models on
+  # every backend, rtx INI router included.
+  inkling = import ./Inkling-2-Mini.nix { inherit lib modelsPullDir; };
   # Helper to set the llama-swap group on a list of models.
   withGroup = group: map (m: m // { inherit group; });
 
@@ -60,7 +66,8 @@ let
   ++ gemma4.rtxModels
   ++ agentsA1.rtxModels
   ++ withGroup "MoE" nex_n25_mini.rtxModels
-  ++ withGroup "dense" (qwen3_8_27B.rtxModels ++ nanbeige4_3_33B.rtxModels);
+  ++ withGroup "dense" (qwen3_8_27B.rtxModels ++ nanbeige4_3_33B.rtxModels)
+  ++ inkling.rtxModels;
 
   amdModels = map (model: model // { params = (model.params or [ ]) ++ [ "--no-mmap" ]; }) (
     [
@@ -98,6 +105,7 @@ let
     ++ nex_n25_mini.amdModels
     ++ hy3.amdModels
     ++ nanbeige4_3_33B.amdModels
+    ++ inkling.amdModels
   );
   # Names of all models that get a host-side Vulkan1 wrapper through
   # `scriptOnlyModels` in `rtx-llama-cpp-config` below (every
@@ -320,6 +328,10 @@ in
               ++ qwen38_flash_next.amdModels
               ++ nex_n25_mini.amdModels
               ++ nanbeige4_3_33B.amdModels
+              # Inkling is served via serverPackage everywhere (no
+              # device-default twin), so nothing auto-collects its specs;
+              # list them explicitly.
+              ++ inkling.amdModels
             )
           )
         )
