@@ -455,6 +455,8 @@ in
         "wdisplays"
         "pcmanfm"
       ];
+      # app_id is `network.cycles.wdisplays`, matched as substring.
+      myconfig.desktop.wayland.launcherRunOrRaise = [ { command = "wdisplays"; } ];
     }
   );
 }
