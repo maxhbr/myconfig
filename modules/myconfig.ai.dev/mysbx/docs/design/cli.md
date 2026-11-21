@@ -991,6 +991,71 @@ root by construction; a named host directory would be read by no one
 and written by no one, and accept-and-ignore is the failure mode the
 gate exists to prevent.
 
+### D31: `--config <path>` replaces the sidecar layer's file for one invocation
+
+The sidecar layer is DERIVED with the sidecar — always
+`<repo>.mysbx/config.toml` (or `<named-sidecar>/config.toml` under
+`--sidecar`, D30) — and this flag is the one place an operator reads
+that second configuration layer from a DIFFERENT file for ONE
+invocation: `mysbx --config /elsewhere.toml` and `mysbx run --config
+/elsewhere.toml -- CMD` run against the named file's policy while
+the sidecar DIRECTORY — the state-dirs, the session clones,
+`result.json`, the egress logs, the ssh keypair, the run report's
+`sidecar:` line — stays the derived or `--sidecar`-named one. The
+named file IS the sidecar layer, with the sidecar layer's full
+trust: its mounts bind without a covering user-config entry, its
+`git-dirs` approve, its `state-dirs` persist, its `backend` wins the
+D6 precedence — everything `config.toml` in the sidecar may decide,
+from a file the operator chose instead. The next run derives the
+file again; the flag writes nothing and there is no TOML surface
+for it — the flag is the whole switch, the `--sidecar` precedent
+(D30).
+
+**The two overrides compose, never conflict.** `--sidecar` moves the
+directory — everything under `repo.sidecar` follows it; `--config`
+moves only the layer file. `--sidecar /s --config /c.toml` runs
+against `/s`'s state and clones configured by `/c.toml` — the state
+bind follows the named sidecar, the backend the named file. Neither
+flag is a spelling of the other: `--sidecar` without `--config` reads
+`<named-sidecar>/config.toml` as ever, `--config` without `--sidecar`
+reads the named file against the derived sidecar's state.
+
+**Scope: the two sandbox forms.** Bare form and `run -- CMD` — the
+same scope as `--sidecar` (D30), for the same reason: every other
+verb reads the sidecar config as a FILE among the state it reports
+on (`status`) or the template it writes (`init`/`edit`), and a
+one-file override of that is a different feature. The big refusal
+arm names the flag like every run-scoped one; `diagnose` gets its
+own explicit refusal (its flags are its own, D29).
+
+**Position and spelling: one rule, like every run-scoped flag.**
+Before the verb and after it for `run` (D10/D16), never twice in one
+invocation, in either position (D5). The value takes the same three
+path spellings a `--ro`/`--rw` path accepts (D16/D8) — absolute,
+`~/…` expanded against $HOME, or relative to the cwd — and must
+EXIST: a missing named file is a canonicalize error naming it, NOT
+D13's `mysbx init` hint — the operator named the file, and the hint's
+command would write a DIFFERENT one, the sidecar's own.
+
+**Guards re-run, not assumed.** The home-exposure refusal applies as
+to a `[[mounts]]` entry (review-3 item 4): the named file may
+neither BE the home directory nor contain it. And the D3
+containment refusal runs against the repo: the sandbox can write the
+repo, so a named file INSIDE it would be content the sandbox
+decided — the `parent` key's own rule (config.md D3/D29), applied to
+the flag. The layer keeps its NAME — "sidecar" — in every error and
+attribution: a parse error, a refused mount, a `git-dirs` violation
+in the named file names the layer the operator overrode, and the
+`## ` report's `sidecar config:` line names the file the run read.
+D13 is not relaxed either: the override replaces the *policy*, not
+the *state* — the sidecar directory (derived or named) must still
+be initialized, and its `mysbx init` hint still names it.
+
+**`mysbx-once` refuses it (D22):** the once run's config layer is the
+temp root's own by construction; a named host file would be read by
+no one and written by no one, and accept-and-ignore is the failure
+mode the gate exists to prevent.
+
 ## Non-goals
 
 - No mysbx daemon — the dtach master is per run and ends with it —

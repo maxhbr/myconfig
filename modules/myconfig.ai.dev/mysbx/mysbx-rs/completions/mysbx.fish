@@ -49,7 +49,7 @@ function __mysbx_tokens
             case gui
                 set out
                 continue
-            case --multiplexer --backend --session --sidecar --timeout --ro --rw --image
+            case --multiplexer --backend --session --sidecar --config --timeout --ro --rw --image
                 set skip 1
                 continue
             case '-*'
@@ -381,6 +381,7 @@ complete -c mysbx -n '__mysbx_no_verb' -l podman-krun -d 'Alias of --backend pod
 complete -c mysbx -n '__mysbx_no_verb' -l krun -d 'Alias of --backend krun (bd myconfig-6tt)'
 complete -c mysbx -n '__mysbx_no_verb' -l session -x -a '(__mysbx_sessions)' -d 'Run in the named session clone; the FIRST run creates it'
 complete -c mysbx -n '__mysbx_no_verb' -l sidecar -r -d 'The sidecar directory of THIS run (cli.md D30); overrides the derived <repo>.mysbx for one invocation'
+complete -c mysbx -n '__mysbx_no_verb' -l config -r -d 'The config file whose layer replaces the sidecar layer of THIS run (cli.md D31); the sidecar itself stays as derived or named'
 complete -c mysbx -n '__mysbx_no_verb' -l ro -r -d 'Bind one more host path read-only for THIS run; repeatable'
 complete -c mysbx -n '__mysbx_no_verb' -l rw -r -d 'The same, read-write; every --ro before every --rw'
 complete -c mysbx -n '__mysbx_no_verb' -l result -d 'With run: record the outcome in result.json instead of exec'
@@ -403,6 +404,7 @@ complete -c mysbx -n '__mysbx_in_run' -l podman-krun -d 'Alias of --backend podm
 complete -c mysbx -n '__mysbx_in_run' -l krun -d 'Alias of --backend krun (bd myconfig-6tt)'
 complete -c mysbx -n '__mysbx_in_run' -l session -x -a '(__mysbx_sessions)' -d 'Run in the named session clone; the FIRST run creates it'
 complete -c mysbx -n '__mysbx_in_run' -l sidecar -r -d 'The sidecar directory of THIS run (cli.md D30); overrides the derived <repo>.mysbx for one invocation'
+complete -c mysbx -n '__mysbx_in_run' -l config -r -d 'The config file whose layer replaces the sidecar layer of THIS run (cli.md D31); the sidecar itself stays as derived or named'
 complete -c mysbx -n '__mysbx_in_run' -l ro -r -d 'Bind one more host path read-only for THIS run; repeatable'
 complete -c mysbx -n '__mysbx_in_run' -l rw -r -d 'The same, read-write; every --ro before every --rw'
 complete -c mysbx -n '__mysbx_in_run' -l result -d 'Record the outcome in result.json instead of exec'

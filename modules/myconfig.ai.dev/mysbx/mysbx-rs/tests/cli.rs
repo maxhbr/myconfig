@@ -18756,3 +18756,296 @@ fn once_refuses_the_sidecar_override() {
         "stderr: {e}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// The --config override (cli.md D31)
+// ---------------------------------------------------------------------------
+
+/// [`fixture_user_backend`] plus a config file at `base/elsewhere.toml`
+/// — the target of the `--config` override: a file OUTSIDE the sidecar
+/// whose content could only have come from the flag.
+fn fixture_alt_config(name: &str) -> (Invocation, PathBuf, PathBuf, PathBuf) {
+    // [`fixture_user_backend`], not [`fixture`]: a dry run needs a
+    // backend from SOME layer (D7), and the user layer keeps both the
+    // sidecar config and the named file decidable — the tests assert
+    // which layer won by writing different backends into each.
+    let (inv, repo, sidecar) = fixture_user_backend(name, &[]);
+    let alt = repo.parent().unwrap().join("elsewhere.toml");
+    std::fs::write(&alt, "backend = \"nono\"\n").unwrap();
+    (inv, repo, sidecar, alt)
+}
+
+/// The named file's layer REPLACES the sidecar layer: its `backend`
+/// wins over the user config's, while the sidecar directory's own
+/// config — read or not — does not (cli.md D31).
+#[test]
+fn config_override_replaces_the_sidecar_layer() {
+    let (inv, _repo, sidecar, alt) = fixture_alt_config("config-override-layer");
+    // The sidecar's own config names ANOTHER backend: if the override
+    // did not replace the layer, this value would win instead.
+    std::fs::write(sidecar.join("config.toml"), "backend = \"bubblewrap\"\n").unwrap();
+    let alt_s = alt.to_string_lossy().into_owned();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run", "--config", &alt_s]);
+    assert_eq!(code, 0, "stdout: {stdout}\nstderr: {stderr}");
+    // The argv's first line names the backend the NAMED file selected.
+    assert!(
+        stdout.contains("nono"),
+        "the named file's layer replaced the sidecar layer: {stdout}"
+    );
+}
+
+/// The sidecar DIRECTORY is untouched by the override: the state bind
+/// still points at the derived `<repo>.mysbx/state/.ssh` (D31 — the
+/// flag moves only the layer file, `--sidecar` moves the directory).
+#[test]
+fn config_override_keeps_the_sidecar_state() {
+    let (inv, repo, _sidecar, alt) = fixture_alt_config("config-override-state");
+    let alt_s = alt.to_string_lossy().into_owned();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--dry-run", "--config", &alt_s]);
+    assert_eq!(code, 0, "stdout: {stdout}\nstderr: {stderr}");
+    // Canonicalize: the argv stores the real target of the temp-dir
+    // spelling, which may itself be a symlink (as `/tmp` is here).
+    let sidecar = repo.canonicalize().unwrap().with_file_name(format!(
+        "{}.mysbx",
+        repo.file_name().unwrap().to_string_lossy()
+    ));
+    assert!(
+        stdout.contains(&format!(
+            "--bind\n{}/state/.ssh\n/mysbx-home/.ssh",
+            sidecar.display()
+        )),
+        "the state bind still uses the derived sidecar: {stdout}"
+    );
+}
+
+/// The `## ` report names the NAMED file as the sidecar layer's source
+/// (cli.md D31): the report describes the run the flag made.
+#[test]
+fn config_override_report_names_the_named_file() {
+    let (inv, _repo, _sidecar, alt) = fixture_alt_config("config-override-report");
+    let alt_s = alt.to_string_lossy().into_owned();
+    let (code, stdout, stderr) =
+        run_binary_with(&inv, &["--verbose", "--dry-run", "--config", &alt_s]);
+    assert_eq!(code, 0, "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stdout.contains(&format!("## sidecar config: {alt_s} (loaded)")),
+        "the report names the named file: {stdout}"
+    );
+}
+
+/// The after-the-verb position (D10/D16): `run --config` is the same
+/// run as `--config run`.
+#[test]
+fn config_override_after_the_verb_replaces_the_layer() {
+    let (inv, _repo, sidecar, alt) = fixture_alt_config("config-override-run-verb");
+    std::fs::write(sidecar.join("config.toml"), "backend = \"bubblewrap\"\n").unwrap();
+    let alt_s = alt.to_string_lossy().into_owned();
+    let (code, stdout, stderr) = run_binary_with(
+        &inv,
+        &["--dry-run", "run", "--config", &alt_s, "--", "true"],
+    );
+    assert_eq!(code, 0, "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stdout.contains("nono"),
+        "the named file's layer replaced the sidecar layer: {stdout}"
+    );
+}
+
+/// The two overrides compose (D30 + D31): `--sidecar` moves the
+/// directory, `--config` replaces the layer — the state bind follows
+/// the NAMED sidecar, the backend the NAMED file.
+#[test]
+fn config_override_composes_with_the_sidecar_override() {
+    let (inv, repo, _sidecar, alt) = fixture_alt_config("config-override-compose");
+    let named_sidecar = repo.parent().unwrap().join("elsewhere");
+    std::fs::create_dir_all(&named_sidecar).unwrap();
+    init_sidecar(&named_sidecar);
+    let alt_s = alt.to_string_lossy().into_owned();
+    let named_s = named_sidecar.to_string_lossy().into_owned();
+    let (code, stdout, stderr) = run_binary_with(
+        &inv,
+        &["--dry-run", "--sidecar", &named_s, "--config", &alt_s],
+    );
+    assert_eq!(code, 0, "stdout: {stdout}\nstderr: {stderr}");
+    assert!(
+        stdout.contains("nono"),
+        "the named file's layer is the sidecar layer: {stdout}"
+    );
+    assert!(
+        stdout.contains(&format!("--bind\n{named_s}/state/.ssh\n/mysbx-home/.ssh")),
+        "the state bind uses the NAMED sidecar: {stdout}"
+    );
+}
+
+/// A missing named file is a canonicalize error naming the raw spelling
+/// — NOT D13's `mysbx init` hint: the operator named the file, the
+/// hint's command would write a different one (D31).
+#[test]
+fn config_override_of_a_missing_file_is_a_canonicalize_error() {
+    let (inv, _repo, _sidecar, _alt) = fixture_alt_config("config-override-missing");
+    let (code, _stdout, stderr) = run_binary_with(&inv, &["--dry-run", "--config", "no-such.toml"]);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(stderr.contains("cannot canonicalize"), "stderr: {stderr}");
+    assert!(
+        stderr.contains("no-such.toml"),
+        "the message names the raw path: {stderr}"
+    );
+    assert!(!stderr.contains("mysbx init"), "stderr: {stderr}");
+}
+
+/// The D3 containment refusal: a config file inside the repo is
+/// content the sandbox can write, so it must not decide the
+/// configuration — the `parent` key's own rule, applied to the flag
+/// (config.md D3, cli.md D31).
+#[test]
+fn config_override_inside_the_repo_is_refused() {
+    let (inv, repo, _sidecar, _alt) = fixture_alt_config("config-override-in-repo");
+    let inside = repo.join("sub").join("config.toml");
+    std::fs::write(&inside, "backend = \"nono\"\n").unwrap();
+    let inside_s = inside.to_string_lossy().into_owned();
+    let (code, _stdout, stderr) = run_binary_with(&inv, &["--dry-run", "--config", &inside_s]);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(stderr.contains("inside the repository"), "stderr: {stderr}");
+}
+
+/// The home-exposure refusal applies as to a `[[mounts]]` entry
+/// (review-3 item 4, cli.md D31): a config file that IS the home is
+/// refused.
+#[test]
+fn config_override_of_the_home_is_refused() {
+    let (inv, _repo, _sidecar, _alt) = fixture_alt_config("config-override-home");
+    let home_s = inv.home.to_string_lossy().into_owned();
+    let (code, _stdout, stderr) = run_binary_with(&inv, &["--dry-run", "--config", &home_s]);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(stderr.contains("home directory"), "stderr: {stderr}");
+}
+
+/// The parser's own refusals (cli.md D31, D5): a missing or empty
+/// value, a `~` that is not the `~/` prefix, and a repeat — in either
+/// position, and across positions.
+#[test]
+fn config_override_parse_errors_are_usage_errors() {
+    let (inv, _repo, _sidecar, alt) = fixture_alt_config("config-override-parse");
+    let alt_s = alt.to_string_lossy().into_owned();
+
+    let (code, _o, e) = run_binary_with(&inv, &["--dry-run", "--config"]);
+    assert_eq!(code, 2, "stderr: {e}");
+    assert!(e.contains("requires a path"), "stderr: {e}");
+
+    let (code, _o, e) = run_binary_with(&inv, &["--dry-run", "--config", ""]);
+    assert_eq!(code, 2, "stderr: {e}");
+    assert!(e.contains("must not be empty"), "stderr: {e}");
+
+    let (code, _o, e) = run_binary_with(&inv, &["--dry-run", "--config", "~"]);
+    assert_eq!(code, 2, "stderr: {e}");
+    assert!(e.contains("`~/` prefix"), "stderr: {e}");
+
+    // The after-verb spelling: the same refusals, the run usage.
+    let (code, _o, e) = run_binary_with(
+        &inv,
+        &["--dry-run", "run", "--config", "~user", "--", "true"],
+    );
+    assert_eq!(code, 2, "stderr: {e}");
+    assert!(e.contains("`~/` prefix"), "stderr: {e}");
+
+    let (code, _o, e) =
+        run_binary_with(&inv, &["--dry-run", "--config", &alt_s, "--config", &alt_s]);
+    assert_eq!(code, 2, "stderr: {e}");
+    assert!(e.contains("repeated flag"), "stderr: {e}");
+
+    let (code, _o, e) = run_binary_with(
+        &inv,
+        &["--config", &alt_s, "run", "--config", &alt_s, "--", "true"],
+    );
+    assert_eq!(code, 2, "stderr: {e}");
+    assert!(e.contains("repeated flag"), "stderr: {e}");
+}
+
+/// D13 still holds under the override: the sidecar DIRECTORY must
+/// be initialized — the named file replaces the *policy*, not the
+/// *state* — so an un-inited sidecar is refused with the `mysbx init`
+/// hint even when the named config file exists and parses
+/// (cli.md D31).
+#[test]
+fn config_override_does_not_relax_d13() {
+    let (inv, _repo, sidecar, alt) = fixture_alt_config("config-override-d13");
+    // Undo the fixture's `init_sidecar`: an un-inited sidecar whose
+    // named policy file exists and is valid.
+    std::fs::remove_file(sidecar.join("config.toml")).unwrap();
+    let alt_s = alt.to_string_lossy().into_owned();
+    let (code, _stdout, stderr) = run_binary_with(&inv, &["--dry-run", "--config", &alt_s]);
+    assert_eq!(code, 70, "stderr: {stderr}");
+    assert!(stderr.contains("mysbx init"), "stderr: {stderr}");
+    assert!(
+        stderr.contains(&sidecar.display().to_string()),
+        "the hint names the derived sidecar: {stderr}"
+    );
+}
+
+/// Every non-run verb refuses the flag (the `--ro`/`--rw` scope, D16;
+/// cli.md D31) — including `diagnose`, which sits outside the big
+/// refusal arm's verb list and gets its own explicit refusal.
+#[test]
+fn config_override_is_refused_for_every_non_run_verb() {
+    let (inv, _repo, _sidecar, alt) = fixture_alt_config("config-override-refused");
+    let alt_s = alt.to_string_lossy().into_owned();
+    for verb in [
+        "init",
+        "edit",
+        "status",
+        "attach",
+        "ssh-pubkey",
+        "fetch",
+        "merge",
+        "push",
+        "diff",
+        "session",
+        "worktree",
+        "doctor",
+        "version",
+        "help",
+        "gui",
+        "podman-load-image",
+        "gvisor-load-image",
+    ] {
+        let (code, _o, e) = run_binary_with(&inv, &["--config", &alt_s, verb]);
+        assert_eq!(code, 2, "verb {verb}, stderr: {e}");
+        assert!(
+            e.contains(&format!("--config is not valid with `{verb}`")),
+            "verb {verb}, stderr: {e}"
+        );
+    }
+    let (code, _o, e) = run_binary_with(&inv, &["--config", &alt_s, "diagnose", "egress"]);
+    assert_eq!(code, 2, "stderr: {e}");
+    assert!(
+        e.contains("--config is not valid with `diagnose`"),
+        "stderr: {e}"
+    );
+}
+
+/// `mysbx-once` refuses the flag (D22, cli.md D31): the once run's
+/// config layer is the temp root's own, so a named host file would be
+/// read by no one. Both positions: the gate at `run()` level sees the
+/// before-verb spelling, the second gate inside `run_command` the
+/// after-verb one.
+#[test]
+fn once_refuses_the_config_override() {
+    let (inv, _repo, _sidecar) = fixture_uninited("once-config-refused", &[]);
+    let alt = inv.cwd.parent().unwrap().join("elsewhere.toml");
+    std::fs::write(&alt, "").unwrap();
+    let alt_s = alt.to_string_lossy().into_owned();
+
+    let (code, _o, e) = run_once(&inv, &["--config", &alt_s, "--dry-run"]);
+    assert_eq!(code, 70, "stderr: {e}");
+    assert!(
+        e.contains("--config is refused in once-mode"),
+        "stderr: {e}"
+    );
+
+    let (code, _o, e) = run_once(&inv, &["run", "--config", &alt_s, "--", "true"]);
+    assert_eq!(code, 70, "stderr: {e}");
+    assert!(
+        e.contains("--config is refused in once-mode"),
+        "stderr: {e}"
+    );
+}

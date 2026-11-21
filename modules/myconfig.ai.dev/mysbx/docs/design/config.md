@@ -35,7 +35,11 @@ Some flags are per-invocation overrides of one config key rather than
 inputs of their own (`--multiplexer`, cli.md D14; `--backend`, cli.md
 D18); the CLI is then the outermost, strongest layer for exactly that
 key, for THIS run only — nothing is written, and the next run reads
-the layers alone.
+the layers alone. One flag redirects a whole layer's FILE instead of a
+key (`--config`, cli.md D31): it replaces where layer 3 is read from
+— the file it names becomes the sidecar layer, with the sidecar
+layer's full trust — while the sidecar directory and every other
+layer stay as derived.
 
 ### D2: The sidecar lives outside the repo
 

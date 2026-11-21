@@ -301,6 +301,7 @@ pub fn run(args: Vec<String>) -> i32 {
                 || (flags.backend.is_some() && other != "run")
                 || (flags.session.is_some() && other != "run" && other != "attach")
                 || (flags.sidecar.is_some() && other != "run")
+                || (flags.config.is_some() && other != "run")
                 || ((flags.result || flags.timeout.is_some()) && other != "run")
                 || ((!flags.ro.is_empty() || !flags.rw.is_empty()) && other != "run")
                 || flags.detach
@@ -393,12 +394,17 @@ pub fn run(args: Vec<String>) -> i32 {
         // generic run-scoped refusal below, which is what makes the
         // before-the-verb spellings reach the verb at all.
         // `diagnose` sits outside the big refusal arm's verb list
-        // (its flags are its own, D29); a run-scoped `--sidecar`
-        // before the verb must not fall through to it and be
-        // silently ignored — refused like every other non-run verb
-        // (cli.md D30).
+        // (its flags are its own, D29); a run-scoped `--sidecar` or
+        // `--config` before the verb must not fall through to it and
+        // be silently ignored — refused like every other non-run verb
+        // (cli.md D30, D31).
         Some("diagnose") if flags.sidecar.is_some() => {
             eprintln!("mysbx: --sidecar is not valid with `diagnose`");
+            eprintln!("try `mysbx --help`");
+            2
+        }
+        Some("diagnose") if flags.config.is_some() => {
+            eprintln!("mysbx: --config is not valid with `diagnose`");
             eprintln!("try `mysbx --help`");
             2
         }
@@ -595,6 +601,8 @@ fn once_gate(flags: &Flags, rest: &[String]) -> Option<i32> {
         Some("--session is refused in once-mode".to_owned())
     } else if flags.sidecar.is_some() {
         Some("--sidecar is refused in once-mode".to_owned())
+    } else if flags.config.is_some() {
+        Some("--config is refused in once-mode".to_owned())
     } else if flags.result {
         Some("--result is refused in once-mode".to_owned())
     } else if flags.timeout.is_some() {
@@ -674,6 +682,18 @@ pub struct Flags {
     /// sidecar is derived, as always. Bare form and `run` only —
     /// every other verb refuses the flag, and so does once-mode.
     pub sidecar: Option<String>,
+    /// The `--config <path>` override (cli.md D31): the file whose
+    /// parsed layer REPLACES the sidecar layer of THIS invocation —
+    /// the sidecar itself (state, clones, result.json, the ssh
+    /// keypair) stays the derived or `--sidecar`-named one, only the
+    /// configuration comes from the named file. The raw spelling as
+    /// typed; the pipeline resolves it like a `--ro`/`--rw` path
+    /// (D16/D8), refuses a file inside the repo (config.md D3) and
+    /// uses it in place of `<sidecar>/config.toml` for the layer
+    /// load. `None` means the flag was not given. Bare form and
+    /// `run` only — every other verb refuses the flag, and so does
+    /// once-mode.
+    pub config: Option<String>,
     /// The `--detach` flag (docs/design/detach.md B2, cli.md D21):
     /// start the bare form's run under a host-side `dtach` master
     /// and return once the sandbox runs (B4). Bare form only — with
@@ -790,6 +810,8 @@ impl Flags {
             "--session"
         } else if self.sidecar.is_some() {
             "--sidecar"
+        } else if self.config.is_some() {
+            "--config"
         } else if !self.ro.is_empty() {
             "--ro"
         } else if !self.rw.is_empty() {
@@ -1098,6 +1120,44 @@ fn split_global_flags_traced(args: &[String]) -> Result<(Flags, Selections, &[St
                     return Err(2);
                 }
                 flags.sidecar = Some(value.clone());
+                // The value argument is consumed with the flag.
+                rest = tail.split_first().map(|(_, t)| t).unwrap_or(&[]);
+                continue;
+            }
+            "--config" => {
+                // cli.md D31: the config file whose layer replaces the
+                // sidecar layer of THIS invocation. The same value
+                // treatment as `--sidecar` (D30): the three path
+                // spellings — absolute, `~/…` and relative to the cwd —
+                // resolved and canonicalized by the pipeline, which
+                // knows the home; a `~` that is not the `~/` prefix is
+                // the parser's own refusal. Not repeatable (D5): one
+                // run has exactly one sidecar layer, wherever it is
+                // read from.
+                if flags.config.is_some() {
+                    eprintln!("mysbx: repeated flag: --config");
+                    eprintln!("try `mysbx --help`");
+                    return Err(2);
+                }
+                let value = match tail.split_first() {
+                    Some((v, _)) => v,
+                    None => {
+                        eprintln!("mysbx: --config requires a path");
+                        eprintln!("try `mysbx --help`");
+                        return Err(2);
+                    }
+                };
+                if value.is_empty() {
+                    eprintln!("mysbx: --config must not be empty");
+                    eprintln!("try `mysbx --help`");
+                    return Err(2);
+                }
+                if value.starts_with('~') && !value.starts_with("~/") {
+                    eprintln!("mysbx: --config: only the `~/` prefix is supported, not `~` alone or `~user`: `{value}`");
+                    eprintln!("try `mysbx --help`");
+                    return Err(2);
+                }
+                flags.config = Some(value.clone());
                 // The value argument is consumed with the flag.
                 rest = tail.split_first().map(|(_, t)| t).unwrap_or(&[]);
                 continue;
@@ -1433,6 +1493,39 @@ fn run_command(global: Flags, selections: &Selections, args: &[String]) -> i32 {
                     return 2;
                 }
                 flags.sidecar = Some(value);
+                idx += 2;
+            }
+            "--config" => {
+                // cli.md D31: the same flag after the verb, the same
+                // position rule as `--sidecar` (D30/D10/D16) — one rule
+                // for every run-scoped flag, both spellings one run.
+                // Not repeatable in EITHER position (D5); the `~`
+                // grammar refusal is identical to the one before the
+                // verb.
+                if flags.config.is_some() {
+                    eprintln!("mysbx run: repeated flag: --config");
+                    eprintln!("usage: {RUN_USAGE}");
+                    return 2;
+                }
+                let value = match args.get(idx + 1) {
+                    Some(v) => v.clone(),
+                    None => {
+                        eprintln!("mysbx run: --config requires a path");
+                        eprintln!("usage: {RUN_USAGE}");
+                        return 2;
+                    }
+                };
+                if value.is_empty() {
+                    eprintln!("mysbx run: --config must not be empty");
+                    eprintln!("usage: {RUN_USAGE}");
+                    return 2;
+                }
+                if value.starts_with('~') && !value.starts_with("~/") {
+                    eprintln!("mysbx run: --config: only the `~/` prefix is supported, not `~` alone or `~user`: `{value}`");
+                    eprintln!("usage: {RUN_USAGE}");
+                    return 2;
+                }
+                flags.config = Some(value);
                 idx += 2;
             }
             "--" => {
@@ -2457,6 +2550,55 @@ fn sandbox_pipeline(
         }
         repo.sidecar = sidecar;
     }
+    // 1c. the `--config <path>` override (cli.md D31): the named
+    // file's layer REPLACES the sidecar layer of THIS invocation —
+    // the sidecar itself (state, clones, result.json, the ssh
+    // keypair, the egress logs) stays the derived or named one, only
+    // the configuration is read from elsewhere. The same path
+    // treatment as `--sidecar` (D30/D16/D8): `~/…` expands against
+    // $HOME, a relative path against the cwd, the file must exist —
+    // a missing named config is a canonicalize error naming it, not
+    // D13's `mysbx init` hint: the operator named the file, the
+    // hint's command would write a DIFFERENT one. The home-exposure
+    // refusal applies as to a `[[mounts]]` entry (review-3 item 4):
+    // a config at the home itself would follow the same symlink
+    // games the user config's walker already guards. And the D3
+    // containment refusal runs against the repo: the payload can
+    // write the repo, so a config inside it would be content the
+    // sandbox decided — the `parent` key's own rule (config.md
+    // D3/D29), applied to the flag.
+    let config_override = match &flags.config {
+        Some(raw) => {
+            let cwd = match std::env::current_dir() {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("mysbx: cannot determine current directory: {e}");
+                    return EXIT_INFRASTRUCTURE;
+                }
+            };
+            // `resolve_cwd` above refused a missing `$HOME`, so it is set.
+            let home = std::env::var_os("HOME").expect("resolve_cwd requires $HOME");
+            let path = match merge::resolve_cli_path(raw, "--config", Path::new(&home), &cwd) {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("mysbx: {e}");
+                    return EXIT_INFRASTRUCTURE;
+                }
+            };
+            let repo_canon =
+                std::fs::canonicalize(&repo.root).unwrap_or_else(|_| repo.root.clone());
+            if path.starts_with(&repo_canon) {
+                eprintln!(
+                    "mysbx: the --config file {} is inside the repository {} — the sandbox can write the repo, so repo content must not decide the configuration (docs/design/config.md D3)",
+                    path.display(),
+                    repo_canon.display()
+                );
+                return EXIT_INFRASTRUCTURE;
+            }
+            Some(path)
+        }
+        None => None,
+    };
     // 1a-once. the temp-root redirect of once-mode (cli.md D22): the
     // sidecar the rest of the pipeline sees is the EPHEMERAL one and
     // the worktrees sibling the TEMP directory, so the host's
@@ -2502,17 +2644,26 @@ fn sandbox_pipeline(
     // 3. both layers, merged (merge.rs, docs/design/config.md D7). Merge
     // errors (broken paths, unparseable files, an `[env]` override) are
     // runtime failures: the full validation still runs under --dry-run —
-    // a dry run that skipped it would exercise the wrong function.
+    // a dry run that skipped it would exercise the wrong function. The
+    // `--config` override (cli.md D31) replaces the sidecar layer's
+    // FILE — the sidecar-derived state binds below are untouched, only
+    // the configuration is read from the named file. In once-mode
+    // there is no override: the gate refused the flag before the
+    // pipeline, so the temp root's own config is the layer.
     let home = std::env::var_os("HOME").unwrap_or_default();
     let xdg = std::env::var("XDG_CONFIG_HOME").ok();
-    let layers =
-        match merge::load_layers(std::path::Path::new(&home), xdg.as_deref(), &repo.sidecar) {
-            Ok(l) => l,
-            Err(e) => {
-                eprintln!("mysbx: {e}");
-                return EXIT_INFRASTRUCTURE;
-            }
-        };
+    let layers = match merge::load_layers_ext(
+        std::path::Path::new(&home),
+        xdg.as_deref(),
+        &repo.sidecar,
+        config_override.as_deref(),
+    ) {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("mysbx: {e}");
+            return EXIT_INFRASTRUCTURE;
+        }
+    };
     // Kept for the report before the configs are consumed by the merge:
     // which files were loaded, and how many mounts the user layer
     // contributed (the merge keeps them first and in order, so this one
@@ -9388,6 +9539,7 @@ mod tests {
                 result: false,
                 session: None,
                 sidecar: None,
+                config: None,
                 detach: false,
                 detachable: false,
             }
@@ -9410,6 +9562,30 @@ mod tests {
             split_global_flags(&s(&["--sidecar", "/a", "--sidecar", "/b"])),
             Err(2)
         );
+
+        // cli.md D31: the `--config` override parses like `--sidecar`
+        // (D30) — the same three path spellings, the same `~`
+        // refusal, the same repeat refusal, the verb left in `rest`.
+        let args = s(&["--config", "/elsewhere/config.toml", "run"]);
+        let (flags, rest) = split_global_flags(&args).unwrap();
+        assert_eq!(flags.config.as_deref(), Some("/elsewhere/config.toml"));
+        assert_eq!(rest, &s(&["run"])[..]);
+        assert_eq!(split_global_flags(&s(&["--config"])), Err(2));
+        assert_eq!(split_global_flags(&s(&["--config", ""])), Err(2));
+        assert_eq!(split_global_flags(&s(&["--config", "~"])), Err(2));
+        assert_eq!(split_global_flags(&s(&["--config", "~user/x"])), Err(2));
+        assert_eq!(
+            split_global_flags(&s(&["--config", "/a", "--config", "/b"])),
+            Err(2)
+        );
+        // One invocation, one sidecar layer: the two overrides compose,
+        // never conflict — `--sidecar` moves the directory, `--config`
+        // moves only the layer file.
+        let args = s(&["--sidecar", "/s", "--config", "/c.toml", "run"]);
+        let (flags, rest) = split_global_flags(&args).unwrap();
+        assert_eq!(flags.sidecar.as_deref(), Some("/s"));
+        assert_eq!(flags.config.as_deref(), Some("/c.toml"));
+        assert_eq!(rest, &s(&["run"])[..]);
 
         let args = s(&["--dry-run", "--verbose"]);
         let (flags, rest) = split_global_flags(&args).unwrap();
@@ -9963,6 +10139,8 @@ mod tests {
             "--rw",
             "--result",
             "--timeout",
+            "--sidecar",
+            "--config",
             "--help",
             "--version",
             "-h",

@@ -563,8 +563,31 @@ pub fn load_layers(
     xdg_config_home: Option<&str>,
     sidecar_dir: &Path,
 ) -> Result<LoadedLayers, Error> {
+    load_layers_ext(home, xdg_config_home, sidecar_dir, None)
+}
+
+/// [`load_layers`] with the `--config <path>` override (cli.md D31):
+/// `config_override` names the file whose parsed layer REPLACES the
+/// sidecar layer — the sidecar directory itself (state, clones,
+/// `result.json`) is not redirected, only where the second
+/// configuration layer is read from. `None` is the derived
+/// `<sidecar>/config.toml`, as ever. The override keeps the override's
+/// own layer name — "sidecar" — in every error and attribution, so the
+/// refusal messages name the layer the operator overrode, never the
+/// file it did not come from. The repo-root derivation for the D3
+/// containment check of `parent` still comes from `sidecar_dir`: the
+/// REPO is what must not decide the configuration, and the repo does
+/// not move with the config file.
+pub fn load_layers_ext(
+    home: &Path,
+    xdg_config_home: Option<&str>,
+    sidecar_dir: &Path,
+    config_override: Option<&Path>,
+) -> Result<LoadedLayers, Error> {
     let user_path = user_config_path(home, xdg_config_home);
-    let sidecar_path = sidecar_dir.join("config.toml");
+    let sidecar_path = config_override
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| sidecar_dir.join("config.toml"));
     // The repo the sidecar belongs to (D2: `<repo>.mysbx`), for the D3
     // containment refusal of `parent` — a file the sandbox can write
     // must not decide the configuration. Derived by stripping the
