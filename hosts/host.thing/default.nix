@@ -57,6 +57,7 @@
         ];
       }
     )
+    ./nixpkgs.overlays.llama-cpp-inkling.nix
     ./myconfig.ai.llmops.llama-cpp
     ./myconfig.observability.llama-swap-metrics.nix
     ./myconfig.ai.vllm
