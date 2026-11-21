@@ -130,6 +130,12 @@ aside#details h2 { font-size: 15px; margin: 0 0 8px; word-break: break-word; }
 .col:empty::after {
   content: "—"; color: var(--muted); opacity: .4; padding: 4px 8px; font-size: 16px;
 }
+.col-more {
+  font-size: 11.5px; color: var(--muted); cursor: pointer;
+  border: 1px dashed var(--border); border-radius: 5px;
+  padding: 3px 8px; text-align: center; user-select: none;
+}
+.col-more:hover { color: var(--fg); border-color: var(--muted); }
 .card {
   background: var(--panel); border: 1px solid var(--border); border-left-width: 4px;
   border-radius: 5px; padding: 6px 8px; cursor: pointer; position: relative;

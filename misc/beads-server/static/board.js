@@ -11,6 +11,9 @@ import { makeDraggable, makeDropTarget } from "./edit.js";
 // lane collapse state: root id -> explicit user decision (boolean);
 // absent = follow the default, which collapses closed epic lanes.
 const overrides = new Map();
+// per-lane expand state for "X more" truncated columns:
+// `${laneRoot}|${colKey}` -> boolean (expanded)
+const expandedCols = new Set();
 export function isCollapsed(laneRoot, closedDefault) {
   return overrides.has(laneRoot)
     ? overrides.get(laneRoot)
@@ -18,6 +21,11 @@ export function isCollapsed(laneRoot, closedDefault) {
 }
 export function toggleLane(laneRoot, closedDefault) {
   overrides.set(laneRoot, !isCollapsed(laneRoot, closedDefault));
+}
+
+const MAX_SHOWN_CARDS = 3;
+function moreKey(laneRoot, colKey) {
+  return (laneRoot || "_ungrouped") + "|" + colKey;
 }
 
 export function renderBoard() {
@@ -35,10 +43,11 @@ export function renderBoard() {
     if (!lanes.has(rootId)) lanes.set(rootId, []);
     lanes.get(rootId).push(card);
   }
-  const named = [], ungrouped = [];
+  const named = [], ungroupedOpen = [], ungroupedClosed = [];
   for (const [rootId, members] of lanes) {
     if (members.length >= 2) named.push({ rootId, members });
-    else ungrouped.push(...members);
+    else for (const m of members)
+      (m.status === "closed" ? ungroupedClosed : ungroupedOpen).push(m);
   }
   named.sort((a, b) =>
     b.members.length - a.members.length ||
@@ -125,19 +134,35 @@ export function renderBoard() {
 
     for (const c of cols) {
       const col = h("div", "col col-" + c.key);
-      for (const m of perCol[c.key]) col.append(card(m));
+      const all = perCol[c.key];
+      const key = moreKey(laneRoot, c.key);
+      const expanded = expandedCols.has(key);
+      // only the closed column is collapsed by default; others show all
+      const shown = !expanded && c.key === "closed"
+        ? all.slice(0, MAX_SHOWN_CARDS)
+        : all;
+      const hidden = all.length - shown.length;
+      for (const m of shown) col.append(card(m));
+      if (hidden > 0) {
+        const more = h("div", "col-more", hidden + " more " + (hidden === 1 ? "bead" : "beads") + " …");
+        more.onclick = () => { expandedCols.add(key); renderBoard(); };
+        col.append(more);
+      } else if (expanded && all.length > MAX_SHOWN_CARDS) {
+        const less = h("div", "col-more", "show fewer");
+        less.onclick = () => { expandedCols.delete(key); renderBoard(); };
+        col.append(less);
+      }
       makeDropTarget(col, c.statuses[0], (id) => DATA.issues.find((i) => i.id === id));
       lane.append(col);
     }
   };
 
   for (const { rootId, members } of openLanes) buildLane(rootId, members, false);
-  if (ungrouped.length) buildLane(null, ungrouped, true);
-  if (closedLanes.length) {
-    const sep = h("div", "board-separator", "closed epics");
-    board.append(sep);
-  }
+  if (ungroupedOpen.length) buildLane(null, ungroupedOpen, true);
+  const afterSeparator = closedLanes.length > 0 || ungroupedClosed.length > 0;
+  if (afterSeparator) board.append(h("div", "board-separator", "closed epics"));
   for (const { rootId, members } of closedLanes) buildLane(rootId, members, false);
+  if (ungroupedClosed.length) buildLane(null, ungroupedClosed, true);
 
   for (const c of cols) {
     const ch = head.querySelector(`[data-col="${c.key}"] .count`);
