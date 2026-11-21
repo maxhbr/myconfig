@@ -368,6 +368,13 @@ pub struct Params<'a> {
     /// asked for a session and getting a bare shell instead would be
     /// discovered only after the work was done in the wrong place.
     pub mux_entry: Option<&'a str>,
+    /// The resolved agent of the interactive session (config.md D32,
+    /// bd myconfig-fv4h) — the image's entry script reads
+    /// `MYSBX_AGENT_*`, emitted as `--env` after the layers' `[env]`
+    /// like every infrastructure variable. The command itself came
+    /// from the HOST-side registry and is resolved before the
+    /// container starts, so nothing in the image can repoint it.
+    pub agent: Option<&'a crate::bwrap::Agent>,
     /// The **waypipe channel** of a run whose merged `display` is
     /// `waypipe` (docs/design/config.md D18): the host socket directory
     /// (bound rw at itself, so the in-container waypipe server finds
@@ -1392,6 +1399,15 @@ pub fn podman_run_argv(
     // and their argv stays byte-identical.
     if params.detachable {
         argv.extend(["--env".into(), "MYSBX_DETACHABLE=1".to_owned()]);
+    }
+    // The resolved agent (config.md D32): `MYSBX_AGENT_*`, the
+    // podman `--env` spelling of the bwrap backend's `--setenv`,
+    // after the layers' `[env]` so no layer can spell a command of
+    // its own.
+    if let Some(agent) = params.agent {
+        for entry in agent.env_segment() {
+            argv.extend(["--env".into(), entry]);
+        }
     }
     // `XDG_RUNTIME_DIR` of a `display = "waypipe"` run (D18):
     // infrastructure like `HOME`, anchoring the guest waypipe

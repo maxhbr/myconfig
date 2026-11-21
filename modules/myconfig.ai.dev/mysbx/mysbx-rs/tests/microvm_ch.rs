@@ -63,6 +63,7 @@ fn params() -> Params<'static> {
         tools_path: "/synth/bin",
         ca_bundle: None,
         mux_entry: None,
+        agent: None,
         workspace: Workspace::Live,
         memory: None,
         cpus: None,

@@ -177,6 +177,13 @@ fn spawn_with_args<S: AsRef<std::ffi::OsStr>>(inv: &Invocation, args: &[S]) -> C
         cmd.env_remove(format!("MYSBX_MUX_ENTRY_{mux}"));
         cmd.env_remove(format!("MYSBX_PODMAN_MUX_ENTRY_{mux}"));
     }
+    // The agent pins (bd myconfig-fv4h) are wrapper-provided as
+    // well: the shorthand arms and the resolution tests below set
+    // them themselves, and a wrapped mysbx on the test runner's
+    // PATH would otherwise leak the runner's registry into the
+    // un-pinned refusal paths.
+    cmd.env_remove("MYSBX_AGENT_NAMES");
+    cmd.env_remove("MYSBX_AGENTS_FILE");
     cmd
 }
 
@@ -2848,6 +2855,330 @@ fn the_multiplexer_flag_is_rejected_by_every_verb() {
         assert!(stderr.contains("--multiplexer"), "{name}: {stderr}");
         assert!(!stdout.contains("--clearenv"), "{name}: no argv: {stdout}");
     }
+}
+
+/// Write the agents registry fixture (bd myconfig-fv4h) into
+/// `inv.home` and return the two pins: the NAMES list and the file
+/// path — the exact shape the Nix wrapper will pin
+/// (`myconfig.ai.dev.mysbx.agents.<kind>` -> `pkgs.formats.toml`).
+fn agent_pins(inv: &Invocation, kinds: &[(&str, &str, &[&str])]) -> (String, String) {
+    let mut names: Vec<&str> = kinds.iter().map(|(k, _, _)| *k).collect();
+    names.sort();
+    let mut text = String::new();
+    for (kind, command, args) in kinds {
+        text.push_str(&format!("[{kind}]\ncommand = \"{command}\"\n"));
+        if !args.is_empty() {
+            let quoted: Vec<String> = args.iter().map(|a| format!("\"{a}\"")).collect();
+            text.push_str(&format!("args = [{}]\n", quoted.join(", ")));
+        }
+    }
+    let file = inv.home.join("agents.toml");
+    std::fs::create_dir_all(&inv.home).unwrap();
+    std::fs::write(&file, text).unwrap();
+    (names.join(" "), file.display().to_string())
+}
+
+#[test]
+fn the_agent_flag_and_shorthands_select_the_resolved_agent() {
+    // config.md D32 (bd myconfig-fv4h): `--agent <kind>` resolves
+    // against the pins and rides the argv as `MYSBX_AGENT_*` — the
+    // entry scripts' contract. The `--<kind>` shorthand parses into
+    // the same field, so the argv is identical.
+    let (inv, _, _) = fixture_user_backend("agent-flag", &["--dry-run"]);
+    let (names, file) = agent_pins(
+        &inv,
+        &[
+            ("pi", "/synth/bin/pi", &["--model", "x"]),
+            ("opencode", "/synth/bin/opencode", &[]),
+        ],
+    );
+    for (args, kind, command, argc) in [
+        (
+            vec!["--agent", "pi", "--dry-run"],
+            "pi",
+            "/synth/bin/pi",
+            "2",
+        ),
+        (vec!["--pi", "--dry-run"], "pi", "/synth/bin/pi", "2"),
+        (
+            vec!["--agent", "opencode", "--dry-run"],
+            "opencode",
+            "/synth/bin/opencode",
+            "0",
+        ),
+        (
+            vec!["--opencode", "--dry-run"],
+            "opencode",
+            "/synth/bin/opencode",
+            "0",
+        ),
+    ] {
+        let mut cmd = spawn_with_args(&inv, &args);
+        cmd.env("MYSBX_AGENT_NAMES", &names)
+            .env("MYSBX_AGENTS_FILE", &file);
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(out.status.code(), Some(0), "{args:?}: {stderr}");
+        // `--dry-run` prints one argv element per line, so each
+        // `--setenv KEY value` is asserted as its three-line shape.
+        let lines: Vec<&str> = stdout.lines().collect();
+        // The three-line shape of one `--setenv KEY value`, found
+        // as a consecutive window of the printed argv.
+        let has_setenv = |key: &str, value: &str| {
+            lines
+                .windows(3)
+                .any(|w| w[0] == "--setenv" && w[1] == key && w[2] == value)
+        };
+        for (key, value) in [
+            ("MYSBX_AGENT_KIND", kind),
+            ("MYSBX_AGENT_COMMAND", command),
+            ("MYSBX_AGENT_ARGC", argc),
+        ] {
+            assert!(
+                has_setenv(key, value),
+                "{args:?}: no --setenv {key} {value} in the argv: {stdout}"
+            );
+        }
+        if argc != "0" {
+            assert!(
+                has_setenv("MYSBX_AGENT_ARG1", "--model"),
+                "{args:?}: no --setenv MYSBX_AGENT_ARG1 --model in the argv: {stdout}"
+            );
+        }
+    }
+
+    // The configuration resolves without any flag: the sidecar key
+    // alone selects the agent (sidecar over user, like every key).
+    let (inv, _, sidecar) = fixture("agent-key", &["--dry-run"]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\ndefault-agent = \"pi\"\n",
+    )
+    .unwrap();
+    let (names, file) = agent_pins(&inv, &[("pi", "/synth/bin/pi", &[])]);
+    let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+    cmd.env("MYSBX_AGENT_NAMES", &names)
+        .env("MYSBX_AGENTS_FILE", &file);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{}", stdout);
+    assert!(
+        stdout.lines().any(|l| l == "MYSBX_AGENT_KIND") && stdout.lines().any(|l| l == "pi"),
+        "{stdout}"
+    );
+
+    // `--no-agent` overrides the resolved key for THIS invocation —
+    // no MYSBX_AGENT_* in the argv, and without the flag the very
+    // same sidecar resolves again (per-invocation, like D14).
+    let mut cmd = spawn_with_args(&inv, &["--no-agent", "--dry-run"]);
+    cmd.env("MYSBX_AGENT_NAMES", &names)
+        .env("MYSBX_AGENTS_FILE", &file);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{}", stdout);
+    assert!(!stdout.contains("MYSBX_AGENT_"), "{stdout}");
+
+    // The flag wins over the layer, like every flag (D6): a key
+    // naming `pi` with the flag naming `opencode` resolves the flag.
+    let (names, file) = agent_pins(
+        &inv,
+        &[
+            ("pi", "/synth/bin/pi", &[]),
+            ("opencode", "/synth/bin/opencode", &[]),
+        ],
+    );
+    let mut cmd = spawn_with_args(&inv, &["--opencode", "--dry-run"]);
+    cmd.env("MYSBX_AGENT_NAMES", &names)
+        .env("MYSBX_AGENTS_FILE", &file);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{}", stdout);
+    assert!(
+        stdout.lines().any(|l| l == "MYSBX_AGENT_KIND") && stdout.lines().any(|l| l == "opencode"),
+        "{stdout}"
+    );
+}
+
+#[test]
+fn an_unknown_agent_kind_is_a_refused_run_naming_the_carried_set() {
+    // D32: an unpinned kind is a REFUSED run (`70`, like an unknown
+    // backend) — the command line is fine, the agent it names is not
+    // installed. Every spelling: the flag, the config key, and a
+    // shorthand that names a kind this build carries but the
+    // registry lost. `--dry-run` refuses too, so nothing starts.
+    let (inv, _, _) = fixture_user_backend("agent-unknown", &["--dry-run"]);
+    let (names, file) = agent_pins(&inv, &[("pi", "/synth/bin/pi", &[])]);
+    let mut cmd = spawn_with_args(&inv, &["--agent", "opencode", "--dry-run"]);
+    cmd.env("MYSBX_AGENT_NAMES", &names)
+        .env("MYSBX_AGENTS_FILE", &file);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        out.status.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "{stdout}"
+    );
+    assert!(stderr.contains("`opencode`"), "{stderr}");
+    assert!(stderr.contains("`pi`"), "{stderr}");
+    assert!(!stdout.contains("--clearenv"), "no argv: {stdout}");
+
+    // A shorthand for an unpinned kind does not PARSE as an agent
+    // flag at all — it falls through to the unknown-command usage
+    // error (`2`), which is the same honest answer: the kind is not
+    // one this build names.
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--no-such-kind", "--dry-run"]);
+    assert_eq!(code, 2, "stdout: {stdout}");
+    assert!(stderr.contains("no-such-kind"), "{stderr}");
+
+    // A kind the NAMES pin carries but the registry file lacks:
+    // still a refused run, never a silent shell.
+    let file2 = inv.home.join("empty-agents.toml");
+    std::fs::write(&file2, "[other]\ncommand = \"/synth/bin/other\"\n").unwrap();
+    let mut cmd = spawn_with_args(&inv, &["--pi", "--dry-run"]);
+    cmd.env("MYSBX_AGENT_NAMES", "other pi")
+        .env("MYSBX_AGENTS_FILE", &file2.display().to_string());
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        out.status.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "{stdout}"
+    );
+    assert!(stderr.contains("pi"), "{stderr}");
+    assert!(stderr.contains("no `[pi]` table"), "{stderr}");
+
+    // No pins at all: the refusal says so, never a fallback shell.
+    let (code, stdout, stderr) = run_binary_with(&inv, &["--agent", "pi", "--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stdout: {stdout}");
+    assert!(stderr.contains("pinned no agent"), "{stderr}");
+}
+
+#[test]
+fn a_command_shaped_agent_kind_is_a_usage_error() {
+    // D4/D32: a kind that fails the grammar is a USAGE error (`2`)
+    // — no spelling of the flag can smuggle in a command, at parse
+    // time, before any pin is consulted.
+    let (inv, _, _) = fixture("agent-grammar", &["--dry-run"]);
+    for bad in ["Pi", "pi --model x", "/bin/sh", "-pi", ""] {
+        let (code, stdout, stderr) = run_binary_with(&inv, &["--agent", bad, "--dry-run"]);
+        assert_eq!(code, 2, "{bad:?}: stdout: {stdout}");
+        assert!(stderr.contains("--agent"), "{bad:?}: {stderr}");
+        assert!(!stdout.contains("--clearenv"), "{bad:?}: no argv: {stdout}");
+    }
+}
+
+#[test]
+fn the_agent_selection_follows_the_one_run_rule() {
+    // D5/D32: any two selections in one invocation are a usage error
+    // naming both spellings — long form, shorthand, and `--no-agent`
+    // (which selects "no agent" exactly like a kind selects one).
+    let (inv, _, _) = fixture("agent-one-run", &["--dry-run"]);
+    let (names, file) = agent_pins(
+        &inv,
+        &[
+            ("pi", "/synth/bin/pi", &[]),
+            ("opencode", "/synth/bin/opencode", &[]),
+        ],
+    );
+    for (args, first, second) in [
+        (vec!["--agent", "pi", "--pi"], "--agent", "--pi"),
+        (vec!["--pi", "--opencode"], "--pi", "--opencode"),
+        (vec!["--agent", "pi", "--no-agent"], "--agent", "--no-agent"),
+        (vec!["--no-agent", "--pi"], "--no-agent", "--pi"),
+    ] {
+        let mut cmd = spawn_with_args(&inv, &args);
+        cmd.env("MYSBX_AGENT_NAMES", &names)
+            .env("MYSBX_AGENTS_FILE", &file);
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert_eq!(out.status.code(), Some(2), "{args:?}: {stdout}");
+        assert!(stderr.contains(first), "{args:?}: {stderr}");
+        assert!(stderr.contains(second), "{args:?}: {stderr}");
+        assert!(stderr.contains("exactly one agent"), "{args:?}: {stderr}");
+    }
+}
+
+#[test]
+fn the_agent_flag_is_rejected_by_every_verb() {
+    // D11/D32: the flags select the INTERACTIVE session's agent, so
+    // no verb accepts them — `run` because a one-shot starts no
+    // agent, the others because they have no run at all. Both
+    // positions of `run -- CMD` refuse, like `--multiplexer`'s.
+    let (inv, _, _) = fixture("agent-verbs", &[]);
+    let (names, file) = agent_pins(&inv, &[("pi", "/synth/bin/pi", &[])]);
+    for (args, name) in [
+        (vec!["--agent", "pi", "run", "--", "ls"], "run"),
+        (vec!["--pi", "run", "--", "ls"], "run (shorthand)"),
+        (vec!["--no-agent", "run", "--", "ls"], "run (no-agent)"),
+        (vec!["--agent", "pi", "init"], "init"),
+        (vec!["--pi", "version"], "version"),
+        (vec!["--no-agent", "status"], "status"),
+        (
+            vec!["run", "--agent", "pi", "--", "ls"],
+            "run (after the verb)",
+        ),
+        (
+            vec!["run", "--no-agent", "--", "ls"],
+            "run (no-agent, after the verb)",
+        ),
+    ] {
+        let mut cmd = spawn_with_args(&inv, &args);
+        cmd.env("MYSBX_AGENT_NAMES", &names)
+            .env("MYSBX_AGENTS_FILE", &file);
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert_eq!(out.status.code(), Some(2), "{name}: {stdout}");
+        assert!(stderr.contains("is not valid with"), "{name}: {stderr}");
+        assert!(!stdout.contains("--clearenv"), "{name}: no argv: {stdout}");
+    }
+}
+
+#[test]
+fn the_report_names_the_resolved_agent() {
+    // The parity guard of bd myconfig-fv4h starts with being able to
+    // SEE what resolved: the report's `agent:` line names the kind
+    // and the command — `none` when nothing did.
+    let (inv, _, _) = fixture_user_backend("agent-report", &["--dry-run", "--verbose"]);
+    let (names, file) = agent_pins(&inv, &[("pi", "/synth/bin/pi", &["--model", "x"])]);
+    let mut cmd = spawn_with_args(&inv, &["--dry-run", "--verbose"]);
+    cmd.env("MYSBX_AGENT_NAMES", &names)
+        .env("MYSBX_AGENTS_FILE", &file);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{}", stdout);
+    assert!(
+        stdout.contains("agent:           none — the session starts a plain shell"),
+        "{stdout}"
+    );
+
+    let mut cmd = spawn_with_args(&inv, &["--pi", "--dry-run", "--verbose"]);
+    cmd.env("MYSBX_AGENT_NAMES", &names)
+        .env("MYSBX_AGENTS_FILE", &file);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{}", stdout);
+    assert!(
+        stdout.contains("agent:           pi (command /synth/bin/pi --model x)"),
+        "{stdout}"
+    );
+
+    // A one-shot has no agent by construction (D11) — its line says
+    // so instead of naming a refusal.
+    let mut cmd = spawn_with_args(&inv, &["--dry-run", "--verbose", "run", "--", "ls"]);
+    cmd.env("MYSBX_AGENT_NAMES", &names)
+        .env("MYSBX_AGENTS_FILE", &file);
+    let out = cmd.output().expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{}", stdout);
+    assert!(
+        stdout.contains("agent:           none — `run -- CMD` starts no agent"),
+        "{stdout}"
+    );
 }
 
 #[test]

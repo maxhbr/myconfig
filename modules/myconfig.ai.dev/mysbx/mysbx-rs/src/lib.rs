@@ -287,7 +287,10 @@ pub fn run(args: Vec<String>) -> i32 {
         // mounts, the payload or the
         // outcome of a run, and no OTHER verb has one to choose or
         // add. `--multiplexer` is refused for `run` too (D11: a
-        // one-shot never starts a session), while `--ro`/`--rw` and
+        // one-shot never starts a session), and so is the D32 agent
+        // group `--agent`/`--<kind>`/`--no-agent` (bd
+        // myconfig-fv4h): a one-shot starts no agent — the flags
+        // select the interactive session's payload. `--ro`/`--rw` and
         // `--backend` (cli.md D18) are accepted before `run` exactly
         // like `--dry-run` is (D10: one position rule for all global
         // flags) — `run_command` appends to the same lists, so both
@@ -298,6 +301,7 @@ pub fn run(args: Vec<String>) -> i32 {
         // either way (B2's `run -- CMD` row).
         Some(other)
             if (flags.multiplexer.is_some()
+                || flags.agent.is_some()
                 || (flags.backend.is_some() && other != "run")
                 || (flags.session.is_some() && other != "run" && other != "attach")
                 || (flags.sidecar.is_some() && other != "run")
@@ -622,6 +626,20 @@ fn once_gate(flags: &Flags, rest: &[String]) -> Option<i32> {
     what.map(|w| once::refuse(&w))
 }
 
+/// The `--agent`/`--<kind>`/`--no-agent` selection (config.md D32,
+/// bd myconfig-fv4h): the agent the INTERACTIVE session starts, one
+/// run only. A three-state fact — `Kind` selects one of the names
+/// the build pins (`MYSBX_AGENT_NAMES`), `None` refuses the agent for
+/// this run (`--no-agent`), and an unset `Flags::agent` means the
+/// configuration layers decide (`merged.default_agent`, sidecar over
+/// user). The one-run rule spans every spelling: any two selections
+/// are a usage error naming both, like the multiplexer's (D5).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AgentSelection {
+    Kind(String),
+    None,
+}
+
 /// The global flags of a sandbox run (cli.md D9, D10, D14, D16).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Flags {
@@ -632,6 +650,16 @@ pub struct Flags {
     /// merged `multiplexer` of the configuration layers. `None` means
     /// the flag was not given and the configuration decides.
     pub multiplexer: Option<config::Multiplexer>,
+    /// The `--agent <kind>`/`--<kind>`/`--no-agent` override
+    /// (config.md D32, bd myconfig-fv4h): the agent the interactive
+    /// session of THIS run starts, replacing the merged
+    /// `default-agent` of the configuration layers. `None` (the
+    /// field, not the variant) means no agent flag was given and the
+    /// configuration decides; `Some(AgentSelection::None)` is the
+    /// explicit `--no-agent`. Interactive-payload-only like
+    /// `--multiplexer` (D11): refused for `run -- CMD` and every
+    /// host-side verb.
+    pub agent: Option<AgentSelection>,
     /// The `--ro <path>` additions (cli.md D16): host paths bound
     /// read-only into THIS run's sandbox, on top of the merged
     /// mounts. The raw spellings as typed; the pipeline resolves and
@@ -775,6 +803,48 @@ impl Flags {
         Ok(())
     }
 
+    /// Set the agent selection, the one-run rule of the multiplexer
+    /// (bd myconfig-6tt) carried over to the D32 flag: `--agent pi
+    /// --pi`, `--pi --opencode`, `--agent pi --no-agent` — any two
+    /// selections in one invocation are a usage error naming BOTH
+    /// spellings, never a silently last-wins. `--no-agent` selects
+    /// "no agent" exactly like a kind selects one, so it conflicts
+    /// with a kind the same way.
+    fn set_agent(
+        &mut self,
+        selection: AgentSelection,
+        flag: &str,
+        previous: Option<&str>,
+        where_: &str,
+        usage: &str,
+    ) -> Result<(), i32> {
+        if let Some(previous_flag) = previous {
+            if previous_flag == flag {
+                eprintln!("mysbx: repeated flag: {flag}");
+            } else {
+                eprintln!(
+                    "{where_}: {flag} selects {}, but {previous_flag} already selected {}",
+                    match &selection {
+                        AgentSelection::Kind(kind) => format!("the agent `{kind}`"),
+                        AgentSelection::None => "no agent".to_owned(),
+                    },
+                    self.agent
+                        .as_ref()
+                        .map(|a| match a {
+                            AgentSelection::Kind(kind) => format!("the agent `{kind}`"),
+                            AgentSelection::None => "no agent".to_owned(),
+                        })
+                        .unwrap_or_default()
+                );
+                eprintln!("  one run starts exactly one agent — pick one");
+            }
+            eprintln!("{usage}");
+            return Err(2);
+        }
+        self.agent = Some(selection);
+        Ok(())
+    }
+
     /// The flag named in the "not valid with `<verb>`" usage error —
     /// whichever was set, `--dry-run` first (it is the older, more
     /// dangerous-sounding promise), then `--verbose`, then the run-
@@ -804,6 +874,8 @@ impl Flags {
     fn first_run_scoped_name(&self) -> &'static str {
         if self.multiplexer.is_some() {
             "--multiplexer"
+        } else if self.agent.is_some() {
+            "--agent"
         } else if self.backend.is_some() {
             "--backend"
         } else if self.session.is_some() {
@@ -861,6 +933,7 @@ fn split_global_flags_traced(args: &[String]) -> Result<(Flags, Selections, &[St
     // one as typed, long form or shorthand (bd myconfig-6tt).
     let mut backend_set_by: Option<String> = None;
     let mut mux_set_by: Option<String> = None;
+    let mut agent_set_by: Option<String> = None;
     let mut rest = args;
     while let Some((first, tail)) = rest.split_first() {
         match first.as_str() {
@@ -948,6 +1021,71 @@ fn split_global_flags_traced(args: &[String]) -> Result<(Flags, Selections, &[St
                     "try `mysbx --help`",
                 )?;
                 mux_set_by = Some(first.to_string());
+            }
+            "--agent" => {
+                if agent_set_by.as_deref() == Some("--agent") {
+                    eprintln!("mysbx: repeated flag: --agent");
+                    eprintln!("try `mysbx --help`");
+                    return Err(2);
+                }
+                let value = match tail.split_first() {
+                    Some((v, _)) => v,
+                    None => {
+                        eprintln!("mysbx: --agent requires a value");
+                        eprintln!("  one of: {}", pinned_agent_names().join(" "));
+                        eprintln!("try `mysbx --help`");
+                        return Err(2);
+                    }
+                };
+                match parse_agent_kind(value, "--agent", "try `mysbx --help`") {
+                    Ok(kind) => flags.set_agent(
+                        AgentSelection::Kind(kind),
+                        "--agent",
+                        agent_set_by.as_deref(),
+                        "mysbx",
+                        "try `mysbx --help`",
+                    )?,
+                    Err(code) => return Err(code),
+                }
+                agent_set_by = Some("--agent".to_string());
+                // The value argument is consumed with the flag.
+                rest = tail.split_first().map(|(_, t)| t).unwrap_or(&[]);
+                continue;
+            }
+            "--no-agent" => {
+                flags.set_agent(
+                    AgentSelection::None,
+                    "--no-agent",
+                    agent_set_by.as_deref(),
+                    "mysbx",
+                    "try `mysbx --help`",
+                )?;
+                agent_set_by = Some("--no-agent".to_string());
+            }
+            first
+                if first.starts_with("--")
+                    && pinned_agent_names().iter().any(|n| n == &first[2..]) =>
+            {
+                // The `--<kind>` shorthands of the D32 flag, validated
+                // against the pinned `MYSBX_AGENT_NAMES` — the same
+                // alias pattern as the multiplexer's (bd
+                // myconfig-6tt): they parse into the SAME
+                // `Flags::agent` field, so every later rule — the
+                // verb refusals, the pipeline's application — governs
+                // them unchanged. The arm sits AFTER the multiplexer
+                // shorthand arm, so a name the registries share can
+                // never shadow one (the Nix layer asserts no
+                // collision with the reserved words, this is the
+                // runtime half of that contract).
+                let kind = first[2..].to_string();
+                flags.set_agent(
+                    AgentSelection::Kind(kind.clone()),
+                    first,
+                    agent_set_by.as_deref(),
+                    "mysbx",
+                    "try `mysbx --help`",
+                )?;
+                agent_set_by = Some(first.to_string());
             }
             "--ro" | "--rw" => {
                 // cli.md D16: a value-taking, REPEATABLE run flag. The
@@ -1344,6 +1482,33 @@ fn run_command(global: Flags, selections: &Selections, args: &[String]) -> i32 {
                 // starts no session, whichever spelling named one.
                 eprintln!("mysbx run: {arg} is not valid with `run`");
                 eprintln!("  it is the shorthand of `--multiplexer {}`, which selects the interactive payload only:",
+                    &arg[2..]);
+                eprintln!("  `mysbx {arg}` starts the session");
+                eprintln!("usage: {RUN_USAGE}");
+                return 2;
+            }
+            "--agent" => {
+                // config.md D32 (bd myconfig-fv4h): the one-shot's twin
+                // of the multiplexer refusal above — `run -- CMD`
+                // starts no agent, so accept-and-ignore would let an
+                // operator believe the one-shot started one.
+                eprintln!("mysbx run: --agent is not valid with `run`");
+                eprintln!("  it selects the interactive session's agent only: `mysbx --agent <kind>` starts the session");
+                eprintln!("usage: {RUN_USAGE}");
+                return 2;
+            }
+            "--no-agent" => {
+                eprintln!("mysbx run: --no-agent is not valid with `run`");
+                eprintln!("  it selects the interactive session's agent only: `mysbx --no-agent` starts the session without one");
+                eprintln!("usage: {RUN_USAGE}");
+                return 2;
+            }
+            arg if arg.starts_with("--") && pinned_agent_names().iter().any(|n| n == &arg[2..]) => {
+                // The `--<kind>` shorthands get the SAME refusal (D32)
+                // — a one-shot starts no agent, whichever spelling
+                // named one.
+                eprintln!("mysbx run: {arg} is not valid with `run`");
+                eprintln!("  it is the shorthand of `--agent {}`, which selects the interactive session's agent only:",
                     &arg[2..]);
                 eprintln!("  `mysbx {arg}` starts the session");
                 eprintln!("usage: {RUN_USAGE}");
@@ -2757,6 +2922,40 @@ fn sandbox_pipeline(
         merged.multiplexer = mux;
     }
 
+    // 3ab. the agent resolution (config.md D32, bd myconfig-fv4h):
+    // the CLI flag wins over the merged `default-agent` of both
+    // layers (D6: flags > sidecar > user > defaults), and
+    // `--no-agent` refuses one for this run. The INTERACTIVE
+    // payload only (D11): a `run -- CMD` starts no agent, and the
+    // dispatcher already refuses the flags for it. The kind is
+    // then resolved against the wrapper's pins: it must be a name
+    // of `MYSBX_AGENT_NAMES` and have an entry in
+    // `MYSBX_AGENTS_FILE` — an unknown or unpinned kind is a
+    // refused run (`70`, like an unknown backend), because the
+    // command line is fine, the agent it names is not installed.
+    // `--dry-run` resolves too, so the report shows what WOULD
+    // start; `None` (no flag, no key, or `--no-agent`) starts none
+    // — byte-identical to the pre-D32 argv.
+    let agent: Option<bwrap::Agent> = if let bwrap::Payload::Shell = payload {
+        let selected = match &flags.agent {
+            Some(AgentSelection::Kind(kind)) => Some(kind.clone()),
+            Some(AgentSelection::None) => None,
+            None => merged.default_agent.clone(),
+        };
+        match selected {
+            Some(kind) => match resolve_agent(&kind) {
+                Ok(agent) => Some(agent),
+                Err(msg) => {
+                    eprintln!("mysbx: {msg}");
+                    return EXIT_INFRASTRUCTURE;
+                }
+            },
+            None => None,
+        }
+    } else {
+        None
+    };
+
     // 3aa. the `--ro`/`--rw` additions (cli.md D16): appended to the
     // merged mounts, after every configured entry — every `--ro`
     // addition before every `--rw` one, the values of each flag in
@@ -4138,6 +4337,7 @@ fn sandbox_pipeline(
         },
         policy_paths: &policy_paths,
         mux_entry: report_mux_entry.as_deref(),
+        agent: agent.as_ref(),
         waypipe: report_waypipe.clone(),
         workspace: workspace.clone(),
         // C7b: credential-free .npmrc on this path (C7b, bd
@@ -4185,6 +4385,7 @@ fn sandbox_pipeline(
                 ca_bundle: ca_bundle.as_deref(),
                 policy_paths: &policy_paths,
                 mux_entry: mux_entry.as_deref(),
+                agent: agent.as_ref(),
                 waypipe: waypipe_params.clone(),
                 workspace: workspace.clone(),
                 // C7b: credential-free .npmrc on this path (C7b, bd
@@ -4334,6 +4535,7 @@ fn sandbox_pipeline(
                     tools_path: "",
                     ca_bundle: None,
                     mux_entry: None,
+                    agent: None,
                     workspace: workspace.clone(),
                     memory: None,
                     cpus: None,
@@ -4562,6 +4764,7 @@ fn sandbox_pipeline(
                 tools_path: &gvisor_tools_path,
                 policy_paths: &policy_paths,
                 mux_entry: podman_mux_entry.as_deref(),
+                agent: agent.as_ref(),
                 waypipe: waypipe_params.clone(),
                 // The shared workspace of the run — once-mode
                 // included (cli.md D22): the podman builders take
@@ -4819,6 +5022,7 @@ fn sandbox_pipeline(
                     tools_path: "",
                     ca_bundle: None,
                     mux_entry: None,
+                    agent: None,
                     workspace: workspace.clone(),
                     memory: None,
                     cpus: None,
@@ -4978,6 +5182,7 @@ fn sandbox_pipeline(
                 tools_path: &tools_path,
                 ca_bundle: ca_bundle.as_deref(),
                 mux_entry: mux_entry.as_deref(),
+                agent: agent.as_ref(),
                 workspace: workspace.clone(),
                 memory: merged.memory.clone().map(Cow::from),
                 cpus: merged.cpus.clone().map(Cow::from),
@@ -5381,6 +5586,7 @@ fn sandbox_pipeline(
                 ca_bundle: ca_bundle.as_deref(),
                 policy_paths: &policy_paths,
                 mux_entry: mux_entry.as_deref(),
+                agent: agent.as_ref(),
                 waypipe: waypipe_params.clone(),
                 workspace: workspace.clone(),
                 // C7b: credential-free .npmrc on the layered nono path
@@ -7185,6 +7391,109 @@ pub(crate) fn refuse_renamed_podman_pins(prefix: &str) -> bool {
 
 fn env_opt(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|v| !v.is_empty())
+}
+
+/// The agent names THIS build pins (`MYSBX_AGENT_NAMES`, bd
+/// myconfig-fv4h): the kinds the Nix registry
+/// (`myconfig.ai.dev.mysbx.agents.<kind>`) carried into the wrapper —
+/// a whitespace-separated list, sorted by the wrapper so a rebuild
+/// does not churn the derivation. Empty when the build pinned none:
+/// every `--<kind>` shorthand is then just an unknown flag, and a
+/// resolved `default-agent` is a refused run (no agent installed).
+fn pinned_agent_names() -> Vec<String> {
+    std::env::var("MYSBX_AGENT_NAMES")
+        .unwrap_or_default()
+        .split_whitespace()
+        .map(str::to_owned)
+        .collect()
+}
+
+/// Resolve an agent KIND against the wrapper's pins (bd
+/// myconfig-fv4h): the kind must be a name of `MYSBX_AGENT_NAMES`
+/// AND carry an entry in the `MYSBX_AGENTS_FILE` registry
+/// (`[<kind>] command = "…"`, `args = […]`, generated from
+/// `myconfig.ai.dev.mysbx.agents.<kind>` via `pkgs.formats.toml`).
+/// `Err` is the refusal message of a `70` exit — the kind was
+/// spelled by a flag or a layer, and the agent it names is not part
+/// of this build: never a fallback to a shell, for the same reason a
+/// missing multiplexer pin is a refused run.
+fn resolve_agent(kind: &str) -> Result<bwrap::Agent, String> {
+    let names = pinned_agent_names();
+    if names.is_empty() {
+        return Err(format!(
+            "the agent `{kind}` is not installed: this build pinned no agent \
+             (MYSBX_AGENT_NAMES is unset)"
+        ));
+    }
+    if !names.iter().any(|n| n == kind) {
+        return Err(format!(
+            "the agent `{kind}` is not installed: this build carries {}",
+            names
+                .iter()
+                .map(|n| format!("`{n}`"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    let file = env_opt("MYSBX_AGENTS_FILE")
+        .ok_or_else(|| format!("the agent `{kind}` cannot start: this build pinned no agent registry (MYSBX_AGENTS_FILE is unset)"))?;
+    let text = std::fs::read_to_string(&file).map_err(|e| {
+        format!("the agent `{kind}` cannot start: cannot read the registry {file}: {e}")
+    })?;
+    let root = crate::toml::parse(&text).map_err(|e| {
+        format!("the agent `{kind}` cannot start: the registry {file} is not valid TOML: {e}")
+    })?;
+    let entry = root.get(kind).and_then(|v| v.as_table()).ok_or_else(|| {
+        format!("the agent `{kind}` cannot start: the registry {file} has no `[{kind}]` table")
+    })?;
+    let command = entry
+        .get("command")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| {
+            format!("the agent `{kind}` cannot start: `[{kind}]` has no `command` string")
+        })?
+        .to_owned();
+    let args = match entry.get("args") {
+        Some(value) => value
+            .as_array()
+            .ok_or_else(|| {
+                format!("the agent `{kind}` cannot start: `[{kind}]` args must be an array")
+            })?
+            .iter()
+            .map(|v| {
+                v.as_str().map(str::to_owned).ok_or_else(|| {
+                    format!("the agent `{kind}` cannot start: `[{kind}]` args must be strings")
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        None => Vec::new(),
+    };
+    Ok(bwrap::Agent {
+        kind: kind.to_owned(),
+        command,
+        args,
+    })
+}
+
+/// Validate an agent kind spelled on the command line against the
+/// pinned names (bd myconfig-fv4h): a `--<kind>` shorthand arm only
+/// matches a PINNED name, and `--agent <kind>` accepts any
+/// grammar-valid kind at PARSE time but refuses an unpinned one at
+/// RESOLUTION time (`70`, like an unknown backend) — the command
+/// line is fine, the agent it names is not installed. A kind that
+/// fails the TOML grammar is a usage error (`2`) right here: no
+/// spelling of the flag can smuggle in a command (config.md D4).
+fn parse_agent_kind(value: &str, flag: &str, usage: &str) -> Result<String, i32> {
+    if !config::valid_agent_kind(value) {
+        eprintln!(
+            "mysbx: {flag} must be a lowercase agent kind matching \
+             [a-z][a-z0-9_-]{{0,31}}, got `{value}`"
+        );
+        eprintln!("  an agent kind names one of the pinned agents, never a command");
+        eprintln!("{usage}");
+        return Err(2);
+    }
+    Ok(value.to_owned())
 }
 
 /// Resolve the backend program to what `Command::new` would exec: a name
@@ -9680,6 +9989,7 @@ mod tests {
                 dry_run: true,
                 verbose: true,
                 multiplexer: None,
+                agent: None,
                 backend: None,
                 ro: Vec::new(),
                 rw: Vec::new(),
@@ -10282,6 +10592,8 @@ mod tests {
             "--dry-run",
             "--verbose",
             "--multiplexer",
+            "--agent",
+            "--no-agent",
             "--backend",
             "--ro",
             "--rw",

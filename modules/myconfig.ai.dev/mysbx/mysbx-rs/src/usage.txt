@@ -1,7 +1,7 @@
 mysbx - my sandboxing tool
 
 Usage:
-  mysbx [--detach] [--dry-run] [--verbose] [--multiplexer <mux>] [--backend <name>] [--session <name>] [--sidecar <path>] [--config <path>] [--ro <path>]... [--rw <path>]...
+  mysbx [--detach] [--dry-run] [--verbose] [--multiplexer <mux>] [--agent <kind>] [--backend <name>] [--session <name>] [--sidecar <path>] [--config <path>] [--ro <path>]... [--rw <path>]...
   mysbx run [--dry-run] [--verbose] [--result] [--timeout <seconds>] [--backend <name>] [--session <name>] [--sidecar <path>] [--config <path>] [--ro <path>]... [--rw <path>]... -- COMMAND...
   mysbx gui [ARG...]
   mysbx fetch | merge | push | diff NAME [verb-arguments...]
@@ -16,7 +16,7 @@ Usage:
 
 The same binary, second name:
   mysbx-once [run -- CMD | gui | doctor | diagnose egress | version | help | the bare form] \
-             [--dry-run] [--verbose] [--backend <name>] [--multiplexer <mux>] [--ro <path>]... [--rw <path>]...
+             [--dry-run] [--verbose] [--backend <name>] [--multiplexer <mux>] [--agent <kind>] [--ro <path>]... [--rw <path>]...
                 one sandbox run for any checkout, with NO persistent
                 setup: the sidecar and the __worktrees sibling live in a
                 private temp dir for one run and are removed when it
@@ -319,6 +319,30 @@ Options:
                 a shorthand together with the long form (or another
                 shorthand) in one invocation is a usage error naming
                 both
+  --agent <kind>
+                the agent the interactive session of THIS run starts,
+                overriding the `default-agent` of the config layers
+                for one invocation — the next run uses the
+                configuration again (config.md D32). <kind> is one of
+                the agents this build pinned (MYSBX_AGENT_NAMES):
+                `pi`, `opencode`, whatever the host registered in
+                myconfig.ai.dev.mysbx.agents. The kind names an agent
+                of the pinned registry, never a command — a value
+                failing the [a-z][a-z0-9_-]{0,31} grammar is a usage
+                error (2), an unpinned kind a refused run (70) naming
+                the carried set. Bare form only: `run -- CMD` starts
+                no agent, and every other verb rejects the flag.
+                `--no-agent` starts the session without one,
+                overriding a resolved configuration key; any two
+                selections in one invocation (long form, shorthand,
+                `--no-agent`) are a usage error naming both. The
+                resolved agent reaches the sandbox's entry scripts as
+                MYSBX_AGENT_KIND / MYSBX_AGENT_COMMAND /
+                MYSBX_AGENT_ARGC / MYSBX_AGENT_ARG1..N.
+                Shorthands: every pinned kind is also its own flag —
+                `--pi` == `--agent pi`, `--opencode` ==
+                `--agent opencode`. Pure aliases with the same
+                position rules and refusals
   --backend <name>
                 the sandbox backend of THIS run, overriding the
                 `backend` of the config layers for one invocation —

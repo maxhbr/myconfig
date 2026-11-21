@@ -251,6 +251,11 @@ pub struct Params<'a> {
     /// that selects a session multiplexer, exactly as on the other
     /// backends (`Error::MultiplexerUnavailable`).
     pub mux_entry: Option<&'a str>,
+    /// The resolved agent of the interactive session (config.md D32,
+    /// bd myconfig-fv4h) — `None` when no agent was selected or the
+    /// payload is a command; `Some` emits the `MYSBX_AGENT_*`
+    /// segment in `sandbox_env`, the bwrap backend's contract.
+    pub agent: Option<&'a crate::bwrap::Agent>,
     /// The live/clone workspace of the run (the repo itself, or the
     /// session clone bound at the repo's own path).
     pub workspace: Workspace<'a>,
@@ -1478,6 +1483,19 @@ fn sandbox_env(
     // and their argv stays byte-identical.
     if params.detachable {
         set("MYSBX_DETACHABLE", "1".to_owned());
+    }
+    // The resolved agent (config.md D32, bd myconfig-fv4h):
+    // `MYSBX_AGENT_KIND`/`COMMAND`/`ARGC`/`ARG1..N`, the same
+    // after-`[env]` placement the bwrap backend gives them, so no
+    // layer can spell a command of its own — the value comes from
+    // the wrapper's registry, resolved by the CLI.
+    if let Some(agent) = params.agent {
+        for entry in agent.env_segment() {
+            let (key, value) = entry
+                .split_once('=')
+                .expect("env_segment formats KEY=value");
+            set(key, value.to_owned());
+        }
     }
     // PATH LAST of the infrastructure block, like the bwrap
     // backend's own ordering: the tool closure is this wrapper's

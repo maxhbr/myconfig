@@ -91,6 +91,7 @@ fn params<'a>(
         tools_path: "/synth/bin",
         ca_bundle: None,
         mux_entry,
+        agent: None,
         workspace,
         memory: None,
         cpus: None,

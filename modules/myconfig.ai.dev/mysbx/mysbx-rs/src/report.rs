@@ -824,6 +824,30 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         // argument vector is what `--dry-run` prints.
         Payload::Command(args) => p(format!("payload:        command {}", args.join(" "))),
     }
+    // The resolved agent (config.md D32, bd myconfig-fv4h): the
+    // one line every run gets, `none` included — the parity guard
+    // of the bead (a seeded `default-agent = "pi"` must behave like
+    // the baked script) starts with being able to SEE what resolved.
+    // A one-shot has no agent by construction, so its line names the
+    // payload form, not a refusal.
+    match r.payload {
+        Payload::Shell => match r.params.agent {
+            Some(agent) => p(format!(
+                "agent:           {} (command {}{})",
+                agent.kind,
+                agent.command,
+                if agent.args.is_empty() {
+                    String::new()
+                } else {
+                    format!(" {}", agent.args.join(" "))
+                }
+            )),
+            None => p("agent:           none — the session starts a plain shell".to_string()),
+        },
+        Payload::Command(_) => {
+            p("agent:           none — `run -- CMD` starts no agent (cli.md D11)".to_string())
+        }
+    }
     p(if r.dry_run {
         "mode:           dry run — the argv follows, nothing is executed".into()
     } else if r.result {
@@ -857,6 +881,14 @@ fn infrastructure(key: &str, display_on: bool) -> bool {
         || key == "MYSBX_HOST"
         || key == "MYSBX_NETWORK"
         || key == "MYSBX_EGRESS_PROXY"
+        // The resolved agent (config.md D32) is set after `[env]`
+        // on every backend, so a layer cannot spoof a command into
+        // the entry scripts — `MYSBX_AGENT_ARG<N>` covered by the
+        // prefix test.
+        || key == "MYSBX_AGENT_KIND"
+        || key == "MYSBX_AGENT_COMMAND"
+        || key == "MYSBX_AGENT_ARGC"
+        || key.starts_with("MYSBX_AGENT_ARG")
         || key == "SSL_CERT_FILE"
         || key == "GIT_SSL_CAINFO"
         || key == "NIX_SSL_CERT_FILE"
@@ -938,6 +970,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            agent: None,
             waypipe: None,
             workspace: Workspace::Live,
             inner: None,
@@ -1057,6 +1090,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            agent: None,
             waypipe: None,
             workspace: Workspace::Live,
             inner: None,
@@ -1115,6 +1149,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            agent: None,
             waypipe: None,
             workspace: Workspace::Live,
             inner: None,
@@ -1196,6 +1231,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            agent: None,
             waypipe: None,
             workspace: Workspace::Live,
             npmrc: None,
@@ -1279,6 +1315,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            agent: None,
             waypipe: None,
             workspace: Workspace::Live,
             inner: None,
@@ -1338,6 +1375,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            agent: None,
             waypipe: None,
             workspace: Workspace::Live,
             inner: None,
@@ -1403,6 +1441,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            agent: None,
             waypipe: None,
             workspace: Workspace::Live,
             inner: None,
@@ -1465,6 +1504,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            agent: None,
             waypipe: None,
             workspace: Workspace::Live,
             inner: None,
@@ -1532,6 +1572,7 @@ mod tests {
                 ca_bundle: None,
                 policy_paths: &[],
                 mux_entry: Some("/synth/bin/mysbx-mux-entry"),
+                agent: None,
                 waypipe: None,
                 workspace: Workspace::Live,
                 npmrc: None,
@@ -1626,6 +1667,7 @@ mod tests {
                 ca_bundle: None,
                 policy_paths: &[],
                 mux_entry: Some("/synth/bin/mysbx-herdr-entry"),
+                agent: None,
                 waypipe: None,
                 workspace,
                 npmrc: None,
@@ -1723,6 +1765,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            agent: None,
             waypipe: Some(crate::bwrap::Waypipe {
                 socket_dir: "/synth/repo.mysbx/waypipe/1234",
                 guest_bin: "/synth/bin/waypipe",
@@ -1886,6 +1929,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            agent: None,
             waypipe: None,
             workspace: Workspace::Live,
             inner: None,
@@ -1949,6 +1993,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            agent: None,
             waypipe: None,
             workspace: Workspace::Live,
             inner: None,
@@ -2011,6 +2056,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            agent: None,
             waypipe: None,
             workspace: crate::bwrap::Workspace::Clone {
                 clone: &clone,
@@ -2107,6 +2153,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            agent: None,
             waypipe: None,
             workspace: Workspace::Live,
             inner: None,

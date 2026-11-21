@@ -181,6 +181,43 @@ pub const WAYPIPE_DISPLAY_PATH: &str = "/mysbx-home/wayland-0";
 /// never disagree.
 pub const NODE_ENV_PROXY_MIN_MAJOR: u32 = 24;
 
+/// The resolved agent of an interactive session (config.md D32, bd
+/// myconfig-fv4h): the KIND the configuration or the flag selected,
+/// with the command and argument vector the wrapper's registry
+/// (`MYSBX_AGENTS_FILE`, generated from
+/// `myconfig.ai.dev.mysbx.agents.<kind>`) carries for it. The argv
+/// builders hand it to the sandbox as `MYSBX_AGENT_KIND`,
+/// `MYSBX_AGENT_COMMAND`, `MYSBX_AGENT_ARGC` and
+/// `MYSBX_AGENT_ARG1`..`ARGN` — the entry scripts read exactly
+/// those, so no layer or flag can spell a command of its own
+/// (config.md D4: configuration that can execute is configuration
+/// that can escape).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Agent {
+    pub kind: String,
+    pub command: String,
+    pub args: Vec<String>,
+}
+
+impl Agent {
+    /// The env segment of [`Agent`] — `MYSBX_AGENT_*`, the
+    /// entry scripts' contract. The arguments ride one variable each
+    /// (`ARG1`..`ARGN`) rather than one shell-quoted string, so no
+    /// entry script ever has to eval or word-split: a quoted read
+    /// is the whole argv, there is no quoting to get wrong.
+    pub fn env_segment(&self) -> Vec<String> {
+        let mut seg = vec![
+            format!("MYSBX_AGENT_KIND={}", self.kind),
+            format!("MYSBX_AGENT_COMMAND={}", self.command),
+            format!("MYSBX_AGENT_ARGC={}", self.args.len()),
+        ];
+        for (i, arg) in self.args.iter().enumerate() {
+            seg.push(format!("MYSBX_AGENT_ARG{}={arg}", i + 1));
+        }
+        seg
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Params<'a> {
     /// Path of the shell used for [`Payload::Shell`].
@@ -274,6 +311,13 @@ pub struct Params<'a> {
     /// bare shell instead would be discovered only after the work was
     /// done in the wrong place.
     pub mux_entry: Option<&'a str>,
+    /// The resolved agent of the interactive session (config.md D32,
+    /// bd myconfig-fv4h): `Some` emits the `MYSBX_AGENT_*` segment
+    /// the entry scripts read — a plain shell runs with none, exactly
+    /// like it runs without a multiplexer. `None` when no agent was
+    /// selected (no `default-agent`, `--no-agent`) or the payload is
+    /// a command — a one-shot starts no agent (cli.md D11).
+    pub agent: Option<&'a Agent>,
     /// The **waypipe channel** of a run whose merged `display` is
     /// `waypipe` (docs/design/config.md D18): the host directory
     /// holding the per-run `waypipe.sock` the host-side `waypipe
@@ -1520,6 +1564,25 @@ pub fn bwrap_argv(
             argv.push("MYSBX_DETACHABLE".into());
             argv.push("1".into());
         }
+        // The resolved agent of the interactive session (config.md
+        // D32, bd myconfig-fv4h): `MYSBX_AGENT_KIND`/`COMMAND`/`ARGC`/
+        // `ARG1..N`, set after `[env]` like the identity pair, so no
+        // configuration layer can spell a command of its own — the
+        // value comes from the wrapper's registry (`MYSBX_AGENTS_FILE`),
+        // resolved by the CLI. Set whenever a run resolves an agent,
+        // whatever the multiplexer: a session entry starts it, a plain
+        // shell carries the segment unused — symmetric with
+        // `MYSBX_MULTIPLEXER`, which a one-shot also sees.
+        if let Some(agent) = params.agent {
+            for entry in agent.env_segment() {
+                argv.push("--setenv".into());
+                let (key, value) = entry
+                    .split_once('=')
+                    .expect("env_segment formats KEY=value");
+                argv.push(key.into());
+                argv.push(value.into());
+            }
+        }
     }
 
     // 7. work in the repo.
@@ -1675,6 +1738,16 @@ pub fn bwrap_argv(
         // carries only nono's infrastructure (backends.md D1).
         if params.detachable {
             argv.push("MYSBX_DETACHABLE=1".into());
+        }
+        // The resolved agent (config.md D32), the nono spelling of
+        // the pure-bwrap `--setenv` section above: `MYSBX_AGENT_*`
+        // ride the payload env segment because nono's own
+        // `--setenv` set carries only nono's infrastructure
+        // (backends.md D1, "Two environments") — and because the
+        // entry script IS the payload, its environment is where it
+        // must arrive.
+        if let Some(agent) = params.agent {
+            argv.extend(agent.env_segment());
         }
     }
     match payload {
@@ -2757,6 +2830,7 @@ mod tests {
             ca_bundle: None,
             policy_paths: &[],
             mux_entry: None,
+            agent: None,
             waypipe: None,
             workspace: Workspace::Live,
             inner: None,
