@@ -77,6 +77,7 @@ fn base(network: bool) -> Merged {
         pids_limit: None,
         store: Some(Store::Host),
         profile: None,
+        default_agent: None,
         multiplexer: Multiplexer::None,
         display: Display::Off,
     }
@@ -1339,6 +1340,7 @@ fn golden_both_layers_contribute_mounts() {
         pids_limit: None,
         store: Some(Store::Host),
         profile: None,
+        default_agent: None,
         multiplexer: Multiplexer::None,
         display: Display::Off,
     };
@@ -1732,6 +1734,7 @@ fn mount_order_is_preserved() {
         pids_limit: None,
         store: Some(Store::Host),
         profile: None,
+        default_agent: None,
         multiplexer: Multiplexer::None,
         display: Display::Off,
     };
@@ -4296,6 +4299,7 @@ fn podman_base(network: bool) -> Merged {
         pids_limit: None,
         store: Some(Store::Host),
         profile: None,
+        default_agent: None,
         multiplexer: Multiplexer::None,
         display: Display::Off,
     }
@@ -4991,6 +4995,7 @@ fn podman_mount_order_is_preserved() {
         pids_limit: None,
         store: Some(Store::Host),
         profile: None,
+        default_agent: None,
         multiplexer: Multiplexer::None,
         display: Display::Off,
     };
@@ -6206,6 +6211,7 @@ fn nono_base(network: bool) -> Merged {
         pids_limit: None,
         store: Some(Store::Host),
         profile: None,
+        default_agent: None,
         multiplexer: Multiplexer::None,
         display: Display::Off,
     }

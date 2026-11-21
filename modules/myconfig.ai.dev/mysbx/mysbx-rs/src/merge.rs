@@ -209,6 +209,17 @@ pub struct Merged {
     /// can attach a store disk) and the wrapper's
     /// `MYSBX_VM_STORE_DISK` pin, facts the merge does not own.
     pub store: Option<Store>,
+    /// Which agent the interactive session starts (`default-agent`,
+    /// docs/design/config.md D32): the layer decision — the sidecar
+    /// wins when both decide, like `multiplexer`, because the key
+    /// selects an agent of the pinned registry and grants no host
+    /// access. `None` when neither layer decided: no agent starts.
+    /// The CLI resolves the kind against the wrapper's
+    /// `MYSBX_AGENT_NAMES`/`MYSBX_AGENTS_FILE` pins and applies the
+    /// `--agent`/`--no-agent` overrides; the resolved kind reaches
+    /// the sandbox as the `MYSBX_AGENT_*` environment the entry
+    /// scripts read.
+    pub default_agent: Option<String>,
 }
 
 impl Merged {
@@ -546,6 +557,11 @@ fn fold_two(
         // where it decided, like `backend` — the same sidecar-wins
         // rule `merge` applies.
         profile: later.profile.or(earlier.profile),
+        // default-agent (config.md D32): the later layer wins where it
+        // decided, like `multiplexer` — the key selects an agent of
+        // the pinned registry, never a command, so a disagreement is
+        // resolved, never refused.
+        default_agent: later.default_agent.or(earlier.default_agent),
         // The chain is consumed by the fold: the folded layer has no
         // parent of its own.
         parent: None,
@@ -1264,6 +1280,13 @@ pub fn merge(
         // an access grant, so a disagreement is resolved (sidecar
         // wins), never refused.
         profile: sidecar.profile.or(user.profile),
+        // default-agent (config.md D32): the later layer wins where it
+        // decided, like `multiplexer` — the key names an agent of the
+        // pinned registry (`MYSBX_AGENT_NAMES`/`MYSBX_AGENTS_FILE`),
+        // never a command, so the sidecar wins when both layers
+        // decide and `None` (no agent) when neither does. The CLI
+        // resolves the kind against the pin at run time.
+        default_agent: sidecar.default_agent.or(user.default_agent),
     })
 }
 
@@ -1810,6 +1833,29 @@ mod tests {
             m(Some(Multiplexer::None), Some(Multiplexer::Tmux)),
             Multiplexer::Tmux
         );
+    }
+
+    #[test]
+    fn the_default_agent_is_none_by_default_and_the_sidecar_wins() {
+        // config.md D32: no agent by default, either layer may decide
+        // the KIND, the sidecar wins when both do (like `multiplexer`)
+        // — there is no narrowing rule, because the key selects an
+        // agent of the pinned registry, never a command.
+        let m = |u: Option<&str>, s: Option<&str>| {
+            let mut user = Config::default();
+            user.default_agent = u.map(str::to_owned);
+            let mut sidecar = Config::default();
+            sidecar.default_agent = s.map(str::to_owned);
+            merge(user, sidecar, &user_file(), &sidecar_file(), &no_home())
+                .unwrap()
+                .default_agent
+        };
+        assert_eq!(m(None, None), None);
+        assert_eq!(m(Some("pi"), None).as_deref(), Some("pi"));
+        assert_eq!(m(None, Some("opencode")).as_deref(), Some("opencode"));
+        // The sidecar may pick another agent for one repository —
+        // every direction, no error.
+        assert_eq!(m(Some("pi"), Some("opencode")).as_deref(), Some("opencode"));
     }
 
     #[test]

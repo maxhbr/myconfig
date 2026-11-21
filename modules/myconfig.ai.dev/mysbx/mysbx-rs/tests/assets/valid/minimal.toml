@@ -30,6 +30,15 @@
 #
 # profile = "assistant"
 #
+# The agent the interactive session starts (D32): a string KIND, one
+# of the names the build pins (MYSBX_AGENT_NAMES — `pi`, `opencode`,
+# whatever the host registered). Never a command: a layer may say
+# WHICH of the agents this build carries runs, never an argv (D4).
+# The sidecar wins when both layers decide; `--agent <kind>`/`--no-agent`
+# override the choice for one run.
+#
+# default-agent = "pi"
+#
 # network = "shared"             # none | proxy-only | shared (D20; the bool
 #                                # false/true stay aliases of none/shared); a
 #                                # sidecar may tighten, never widen

@@ -683,6 +683,19 @@ pub struct Config {
     /// security boundary: the actual tool closure is the wrapper's
     /// pinned `MYSBX_TOOLS_PATH` either way.
     pub profile: Option<String>,
+    /// Which agent the INTERACTIVE payload's session starts
+    /// (`default-agent`, docs/design/config.md D32): a string KIND,
+    /// never a command — a layer may say *which of the agents this
+    /// build carries* runs (the wrapper pins the registry as
+    /// `MYSBX_AGENT_NAMES`/`MYSBX_AGENTS_FILE`), the argv vector
+    /// belongs to the entry scripts that resolve the kind (D4:
+    /// configuration that can execute is configuration that can
+    /// escape). `None` means "not decided by this layer", like
+    /// `multiplexer`: either layer may decide it and the sidecar
+    /// wins when both do — the key grants no host access, it selects
+    /// a payload from mysbx's own closure and resolves to the
+    /// `MYSBX_AGENT_*` environment the entry scripts read.
+    pub default_agent: Option<String>,
 }
 
 impl Default for Config {
@@ -709,6 +722,7 @@ impl Default for Config {
             store: None,
             parent: None,
             profile: None,
+            default_agent: None,
         }
     }
 }
@@ -746,6 +760,7 @@ impl Config {
         "parent",
         "backend",
         "profile",
+        "default-agent",
         "network",
         "nested-virt",
         "multiplexer",
@@ -806,6 +821,29 @@ impl Config {
                             "top level: `profile` must be a lowercase profile name matching \
                              [a-z][a-z0-9-]* and not the reserved `once` — it names the \
                              mysbx-<profile> launcher this configuration requires"
+                                .to_owned(),
+                        ));
+                    }
+                }
+                // default-agent (D32): a string KIND with the
+                // `[a-z][a-z0-9_-]{0,31}` grammar (the registry keys
+                // the module layer validates the same way), never a
+                // command — shape only, not a closed enum (agent
+                // kinds are host-defined, pinned by the wrapper as
+                // `MYSBX_AGENT_NAMES`). Resolution against the pin
+                // happens at RUN time (lib.rs), where a kind the
+                // build does not carry is a refused run, not a parse
+                // error: the file is fine, the agent it names is not
+                // installed.
+                "default-agent" => {
+                    let kind = string(value, "default-agent")?;
+                    if valid_agent_kind(kind) {
+                        config.default_agent = Some(kind.to_owned());
+                    } else {
+                        return Err(Error::Schema(
+                            "top level: `default-agent` must be a lowercase agent kind matching \
+                             [a-z][a-z0-9_-]{0,31} — it names an agent of the pinned registry \
+                             (MYSBX_AGENT_NAMES), never a command"
                                 .to_owned(),
                         ));
                     }
@@ -1365,6 +1403,24 @@ fn unknown(at: &str, key: &str) -> Error {
     Error::Schema(format!("{at}: unknown key `{key}`"))
 }
 
+/// Whether `kind` is a valid `default-agent` spelling (config.md
+/// D32): `[a-z][a-z0-9_-]{0,31}` — lowercase, alphanumerics, `_` and
+/// `-`, at most 32 characters. Public so the CLI validation and the
+/// module layer's Nix assertion can name the same grammar; shared
+/// with the schema edge above.
+pub fn valid_agent_kind(kind: &str) -> bool {
+    let mut chars = kind.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_lowercase() => {}
+        _ => return false,
+    }
+    let tail: Vec<char> = chars.collect();
+    tail.len() <= 31
+        && tail
+            .iter()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '_' || *c == '-')
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1394,6 +1450,37 @@ mod tests {
             let msg = e.to_string();
             assert!(matches!(e, Error::Schema(_)), "{text}: {msg}");
             assert!(msg.contains("profile"), "{text}: {msg}");
+        }
+    }
+
+    #[test]
+    fn default_agent_parses_as_a_grammar_validated_kind() {
+        // config.md D32: a free-form agent KIND with the
+        // `[a-z][a-z0-9_-]{0,31}` grammar, NOT a crate enum — the
+        // crate validates shape only; the run-time resolution checks
+        // the kind against the wrapper's `MYSBX_AGENT_NAMES` pin.
+        let c = Config::parse("default-agent = \"pi\"\n").unwrap();
+        assert_eq!(c.default_agent.as_deref(), Some("pi"));
+        let c = Config::parse("default-agent = \"opencode\"\n").unwrap();
+        assert_eq!(c.default_agent.as_deref(), Some("opencode"));
+        let c = Config::parse("default-agent = \"a_kind-42\"\n").unwrap();
+        assert_eq!(c.default_agent.as_deref(), Some("a_kind-42"));
+        assert_eq!(Config::parse("").unwrap().default_agent, None);
+        // Every refusal is a Schema error naming the key.
+        for text in [
+            "default-agent = \"\"\n",
+            "default-agent = \"Pi\"\n",
+            "default-agent = \"-x\"\n",
+            "default-agent = \"a b\"\n",
+            "default-agent = \"pi --continue\"\n",
+            "default-agent = \"012345678901234567890123456789012\"\n",
+            "default-agent = 42\n",
+            "default-agent = true\n",
+        ] {
+            let e = Config::parse(text).unwrap_err();
+            let msg = e.to_string();
+            assert!(matches!(e, Error::Schema(_)), "{text}: {msg}");
+            assert!(msg.contains("default-agent"), "{text}: {msg}");
         }
     }
 

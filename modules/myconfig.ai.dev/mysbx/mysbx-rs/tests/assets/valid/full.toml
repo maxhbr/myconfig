@@ -16,6 +16,11 @@ backend = "bwrap"
 # is the launcher's own either way.
 profile = "assistant"
 
+# The agent the interactive session starts (config.md D32): a string
+# KIND of the pinned registry — never a command. The entry scripts
+# resolve the kind to the command they start.
+default-agent = "pi"
+
 network = true
 
 # Nested virtualization (config.md D27): hand a `microvm-qemu` run

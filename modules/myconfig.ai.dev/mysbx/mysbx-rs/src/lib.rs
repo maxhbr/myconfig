@@ -8578,6 +8578,56 @@ fn user_layer_multiplexer() -> Option<config::Multiplexer> {
     }
 }
 
+/// The `default-agent` section of a fresh sidecar `config.toml`
+/// (config.md D32), the twin of [`multiplexer_template`]: recorded
+/// from the user layer when it decides one, so the fresh file changes
+/// nothing (the sidecar wins over the user config, D32) — and left
+/// commented out when the user layer could not be read, because a
+/// guessed kind here would override the host default for every newly
+/// initialized repository.
+fn default_agent_template(user_value: Option<String>) -> String {
+    let head = "\n# The agent the interactive session starts\n\
+             # (docs/design/config.md D32): a string KIND of the pinned\n\
+             # registry, never a command. `mysbx run -- CMD` starts no\n\
+             # session, so it starts no agent either (cli.md D11).\n";
+    match user_value {
+        Some(kind) => format!(
+            "{head}# Recorded from the host-wide user configuration layer, so this\n\
+             # file changes nothing until you edit it — the sidecar wins.\n\
+             default-agent = \"{kind}\"\n"
+        ),
+        None => format!(
+            "{head}# Left commented out: the user configuration layer could not be\n\
+             # read, and a guessed kind here would OVERRIDE it (the sidecar\n\
+             # wins). Uncomment to decide it for this repository.\n\
+             # default-agent = \"pi\"\n"
+        ),
+    }
+}
+
+/// The `default-agent` value of the user configuration layer, for
+/// [`default_agent_template`] — the twin of
+/// [`user_layer_multiplexer`]: `Some(kind)` when the chain decides
+/// one, `None` when it cannot be read or parsed. Unlike the
+/// multiplexer there is no "decides nothing" default to record: an
+/// empty layer starts no agent, and recording THAT would be a
+/// decision the user layer never made.
+fn user_layer_default_agent() -> Option<String> {
+    let home = std::env::var_os("HOME").unwrap_or_default();
+    let xdg = std::env::var("XDG_CONFIG_HOME").ok();
+    let path = merge::user_config_path(std::path::Path::new(&home), xdg.as_deref());
+    if !path.exists() {
+        // An absent user layer is an EMPTY layer (merge.rs
+        // `load_optional`): it decides nothing, so nothing is
+        // recorded — no agent is the default.
+        return None;
+    }
+    match merge::load_layer_chain(&path, "user", std::path::Path::new(&home), None) {
+        Ok(c) => c.config.default_agent,
+        Err(_) => None,
+    }
+}
+
 /// The root-table part of a fresh sidecar `config.toml`
 /// ([`ensure_sidecar_config`]): every top-level schema key, commented, with
 /// the design-doc decision that owns it next to it. `init` and `edit` both
@@ -8617,6 +8667,15 @@ const SIDECAR_TEMPLATE_ROOT: &str = r#"# mysbx sidecar config
 # security boundary: the actual tool closure is the launcher's own.
 #
 # profile = "assistant"
+#
+# The agent the interactive session starts (D32): a string KIND, one
+# of the names the build pins (MYSBX_AGENT_NAMES — `pi`, `opencode`,
+# whatever the host registered). Never a command: a layer may say
+# WHICH of the agents this build carries runs, never an argv (D4).
+# The sidecar wins when both layers decide; `--agent <kind>`/`--no-agent`
+# override the choice for one run.
+#
+# default-agent = "pi"
 #
 # network = "shared"             # none | proxy-only | shared (D20; the bool
 #                                # false/true stay aliases of none/shared); a
@@ -8748,6 +8807,7 @@ fn ensure_sidecar_config(repo: &repo::Repo, snapshot_git_dirs: bool) -> Result<O
     // (a commented key is not a policy).
     let mut contents = SIDECAR_TEMPLATE_ROOT.to_owned();
     contents.push_str(&multiplexer_template(user_layer_multiplexer()));
+    contents.push_str(&default_agent_template(user_layer_default_agent()));
     if snapshot_git_dirs && !repo.git_dirs.is_empty() {
         contents.push_str(
             "\n# Git metadata this repository needs from outside the work tree\n\
@@ -10722,6 +10782,15 @@ mod tests {
         // E7: a gone pid's directory whose `decisions.jsonl` cannot be
         // read survives the sweep — deleting it would lose the log for
         // good — and the sweep itself does not fail the run.
+        //
+        // The premise (a 0000 file cannot be read) is false for root:
+        // DAC does not bind root, so the sweep MERGES the file and
+        // removes the directory. Skip when the suite runs as root —
+        // the mysbx-tests check runs as a build user, but a local
+        // `cargo test` as root must not report a phantom failure.
+        if unsafe { libc_geteuid() } == 0 {
+            return;
+        }
         let root = consolidation_root("unreadable");
         let gone = root.join("999999");
         std::fs::create_dir_all(&gone).expect("create the gone pid's dir");

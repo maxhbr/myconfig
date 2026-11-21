@@ -2742,6 +2742,7 @@ mod tests {
             pids_limit: None,
             store: None,
             profile: None,
+            default_agent: None,
             multiplexer: Multiplexer::None,
             display: Display::Off,
         }
