@@ -11510,6 +11510,15 @@ fn proxy_only_with_a_broker_pin_reports_the_per_run_channel_and_creates_nothing(
         created.is_empty(),
         "a dry run must leave the runtime root empty: {created:?}"
     );
+    // E5 + E7: the sweep (and with it the consolidation) exists only on
+    // the real path — `start_egress_broker` is never reached in a dry
+    // run — so the SIDECAR egress root and `log.jsonl` must not exist
+    // either. The sidecar itself exists from `init`; `egress/` under
+    // it is what the broker path creates.
+    assert!(
+        !sidecar.join("egress").exists(),
+        "a dry run must not create the sidecar egress root"
+    );
     // The report names the per-run source, and the static forwarder
     // directory appears only as the fixed in-sandbox destination.
     let per_run = format!("{}/mysbx-egress/", runtime.display());

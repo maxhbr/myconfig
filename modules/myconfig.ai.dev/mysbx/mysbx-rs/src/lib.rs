@@ -7883,14 +7883,18 @@ fn sweep_pid_dirs(root: &std::path::Path) {
 /// caller prints and keeps the directory for, never a failed run.
 fn consolidate_egress_log(root: &std::path::Path, run_log: &std::path::Path) -> Result<(), String> {
     let durable = root.join("log.jsonl");
-    let existing: Vec<String> = match std::fs::read_to_string(&durable) {
-        Ok(text) => text.lines().map(str::to_owned).collect(),
-        // `log.jsonl` lives in the same `egress/` root but is a plain
-        // file, so the sweep's pid-name parse never touches it; the
-        // merge reads per-run files only — it is never its own input.
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+    // `log.jsonl` is never-pruned (E7), so the dedupe set grows with
+    // it — the membership check must stay O(1) per line, not a scan
+    // over the whole history per fresh line. It lives in the same
+    // `egress/` root but is a plain file, so the sweep's pid-name
+    // parse never touches it; the merge reads per-run files only —
+    // it is never its own input.
+    let existing_text = match std::fs::read_to_string(&durable) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
         Err(e) => return Err(format!("cannot read {}: {e}", durable.display())),
     };
+    let existing: std::collections::HashSet<&str> = existing_text.lines().collect();
     let fresh = std::fs::read_to_string(run_log)
         .map_err(|e| format!("cannot read {}: {e}", run_log.display()))?;
     let mut new_lines: Vec<&str> = Vec::new();
@@ -7898,7 +7902,7 @@ fn consolidate_egress_log(root: &std::path::Path, run_log: &std::path::Path) -> 
         // Dedupe against `log.jsonl` only (a partial merge retried):
         // this file's own bytes are copied verbatim, duplicates
         // included — the merge never interprets content (E7).
-        if !existing.iter().any(|known| known == line) {
+        if !existing.contains(line) {
             new_lines.push(line);
         }
     }
@@ -7914,13 +7918,23 @@ fn consolidate_egress_log(root: &std::path::Path, run_log: &std::path::Path) -> 
             .mode(0o600)
             .open(&durable)
             .map_err(|e| format!("cannot open {}: {e}", durable.display()))?;
-        for line in new_lines {
-            out.write_all(line.as_bytes())
-                .and_then(|()| out.write_all(b"\n"))
-                .map_err(|e| format!("cannot append to {}: {e}", durable.display()))?;
+        // One write per merge, with a guard byte first when a crash
+        // left `log.jsonl` without its trailing newline: appending
+        // straight onto an unterminated line would glue two records
+        // into one the reader can never split again. The partial
+        // line's bytes stay untouched — the merge does not repair,
+        // it only stops corrupting (E7).
+        let mut batch = Vec::new();
+        if !existing_text.ends_with('\n') && !existing_text.is_empty() {
+            batch.push(b'\n');
         }
-        out.flush()
-            .map_err(|e| format!("cannot flush {}: {e}", durable.display()))?;
+        for line in new_lines {
+            batch.extend_from_slice(line.as_bytes());
+            batch.push(b'\n');
+        }
+        out.write_all(&batch)
+            .and_then(|()| out.flush())
+            .map_err(|e| format!("cannot append to {}: {e}", durable.display()))?;
     }
     Ok(())
 }
@@ -10640,15 +10654,66 @@ mod tests {
             "every line exactly once, appended in file order"
         );
 
-        // The second sweep is a no-op: the gone directory is already
-        // gone, and a re-created twin would not double-append either.
+        // The second sweep is a no-op on the RETRY path: the gone
+        // directory is re-created with the same lines (a crash after
+        // a partial merge, or a sweep whose removal half failed), and
+        // the dedupe must recognize every line as already-merged —
+        // log.jsonl stays byte-identical.
+        std::fs::create_dir_all(&gone).expect("re-create the gone pid's dir");
+        std::fs::write(
+            gone.join("decisions.jsonl"),
+            format!("{line_a}\n{line_b}\n"),
+        )
+        .expect("rewrite the gone pid's log");
         sweep_pid_dirs(&root);
         let again = std::fs::read_to_string(root.join("log.jsonl"))
             .expect("read the merged log.jsonl again");
         assert_eq!(
             merged, again,
-            "the second sweep must leave log.jsonl byte-identical"
+            "re-sweeping a re-created twin must leave log.jsonl byte-identical"
         );
+        assert!(
+            !gone.exists(),
+            "the re-created twin is swept again after the no-op merge"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_merge_never_glues_onto_an_unterminated_log_jsonl() {
+        // E7: a crash mid-append can leave `log.jsonl` without its
+        // trailing newline. The merge must not append straight onto
+        // that partial line (two records would glue into one the
+        // reader can never split) — it prepends a guard newline, and
+        // the partial line's bytes stay untouched (no repair, E7).
+        let root = consolidation_root("unterminated");
+        let gone = root.join("999999");
+        std::fs::create_dir_all(&gone).expect("create the gone pid's dir");
+        let line = r#"{"ts":1794583070,"pid":9672,"event":"deny","why":"peer"}"#;
+        std::fs::write(gone.join("decisions.jsonl"), line.to_owned() + "\n")
+            .expect("write the gone pid's log");
+        std::fs::write(
+            root.join("log.jsonl"),
+            r#"{"ts":1794583000,"pid":1,"event":"listen"#,
+        )
+        .expect("write an unterminated partial line");
+
+        sweep_pid_dirs(&root);
+
+        let merged =
+            std::fs::read_to_string(root.join("log.jsonl")).expect("read the merged log.jsonl");
+        let mut lines = merged.lines();
+        assert_eq!(
+            lines.next(),
+            Some(r#"{"ts":1794583000,"pid":1,"event":"listen"#),
+            "the partial line's bytes stay untouched"
+        );
+        assert_eq!(
+            lines.next(),
+            Some(line),
+            "the fresh line is a line of its own, not glued onto the partial one"
+        );
+        assert_eq!(lines.next(), None, "nothing else was appended");
         let _ = std::fs::remove_dir_all(&root);
     }
 
