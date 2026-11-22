@@ -336,6 +336,7 @@ complete -c mysbx -f -n '__mysbx_no_verb' -a status -d 'The one-command overview
 complete -c mysbx -f -n '__mysbx_no_verb' -a attach -d 'Connect this terminal to the detached run of the live repo (or of --session NAME)'
 complete -c mysbx -f -n '__mysbx_no_verb' -a doctor -d 'Host health check of the configured backend (or the named ones)'
 complete -c mysbx -f -n '__mysbx_no_verb' -a diagnose -d 'The diagnose group: read the egress broker\'s decision log (egress)'
+complete -c mysbx -f -n '__mysbx_no_verb' -a tui -d 'The session picker: one row per one-run decision (backend, multiplexer, default-agent); Enter dispatches, Esc or q exits 0'
 complete -c mysbx -f -n '__mysbx_no_verb' -a ssh-pubkey -d 'Print the sandbox ssh keypair\'s public key (GitHub deploy key / gitolite keydir value)'
 complete -c mysbx -f -n '__mysbx_no_verb' -a podman-load-image -d 'Load the agent container image into Podman (--force, --test, --image <ref>)'
 

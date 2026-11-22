@@ -12648,6 +12648,237 @@ fn diagnose_needs_a_known_sub_verb() {
     assert!(stderr.contains("needs a pid"), "{stderr}");
 }
 
+// ---- the session picker verb (docs/design/tui.md, bd myconfig-dm7b) ---------
+
+#[test]
+fn tui_needs_a_terminal_on_stdin_and_stdout() {
+    // T6: the picker reads keys and renders full-screen, so it needs
+    // a terminal on BOTH stdin and stdout. The test harness pipes
+    // both — the natural non-interactive environment — and the tty
+    // gate fires before anything renders: exit 70, the D8-style
+    // boundary, suggesting the bare form.
+    let (inv, _repo, _sidecar) = fixture("tui-no-tty", &["tui"]);
+    let (code, _stdout, stderr) = run_binary_with(&inv, &["tui"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("the picker needs a terminal on stdin and stdout"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("use the bare `mysbx` form"),
+        "the refusal suggests the bare form: {stderr}"
+    );
+}
+
+#[test]
+fn tui_refuses_the_run_scoped_flags_and_dry_run() {
+    // T7: the picker IS the interactive replacement for exactly the
+    // one-run override flags, so every run-scoped flag before the
+    // verb is a usage error naming it (the shared rejection arm),
+    // and `--dry-run`/`--verbose` too — the verb's whole job is an
+    // interactive side effect, so there is no argv to print and no
+    // run to report on (the generic `flags.any()` arm).
+    let (inv, _repo, _sidecar) = fixture("tui-flags", &[]);
+    for args in [
+        vec!["--backend", "krun", "tui"],
+        vec!["--multiplexer", "tmux", "tui"],
+        vec!["--tmux", "tui"],
+        vec!["--no-agent", "tui"],
+        vec!["--ro", "/tmp", "tui"],
+        vec!["--rw", "/tmp", "tui"],
+        vec!["--session", "fix-1", "tui"],
+        vec!["--sidecar", "/tmp", "tui"],
+        vec!["--config", "/tmp", "tui"],
+        vec!["--result", "tui"],
+        vec!["--timeout", "5", "tui"],
+        vec!["--detach", "tui"],
+        vec!["--detachable", "tui"],
+        vec!["--dry-run", "tui"],
+        vec!["--verbose", "tui"],
+    ] {
+        let (code, _, stderr) = run_binary_with(&inv, &args);
+        assert_eq!(code, 2, "{args:?}: {stderr}");
+        assert!(
+            stderr.contains("is not valid with `tui`"),
+            "{args:?}: {stderr}"
+        );
+    }
+}
+
+#[test]
+fn tui_refuses_a_tail() {
+    // T1: the verb takes no tail — an argument after it is a usage
+    // error, never a flag the picker would accept and ignore.
+    let (inv, _repo, _sidecar) = fixture("tui-tail", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["tui", "extra"]);
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(
+        stderr.contains("mysbx tui: unexpected argument: extra"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("try `mysbx --help`"), "{stderr}");
+}
+
+#[test]
+fn tui_refuses_a_cwd_that_is_not_a_repo() {
+    // T3/D1: repo resolution is unchanged — `$HOME` is not a repo,
+    // and the refusal (exit 70) fires before any row renders.
+    let base = tmpdir("tui-home");
+    let home = base.join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(base.join("xdg")).unwrap();
+    let inv = Invocation {
+        args: vec!["tui"],
+        cwd: home.clone(),
+        home,
+        xdg: base.join("xdg"),
+    };
+    let (code, _, stderr) = run_binary(&inv);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("mysbx: ") && stderr.contains("repo"),
+        "the refusal names the repo problem: {stderr}"
+    );
+}
+
+#[test]
+fn tui_is_allowed_in_a_once_run() {
+    // T8/D22: the once gate ALLOWS the verb, so the spelled-out
+    // `mysbx-once tui` must not hit the once refusal — it reaches
+    // the picker, whose own no-tty case prints the ONCE suggestion
+    // (`mysbx-once run -- CMD`), never the plain form's.
+    let (inv, _repo, _sidecar) = fixture("tui-once", &[]);
+    let (code, _stdout, stderr) = run_once(&inv, &["tui"]);
+    assert_eq!(
+        code,
+        mysbx::EXIT_INFRASTRUCTURE,
+        "the picker's no-tty refusal: {stderr}"
+    );
+    assert!(
+        !stderr.contains("is refused in once-mode"),
+        "tui must not hit the once refusal: {stderr}"
+    );
+    assert!(
+        stderr.contains("mysbx-once: the picker needs a terminal on stdin and stdout"),
+        "the once form's own no-tty refusal fired: {stderr}"
+    );
+    assert!(
+        stderr.contains("use `mysbx-once run -- CMD`"),
+        "the refusal suggests the once scripted form: {stderr}"
+    );
+}
+
+#[test]
+fn once_bare_form_opens_the_picker_instead_of_the_shell() {
+    // T8: `mysbx-once` typed with NOTHING at all — no verb, no flag
+    // — is the picker now, not the straight shell dispatch the bare
+    // form had before. The piped (non-tty) harness hits the
+    // picker's own no-tty refusal with the ONCE suggestion
+    // (`mysbx-once run -- CMD`), never the plain form's — and never
+    // a shell that would read the piped stdin.
+    let (inv, _repo, _sidecar) = fixture_uninited("once-bare-tui", &[]);
+    let (code, _stdout, stderr) = run_once(&inv, &[]);
+    assert_eq!(
+        code,
+        mysbx::EXIT_INFRASTRUCTURE,
+        "the picker's no-tty refusal: {stderr}"
+    );
+    assert!(
+        stderr.contains("mysbx-once: the picker needs a terminal on stdin and stdout"),
+        "the once form's own no-tty refusal fired: {stderr}"
+    );
+    assert!(
+        stderr.contains("use `mysbx-once run -- CMD`"),
+        "the refusal suggests the once scripted form: {stderr}"
+    );
+    // It was the PICKER, not a run: the run's pipeline would have
+    // created the temp root (or at least reported a backend) — the
+    // refusal fired before any of that.
+    assert!(
+        !inv.home.join("runtime/mysbx-once").exists(),
+        "no temp root was created before the refusal"
+    );
+}
+
+#[test]
+fn once_bare_form_refuses_a_cwd_that_is_not_a_repo() {
+    // T8: the bare once form resolves the repo through the shared
+    // `resolve_repo_or_refuse` (the `tui` verb arm's refusal,
+    // n2): a cwd that is not a repo is exit 70 with the same
+    // `mysbx: ` message, before any row renders — never the
+    // picker's no-tty case, and never a run.
+    let base = tmpdir("once-bare-home");
+    let home = base.join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(base.join("xdg")).unwrap();
+    let inv = Invocation {
+        args: vec![],
+        cwd: home.clone(),
+        home,
+        xdg: base.join("xdg"),
+    };
+    let (code, _, stderr) = run_once(&inv, &[]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("mysbx: ") && stderr.contains("repo"),
+        "the refusal names the repo problem: {stderr}"
+    );
+    assert!(
+        !stderr.contains("the picker needs a terminal"),
+        "the repo refusal fires before the tty gate: {stderr}"
+    );
+    assert!(
+        !inv.home.join("runtime/mysbx-once").exists(),
+        "no temp root was created before the refusal"
+    );
+}
+
+#[test]
+fn once_flagful_bare_form_still_dispatches_straight_into_the_run() {
+    // T8's other half: a once bare form WITH flags never opens the
+    // picker — the flags ARE the decisions, already typed, so the
+    // D22 allowed list keeps dispatching it straight into
+    // `RunMode::Once`. Pinned through the cheapest straight
+    // dispatch there is: a `--dry-run` flagful bare form prints the
+    // ONCE-shaped argv (the temp worktrees bind at the host
+    // sibling's path, never the picker's no-tty refusal — a dry
+    // run needs no terminal, and it never was the picker's path).
+    let (inv, repo, _sidecar) = fixture_uninited("once-bare-flags", &["--dry-run"]);
+    let (code, stdout, stderr) = run_once(&inv, &["--dry-run"]);
+    assert_eq!(code, 0, "stdout: {stdout} stderr: {stderr}");
+    assert!(
+        !stderr.contains("the picker needs a terminal"),
+        "the flagful bare form never opened the picker: {stderr}"
+    );
+    let worktrees = format!("{}__worktrees", repo.display());
+    assert!(
+        stdout.contains("mysbx-once/dry-run/worktrees"),
+        "the straight dispatch ran the ONCE pipeline: {stdout}"
+    );
+    assert!(
+        stdout.lines().any(|a| a == worktrees),
+        "the temp worktrees bind at the host sibling's path: {stdout}"
+    );
+    // A non-dry-run flagful bare form pins the same branch the
+    // other way: it reaches the run pipeline (and its backend
+    // gate), not the picker's no-tty refusal.
+    let (inv2, _repo2, _sidecar2) = fixture_uninited("once-bare-flags2", &["--backend", "nope"]);
+    let (code2, _stdout2, stderr2) = run_once(&inv2, &["--backend", "nope"]);
+    assert_eq!(
+        code2,
+        mysbx::EXIT_INFRASTRUCTURE,
+        "the unknown backend refusal: {stderr2}"
+    );
+    assert!(
+        stderr2.contains("unknown backend `nope`"),
+        "the flagful bare form reached the backend gate, not the picker: {stderr2}"
+    );
+    assert!(
+        !stderr2.contains("the picker needs a terminal"),
+        "no picker in the flagful path: {stderr2}"
+    );
+}
+
 #[test]
 fn proxy_only_refuses_a_socket_outside_the_pinned_directory() {
     // bd myconfig-mo3.2.6: the socket path is exactly
@@ -18376,11 +18607,15 @@ fn once_worktrees_live_in_the_temp_root_and_leave_no_stale_entries() {
 }
 
 #[test]
-fn once_bare_form_runs_without_a_sidecar_and_leaves_nothing_behind() {
-    // The primary acceptance of cli.md D22: the BARE form — the
+fn once_flagful_bare_form_runs_without_a_sidecar_and_leaves_nothing_behind() {
+    // The primary acceptance of cli.md D22: the bare form — the
     // form D13 refuses for a not-inited repo — runs in once-mode
     // for a repo with no sidecar at all, and the host keeps no
     // trace: no sidecar config, no worktrees sibling, no temp root.
+    // The fully bare form opens the picker now (docs/design/tui.md
+    // T8), so the straight-dispatch acceptance runs through the
+    // FLAGFUL bare form (`--backend bubblewrap`): one decision
+    // typed, the picker never involved.
     if !is_bwrap_available() {
         eprintln!("skipping: bwrap not available in this environment");
         return;
@@ -18405,8 +18640,15 @@ fn once_bare_form_runs_without_a_sidecar_and_leaves_nothing_behind() {
         eprintln!("skipping: no sandbox-reachable true");
         return;
     };
-    let (inv, _repo, sidecar) = fixture_uninited("once-bare", &[]);
-    let out = spawn_once(&inv, &[])
+    let (inv, _repo, sidecar) = fixture_uninited("once-bare", &["--backend", "bubblewrap"]);
+    // The fully BARE form is the picker (docs/design/tui.md T8),
+    // so this real-run acceptance of D22 pins the FLAGFUL bare
+    // form — one decision typed (`--backend`), the rest left to
+    // the layers — which dispatches straight into `RunMode::Once`
+    // (T8's other half). `--backend bubblewrap` spells the user
+    // layer's value explicitly; it changes nothing about the
+    // lifecycle under test.
+    let out = spawn_once(&inv, &["--backend", "bubblewrap"])
         .env("MYSBX_SHELL", &true_path)
         .env("MYSBX_TOOLS_PATH", "/usr/bin")
         .output()
@@ -18414,7 +18656,7 @@ fn once_bare_form_runs_without_a_sidecar_and_leaves_nothing_behind() {
     assert_eq!(
         out.status.code(),
         Some(0),
-        "the bare once run exits with the payload's code; stdout: {} stderr: {}",
+        "the flagful bare once run exits with the payload's code; stdout: {} stderr: {}",
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
     );
@@ -18424,7 +18666,7 @@ fn once_bare_form_runs_without_a_sidecar_and_leaves_nothing_behind() {
             || std::fs::read_dir(&base)
                 .map(|d| d.count() == 0)
                 .unwrap_or(false),
-        "the temp root was removed after the bare run"
+        "the temp root was removed after the flagful bare run"
     );
     assert!(
         !sidecar.join("config.toml").exists(),
@@ -18749,6 +18991,97 @@ fn once_a_terminal_reading_payload_completes_under_the_group_isolation() {
     assert!(
         out.success(),
         "the payload exits with its own code; pty said: {seen}"
+    );
+}
+
+#[test]
+fn the_bare_once_picker_aborts_with_q_and_leaves_no_temp_root() {
+    // T8's Esc/`q` contract, live under a pty: the fully bare
+    // `mysbx-once` opens the picker (not the shell), `q` aborts it,
+    // and the exit is `0` — nothing was started. The temp-root
+    // lifecycle is untouched by the abort: the root is `sandbox()`'s
+    // Once arm's to create, only after Enter, so the runtime base
+    // must be absent (or empty) after the picker exits. The pty is
+    // required — the piped harness hits the no-tty refusal before
+    // any row renders (T6).
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture_uninited("once-bare-picker", &[]);
+    let runtime = inv.home.join("runtime");
+    std::fs::create_dir_all(&runtime).unwrap();
+    // The user layer `spawn_once` writes, spelled here because the
+    // pty child's env is built from scratch (`env_clear` keeps the
+    // fixture's HOME/XDG from leaking).
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_mysbx"));
+    cmd.env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+        .env("HOME", &inv.home)
+        .env("XDG_CONFIG_HOME", &inv.xdg)
+        .env("XDG_RUNTIME_DIR", &runtime)
+        .env("MYSBX_ONCE", "1")
+        .current_dir(&inv.cwd);
+    unsafe {
+        set_session_with_pty(&mut cmd, master.as_raw_fd());
+    }
+    let mut child = cmd
+        .spawn()
+        .expect("failed to spawn the bare mysbx-once under a pty");
+
+    // The picker renders the rows, then `q` aborts. The render is
+    // the readiness signal: wait for a row label before sending
+    // the key, so the abort cannot race the first read.
+    use std::io::{Read, Write};
+    let mut master = master;
+    let mut buf = [0u8; 4096];
+    let mut seen = String::new();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        if std::time::Instant::now() > deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("the picker never aborted; pty said: {seen}");
+        }
+        let mut fds = [master.as_raw_fd()];
+        if pty_readable(&mut fds, 300) {
+            let n = master.read(&mut buf).unwrap_or(0);
+            if n == 0 {
+                break;
+            }
+            seen.push_str(&String::from_utf8_lossy(&buf[..n]));
+        }
+        if seen.contains("multiplexer") {
+            master.write_all(b"q").unwrap();
+            break;
+        }
+    }
+    let out = pty_wait_with_deadline(&mut child, std::time::Duration::from_secs(10))
+        .unwrap_or_else(|| {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("the picker did not end after `q`; pty said: {seen}")
+        });
+    assert_eq!(
+        out.code(),
+        Some(0),
+        "Esc/`q` exits 0 — nothing was started; pty said: {seen}"
+    );
+    // No temp root: the picker only fills `Flags`; `sandbox()`'s
+    // Once arm creates the root, and it never ran.
+    let base = inv.home.join("runtime/mysbx-once");
+    assert!(
+        !base.exists()
+            || std::fs::read_dir(&base)
+                .map(|d| d.count() == 0)
+                .unwrap_or(false),
+        "the abort left no temp root behind; pty said: {seen}"
     );
 }
 

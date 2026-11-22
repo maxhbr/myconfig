@@ -73,6 +73,15 @@ created on the host, and an existing `<repo>.mysbx` is ignored, not
 loaded: the sidecar LAYER of a once run is empty.
 _Avoid_: ephemeral mode, temp sandbox, one-off
 
+**Session picker**:
+The `mysbx tui` form: an opt-in full-screen selection shown before a
+launch — the three interactive-session decisions (backend, multiplexer,
+default-agent) preselected from the merged layers, cycled with the arrow
+keys, started with Enter, which composes the one-run override flags
+(cli.md D14/D18/D32). `mysbx-once` bare launches it too
+(`docs/design/tui.md`).
+_Avoid_: TUI, menu, dialog
+
 **State dir**:
 A sandbox-home-relative path declared in `state-dirs` (config.md D15):
 mysbx backs it with `<sidecar>/state/<entry>` and binds it rw at

@@ -49,6 +49,7 @@ pub mod status;
 
 use std::path::Path;
 pub mod toml;
+pub mod tui;
 pub mod worktreeverbs;
 
 /// The usage text.
@@ -270,6 +271,31 @@ pub fn run(args: Vec<String>) -> i32 {
             eprintln!("try `mysbx --help`");
             2
         }
+        // The bare ONCE form is the picker (T8, docs/design/tui.md):
+        // `mysbx-once` typed with NOTHING at all — no verb, no flag
+        // — opens the session picker instead of the shell, seeded
+        // from the user layer alone (the sidecar layer is empty by
+        // construction, D22; `RunMode::Once` skips the D13 gate,
+        // so T5's not-inited confirmation does not exist here). A
+        // bare once form WITH flags (`mysbx-once --backend krun`)
+        // never opens it: the flags ARE the decisions, already
+        // typed, and dispatch straight into `RunMode::Once` (D22's
+        // allowed list). `Flags::default()` — which `Flags` derives
+        // `PartialEq` for, and which `split_global_flags_traced`
+        // starts from — is exactly the fully bare invocation, so
+        // the identity comparison is the bare-vs-flagful branch;
+        // a traced selection always shows up in a field, never in
+        // `Selections` alone. The repo is resolved by
+        // `resolve_repo_or_refuse`, shared with the `tui` verb arm:
+        // a cwd that is not a repo is the same `70` refusal before
+        // any row renders. On Esc/`q` the picker
+        // returns `0` — nothing was started, and no temp root
+        // exists to tear down (the root is `sandbox()`'s Once arm's
+        // to create, only after Enter).
+        None if once && flags == Flags::default() => match resolve_repo_or_refuse() {
+            Ok(repo) => tui::run(flags, &repo, RunMode::Once),
+            Err(code) => code,
+        },
         // Bare `mysbx` is the primary action (docs/design/cli.md D2): enter
         // the sandbox for the current repository.
         None if once => sandbox(flags, bwrap::Payload::Shell, RunMode::Once),
@@ -328,6 +354,7 @@ pub fn run(args: Vec<String>) -> i32 {
                         | "doctor"
                         | "ssh-pubkey"
                         | "attach"
+                        | "tui"
                         | "podman-load-image"
                         | "gvisor-load-image"
                 ) =>
@@ -546,6 +573,40 @@ pub fn run(args: Vec<String>) -> i32 {
             eprintln!("try `mysbx --help`");
             2
         }
+        // `mysbx tui` — the session picker (docs/design/tui.md, bd
+        // myconfig-dm7b): the full-screen form before a launch, seeded
+        // from the merged layers (T3) and composed into the one-run
+        // override flags on Enter (T4). Every flag refusal is the
+        // arms' above, inherited by placement: the run-scoped flags
+        // (`--backend`, `--multiplexer`, `--agent`, `--session`,
+        // `--sidecar`, `--config`, `--result`/`--timeout`, `--ro`/
+        // `--rw`, `--detach`/`--detachable`) by the shared rejection
+        // arm that lists the verb (T7 — the picker IS the interactive
+        // replacement for exactly those flags), `--dry-run`/`--verbose`
+        // by the generic `flags.any()` arm this arm sits AFTER: the
+        // verb's whole job is an interactive side effect, so `--dry-run`
+        // has no argv to print and `--verbose` no report before Enter
+        // (T7's own-reason refusal, the podman-load-image precedent).
+        // The tail is closed the same way: an argument after the verb
+        // is a usage error, never a flag the picker would accept and
+        // ignore. The repo is resolved like on the other verbs that
+        // need one (`init`, D1): a cwd that is not a repo is the same
+        // `70` refusal before any row renders. The once gate allows
+        // the verb (T8), so `mysbx-once tui` reaches this arm too and
+        // seeds from the user layer alone — the `RunMode::Once` the
+        // bare once form dispatches into, the `run_command` precedent.
+        Some("tui") if rest.len() > 1 => {
+            eprintln!("mysbx tui: unexpected argument: {}", rest[1]);
+            eprintln!("try `mysbx --help`");
+            2
+        }
+        Some("tui") => match resolve_repo_or_refuse() {
+            Ok(repo) => {
+                let mode = if once { RunMode::Once } else { RunMode::Exec };
+                tui::run(flags, &repo, mode)
+            }
+            Err(code) => code,
+        },
         Some("help") | Some("-h") | Some("--help") => {
             usage();
             0
@@ -593,13 +654,25 @@ pub fn run(args: Vec<String>) -> i32 {
 ///   host repo's session/worktree state — exactly what once-mode
 ///   promises not to touch.
 ///
-/// Everything else — the bare form, `run -- CMD`, `gui`, `doctor`,
-/// `version`/`help`, `--dry-run`, `--multiplexer` (a session in the
+/// Everything else — the bare form, `run -- CMD`, `tui`, `gui`,
+/// `doctor`, `diagnose egress`, `version`/`help`, `--dry-run`,
+/// `--multiplexer` (a session in the
 /// temp root is as ephemeral as the run itself) — runs: `version`/
 /// `help` and `doctor` are host-side read-only, `gui` opens the
 /// terminal that runs the ONCE form's own inner invocation (the
 /// inner re-invokes the same argv[0], so it stays in once-mode by
 /// itself).
+/// The repo of the cwd, or the refusal the picker's two arms share
+/// (the `tui` verb and the bare once form, T1/T8): a cwd that is
+/// not a repo is `70` — `mysbx: {e}` — before any row renders,
+/// the `init`-needs-a-repo precedent (D1).
+fn resolve_repo_or_refuse() -> Result<repo::Repo, i32> {
+    repo::resolve_cwd().map_err(|e| {
+        eprintln!("mysbx: {e}");
+        EXIT_INFRASTRUCTURE
+    })
+}
+
 fn once_gate(flags: &Flags, rest: &[String]) -> Option<i32> {
     let what: Option<String> = if flags.session.is_some() {
         Some("--session is refused in once-mode".to_owned())
@@ -10589,6 +10662,7 @@ mod tests {
             "help",
             "status",
             "doctor",
+            "tui",
             "--dry-run",
             "--verbose",
             "--multiplexer",

@@ -61,7 +61,8 @@ proxy-only channel”).
 Currently implemented: `init`, `edit` (D12), `version`, `help`, the bare
 form (entering the sandbox, see D2), `run -- COMMAND` for
 non-interactive use, `run --result -- COMMAND` (D17) for the
-machine-readable-outcome form, `gui [ARG...]` (D15), the handoff verbs
+machine-readable-outcome form, `gui [ARG...]` (D15), the opt-in session
+picker `tui` ([tui.md](./tui.md) T1), the handoff verbs
 `fetch NAME` / `merge NAME` / `push NAME [REMOTE]` / `diff NAME`
 ([workspace.md](./workspace.md) D6 — the host-side git plumbing between
 the host repo and a session's clone; no sandbox is started, the session
@@ -482,6 +483,14 @@ the inner `mysbx` understands (`mysbx gui --multiplexer herdr`),
 subcommands (`mysbx gui run -- ls`), anything. Only the inner process
 parses it, so only it can reject it.
 
+**`mysbx gui tui` needs nothing of its own** ([tui.md](./tui.md),
+resolved question 4): the session picker is a verb of the inner
+invocation, and the tail passes through verbatim, so the window
+renders the picker like any inner run — no window title, no size
+adaptation, nothing about `gui` knows the verb. It is recorded in the
+design note as working by construction, not polished; improving it is
+a later change.
+
 **No global flag before the verb.** The argv the outer invocation builds
 is the terminal's, not the sandbox's: `--dry-run` before `gui` has
 nothing to print, `--verbose` no run to report on, and `--multiplexer`
@@ -843,6 +852,17 @@ $ARGS` for the repo the cwd resolves to — resolution is unchanged
 `<repo>__worktrees`: both are created in a private temporary
 directory for one run and removed when it ends.
 
+**Superseded (the bare form).** The once bare form — `mysbx-once`
+with no arguments — used to dispatch straight into `RunMode::Once`,
+the interactive shell. It launches the session picker instead
+([tui.md](./tui.md) T8): seeded from the user layer alone (the
+sidecar layer is empty by construction), Enter dispatches into
+`RunMode::Once`, Esc or `q` exits `0` before any temp root exists.
+The spelled verb `mysbx-once tui` behaves the same — the once gate
+allows it — and everything else here (the temp root, the lifecycle,
+the refusal surface) is unchanged; the picker fills `Flags`, the
+once pipeline owns the rest.
+
 **This is D13's one explicit exception, and it keeps D13's
 intent**: nothing persistent is created on the host. The sidecar
 LAYER is empty (built-in defaults + user config + flags); an
@@ -890,13 +910,15 @@ inherited from its caller; after the payload, the teardown runs:
 whose state the temp root cannot carry): `init`, `edit`, `status`,
 the session and worktree noun groups, `fetch`/`merge`/`push`/
 `diff`, `attach`, `ssh-pubkey`, `--session`, `--result`/`--timeout`,
-`--detach`/`--detachable`. **Allowed**: the bare form, `run --
-CMD`, `gui` (the window's inner invocation carries the marker),
+`--detach`/`--detachable`. **Allowed**: the bare form — which
+launches the session picker ([tui.md](./tui.md) T8) — `run --
+CMD`, `tui` (the gate allows the verb), `gui` (the window's inner
+invocation carries the marker),
 `doctor` (it checks the user layer, reporting the sidecar as
 ignored), `diagnose egress` (it reads the HOST sidecar, D29),
 `version`/`help`, `--dry-run` — which creates nothing and
 prints the argv with a placeholder temp path — `--multiplexer`,
-`--backend`, `--ro`/`--rw`, `--verbose`.
+`--backend`, `--agent`/`--no-agent`, `--ro`/`--rw`, `--verbose`.
 
 **Ephemeral consequences, documented not worked around**: the
 state-dirs do not persist; the sandbox ssh keypair is new for each
@@ -1101,4 +1123,6 @@ would start, and the resolved agent reaches the entry scripts as
   and no background state beyond the sidecar and the runtime root
   (detach.md B9).
 - No interactive prompts; `mysbx` must be usable from scripts and from
-  agents.
+  agents. The one exception is the opt-in `tui` verb
+  ([tui.md](./tui.md) T1) — a session picker the operator asks for,
+  never a prompt a script meets.
