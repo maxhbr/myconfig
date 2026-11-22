@@ -334,17 +334,18 @@ in
             );
         }
       ];
-      myconfig.desktop.wayland.launcherCommands = builtins.concatMap
-        (h: [
-          "gui-et-${h}"
-          "gui-et-${h}-wg0"
-        ])
-        [
-          "p14"
-          "nuc"
-          "thing"
-          "workstation"
-        ];
+      myconfig.desktop.wayland.launcherCommands =
+        builtins.concatMap
+          (h: [
+            "gui-et-${h}"
+            "gui-et-${h}-wg0"
+          ])
+          [
+            "p14"
+            "nuc"
+            "thing"
+            "workstation"
+          ];
     }
     # {
     #   fileSystems."/home/${user}/imgwork2" = {
