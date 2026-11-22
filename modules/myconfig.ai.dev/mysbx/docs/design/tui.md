@@ -120,7 +120,11 @@ guards — fires
 as if the flags had been typed. A row the operator never TOUCHED
 leaves its `flags.*` unset, so the layers decide (cli.md D6
 precedence: flags > sidecar > user > defaults); the picker never
-freezes a decision the configuration owns.
+freezes a decision the configuration owns — and a row whose set
+carries a single value can never be touched at all (cycling it
+moves nothing), so Enter leaves it to the layers on every path,
+the pipeline's own refusals included (a backend-only host meets
+the same "no backend configured" `70` the bare form would).
 
 The terminal leaves raw mode (T6) BEFORE dispatch: the payload — or
 the refusing site — owns the terminal from there, and a refusal

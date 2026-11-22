@@ -49,6 +49,7 @@ pub mod status;
 
 use std::path::Path;
 pub mod toml;
+pub mod tui;
 pub mod worktreeverbs;
 
 /// The usage text.
