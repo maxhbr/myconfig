@@ -2406,8 +2406,9 @@ in
               host's own loopback.
 
               Legal only next to the broker channel: a run with rows
-              but without `backend = "bubblewrap"` +
-              `network = "proxy-only"` is refused (never
+              but without a broker-channel backend (`bubblewrap`,
+              `podman-gvisor`, `krun`, `microvm-qemu`, `microvm-ch`)
+              and `network = "proxy-only"` is refused (never
               accepted-and-ignored, D34's pairing rule). These seed
               the user layer; a sidecar adds rows, it cannot override
               one (the merge dedupes by name, first occurrence wins,

@@ -1649,11 +1649,11 @@ fn a_duplicated_row_name_is_refused_with_seventy() {
 }
 
 #[test]
-fn localhost_is_refused_as_a_row_name_with_a_usage_error() {
+fn localhost_is_refused_as_a_row_name_fail_closed() {
     // `localhost` inside the sandbox IS the relay's own listener
     // (bound over /etc/hosts) — a row under that name would shadow
-    // the model lane's endpoint with a forward to the host. Refused
-    // at parse time, exit 2, like every other shape violation.
+    // the model lane's endpoint with a forward to the host. A content
+    // refusal, exit 70, like the other row-name rules.
     let dir = run_dir("row-localhost");
     let (code, _stdout, stderr) = run(&[
         "--listen",
@@ -1761,5 +1761,11 @@ fn the_row_listen_block_names_every_row_in_a_deterministic_order() {
     assert!(
         log.find("a-svc").unwrap() < log.find("b-svc").unwrap(),
         "rows print sorted by name: {log}"
+    );
+    assert!(
+        log.contains(&format!(
+            "confined by Landlock to that one port plus the host-service rows' ports: {port}, 9443"
+        )),
+        "the fence line names every row port the fence grants: {log}"
     );
 }

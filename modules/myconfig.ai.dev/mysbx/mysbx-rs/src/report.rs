@@ -2251,38 +2251,43 @@ mod tests {
             npmrc: None,
             node_major: None,
         };
-        let joined = lines(&Report {
-            repo: &repo,
-            sidecar_exists: true,
-            user_config: Path::new("/synth/xdg/mysbx/config.toml"),
-            user_config_exists: true,
-            sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
-            sidecar_config_exists: false,
-            parent_configs: &[],
-            merged: &merged,
-            backend_from_cli: false,
-            user_mount_count: 1,
-            cli_mount_count: 0,
-            host_env: &host,
-            dropped_env: &[],
-            placeholder_env: &[],
-            reserved_env: &[],
-            params: &params,
-            bwrap_bin: "bwrap",
-            backend: "bubblewrap",
-            image: None,
-            payload: &Payload::Shell,
-            dry_run: true,
-            result: false,
-        })
-        .join("\n");
+        let render = |merged: &Merged| {
+            lines(&Report {
+                repo: &repo,
+                sidecar_exists: true,
+                user_config: Path::new("/synth/xdg/mysbx/config.toml"),
+                user_config_exists: true,
+                sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
+                sidecar_config_exists: false,
+                parent_configs: &[],
+                merged,
+                backend_from_cli: false,
+                user_mount_count: 1,
+                cli_mount_count: 0,
+                host_env: &host,
+                dropped_env: &[],
+                placeholder_env: &[],
+                reserved_env: &[],
+                params: &params,
+                bwrap_bin: "bwrap",
+                backend: "bubblewrap",
+                image: None,
+                payload: &Payload::Shell,
+                dry_run: true,
+                result: false,
+            })
+            .join("\n")
+        };
+        let joined = render(&merged);
         assert!(
             joined.contains("host-services:  my-mcp:8765, bd:9999"),
             "{joined}"
         );
-        // And the line is absent without rows (fixture_report's own
-        // renderings elsewhere pin that: no rows, no line).
-        let (_, empty, _) = fixture_report();
-        let _ = empty;
+        merged.host_services.clear();
+        let joined = render(&merged);
+        assert!(
+            !joined.contains("host-services:"),
+            "no rows, no line: {joined}"
+        );
     }
 }

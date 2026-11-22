@@ -259,6 +259,14 @@ impl Invocation {
                     .to_owned(),
             );
         }
+        if public && !host_services.is_empty() {
+            return Err(
+                "`--public` and `--host-service` are mutually exclusive: the public lane's \
+                 rule is the deny set, and a row is a second policy it cannot express \
+                 (docs/design/egress-host-services.md E15)"
+                    .to_owned(),
+            );
+        }
         Ok(Invocation {
             listen: listen.ok_or_else(|| format!("missing `--listen`\n{USAGE}"))?,
             upstream: upstream.ok_or_else(|| format!("missing `--upstream`\n{USAGE}"))?,
@@ -456,9 +464,10 @@ fn run(inv: &Invocation) -> Result<(), String> {
     // line names — the E10 rule the CONNECT table learned as review
     // finding 3. The rows are loopback-only, so the fence's port is
     // the only axis a row contributes; the addresses are pinned in
-    // the argv and never resolved. Applied regardless of the lane:
-    // rows and a table can coexist (the rows are forwards, not
-    // grants), so every lane's fence grows the row ports.
+    // the argv and never resolved. Rows and a table can coexist
+    // (the rows are forwards, not grants), so the table's fence and
+    // the plain broker's both grow the row ports; the public lane
+    // refuses rows at parse.
     let mut fence_ports = vec![inv.upstream.port()];
     fence_ports.extend(policy.dial_ports());
     for row in &host_services {
@@ -509,13 +518,28 @@ fn run(inv: &Invocation) -> Result<(), String> {
             return Err(e);
         }
     };
+    // The fence summary names the row ports too (E10's rule: the
+    // line says exactly what the fence grants, never less).
+    let fence_summary = if host_services.is_empty() {
+        policy.fence_summary()
+    } else {
+        format!(
+            "{} plus the host-service rows' ports: {}",
+            policy.fence_summary(),
+            host_services
+                .iter()
+                .map(|r| r.port().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    };
     log.record(
         "listen",
         &format!(
             "{} -> {}, confined by Landlock to {}",
             inv.listen.display(),
             inv.upstream,
-            policy.fence_summary()
+            fence_summary
         ),
     );
     if !host_services.is_empty() {
@@ -2034,6 +2058,7 @@ mod tests {
         for mixed in [
             vec!["--allow-domain", "github.com"],
             vec!["--allow-connect-port", "443"],
+            vec!["--host-service", "my-mcp=127.0.0.1:8080"],
         ] {
             let mut args = s(&[
                 "--listen",

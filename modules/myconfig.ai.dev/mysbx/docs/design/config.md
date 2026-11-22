@@ -2297,13 +2297,15 @@ CONNECTing the name explicitly. Full design:
 egress-host-services.md E15.
 
 Pairing (E7's rule on the new key): the rows are legal only on a
-Broker-channel backend (`bubblewrap`) under `network = "proxy-only"`;
-next to a shared, absent or `public` network, or on a non-Broker
-backend (`nono`, podman, microvm), the run is REFUSED
+Broker-channel backend (`bubblewrap`, `podman-gvisor`, `krun`,
+`microvm-qemu`, `microvm-ch`) under `network = "proxy-only"`; next to a
+shared, absent or `public` network, or on a backend without the broker
+channel (`nono`, `podman-krun`), the run is REFUSED
 (EXIT_INFRASTRUCTURE) — never a silently dropped row.
 
 Merge (D15's rule): the user layer's rows first, the sidecar's added,
 deduplicated by name keeping the first occurrence; a name spelled with
 DIFFERENT ports in two trusted layers is a merge refusal, not a
 first-win — either silent resolution would drop a row an operator
-wrote, and one selector cannot select two forwards.
+wrote, and one selector cannot select two forwards. A name repeated
+within ONE file is a schema error.

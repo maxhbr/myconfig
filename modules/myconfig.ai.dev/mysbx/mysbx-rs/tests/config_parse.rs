@@ -595,6 +595,10 @@ fn host_services_reject_wrong_shapes() {
             "[[host-services]]\nname = \"a/b\"\nport = 8\n",
         ),
         ("empty name", "[[host-services]]\nname = \"\"\nport = 8\n"),
+        (
+            "duplicate name in one file",
+            "[[host-services]]\nname = \"x\"\nport = 8\n[[host-services]]\nname = \"X\"\nport = 8\n",
+        ),
     ] {
         assert!(Config::parse(text).is_err(), "{why} must be refused");
     }

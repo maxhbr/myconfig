@@ -1099,9 +1099,9 @@ pub struct HostServiceRow {
 /// (D11) — `name` and `port` are both required, unknown keys and
 /// wrong types are errors naming the file, the key and the row. The
 /// per-row name shape check runs here so a bad name never reaches
-/// the merge; duplicate names are checked at MERGE time, where both
-/// layers are visible (the D15 dedupe is first-win, so a duplicate
-/// WITHIN one file is the only refusal the parse can see).
+/// the merge, and a name repeated WITHIN one file is a schema error;
+/// a name repeated ACROSS layers is the merge's to judge (D15's
+/// first-win, or a refusal when the ports differ).
 fn host_services(value: &Value) -> Result<Vec<HostServiceRow>, Error> {
     let items = value.as_array().ok_or_else(|| {
         Error::Schema(format!(
@@ -1145,10 +1145,14 @@ fn host_services(value: &Value) -> Result<Vec<HostServiceRow>, Error> {
         let port =
             port.ok_or_else(|| Error::Schema(format!("{at}: missing required key `port`")))?;
         host_service_name(&name, &at)?;
-        out.push(HostServiceRow {
-            name: name.to_ascii_lowercase(),
-            port,
-        });
+        let name = name.to_ascii_lowercase();
+        if out.iter().any(|r: &HostServiceRow| r.name == name) {
+            return Err(Error::Schema(format!(
+                "{at}: name `{name}` is already named by an earlier row — a row's \
+                 name selects exactly one forward (docs/design/config.md D34)"
+            )));
+        }
+        out.push(HostServiceRow { name, port });
     }
     Ok(out)
 }

@@ -52,9 +52,10 @@ mysbx-egress-broker --listen <run>/<name> --upstream 127.0.0.1:<port> \
   never resolved, never influenced by anything inside the sandbox, so
   the E9 rebinding/metadata concern has no foothold — the exemption is
   earned the same way the upstream's is.
-- **The name is the policy, exactly as for `allow-domains**: plain
+- **The name is the policy, exactly as for `allow-domains`**: plain
   host-name grammar, lower-cased at validation, deduplicated, and the
-  first-win rule on merge. A row's name may not collide with another
+  first-win rule on merge (a name two layers spell with DIFFERENT
+  ports is a merge refusal). A row's name may not collide with another
   row's, may not be an IP literal, may not carry scheme/path/port
   syntax, and may not be `localhost` — `localhost` inside the sandbox
   is the in-sandbox loopback (`egressEtc` binds `127.0.0.1 localhost`
@@ -74,9 +75,13 @@ mysbx-egress-broker --listen <run>/<name> --upstream 127.0.0.1:<port> \
   not survive. Host services on DIFFERENT ports are refused by the
   kernel with `EACCES`, and the log says only what the fence grants.
 - **The lane picker stays byte-exact.** A connection whose first bytes
-  are not a `CONNECT` request line keeps its two existing outcomes:
-  relayed to the model upstream (the phase-B lane) or, now, when the
-  CONNECT authority's host NAMES A ROW, tunneled to the row's target.
+  are not a `CONNECT` request line keeps its existing outcome: relayed
+  to the model upstream (the phase-B lane). A `CONNECT` whose
+  authority's host NAMES A ROW is tunneled to the row's target. The
+  consequence: a plain-HTTP forward-proxy request to a row name
+  (absolute-form `GET http://<row>:<port>/…`, no `CONNECT`) is NOT a
+  row request — it takes the model lane like any non-`CONNECT` bytes,
+  so a client reaches a row only by tunneling.
   The preface classifier and the tunnel tail are reused unchanged; a
   `CONNECT <row name>:<port>` where the port does not match the row's
   port is a `deny` (the row pins the port too — `CONNECT row:443`
@@ -88,7 +93,9 @@ mysbx-egress-broker --listen <run>/<name> --upstream 127.0.0.1:<port> \
   (`Allowlist::Broker` rows: bubblewrap, podman-gvisor, krun,
   microvm-qemu, microvm-ch); `shared`/`none`/`public` + the key is
   refused, nono stays refused (open decision 12), podman-krun stays
-  refused. A plain profile run with rows keeps the empty CONNECT
+  refused; the broker's own parse refuses `--public` next to
+  `--host-service` (exit 2), like `--public` next to the CONNECT
+  table. A plain profile run with rows keeps the empty CONNECT
   table — the rows are forwards, not grants, so they do not need
   `connect-ports` and do not inject proxy variables.
 - **No proxy-variable collision (E8/E13).** The rows do not trigger
