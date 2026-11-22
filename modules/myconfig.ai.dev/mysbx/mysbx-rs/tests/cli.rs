@@ -19011,6 +19011,10 @@ fn the_bare_once_picker_aborts_with_q_and_leaves_no_temp_root() {
     let (inv, _repo, _sidecar) = fixture_uninited("once-bare-picker", &[]);
     let runtime = inv.home.join("runtime");
     std::fs::create_dir_all(&runtime).unwrap();
+    // The termios probe's baseline — the `q` abort must restore it
+    // (Fix 3's abort-path half; the Enter and SIGTERM paths are the
+    // sibling tests').
+    let termios_before = pty_termios(master.as_raw_fd()).expect("the master carries termios");
     // The user layer `spawn_once` writes, spelled here because the
     // pty child's env is built from scratch (`env_clear` keeps the
     // fixture's HOME/XDG from leaking).
@@ -19073,6 +19077,12 @@ fn the_bare_once_picker_aborts_with_q_and_leaves_no_temp_root() {
         Some(0),
         "Esc/`q` exits 0 — nothing was started; pty said: {seen}"
     );
+    // Fix 3: raw mode was restored on the abort path too.
+    let termios_after = pty_termios(master.as_raw_fd()).expect("the master carries termios");
+    assert_eq!(
+        termios_before, termios_after,
+        "the `q` abort restored the termios"
+    );
     // No temp root: the picker only fills `Flags`; `sandbox()`'s
     // Once arm creates the root, and it never ran.
     let base = inv.home.join("runtime/mysbx-once");
@@ -19085,12 +19095,659 @@ fn the_bare_once_picker_aborts_with_q_and_leaves_no_temp_root() {
     );
 }
 
+/// The libc `termios` the test's `tcgetattr` probe reads — the
+/// same opaque-bytes shape the lib's tui.rs spells, mirrored here
+/// because the test crate is as dependency-free as the lib.
+#[repr(C)]
+#[derive(Clone, PartialEq, Eq, Debug)]
+struct TermiosRaw {
+    c_iflag: u32,
+    c_oflag: u32,
+    c_cflag: u32,
+    c_lflag: u32,
+    c_line: u8,
+    c_cc: [u8; 32],
+    c_ispeed: u32,
+    c_ospeed: u32,
+}
+
+/// `tcgetattr(3)` on the pty MASTER — on Linux the master reflects
+/// the pair's termios, so this is the test's window into what the
+/// child's raw-mode guard did to the slave. `None` when the fd is
+/// no terminal (the probe's own honest skip).
+fn pty_termios(master_fd: std::os::fd::RawFd) -> Option<TermiosRaw> {
+    extern "C" {
+        fn tcgetattr(fd: i32, termios_p: *mut TermiosRaw) -> i32;
+    }
+    let mut t = TermiosRaw {
+        c_iflag: 0,
+        c_oflag: 0,
+        c_cflag: 0,
+        c_lflag: 0,
+        c_line: 0,
+        c_cc: [0; 32],
+        c_ispeed: 0,
+        c_ospeed: 0,
+    };
+    // SAFETY: `tcgetattr` writes only the struct at `t`.
+    (unsafe { tcgetattr(master_fd, &mut t) } == 0).then_some(t)
+}
+
+/// Read the pty master until the child exits (or the deadline
+/// fails the test) — every failure path kills and reaps, so a
+/// stuck child FAILS instead of hanging.
+fn pty_drain_until_exit(
+    master: &mut std::fs::File,
+    child: &mut std::process::Child,
+    label: &str,
+) -> (String, std::process::ExitStatus) {
+    use std::io::{Read, Write};
+    let mut seen = String::new();
+    let mut buf = [0u8; 4096];
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        if std::time::Instant::now() > deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("{label}: the child never exited; pty said: {seen}");
+        }
+        let mut fds = [master.as_raw_fd()];
+        if pty_readable(&mut fds, 300) {
+            let n = master.read(&mut buf).unwrap_or(0);
+            if n == 0 {
+                break;
+            }
+            seen.push_str(&String::from_utf8_lossy(&buf[..n]));
+        }
+        if let Ok(Some(status)) = child.try_wait() {
+            // Drain once more for the tail the child wrote between
+            // the wait and here, then done.
+            while pty_readable(&mut fds, 100) {
+                let n = master.read(&mut buf).unwrap_or(0);
+                if n == 0 {
+                    break;
+                }
+                seen.push_str(&String::from_utf8_lossy(&buf[..n]));
+            }
+            return (seen, status);
+        }
+    }
+    let out =
+        pty_wait_with_deadline(child, std::time::Duration::from_secs(10)).unwrap_or_else(|| {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("{label}: the child never exited; pty said: {seen}")
+        });
+    (seen, out)
+}
+
+/// Wait until `needle` shows up in the pty's output (the
+/// readiness signal before a key is sent), draining as it arrives.
+/// Panics (after kill+reap) on the deadline — a picker that never
+/// renders must fail the test, never hang it.
+fn pty_wait_for(
+    master: &mut std::fs::File,
+    child: &mut std::process::Child,
+    needle: &str,
+    label: &str,
+) -> String {
+    use std::io::Read;
+    let mut seen = String::new();
+    let mut buf = [0u8; 4096];
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        if std::time::Instant::now() > deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("{label}: never saw `{needle}`; pty said: {seen}");
+        }
+        let mut fds = [master.as_raw_fd()];
+        if pty_readable(&mut fds, 300) {
+            let n = master.read(&mut buf).unwrap_or(0);
+            if n == 0 {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("{label}: the pty closed before `{needle}`; saw: {seen}");
+            }
+            seen.push_str(&String::from_utf8_lossy(&buf[..n]));
+        }
+        if seen.contains(needle) {
+            return seen;
+        }
+    }
+}
+
+/// The bare once picker's env-built-from-scratch Command — the same
+/// shape `the_bare_once_picker_aborts_with_q_and_leaves_no_temp_root`
+/// spells inline: `env_clear`, the fixture's HOME/XDG, a private
+/// runtime dir, `MYSBX_ONCE=1`, and the pty session.
+#[allow(clippy::too_many_arguments)]
+fn once_picker_under_pty(
+    home: &std::path::Path,
+    xdg: &std::path::Path,
+    cwd: &std::path::Path,
+    master_fd: std::os::fd::RawFd,
+    args: &[&str],
+) -> Command {
+    let runtime = home.join("runtime");
+    std::fs::create_dir_all(&runtime).unwrap();
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_mysbx"));
+    cmd.env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+        .env("HOME", home)
+        .env("XDG_CONFIG_HOME", xdg)
+        .env("XDG_RUNTIME_DIR", &runtime)
+        .env("MYSBX_ONCE", "1")
+        .args(args)
+        .current_dir(cwd);
+    unsafe {
+        set_session_with_pty(&mut cmd, master_fd);
+    }
+    cmd
+}
+
+#[test]
+fn the_once_picker_enter_runs_the_selected_backend_override() {
+    // Fix 4's regression: the Enter path composes the touched rows
+    // into `Flags` and dispatches through the REAL `sandbox()`
+    // pipeline — verified through an observable refusal, so no
+    // working sandbox backend is needed: the backend row starts at
+    // `bubblewrap` (the user layer's value) and one Right selects
+    // `nono`, whose BINARY is missing in the test env, so the
+    // pipeline's own spawn refusal (exit 70, naming the backend)
+    // proves the override crossed the Enter boundary — the untouched
+    // direction is the sibling test below. Also asserts the two
+    // Fix 3 invariants on the same run: the alt-screen LEAVE
+    // sequence precedes the pipeline's first output byte, and the
+    // master's termios is back to the pre-picker state after exit.
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture_uninited("once-picker-enter", &[]);
+    // The user layer the seed reads, spelled here because the pty
+    // child's env is built from scratch. The backend row is
+    // `MYSBX_ENABLED_BACKENDS` (the Nix wrapper's gate): two
+    // entries — `bubblewrap` (the seed's bracket) and
+    // `podman-gvisor`, a backend whose refusal NAMES it (the
+    // unpinned-image check, no working backend needed) — so one
+    // Right cycles to `podman-gvisor` and the Enter run's refusal
+    // names it, never the seeded `bubblewrap`.
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let before = pty_termios(master.as_raw_fd()).expect("the master carries termios");
+    let mut cmd = once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &[]);
+    cmd.env("MYSBX_ENABLED_BACKENDS", "bubblewrap podman-gvisor");
+    let mut child = cmd
+        .spawn()
+        .expect("failed to spawn the bare mysbx-once under a pty");
+    let mut master = master;
+    use std::io::Write;
+    let _seen = pty_wait_for(
+        &mut master,
+        &mut child,
+        "multiplexer",
+        "the picker never rendered",
+    );
+    // Focus starts on the backend row; one Right cycles bubblewrap
+    // (the seed's bracket) → podman-gvisor.
+    master.write_all(b"\x1b[C").unwrap();
+    // Re-render before Enter, so the cycle cannot race the read.
+    let _ = pty_wait_for(
+        &mut master,
+        &mut child,
+        "[podman-gvisor]",
+        "the cycle never rendered",
+    );
+    master.write_all(b"\r").unwrap();
+    let (seen, out) = pty_drain_until_exit(&mut master, &mut child, "the Enter run");
+    assert_eq!(
+        out.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "the selected backend's refusal is the pipeline's exit 70; pty said: {seen}"
+    );
+    assert!(
+        seen.contains("mysbx: podman-gvisor: no container image configured"),
+        "the refusal names the OVERRIDDEN backend (`podman-gvisor`), never the seeded `bubblewrap`: {seen}"
+    );
+    // Fix 3: the display restore precedes the pipeline's first byte.
+    let leave = seen
+        .find("\x1b[?1049l")
+        .unwrap_or_else(|| panic!("the alt-screen leave sequence was written: {seen}"));
+    let refusal = seen
+        .find("no container image configured")
+        .expect("checked above");
+    assert!(
+        leave < refusal,
+        "the leave sequence precedes the pipeline's output: {seen}"
+    );
+    // Fix 3: the master's termios (the pair's) is the pre-picker one.
+    let after = pty_termios(master.as_raw_fd()).expect("the master carries termios");
+    assert_eq!(
+        before, after,
+        "raw mode was restored after the Enter dispatch"
+    );
+}
+
+#[test]
+fn the_once_picker_enter_with_untouched_rows_leaves_the_layers_decide() {
+    // Fix 4's untouched-rows direction (T4): Enter with NOTHING
+    // touched composes all-`None` flags, so the run is EXACTLY a
+    // bare run — here the user layer's `bubblewrap`, whose binary
+    // the test env lacks, so the pipeline refuses with the SAME
+    // message a flagful bare `mysbx-once --backend bubblewrap` gets
+    // (pinned by the sibling invocation below): the picker added
+    // no decision of its own.
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture_uninited("once-picker-enter-untouched", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let mut cmd = once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &[]);
+    let mut child = cmd
+        .spawn()
+        .expect("failed to spawn the bare mysbx-once under a pty");
+    let mut master = master;
+    use std::io::Write;
+    let _ = pty_wait_for(
+        &mut master,
+        &mut child,
+        "multiplexer",
+        "the picker never rendered",
+    );
+    master.write_all(b"\r").unwrap();
+    let (seen, out) = pty_drain_until_exit(&mut master, &mut child, "the untouched Enter run");
+    assert_eq!(
+        out.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "the layers' decision (the missing bubblewrap binary) is the run's; pty said: {seen}"
+    );
+    assert!(
+        seen.contains("cannot exec the backend"),
+        "the refusal is the pipeline's own: {seen}"
+    );
+    // The very same refusal a flagful bare once run with the user
+    // layer's backend spelled out gets — Enter with untouched rows
+    // is that run, byte for byte.
+    let (code2, _stdout2, stderr2) = run_once(&inv, &["--backend", "bubblewrap"]);
+    assert_eq!(
+        code2,
+        mysbx::EXIT_INFRASTRUCTURE,
+        "the flagful bare run refuses too: {stderr2}"
+    );
+    assert!(
+        stderr2.contains("cannot exec the backend"),
+        "the flagful bare run gets the same refusal: {stderr2}"
+    );
+}
+
+#[test]
+fn a_coalesced_burst_in_one_write_decodes_key_by_key() {
+    // MINOR-2: the queue survival, pinned at the WIRED level. The
+    // pty writes ONE burst — `x` then `q` — in a single write,
+    // right after the render. A regression to a fresh reader per
+    // keypress drops the queue on the first decode: the `x`
+    // lands (a no-op char) and the `q` in the SAME read vanishes
+    // — the picker would sit there, this test would time out and
+    // kill it. With the one persistent reader both keys decode:
+    // the `q` aborts, exit `0`.
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture_uninited("once-picker-burst", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let mut cmd = once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &[]);
+    let mut child = cmd
+        .spawn()
+        .expect("failed to spawn the bare mysbx-once under a pty");
+    let mut master = master;
+    use std::io::Write;
+    let _ = pty_wait_for(
+        &mut master,
+        &mut child,
+        "multiplexer",
+        "the picker never rendered",
+    );
+    // The burst: both keys in ONE write, no sleep between them —
+    // the pty delivers them as one readable event, exactly the
+    // coalescing the decoder must survive.
+    master.write_all(b"xq").unwrap();
+    let (seen, out) = pty_drain_until_exit(&mut master, &mut child, "the burst's q abort");
+    assert_eq!(
+        out.code(),
+        Some(0),
+        "both keys of the burst decoded — the q aborted; pty said: {seen}"
+    );
+}
+
+#[test]
+fn an_idle_picker_keeps_running_instead_of_timing_out() {
+    // The Blocker-1 regression: the continuation deadline must gate
+    // ONLY the continuation reads of an incomplete sequence — the
+    // LEADING fill (the operator's next keypress) must block
+    // indefinitely. A deadline applied to the leading fill made the
+    // picker decode a spurious Esc ~25 ms after rendering and
+    // abort a sitting operator; this test renders the picker, sits
+    // idle for half a second (10× the deadline) with NO key sent,
+    // and asserts the child is STILL running — then `q` finishes
+    // normally. A regression re-aborts inside the sleep window and
+    // the still-running assert fails.
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture_uninited("once-picker-idle", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let mut cmd = once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &[]);
+    let mut child = cmd
+        .spawn()
+        .expect("failed to spawn the bare mysbx-once under a pty");
+    let mut master = master;
+    use std::io::{Read, Write};
+    let mut seen = String::new();
+    let mut buf = [0u8; 4096];
+    // Render = the readiness signal; drain everything it prints.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        if std::time::Instant::now() > deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("the picker never rendered; pty said: {seen}");
+        }
+        let mut fds = [master.as_raw_fd()];
+        if pty_readable(&mut fds, 300) {
+            let n = master.read(&mut buf).unwrap_or(0);
+            if n == 0 {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("the pty closed before the render; saw: {seen}");
+            }
+            seen.push_str(&String::from_utf8_lossy(&buf[..n]));
+        }
+        if seen.contains("multiplexer") {
+            break;
+        }
+    }
+    // The idle window: 500 ms, ten times the 25 ms continuation
+    // deadline — a leading-fill deadline would have decoded a
+    // spurious Esc (the abort bind) well inside this sleep and
+    // exited 0 by now.
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    match child.try_wait().expect("the child probe itself failed") {
+        Some(status) => panic!(
+            "the idle picker exited on its own ({status}); the leading fill must block, not time out; pty said: {seen}"
+        ),
+        None => {}
+    }
+    // Still alive — `q` must finish it normally, exit `0`.
+    master.write_all(b"q").unwrap();
+    let (tail, out) = pty_drain_until_exit(&mut master, &mut child, "the idle picker's q exit");
+    seen.push_str(&tail);
+    assert_eq!(
+        out.code(),
+        Some(0),
+        "the idle picker aborted cleanly on q (never earlier); pty said: {seen}"
+    );
+}
+
+#[test]
+fn esc_at_the_not_inited_prompt_leaves_the_repo_untouched() {
+    // Fix 2: Esc at the not-inited confirmation aborts with `0` and
+    // the repo as it was — no sidecar `config.toml` was created
+    // (the abort must not re-seed or run init).
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    let (inv, repo, sidecar) = fixture_uninited("tui-esc-notinited", &["tui"]);
+    let _ = repo;
+    let mut cmd =
+        once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &["tui"]);
+    // The plain (not once) `mysbx tui` form: no MYSBX_ONCE.
+    cmd.env_remove("MYSBX_ONCE");
+    let mut child = cmd.spawn().expect("failed to spawn mysbx tui under a pty");
+    let mut master = master;
+    use std::io::Write;
+    let _ = pty_wait_for(
+        &mut master,
+        &mut child,
+        "Enter runs `mysbx init`",
+        "the confirmation never rendered",
+    );
+    master.write_all(b"\x1b").unwrap();
+    let (seen, out) = pty_drain_until_exit(&mut master, &mut child, "the Esc abort");
+    assert_eq!(
+        out.code(),
+        Some(0),
+        "Esc aborts with `0` — nothing was started; pty said: {seen}"
+    );
+    assert!(
+        !sidecar.join("config.toml").exists(),
+        "the abort created no sidecar config; pty said: {seen}"
+    );
+}
+
+#[test]
+fn successful_init_reseeds_without_launching() {
+    // Fix 2's success direction: Enter at the not-inited prompt runs
+    // `mysbx init`, the loop RE-SEEDS and renders the picker again
+    // — WITHOUT launching — so the operator sees the rows the
+    // fresh sidecar's existence now lets through. The re-render is
+    // the observable: init's `## created:` report, then the picker
+    // header again — no pipeline output between them — and `q`
+    // then aborts with `0`, nothing launched, with the sidecar
+    // config init wrote left in place.
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    let (inv, _repo, sidecar) = fixture_uninited("tui-init-reseed", &["tui"]);
+    // The D13 gate keys on the config file EXISTING, and the
+    // UNINITED fixture creates only the sidecar DIRECTORY — the
+    // Enter is what creates the config, the honest drive.
+    let mut cmd =
+        once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &["tui"]);
+    cmd.env_remove("MYSBX_ONCE");
+    let mut child = cmd.spawn().expect("failed to spawn mysbx tui under a pty");
+    let mut master = master;
+    use std::io::Write;
+    let _ = pty_wait_for(
+        &mut master,
+        &mut child,
+        "Enter runs `mysbx init`",
+        "the confirmation never rendered",
+    );
+    master.write_all(b"\r").unwrap();
+    // init's `## created:` line, then the picker's re-render — the
+    // re-seed proof: the picker drew again (no launch happened),
+    // seeded from the layers the fresh sidecar now takes part in.
+    let seen = pty_wait_for(
+        &mut master,
+        &mut child,
+        "## created:",
+        "init never reported its create",
+    );
+    let _ = seen;
+    let seen = pty_wait_for(
+        &mut master,
+        &mut child,
+        "mysbx tui — pick this session's sandbox",
+        "the picker did not re-render after init",
+    );
+    assert!(
+        !seen.contains("cannot exec the backend"),
+        "no launch happened between init and the re-render: {seen}"
+    );
+    // And the re-rendered picker aborts like any other.
+    master.write_all(b"q").unwrap();
+    let (seen, out) = pty_drain_until_exit(&mut master, &mut child, "the post-init abort");
+    assert_eq!(
+        out.code(),
+        Some(0),
+        "the re-seeded picker aborts with `0`; pty said: {seen}"
+    );
+    assert!(
+        sidecar.join("config.toml").exists(),
+        "init created the sidecar config; pty said: {seen}"
+    );
+}
+
+#[test]
+fn a_sidecar_creation_failure_exits_70_after_one_enter() {
+    // Fix 2's failure direction: a FAILED init propagates its own
+    // exit code (70) after the ONE Enter — no second prompt, no
+    // re-seed, no launch. The failure: `<repo>.mysbx` is occupied
+    // by a regular FILE, so `init`'s sidecar creation fails.
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    let base = tmpdir("tui-init-fail");
+    let (repo, sidecar) = make_repo(&base, "repo");
+    // The collision: the sidecar path is a file, not a directory.
+    std::fs::remove_dir(&sidecar).unwrap();
+    std::fs::write(&sidecar, "occupied").unwrap();
+    std::fs::create_dir_all(base.join("home")).unwrap();
+    std::fs::create_dir_all(base.join("xdg")).unwrap();
+    let inv = Invocation {
+        args: vec!["tui"],
+        cwd: repo,
+        home: base.join("home"),
+        xdg: base.join("xdg"),
+    };
+    let mut cmd =
+        once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &["tui"]);
+    cmd.env_remove("MYSBX_ONCE");
+    let mut child = cmd.spawn().expect("failed to spawn mysbx tui under a pty");
+    let mut master = master;
+    use std::io::Write;
+    let mut before_enter = pty_wait_for(
+        &mut master,
+        &mut child,
+        "Enter runs `mysbx init`",
+        "the confirmation never rendered",
+    );
+    master.write_all(b"\r").unwrap();
+    let (seen, out) = pty_drain_until_exit(&mut master, &mut child, "the failed init");
+    assert_eq!(
+        out.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "the failed init's own exit code propagated; pty said: {before_enter}{seen}"
+    );
+    assert!(
+        seen.contains("mysbx: cannot create"),
+        "init's failure message printed once: {before_enter}{seen}"
+    );
+    // ONE prompt, no second: the confirmation text appears exactly
+    // once in the WHOLE transcript (the pre-Enter bytes included —
+    // a re-seed loop would have drawn it again).
+    before_enter.push_str(&seen);
+    let prompts = before_enter.matches("Enter runs `mysbx init`").count();
+    assert_eq!(
+        prompts, 1,
+        "no second prompt after the failed init: {before_enter}"
+    );
+}
+
+#[test]
+fn sigterm_under_the_picker_restores_the_terminal() {
+    // Fix 3's signal half: while the picker owns the TTY, a
+    // catchable termination (SIGTERM here) must restore the
+    // termios (and the display) BEFORE the default disposition
+    // re-raises — so the shell's terminal survives the kill and
+    // the exit status stays the killed-by-signal one. The master
+    // reflects the pair's termios on Linux: read it before spawn,
+    // while the picker holds raw mode, and after the reaped exit.
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture_uninited("once-picker-sigterm", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let before = pty_termios(master.as_raw_fd()).expect("the master carries termios");
+    let mut cmd = once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &[]);
+    let mut child = cmd
+        .spawn()
+        .expect("failed to spawn the bare mysbx-once under a pty");
+    let mut master = master;
+    let _ = pty_wait_for(
+        &mut master,
+        &mut child,
+        "multiplexer",
+        "the picker never rendered",
+    );
+    // The picker holds raw mode now: the master's termios shows it
+    // (echo off) — the mid-flight probe the restoration is checked
+    // against.
+    let mid = pty_termios(master.as_raw_fd()).expect("the master carries termios");
+    assert_ne!(before, mid, "the picker put the pair in raw mode");
+    // SIGTERM, then reap: the handler ran before the default kill.
+    unsafe {
+        libc_kill(child.id(), 15);
+    }
+    let (seen, out) = pty_drain_until_exit(&mut master, &mut child, "the SIGTERM kill");
+    use std::os::unix::process::ExitStatusExt;
+    assert_eq!(
+        out.signal(),
+        Some(15),
+        "the exit status stays the killed-by-SIGTERM one; pty said: {seen}"
+    );
+    let after = pty_termios(master.as_raw_fd()).expect("the master carries termios");
+    assert_eq!(
+        before, after,
+        "SIGTERM restored the termios on the way out; pty said: {seen}"
+    );
+    assert!(
+        seen.contains("\x1b[?1049l"),
+        "SIGTERM restored the display (the alt-screen leave) too: {seen}"
+    );
+}
+
 /// Whether one of `fds` is readable within `millis` — `select(2)`
-/// through the raw libc symbol, the pty test's read budget.
+/// through the raw libc symbol, the pty test's read budget. The
+/// fd_set word indexing is `fd / 64` (the bit is `fd % 64`): a
+/// master numbered 64 or higher lives in the SECOND `fds_bits`
+/// word, and a set that always watched word zero polled the wrong
+/// fd — a silent hang for high-numbered masters.
 fn pty_readable(fds: &mut [std::os::fd::RawFd; 1], millis: u64) -> bool {
+    // The fd_set covers fds 0..1024 (16 × 64-bit words); a master
+    // at 1024 or higher would index past the set — the tests
+    // never plausibly hold that many fds, and the assert makes a
+    // violation loud instead of a silent wrong-fd poll.
+    debug_assert!(
+        (fds[0] as usize) < 1024,
+        "fd {} exceeds the select fd_set",
+        fds[0]
+    );
     unsafe {
         let mut set = std::mem::zeroed::<FdSetRaw>();
-        set.fds_bits[0] = 1u64 << (fds[0] % 64);
+        set.fds_bits[(fds[0] / 64) as usize] = 1u64 << (fds[0] % 64);
         let mut tv = TimeValRaw {
             secs: (millis / 1000) as i64,
             micros: ((millis % 1000) * 1000) as i64,
