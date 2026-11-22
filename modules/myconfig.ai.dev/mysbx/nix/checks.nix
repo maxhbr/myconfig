@@ -2553,9 +2553,7 @@ in
       # removing its `extraFiles` entry would leave the mount count and
       # mode of the eval phase unchanged — only the realised tree shows
       # the empty directory. One path per configuration.
-      trMountedFile = "${
-        (builtins.head trMounts).path
-      }";
+      trMountedFile = "${(builtins.head trMounts).path}";
       # The host must not deploy the file: it is sandbox-only content
       # (`extraFiles`), the host's copy stays runtime-managed via
       # `pi mcp add`. Both spellings of the home.file key are checked,
