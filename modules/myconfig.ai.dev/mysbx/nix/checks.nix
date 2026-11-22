@@ -2303,7 +2303,7 @@ in
         map (sub: "/mysbx-home/${sub}") (
           (import ../../programs/pi-sandbox-subtrees.nix {
             config = cfg;
-            inherit lib;
+            inherit lib pkgs;
           }).subtrees
         );
       # The sandbox-only target paths, from the same shared contract the
@@ -2312,7 +2312,7 @@ in
       sandboxOnlyFiles =
         (import ../../programs/pi-sandbox-subtrees.nix {
           config = cfg;
-          inherit lib;
+          inherit lib pkgs;
         }).sandboxOnlyFiles;
       cfg = self.nixosConfigurations.test-f13.config;
       thinkrailOnlyCfg =

@@ -42,11 +42,15 @@ let
   # The mounted pi-config subtrees, shared with the modules whose payload
   # embeds pi's engine (programs.thinkrail.nix) so both describe ONE set
   # — see ../pi-sandbox-subtrees.nix.
-  mysbxPiSubtrees = (import ../pi-sandbox-subtrees.nix { inherit config lib; }).subtrees;
+  mysbxPiSubtrees = (import ../pi-sandbox-subtrees.nix { inherit config lib pkgs; }).subtrees;
+  # The gate/path/content triple of the sandbox mcp.json mount, from the
+  # shared generator — the same import the subtrees list (above) gates
+  # on, so `subtrees` and `extraFiles` below cannot drift.
+  piMcp = import ../pi-mcp-servers.nix { inherit config lib pkgs; };
   # The sandbox-only files that ride `extraFiles` (the trust extension
   # among them) — the shared contract the check asserts against.
   mysbxPiSandboxOnlyFiles =
-    (import ../pi-sandbox-subtrees.nix { inherit config lib; }).sandboxOnlyFiles;
+    (import ../pi-sandbox-subtrees.nix { inherit config lib pkgs; }).sandboxOnlyFiles;
 
   # Jail library handle + the jail-to-host channel combinator. The combinator
   # exposes a program *inside* the jail that forwards its single argument over
@@ -1644,6 +1648,13 @@ let
   #      the sidecar, and a state entry is always a directory, so the
   #      files could not be persisted this way anyway).
   #
+  #   5. pi's MCP server definitions reach the sandbox -> the rendered
+  #      `~/.pi/agent/mcp.json` (bd myconfig-9y4c). Source is
+  #      home-manager's `programs.mcp.servers` registry, rendered by the
+  #      shared `../pi-mcp-servers.nix` generator and mounted from the
+  #      sandbox tree via `extraFiles` — never `home.file`, so the
+  #      host's copy stays runtime-managed via `pi mcp add`.
+  #
   # What is mounted: one read-only mount per pi-config subtree, from the
   # self-contained store tree built by the shared `sandbox-config.nix`
   # helper (NOT the host home — see `mysbxSandboxConfig` below).
@@ -1699,8 +1710,12 @@ let
     # `mysbxTrustExtension` is the sanctioned-exception pattern this
     # parameter exists for: content the sandbox needs but the host must
     # never deploy. Keep it OUT of `home.file` (see the comment above).
+    # pi's mcp.json rides the same way (bd myconfig-9y4c): the host's
+    # copy stays runtime-managed via `pi mcp add`, the sandbox gets the
+    # registry rendered from the shared generator.
     extraFiles =
-      mysbxPiSkillsBundle
+      (lib.optionalAttrs piMcp.enable { ${piMcp.path} = piMcp.json; })
+      // mysbxPiSkillsBundle
       // (builtins.listToAttrs (
         map (f: lib.nameValuePair f mysbxTrustExtension) mysbxPiSandboxOnlyFiles
       ));

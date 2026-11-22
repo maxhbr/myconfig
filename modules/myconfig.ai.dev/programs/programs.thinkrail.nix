@@ -45,7 +45,11 @@ let
   # win (../../mysbx/mysbx-rs/src/nono.rs), so two lists would silently
   # hand the payload a mixture of two store trees ordered by module
   # merge order.
-  mysbxThinkrailSubtrees = (import ./pi-sandbox-subtrees.nix { inherit config lib; }).subtrees;
+  mysbxThinkrailSubtrees = (import ./pi-sandbox-subtrees.nix { inherit config lib pkgs; }).subtrees;
+  # The gate/path/content of the sandbox mcp.json mount, from the same
+  # shared generator the subtrees list gates on — `subtrees` and the
+  # `extraFiles` entry below cannot drift.
+  piMcp = import ./pi-mcp-servers.nix { inherit config lib pkgs; };
 
   # Like pi's integration: copies of the home-manager-deployed config,
   # NOT the host home (the podman-gvisor backend mounts nothing from the
@@ -75,7 +79,10 @@ let
       homeDirectory = config.home-manager.users.mhuber.home.homeDirectory;
       subtrees = mysbxThinkrailSubtrees;
       name = "thinkrail-sandbox-config";
-      extraFiles = hmSkillsBundle;
+      # pi's mcp.json rides `extraFiles`, exactly like pi's own
+      # integration (bd myconfig-9y4c): the host copy stays
+      # runtime-managed, the sandbox gets the rendered registry.
+      extraFiles = (lib.optionalAttrs piMcp.enable { ${piMcp.path} = piMcp.json; }) // hmSkillsBundle;
     }).mounts;
 
   # pi's own mysbx integration mounts the SAME subtrees (`mysbxPiMounts`
