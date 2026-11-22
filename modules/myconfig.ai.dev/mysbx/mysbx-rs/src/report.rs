@@ -887,7 +887,6 @@ fn infrastructure(key: &str, display_on: bool) -> bool {
         // prefix test.
         || key == "MYSBX_AGENT_KIND"
         || key == "MYSBX_AGENT_COMMAND"
-        || key == "MYSBX_AGENT_ARGC"
         || key.starts_with("MYSBX_AGENT_ARG")
         || key == "SSL_CERT_FILE"
         || key == "GIT_SSL_CAINFO"

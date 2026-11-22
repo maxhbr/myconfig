@@ -100,26 +100,6 @@ let
 
   # The agent start tail of the relocation subshell (bd
   # myconfig-fv4h, config.md D32): when the argv builder resolved an
-  # agent for this run (`MYSBX_AGENT_KIND` and friends are set),
-  # start it in the new workspace's ROOT pane over the socket API —
-  # herdr has no config key for an initial command. The block is
-  # AGENT-AGNOSTIC: the command and its arguments arrive as
-  # `MYSBX_AGENT_COMMAND`/`MYSBX_AGENT_ARG1..N` (one variable per
-  # argument, so nothing here ever word-splits or evals), and without
-  # an agent the tail is the plain create-and-retry loop, so a no-agent
-  # run keeps the byte-identical behavior the checks pin. The pane id
-  # comes from the `workspace create` JSON answer,
-  # `.result.root_pane.pane_id` (`pane split` answers a DIFFERENT
-  # shape, `.result.pane.pane_id`).
-  #
-  # `agent start` needs the pane's shell at its interactive prompt,
-  # so `agent_not_ready` right after the create is expected and
-  # retried — at a 1 s cadence, never faster: every `herdr` CLI costs
-  # mediated bind/connect tokens (nono bucket, bd myconfig-27o).
-  # NOTE: `--kind` and the agent NAME both take the resolved kind —
-  # the argv pin and herdr's own registry agree on the spelling.
-  # The agent start tail of the relocation subshell (bd
-  # myconfig-fv4h, config.md D32): when the argv builder resolved an
   # agent for this run (`MYSBX_AGENT_KIND` and friends are set), start
   # it in the new workspace's ROOT pane over the socket API — herdr
   # has no config key for an initial command. The block is
