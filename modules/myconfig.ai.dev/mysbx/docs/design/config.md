@@ -2237,10 +2237,19 @@ D6). A stdio server's binary rides `extra-tools`, its secrets ride
 `forward-env-vars` — `{env:NAME}` placeholders become `${NAME}` in the
 render — and a remote server needs a `network` policy that permits it.
 The rendered file is sandbox-only store content; the host's copy stays
-runtime-managed (`pi mcp add`). A project-level `.pi/mcp.json` inside
-the sandbox stays repo-untrusted content exactly as D3 holds for
-anything under the repo — the user-level mount above is the only
-trusted half. The drift hazard this design closes: a subtree listed
-without its `extraFiles` entry materializes an EMPTY DIRECTORY named
-`mcp.json`, which pi fails to parse — hence gate, path and content
-come from one shared generator, and `mysbx-mcp-mounts-test` pins it.
+runtime-managed (`pi mcp add`). The user-level mount is the trusted
+HALF of pi's two-layer registry, not the only one pi loads: the
+sandbox's trust extension auto-answers pi's project-trust prompt
+(`mysbxTrustExtension` in
+`myconfig.ai.dev/programs/programs.pi-coding-agent/default.nix`),
+so pi ALSO reads a project-level `.pi/mcp.json` inside the mounted
+repo — and a project entry REPLACES a same-named user entry (upstream
+docs/mcp.md). That is accepted runtime behavior under the
+project-trust doctrine: inside a mysbx jail, trusting the repo grants
+nothing the confinement does not already enforce (the same reasoning
+that auto-answers the prompt), and the repo could ship its own agent
+definitions either way. The drift hazard this design closes: a
+subtree listed without its `extraFiles` entry materializes an EMPTY
+DIRECTORY named `mcp.json`, which pi fails to parse — hence gate,
+path and content come from one shared generator, and
+`mysbx-mcp-mounts-test` pins it.

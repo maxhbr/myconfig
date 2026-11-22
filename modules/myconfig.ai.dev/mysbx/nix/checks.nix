@@ -2548,6 +2548,14 @@ in
           (builtins.head (builtins.filter (m: m.dest == "/mysbx-home/.pi/agent/extensions") allPiMounts))
           .path;
       mountedFile = "${sandboxTree}/.pi/agent/mcp.json";
+      # The drift catcher needs EVERY owner's tree, not just pi's:
+      # thinkrail's mount points into thinkrail's own derivation, and
+      # removing its `extraFiles` entry would leave the mount count and
+      # mode of the eval phase unchanged — only the realised tree shows
+      # the empty directory. One path per configuration.
+      trMountedFile = "${
+        (builtins.head trMounts).path
+      }";
       # The host must not deploy the file: it is sandbox-only content
       # (`extraFiles`), the host's copy stays runtime-managed via
       # `pi mcp add`. Both spellings of the home.file key are checked,
@@ -2605,7 +2613,7 @@ in
     in
     pkgs.runCommand "mysbx-mcp-mounts-test"
       {
-        inherit evalGate mountedFile sandboxTree;
+        inherit evalGate mountedFile trMountedFile;
         nativeBuildInputs = with pkgs; [
           gnugrep
           jq
@@ -2619,14 +2627,17 @@ in
 
         [ "$evalGate" = ok ] || { echo "mysbx-mcp-mounts-test: eval gate: $evalGate" >&2; exit 1; }
 
-        # The drift catcher: the dest must be a real FILE in the tree.
-        # A subtree listed without its extraFiles entry materializes an
-        # empty DIRECTORY here, and pi fails to parse it.
-        test -f "$mountedFile" || fail ".pi/agent/mcp.json is missing from the pi-sandbox-config tree, or is a directory (subtree/extraFiles drift)"
-
-        # The rendered content must carry the seeded server.
-        jq -e '.mcpServers.context7.url' "$mountedFile" >/dev/null \
-          || fail "the rendered mcp.json does not name mcpServers.context7.url: $(cat "$mountedFile")"
+        # The drift catcher: the dest must be a real FILE in EVERY
+        # owner's tree. A subtree listed without its extraFiles entry
+        # materializes an empty DIRECTORY there, and pi fails to parse
+        # it — so each configuration's own mount path is probed, not a
+        # path reconstructed from pi's tree.
+        for f in "$mountedFile" "$trMountedFile"; do
+          test -f "$f" || fail "$f is missing from its sandbox-config tree, or is a directory (subtree/extraFiles drift)"
+          # The rendered content must carry the seeded server.
+          jq -e '.mcpServers.context7.url' "$f" >/dev/null \
+            || fail "$f does not name mcpServers.context7.url: $(cat "$f")"
+        done
 
         mkdir "$out"
       '';

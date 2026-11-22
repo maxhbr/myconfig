@@ -37,15 +37,20 @@ let
 
   # home-manager's shared placeholder spelling is `{env:NAME}` (see
   # modules/programs/mcp.nix of the home-manager input), pi's is
-  # `${NAME}` (upstream docs/mcp.md). Anchored: the match must span the
-  # WHOLE value, so a placeholder embedded in a longer string is left
-  # alone rather than silently mangled by a blanket `}` rewrite.
+  # `${NAME}` (upstream docs/mcp.md). Every valid occurrence is
+  # translated, embedded ones included: the common real-world shape
+  # is `Bearer {env:TOKEN}`, whose braces would reach pi unchanged and
+  # leave the header literal (forward-env cannot help). A `{env:…}`
+  # whose NAME is not an identifier is left alone rather than
+  # mangled by a blanket `}` rewrite.
   rewritePlaceholder =
     value:
     let
-      m = builtins.match "^[{]env:([A-Za-z_][A-Za-z0-9_]*)[}]$" value;
+      # builtins.split yields alternating plain segments and, per
+      # match, a list of the capture groups — here the single NAME.
+      render = part: if builtins.isList part then "\${${builtins.elemAt part 0}}" else part;
     in
-    if m == null then value else "\${${builtins.head m}}";
+    lib.concatStrings (map render (builtins.split "[{]env:([A-Za-z_][A-Za-z0-9_]*)[}]" value));
 
   # A file ref (`env.<name>.file`) cannot ride a read-only store tree:
   # the rendered JSON names a host path the sandbox cannot read (and
@@ -82,6 +87,12 @@ let
       }
       // lib.optionalAttrs (s ? description) { inherit (s) description; }
       // lib.optionalAttrs (s ? timeout) { inherit (s) timeout; }
+      # pi's tool-exposure fields, passed through verbatim: pi defaults
+      # a missing `exposure` to `codemode`, so dropping a server set
+      # `hidden` here would silently make its tools callable in the
+      # sandbox.
+      // lib.optionalAttrs (s ? exposure) { inherit (s) exposure; }
+      // lib.optionalAttrs (s ? toolExposure) { inherit (s) toolExposure; }
       // {
         enabled =
           if s ? enabled && s.enabled != null then
