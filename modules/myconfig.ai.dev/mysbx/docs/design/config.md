@@ -2223,3 +2223,24 @@ text is byte-identical to the pre-D32 one. Eval assertions
 demand a configured kind be registered, match the grammar, and
 not collide with a reserved CLI word (the `--<kind>` shorthand
 must not shadow `--backend`, `--multiplexer` or the flag words).
+
+### D33: MCP is mounted tooling, not a config key (bd myconfig-9y4c)
+
+The sandbox's MCP server definitions reach the payload the same way
+every other agent tooling does — mounts plus PATH plus forwarded env —
+with NO dedicated `config-schema` key: `programs.mcp.servers` is
+home-manager's single source of truth, rendered into pi's user-level
+`.pi/agent/mcp.json` by the shared generator
+(`myconfig.ai.dev/programs/pi-mcp-servers.nix`) and mounted read-only
+via the user config layer's mounts (`mkSandboxConfig` `extraFiles`,
+D6). A stdio server's binary rides `extra-tools`, its secrets ride
+`forward-env-vars` — `{env:NAME}` placeholders become `${NAME}` in the
+render — and a remote server needs a `network` policy that permits it.
+The rendered file is sandbox-only store content; the host's copy stays
+runtime-managed (`pi mcp add`). A project-level `.pi/mcp.json` inside
+the sandbox stays repo-untrusted content exactly as D3 holds for
+anything under the repo — the user-level mount above is the only
+trusted half. The drift hazard this design closes: a subtree listed
+without its `extraFiles` entry materializes an EMPTY DIRECTORY named
+`mcp.json`, which pi fails to parse — hence gate, path and content
+come from one shared generator, and `mysbx-mcp-mounts-test` pins it.

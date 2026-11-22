@@ -795,6 +795,18 @@ Like pi, opencode keeps its sessions and its credentials in separate
 paths, so the session state can be persisted without the credentials
 following it.
 
+MCP server definitions are not per-agent wiring but part of the same
+pattern: they come from home-manager's registry
+(`programs.mcp.servers`, the single source of truth), are rendered
+into pi's user-level shape by the shared
+[`pi-mcp-servers.nix`](../../programs/pi-mcp-servers.nix) generator
+and mounted read-only into the sandbox at `.pi/agent/mcp.json` via
+`mkSandboxConfig`'s `extraFiles` — sandbox-only, the host's copy stays
+runtime-managed via `pi mcp add`. The mount exists exactly when the
+registry renders non-empty content; the `myconfig.ai.dev.mysbx.mcp`
+option seeds `programs.mcp.enable` for hosts that install neither
+opencode nor claude-code.
+
 `hermes` ([`hermes-agent/mysbx.nix`](../hermes-agent/mysbx.nix)) is wired
 in the same way, with one deliberate difference: nothing of the host
 `~/.hermes` is mounted. hermes keeps `config.yaml`, `.env`, `auth.json`,
