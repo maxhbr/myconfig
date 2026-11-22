@@ -2471,6 +2471,166 @@ in
         mkdir "$out"
       '';
 
+  # The MCP-in-mysbx mount gate (bd myconfig-9y4c.5): the sandbox-only
+  # `.pi/agent/mcp.json` must exist EXACTLY when the home-manager MCP
+  # registry renders non-empty content, and it must be a real FILE —
+  # the drift catcher between the shared subtree list
+  # (../../programs/pi-sandbox-subtrees.nix) and the per-caller
+  # `extraFiles` entries (programs.pi-coding-agent/default.nix,
+  # programs.thinkrail.nix). A subtree listed without its extraFiles
+  # entry makes `mkSandboxConfig` materialize an EMPTY DIRECTORY named
+  # `mcp.json`, which pi fails to parse — the exact failure this check
+  # exists to catch in CI instead of in a sandboxed session.
+  #
+  # Note the gate: the mount is driven by registry CONTENT (the shared
+  # pi-mcp-servers.nix generator gates on `servers != {}`), NOT by the
+  # `myconfig.ai.dev.mysbx.mcp` option — that option only seeds
+  # `programs.mcp.enable` so hosts without opencode/claude-code still
+  # build the registry. So the reference host asserts the MOUNTED case
+  # (test-f13 seeds context7 through programs.mcp.servers.nix), and the
+  # opt-out arm below EMPTIES the registry (not the option) to prove the
+  # mount disappears with it.
+  #
+  # Both legitimate owners of the dest are asserted: pi's integration
+  # (reference host) and thinkrail's (the thinkrail-only variant, pi
+  # disabled — the same arm mysbx-pi-mounts-test uses).
+  mysbx-mcp-mounts-test =
+    let
+      lib = inputs.nixpkgs.lib;
+      mcpDest = "/mysbx-home/.pi/agent/mcp.json";
+      mountsOf = cfg: builtins.filter (m: m.dest == mcpDest) cfg.myconfig.ai.dev.mysbx.config.mounts;
+      cfg = self.nixosConfigurations.test-f13.config;
+      # The thinkrail-only variant, as in mysbx-pi-mounts-test above.
+      thinkrailOnlyCfg =
+        (self.nixosConfigurations.test-f13.extendModules {
+          modules = [
+            {
+              myconfig.ai.dev.pi-coding-agent.enable = lib.mkForce false;
+            }
+          ];
+        }).config;
+      # The empty-registry arm: overrides the shared seed so the
+      # generator renders nothing, and the mount must vanish. (Turning
+      # off `myconfig.ai.dev.mysbx.mcp` instead would change nothing —
+      # it gates the registry's existence, not the mount.)
+      emptyRegistryCfg =
+        (self.nixosConfigurations.test-f13.extendModules {
+          modules = [
+            {
+              home-manager.sharedModules = [
+                {
+                  programs.mcp.servers = lib.mkForce { };
+                }
+              ];
+            }
+          ];
+        }).config;
+      # Realise-proof inputs for the build phase: the mounted file and
+      # the tree it comes from.
+      piMcp = (
+        import ../../programs/pi-mcp-servers.nix {
+          inherit (self.nixosConfigurations.test-f13) config;
+          inherit lib;
+          pkgs = pkgs;
+        }
+      );
+      piMounts = mountsOf cfg;
+      trMounts = mountsOf thinkrailOnlyCfg;
+      emptyMounts = mountsOf emptyRegistryCfg;
+      # The store tree the mount binds from, derived the same way as in
+      # mysbx-pi-mounts-test (from the extensions mount, whose dest only
+      # pi's tree carries).
+      allPiMounts = builtins.filter (
+        m: lib.hasPrefix "/mysbx-home/.pi" m.dest
+      ) cfg.myconfig.ai.dev.mysbx.config.mounts;
+      sandboxTree =
+        lib.removeSuffix "/.pi/agent/extensions"
+          (builtins.head (builtins.filter (m: m.dest == "/mysbx-home/.pi/agent/extensions") allPiMounts))
+          .path;
+      mountedFile = "${sandboxTree}/.pi/agent/mcp.json";
+      # The host must not deploy the file: it is sandbox-only content
+      # (`extraFiles`), the host's copy stays runtime-managed via
+      # `pi mcp add`. Both spellings of the home.file key are checked,
+      # like mysbx-pi-mounts-test does for the trust extension.
+      hmHomeFile = cfg.home-manager.users.mhuber.home.file;
+      hostDeploysIt =
+        hmHomeFile ? ".pi/agent/mcp.json"
+        || hmHomeFile ? "${cfg.home-manager.users.mhuber.home.homeDirectory}/.pi/agent/mcp.json";
+      evalAssertions = [
+        {
+          assertion = builtins.length piMounts == 1;
+          message = "mysbx-mcp-mounts-test: expected exactly one ${mcpDest} mount on the reference host, got ${toString (builtins.length piMounts)}";
+        }
+        {
+          assertion = builtins.length trMounts == 1;
+          message = "mysbx-mcp-mounts-test: (pi disabled) expected exactly one ${mcpDest} mount from thinkrail's integration, got ${toString (builtins.length trMounts)}";
+        }
+        {
+          # The registry gates the mount, not the option: an empty
+          # registry must leave no mount behind (the generator's
+          # `enable = servers != {}` and the callers' optionalAttrs
+          # working as one).
+          assertion = emptyMounts == [ ];
+          message = "mysbx-mcp-mounts-test: an empty programs.mcp.servers registry must drop the ${mcpDest} mount, got ${toString (builtins.length emptyMounts)}";
+        }
+        {
+          assertion = builtins.all (m: m.mode == "ro") (piMounts ++ trMounts);
+          message = "mysbx-mcp-mounts-test: the mcp.json mount must be read-only";
+        }
+        {
+          assertion = builtins.all (m: lib.hasPrefix sandboxTree m.path) piMounts;
+          message = "mysbx-mcp-mounts-test: the mount path must sit inside the pi-sandbox-config derivation (got ${
+            toString (map (m: m.path) piMounts)
+          })";
+        }
+        {
+          # The rendered registry must actually name the seeded server —
+          # guards against a render that silently drops everything.
+          assertion = piMcp.enable && piMcp.json ? outPath;
+          message = "mysbx-mcp-mounts-test: the shared generator must render the non-empty registry";
+        }
+        {
+          assertion = !hostDeploysIt;
+          message = "mysbx-mcp-mounts-test: the host's home.file deploys .pi/agent/mcp.json — sandbox-only content must ride mkSandboxConfig's extraFiles only (the host copy stays runtime-managed via `pi mcp add`)";
+        }
+      ];
+      failures = builtins.filter (a: !a.assertion) evalAssertions;
+      evalGate =
+        if failures != [ ] then
+          throw "mysbx-mcp-mounts-test: ${toString (builtins.length failures)} eval assertion(s) failed:\n  - ${
+            lib.concatMapStringsSep "\n  - " (f: f.message) failures
+          }"
+        else
+          "ok";
+    in
+    pkgs.runCommand "mysbx-mcp-mounts-test"
+      {
+        inherit evalGate mountedFile sandboxTree;
+        nativeBuildInputs = with pkgs; [
+          gnugrep
+          jq
+        ];
+      }
+      ''
+        fail() {
+          echo "mysbx-mcp-mounts-test: $*" >&2
+          exit 1
+        }
+
+        [ "$evalGate" = ok ] || { echo "mysbx-mcp-mounts-test: eval gate: $evalGate" >&2; exit 1; }
+
+        # The drift catcher: the dest must be a real FILE in the tree.
+        # A subtree listed without its extraFiles entry materializes an
+        # empty DIRECTORY here, and pi fails to parse it.
+        test -f "$mountedFile" || fail ".pi/agent/mcp.json is missing from the pi-sandbox-config tree, or is a directory (subtree/extraFiles drift)"
+
+        # The rendered content must carry the seeded server.
+        jq -e '.mcpServers.context7.url' "$mountedFile" >/dev/null \
+          || fail "the rendered mcp.json does not name mcpServers.context7.url: $(cat "$mountedFile")"
+
+        mkdir "$out"
+      '';
+
   # The hermes tier (../../hermes-agent/mysbx.nix), evaluated against the
   # REAL reference host that enables both halves (`test-p14`:
   # `hermes.enable` in hosts/host.p14/hermes-agent.nix, `mysbx.enable` in
