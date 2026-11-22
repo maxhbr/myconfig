@@ -1365,10 +1365,16 @@ in
           # closure.
           ++ lib.optionals cfg.krun.nestedPodman.enable cfg.krun.nestedPodman.packages
           ++ lib.optionals cfg.krun.nix.enable cfg.krun.nix.packages
-          # Image processing on the container `PATH` — the same payload
-          # the bwrap backend gets via `extraTools`.
-          ++ [ pkgs.imagemagick ];
-        defaultText = literalExpression "the selected multiplexer's tools, the `podman.muxEntries` scripts, plus waypipe, see `display.package`; plus the mysbx crate when the host runs LiteLLM (the in-image egress relay, bd myconfig-eov2); plus the generated credential-free npmrc (C7b, bd myconfig-f23e); plus `krun.nestedPodman.packages` / `krun.nix.packages` when `krun.nestedPodman.enable` / `krun.nix.enable`; plus imagemagick";
+          # Image processing and sandbox-state observation on the
+          # container `PATH` — the same payload the bwrap backend
+          # gets via `extraTools`.
+          ++ [
+            pkgs.imagemagick
+            pkgs.htop
+            pkgs.btop
+            pkgs.ranger
+          ];
+        defaultText = literalExpression "the selected multiplexer's tools, the `podman.muxEntries` scripts, plus waypipe, see `display.package`; plus the mysbx crate when the host runs LiteLLM (the in-image egress relay, bd myconfig-eov2); plus the generated credential-free npmrc (C7b, bd myconfig-f23e); plus `krun.nestedPodman.packages` / `krun.nix.packages` when `krun.nestedPodman.enable` / `krun.nix.enable`; plus imagemagick, htop, btop and ranger";
         description = ''
           Packages baked into the container image (`podman.image`, see
           ./podman.nix) next to the enabled agents, the fish world and
@@ -2826,6 +2832,13 @@ in
       # Image processing for payloads (screenshot inspection, resizing
       # before handing images to vision-capable models).
       ++ [ pkgs.imagemagick ]
+      # Observe the sandbox's own state on demand: process, resource
+      # and file inspection without leaving the session.
+      ++ [
+        pkgs.htop
+        pkgs.btop
+        pkgs.ranger
+      ]
       ++ lib.optional cfg.browser.enable browserPackage
       # The waypipe binary of the display channel (D18): the argv
       # already pins it for the guest server wrap, but putting it on
