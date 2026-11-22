@@ -732,7 +732,10 @@ let
   ) cfg.profiles;
 in
 {
-  imports = [ ./podman.nix ];
+  imports = [
+    ./mcp.nix
+    ./podman.nix
+  ];
 
   options.myconfig.ai.dev.mysbx = with lib; {
     enable = mkEnableOption "myconfig.ai.dev.mysbx";
