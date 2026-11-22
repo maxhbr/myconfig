@@ -32,6 +32,8 @@ Commands:
   (none)        enter an interactive sandbox shell for the current repo;
                 the repo must have been initialized with `mysbx init`
                 first — a run creates nothing;
+                for `mysbx-once` the bare form is the session picker
+                instead (see `tui`);
                 with `multiplexer = "tmux"|"workmux"|"herdr"|"aoe"|"orca"` in
                 a config layer this is a session of that multiplexer
                 instead of a bare shell, on a socket inside the sandbox

@@ -50,11 +50,15 @@ with or without `--dry-run`) ever writes the sidecar for you
 For a checkout you do NOT want to initialize there is a second
 name: `mysbx-once` (the same binary, bd myconfig-7zwt,
 [`docs/design/cli.md`](./docs/design/cli.md) D22) runs
-`mysbx $ARGS` — the bare form, `run -- CMD...`, `gui`, `doctor` —
-against the repo the cwd resolves to, with the sidecar and the
+`mysbx $ARGS` — the bare form, `run -- CMD...`, `gui`, `tui`,
+`doctor`, `diagnose egress` — against the repo the cwd resolves
+to, with the sidecar and the
 `__worktrees` sibling created inside a private temporary directory
 for the one run and removed when it ends: nothing persistent on
 the host, an existing `<repo>.mysbx` is ignored, not loaded. The
+bare form opens the session picker
+([`docs/design/tui.md`](./docs/design/tui.md) T8); a bare form
+with flags still dispatches straight into the run. The
 forms whose state that cannot carry (`init`, `edit`, `status`, the
 session/worktree groups, `fetch`/`merge`/`push`/`diff`, `attach`,
 `--session`, `--result`/`--timeout`, `--detach`) are refused with

@@ -61,7 +61,8 @@ proxy-only channel”).
 Currently implemented: `init`, `edit` (D12), `version`, `help`, the bare
 form (entering the sandbox, see D2), `run -- COMMAND` for
 non-interactive use, `run --result -- COMMAND` (D17) for the
-machine-readable-outcome form, `gui [ARG...]` (D15), the handoff verbs
+machine-readable-outcome form, `gui [ARG...]` (D15), the opt-in session
+picker `tui` ([tui.md](./tui.md) T1), the handoff verbs
 `fetch NAME` / `merge NAME` / `push NAME [REMOTE]` / `diff NAME`
 ([workspace.md](./workspace.md) D6 — the host-side git plumbing between
 the host repo and a session's clone; no sandbox is started, the session
@@ -917,7 +918,7 @@ invocation carries the marker),
 ignored), `diagnose egress` (it reads the HOST sidecar, D29),
 `version`/`help`, `--dry-run` — which creates nothing and
 prints the argv with a placeholder temp path — `--multiplexer`,
-`--backend`, `--ro`/`--rw`, `--verbose`.
+`--backend`, `--agent`/`--no-agent`, `--ro`/`--rw`, `--verbose`.
 
 **Ephemeral consequences, documented not worked around**: the
 state-dirs do not persist; the sandbox ssh keypair is new for each

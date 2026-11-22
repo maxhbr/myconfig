@@ -654,8 +654,9 @@ pub fn run(args: Vec<String>) -> i32 {
 ///   host repo's session/worktree state — exactly what once-mode
 ///   promises not to touch.
 ///
-/// Everything else — the bare form, `run -- CMD`, `gui`, `doctor`,
-/// `version`/`help`, `--dry-run`, `--multiplexer` (a session in the
+/// Everything else — the bare form, `run -- CMD`, `tui`, `gui`,
+/// `doctor`, `diagnose egress`, `version`/`help`, `--dry-run`,
+/// `--multiplexer` (a session in the
 /// temp root is as ephemeral as the run itself) — runs: `version`/
 /// `help` and `doctor` are host-side read-only, `gui` opens the
 /// terminal that runs the ONCE form's own inner invocation (the

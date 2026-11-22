@@ -27,11 +27,15 @@ complete -c mysbx-once -f -n '__mysbx_once_no_verb' -a version -d 'Print the ver
 complete -c mysbx-once -f -n '__mysbx_once_no_verb' -a help -d 'Print this help'
 
 # The flags the once forms accept (usage.txt "The same binary, second
-# name"): --dry-run, --verbose, --backend, --multiplexer, --ro, --rw
-# global; the same set minus --session/--result/--timeout after `run`.
+# name"): --dry-run, --verbose, --backend, --multiplexer, --agent,
+# --ro, --rw global; the same set minus --session/--result/--timeout
+# after `run`. The agent selection (config.md D32) is the mysbx.fish
+# pair on the once name.
 complete -c mysbx-once -l dry-run -d 'Print the argv instead of running (creates nothing)'
 complete -c mysbx-once -l verbose -d 'Print the run configuration report'
 complete -c mysbx-once -l backend -x -d 'Override the backend for this run'
 complete -c mysbx-once -l multiplexer -x -d 'Override the multiplexer for this run'
+complete -c mysbx-once -l agent -x -a 'pi opencode' -d 'The agent the interactive session of THIS run starts (config.md D32)'
+complete -c mysbx-once -l no-agent -d 'Start the session without an agent, overriding a resolved default-agent'
 complete -c mysbx-once -l ro -r -d 'Bind a host path read-only into the sandbox'
 complete -c mysbx-once -l rw -r -d 'Bind a host path read-write into the sandbox'
