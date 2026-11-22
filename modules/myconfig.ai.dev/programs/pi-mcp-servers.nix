@@ -87,7 +87,7 @@ let
       fileRefs = lib.filterAttrs (_: lib.isAttrs) (server.env or { });
     in
     if fileRefs != { } then
-      throw "programs.mcp.servers.${name}: pi's sandboxed mcp.json cannot carry env.<name>.file references (${lib.concatStringsSep ", " (lib.attrNames fileRefs)}) — inline the secret via forwardedEnvVars and \${NAME} placeholders instead"
+      throw "programs.mcp.servers.${name}: pi's sandboxed mcp.json cannot carry env.<name>.file references (${lib.concatStringsSep ", " (lib.attrNames fileRefs)}) — inline the secret via forwardedEnvVars and {env:NAME} placeholders instead"
     else
       server;
 
@@ -162,7 +162,19 @@ let
         // lib.optionalAttrs (s ? headers) {
           headers = lib.mapAttrs (_: rewritePlaceholder) s.headers;
         }
-        // lib.optionalAttrs (s ? oauth) { inherit (s) oauth; }
+        # `oauth.clientSecret` is the one oauth field pi resolves
+        # through the same resolver as env/header values
+        # (runtime.js `oauthSettings`: clientSecret goes through
+        # `resolveConfigValueOrThrow`, every other oauth field is
+        # copied raw) — so it gets the same placeholder translation
+        # and literal escaping. The other fields stay verbatim.
+        // lib.optionalAttrs (s ? oauth) {
+          oauth =
+            if s.oauth ? clientSecret then
+              s.oauth // { clientSecret = rewritePlaceholder s.oauth.clientSecret; }
+            else
+              s.oauth;
+        }
         // lib.optionalAttrs (s ? type) { inherit (s) type; }
         // lib.optionalAttrs (s ? auth) { inherit (s) auth; }
         // lib.optionalAttrs (s ? description) { inherit (s) description; }

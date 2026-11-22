@@ -2555,6 +2555,14 @@ in
           env = {
             PLAIN = "literal$X";
           };
+          # The one oauth field pi resolves like env/header values
+          # (runtime.js oauthSettings): the placeholder must translate
+          # and literals escape.
+          oauth = {
+            clientId = "fixture-client";
+            clientSecret = "{env:MCP_SECRET}";
+            scope = "literal$NotResolved read";
+          };
         };
         # Disabled WITH a file ref: must be dropped silently, not
         # block the render (enablement resolves before the throw).
@@ -2671,6 +2679,14 @@ in
     pkgs.runCommand "mysbx-mcp-mounts-test"
       {
         inherit evalGate mountedFile trMountedFile;
+        # The pi spellings the fixture must produce. Both ride the
+        # derivation environment (plain values, no shell quoting):
+        # writing them inline in the script below is not expressible
+        # — the brace-dollar sequence is nix interpolation inside this
+        # indented string, and every shell-level quoting of it collides
+        # with either bash expansion or jq interpolation.
+        expectedAuth = "Bearer \${" + "AUTH_TOKEN}";
+        expectedSecret = "\${" + "MCP_SECRET}";
         inherit (fixtureMcp) json;
         fixtureFile = "${fixtureMcp.json}";
         nativeBuildInputs = with pkgs; [
@@ -2712,7 +2728,7 @@ in
         # value rides a jq --arg: a literal brace-dollar sequence inside
         # this indented string is nix interpolation, so it cannot be
         # spelled inline).
-        jq -e --arg expected 'Bearer ''\${AUTH_TOKEN}' \
+        jq -e --arg expected "$expectedAuth" \
           '.mcpServers.fixture.headers.Authorization == $expected' "$fixtureFile" >/dev/null \
           || fail "embedded {env:NAME} was not translated: $(cat "$fixtureFile")"
         # Literal dollars are escaped for pi's resolver ($$), and the
@@ -2726,6 +2742,18 @@ in
         # The disabled server (with its file ref) is omitted entirely.
         jq -e '.mcpServers.off == null' "$fixtureFile" >/dev/null \
           || fail "the disabled server was rendered: $(cat "$fixtureFile")"
+        # oauth.clientSecret is resolved by pi like env/header values
+        # — placeholder translated, literals escaped — while the other
+        # oauth fields stay verbatim (runtime.js oauthSettings). The
+        # expected secret rides a jq --arg for the same interpolation
+        # reasons as the Authorization assertion above.
+        jq -e --arg expected "$expectedSecret" \
+          '.mcpServers.fixture.oauth.clientSecret == $expected' "$fixtureFile" >/dev/null \
+          || fail "oauth.clientSecret was not translated: $(cat "$fixtureFile")"
+        jq -e '.mcpServers.fixture.oauth.scope == "literal$NotResolved read"' "$fixtureFile" >/dev/null \
+          || fail "another oauth field was rewritten: $(cat "$fixtureFile")"
+        jq -e '.mcpServers.fixture.oauth.clientId == "fixture-client"' "$fixtureFile" >/dev/null \
+          || fail "oauth.clientId was changed: $(cat "$fixtureFile")"
 
         mkdir "$out"
       '';
