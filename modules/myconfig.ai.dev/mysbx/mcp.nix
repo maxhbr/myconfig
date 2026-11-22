@@ -4,11 +4,9 @@
 # myconfig.ai.dev.mysbx.mcp — turn on home-manager's MCP registry
 # (`programs.mcp`, the single source of truth seeded by
 # ../programs/programs.mcp.servers.nix) for hosts that run mysbx
-# sandboxes, so the follow-up subtasks (bd myconfig-9y4c.2/.3/.4) can
-# render the registry into the sandbox. The flag only seeds
-# `programs.mcp.enable`: the registry alone changes nothing on the
-# host — every consumer (opencode, claude-code, the sandbox mount)
-# reads it opt-in.
+# sandboxes. The flag only seeds `programs.mcp.enable`: the registry
+# alone changes nothing on the host — every consumer (opencode,
+# claude-code, the sandbox mount of bd myconfig-9y4c) reads it opt-in.
 {
   config,
   lib,

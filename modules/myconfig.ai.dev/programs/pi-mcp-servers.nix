@@ -21,9 +21,10 @@
 # Reads the registry of THE user the sandbox tree renders for
 # (home-manager keys it per user; both consumers render for `mhuber`).
 # Does not read `programs.mcp.enable`: a caller gates its mount on
-# `enable` (the option myconfig.ai.dev.mysbx.mcp turns on), this file
-# gates on content — an empty registry renders an empty `mcpServers`
-# object, which pi accepts but cannot use.
+# this file's `enable` (the content gate), NOT on the
+# `myconfig.ai.dev.mysbx.mcp` option — that option only seeds
+# `programs.mcp.enable` so hosts without opencode/claude-code still
+# build the registry.
 {
   config,
   lib,

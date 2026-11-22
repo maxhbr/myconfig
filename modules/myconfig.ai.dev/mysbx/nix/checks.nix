@@ -2525,13 +2525,13 @@ in
             }
           ];
         }).config;
-      # Realise-proof inputs for the build phase: the mounted file and
-      # the tree it comes from.
+      # The rendered registry, for the eval assertion that it is
+      # non-empty. (The build phase below realises the mounted file
+      # itself, via `mountedFile`.)
       piMcp = (
         import ../../programs/pi-mcp-servers.nix {
           inherit (self.nixosConfigurations.test-f13) config;
-          inherit lib;
-          pkgs = pkgs;
+          inherit lib pkgs;
         }
       );
       piMounts = mountsOf cfg;
