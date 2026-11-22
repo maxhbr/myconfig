@@ -2109,8 +2109,14 @@ in
                 # renders: from the gate line to the block's closing
                 # `fi` at the loop tail.
                 agent_gate_block="$(sed -n '/MYSBX_AGENT_KIND:-/,/^fi$/p' "$herdr_entry")"
+                # The gate still names `MYSBX_AGENT_COMMAND` (the CLI
+                # emits it for BOTH entries), but the start itself must
+                # NOT forward it — herdr derives the executable from
+                # `--kind` and would otherwise run `hermes hermes`.
                 printf '%s\n' "$agent_gate_block" | grep -q 'MYSBX_AGENT_COMMAND' \
                   || fail "the herdr agent block does not read the resolved command"
+                printf '%s\n' "$agent_gate_block" | grep -q 'MYSBX_AGENT_COMMAND"' \
+                  && fail "the herdr agent start forwards MYSBX_AGENT_COMMAND as argv (herdr derives the executable from --kind; the workmux entry is the one that needs the command)"
 
                 # (1c) herdr keeps the 1s retry pacing of the agent start
                 # (nono token bucket, bd myconfig-27o).
@@ -2151,6 +2157,12 @@ in
                 grep -qxF -- '%42' "$calls" || fail "the agent start does not target the captured pane"
                 grep -qxF -- '--continue' "$calls" || fail "the first arg was not forwarded"
                 grep -qxF -- 'two words' "$calls" || fail "the second arg was not forwarded verbatim"
+                # The command itself must NOT appear after `--`: the
+                # stub call line ends with the args, and `fake-agent`
+                # appears exactly twice (the kind NAME and --kind value),
+                # never as a forwarded argv element.
+                [ "$(grep -cxF -- 'fake-agent' "$calls")" -eq 2 ] \
+                  || fail "the agent start forwarded the command as argv (expected exactly the kind name and --kind value, got $(grep -cxF -- 'fake-agent' "$calls"))"
                 # WITHOUT the resolved agent: the stub is never called.
                 rm -f "$calls"
                 (

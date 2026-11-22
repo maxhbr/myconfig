@@ -103,12 +103,17 @@ let
   # agent for this run (`MYSBX_AGENT_KIND` and friends are set), start
   # it in the new workspace's ROOT pane over the socket API — herdr
   # has no config key for an initial command. The block is
-  # AGENT-AGNOSTIC: the command and its arguments arrive as
-  # `MYSBX_AGENT_COMMAND`/`MYSBX_AGENT_ARG1..N` (one variable per
-  # argument, quoted reads only — no word splitting, no eval; the
-  # indirection is bash's `''${!name}` expansion), so one script
-  # serves every registry kind and no rebuild is needed to change the
-  # choice. The pane id comes from the `workspace create` JSON answer,
+  # AGENT-AGNOSTIC: the arguments arrive as `MYSBX_AGENT_ARG1..N`
+  # (one variable per argument, quoted reads only — no word
+  # splitting, no eval; the indirection is bash's `''${!name}`
+  # expansion), so one script serves every registry kind and no
+  # rebuild is needed to change the choice. `MYSBX_AGENT_COMMAND`
+  # is deliberately NOT forwarded: herdr derives the executable
+  # from `--kind` itself and appends whatever follows `--` as argv
+  # to that process, so passing the command would start
+  # `hermes hermes` / `pi pi`. The workmux entry is the one that
+  # needs the command (it types a literal line into a pane).
+  # The pane id comes from the `workspace create` JSON answer,
   # `.result.root_pane.pane_id` (`pane split` answers a DIFFERENT
   # shape, `.result.pane.pane_id`).
   #
@@ -122,8 +127,9 @@ let
   agentStartTail = ''
     if [ -n "''${MYSBX_AGENT_KIND:-}" ] && [ -n "''${MYSBX_AGENT_COMMAND:-}" ] && [ -n "$pane_id" ]; then
         # Quoted reads only — the argv arrives as one variable per
-        # argument, so nothing here word-splits or evals.
-        agent_argv=("$MYSBX_AGENT_COMMAND")
+        # argument, so nothing here word-splits or evals. The command
+        # itself is herdr's to derive from `--kind` (see above).
+        agent_argv=()
         agent_argc="''${MYSBX_AGENT_ARGC:-0}"
         agent_i=1
         while [ "$agent_argc" -ge "$agent_i" ]; do
