@@ -217,9 +217,12 @@ keypress.
 4. **`mysbx gui tui` works by D15's existing tail pass-through** —
    the tail is never parsed, so the window's inner invocation runs
    the verb and the picker renders in the window like any inner
-   run. Nothing about `gui` adapts to it (no window title, no size
-   hint); it is recorded here as working by construction, and
-   polishing it is a later change.
+   run. The same construction covers the once form: `mysbx-once
+   gui` with an EMPTY tail re-invokes the bare once form in the
+   window, which is the picker itself (T8) — the window opens on
+   the rows. Nothing about `gui` adapts to it (no window title, no
+   size hint); it is recorded here as working by construction,
+   and polishing it is a later change.
 5. **`tui` + `--detachable` is deferred** (T7): refused with the
    verb until the composition is decided.
 

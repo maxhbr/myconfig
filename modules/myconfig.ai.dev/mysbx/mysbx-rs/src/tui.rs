@@ -251,7 +251,7 @@ pub(crate) fn run(flags: Flags, repo: &repo::Repo, mode: RunMode) -> i32 {
                 }
             }
         }
-        let merged = match load_merged(repo) {
+        let merged = match load_merged(repo, once) {
             Ok(m) => m,
             Err(e) => {
                 eprintln!("mysbx: {e}");
@@ -314,20 +314,42 @@ fn confirm_not_inited(msg: &str) -> Outcome {
 /// `load_layers` + `merge`, the `status` precedent. In once-mode
 /// the sidecar layer is empty by construction (T8/D22: the temp
 /// root's own `config.toml`, created only by `sandbox()`'s Once
-/// arm after Enter), so the user layer alone decides (config.md
-/// D6).
-fn load_merged(repo: &repo::Repo) -> Result<Merged, String> {
+/// arm after Enter) — so the HOST sidecar is IGNORED here, never
+/// read: the `doctor.rs` `effective_config` precedent ("an
+/// existing host `<repo>.mysbx/config.toml` is ignored"). A
+/// preselect from a sidecar the Enter run will not use would lie
+/// (the sidecar says podman-gvisor, the once run runs the user
+/// layer's backend), and a touched agent row would import
+/// host-sidecar policy into a once run. The user layer loads WITH
+/// its parent chain (config.md D29) against `Config::default()`;
+/// the repo-root containment check is skipped for the same reason
+/// a real once run skips it — no repo root is derivable from the
+/// temp sidecar a run carries.
+fn load_merged(repo: &repo::Repo, once: bool) -> Result<Merged, String> {
     let home = std::env::var_os("HOME")
         .map(PathBuf::from)
         .unwrap_or_default();
     let xdg = std::env::var("XDG_CONFIG_HOME").ok();
-    let layers =
-        merge::load_layers(&home, xdg.as_deref(), &repo.sidecar).map_err(|e| e.to_string())?;
+    if !once {
+        let layers =
+            merge::load_layers(&home, xdg.as_deref(), &repo.sidecar).map_err(|e| e.to_string())?;
+        return merge::merge(
+            layers.user.0,
+            layers.sidecar.0,
+            &layers.user.1,
+            &layers.sidecar.1,
+            &home,
+        )
+        .map_err(|e| e.to_string());
+    }
+    let user_path = merge::user_config_path(&home, xdg.as_deref());
+    let user =
+        merge::load_layer_chain(&user_path, "user", &home, None).map_err(|e| e.to_string())?;
     merge::merge(
-        layers.user.0,
-        layers.sidecar.0,
-        &layers.user.1,
-        &layers.sidecar.1,
+        user.config,
+        crate::config::Config::default(),
+        &user.top,
+        &user.top,
         &home,
     )
     .map_err(|e| e.to_string())
@@ -942,5 +964,83 @@ mod tests {
             }
         }
         assert_eq!(read_key(&mut Broken), Key::Esc);
+    }
+
+    #[test]
+    fn the_once_seed_ignores_a_host_sidecar_that_disagrees_with_the_user_layer() {
+        // T8/D22 regression: the once picker's seed must come from
+        // the user layer ALONE — a host sidecar the Enter run will
+        // not use must not preselect (it would lie: the sidecar says
+        // podman-gvisor, the once run runs the user layer's
+        // backend), and a touched agent row must not import
+        // host-sidecar policy into a once run. The sidecar here
+        // disagrees on every row: backend, multiplexer, agent.
+        //
+        // `load_merged` reads $HOME and $XDG_CONFIG_HOME, so the
+        // test owns them for its duration and restores them after
+        // (the doctor.rs egress-test precedent); no other lib test
+        // writes either name, so the ownership cannot race.
+        let base = std::env::temp_dir().join(format!("mysbx-tui-once-seed-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let home = base.join("home");
+        let xdg = base.join("xdg");
+        std::fs::create_dir_all(xdg.join("mysbx")).unwrap();
+        std::fs::write(
+            xdg.join("mysbx").join("config.toml"),
+            "backend = \"bubblewrap\"\nmultiplexer = \"none\"\n",
+        )
+        .unwrap();
+        let repo = repo::Repo {
+            root: base.join("repo"),
+            sidecar: base.join("repo.mysbx"),
+            git_dirs: Vec::new(),
+            worktrees: None,
+        };
+        std::fs::create_dir_all(&repo.sidecar).unwrap();
+        std::fs::write(
+            repo.sidecar.join("config.toml"),
+            "backend = \"podman-gvisor\"\nmultiplexer = \"herdr\"\ndefault-agent = \"opencode\"\n",
+        )
+        .unwrap();
+
+        let saved_home = std::env::var_os("HOME");
+        let saved_xdg = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe { std::env::set_var("HOME", &home) };
+        unsafe { std::env::set_var("XDG_CONFIG_HOME", &xdg) };
+        let once_merged = load_merged(&repo, true);
+        let plain_merged = load_merged(&repo, false);
+        match (saved_home, saved_xdg) {
+            (Some(h), Some(x)) => {
+                unsafe { std::env::set_var("HOME", h) };
+                unsafe { std::env::set_var("XDG_CONFIG_HOME", x) };
+            }
+            (Some(h), None) => {
+                unsafe { std::env::set_var("HOME", h) };
+                unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
+            }
+            (None, Some(x)) => {
+                unsafe { std::env::remove_var("HOME") };
+                unsafe { std::env::set_var("XDG_CONFIG_HOME", x) };
+            }
+            (None, None) => {
+                unsafe { std::env::remove_var("HOME") };
+                unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
+            }
+        }
+
+        // The plain mode loads both layers: the sidecar's
+        // podman-gvisor wins the merge (the run would use it).
+        let plain = plain_merged.expect("the plain load succeeds");
+        assert_eq!(plain.backend.as_deref(), Some("podman-gvisor"));
+        assert_eq!(plain.default_agent.as_deref(), Some("opencode"));
+        // The once mode ignores the sidecar entirely: the user
+        // layer's backend, and NO agent — never the sidecar's
+        // `default-agent` a touched row would have carried over.
+        let once = once_merged.expect("the once load succeeds");
+        assert_eq!(once.backend.as_deref(), Some("bubblewrap"));
+        assert_eq!(once.default_agent, None);
+        assert_eq!(once.multiplexer, Multiplexer::None);
+
+        let _ = std::fs::remove_dir_all(&base);
     }
 }

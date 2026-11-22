@@ -5,7 +5,8 @@
 # second name of the mysbx binary, one sandbox run out of a private
 # temp root. The verb set is the once subset — the persistent forms
 # are REFUSED with exit 70, so offering them would be noise: the bare
-# form, `run`, `gui`, `doctor`, `diagnose egress`, `version`, `help`,
+# form (itself the picker when fully bare, docs/design/tui.md T8),
+# `run`, `gui`, `tui`, `doctor`, `diagnose egress`, `version`, `help`,
 # and the flags that
 # apply. Mirrors the structure of mysbx.fish (same `__mysbx_no_verb`
 # discipline: a verb ends flag offering) but is deliberately NOT
@@ -14,11 +15,12 @@
 # `mysbx-once` line on its own.
 
 function __mysbx_once_no_verb
-    not __fish_seen_subcommand_from run gui doctor diagnose version help
+    not __fish_seen_subcommand_from run gui tui doctor diagnose version help
 end
 
 complete -c mysbx-once -f -n '__mysbx_once_no_verb' -a run -d 'Run one command in the sandbox: mysbx-once run [flags] -- CMD...'
 complete -c mysbx-once -f -n '__mysbx_once_no_verb' -a gui -d 'Run mysbx-once in a new terminal window (needs a graphical session)'
+complete -c mysbx-once -f -n '__mysbx_once_no_verb' -a tui -d 'The session picker: the bare form with no verb and no flag opens it (Enter dispatches, Esc exits 0)'
 complete -c mysbx-once -f -n '__mysbx_once_no_verb' -a doctor -d 'Check the user-layer configuration (the host sidecar is ignored)'
 complete -c mysbx-once -f -n '__mysbx_once_no_verb' -a diagnose -d 'Read the egress broker log of the HOST sidecar (read-only)'
 complete -c mysbx-once -f -n '__mysbx_once_no_verb' -a version -d 'Print the version'
