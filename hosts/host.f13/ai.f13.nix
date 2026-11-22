@@ -39,6 +39,8 @@
           # modules/myconfig.ai.dev/default.nix).
           agent-of-empires.enable = lib.mkForce false;
 
+          github-copilot-cli.enable = true;
+
           thinkrail.enable = true;
 
           defaultHugeModel = "GLM-5.3";
