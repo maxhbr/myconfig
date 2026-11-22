@@ -162,6 +162,7 @@ in
     # instead of dying with the tmpfs home.
     myconfig.ai.dev.mysbx = lib.mkIf config.myconfig.ai.dev.mysbx.enable {
       extraTools = [ pkgs.codex ];
+      agents.codex.command = "codex";
       config.mounts = mysbxCodexMounts;
       config.stateDirs = [
         ".codex/sessions"

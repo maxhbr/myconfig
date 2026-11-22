@@ -99,6 +99,11 @@ in
     myconfig.ai.dev.mysbx = {
       extraTools = [ hermesSandboxed ];
 
+      # D32 agent registry entry: the launcher above (config seed +
+      # exec), NOT `bin/hermes-acp` — an interactive session starts
+      # the plain CLI.
+      agents.hermes.command = "hermes";
+
       # The podman backends run the image's own `/bin`, so the launcher has
       # to be baked in rather than added to the sandbox PATH.
       podman = {

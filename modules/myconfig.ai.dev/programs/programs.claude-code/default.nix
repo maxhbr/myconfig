@@ -243,6 +243,9 @@ in
     # credential), reaching every backend like the pi `PI_JAIL_MARKER` entry.
     myconfig.ai.dev.mysbx = lib.mkIf config.myconfig.ai.dev.mysbx.enable {
       extraTools = [ claude-code ];
+      # D32 agent registry entry: the kind is `claude` (the binary the
+      # workmux tier above and the CLI both call), not the package name.
+      agents.claude.command = lib.mkDefault "claude";
       config.mounts = mysbxClaudeMounts;
       config.env.CLAUDE_CODE_SANDBOXED = "1";
       config.stateDirs = [
