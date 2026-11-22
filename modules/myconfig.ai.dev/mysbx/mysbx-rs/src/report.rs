@@ -313,6 +313,21 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
             }
         ));
     }
+    // The D34 host-service rows, when a layer declared them: they
+    // ride the broker channel the report just named, and the
+    // operator should see which named host loopback forwards this
+    // run carries without cross-referencing the broker argv block.
+    if !r.merged.host_services.is_empty() {
+        p(format!(
+            "host-services:  {}",
+            r.merged
+                .host_services
+                .iter()
+                .map(|row| format!("{}:{}", row.name, row.port))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
     // The D28 rule 6a drop list: every forward-env name beyond the
     // terminal/locale/editor base, said out loud rather than silently
     // narrowed. A name that got the rule-6d placeholder says so; the
@@ -944,6 +959,7 @@ mod tests {
             allow_domains: Vec::new(),
             connect_ports: Vec::new(),
             listen_ports: Vec::new(),
+            host_services: Vec::new(),
             memory: None,
             scratch_size: None,
             cpus: None,
@@ -2199,5 +2215,79 @@ mod tests {
             "{joined}"
         );
         assert!(!joined.contains("downgraded"), "{joined}");
+    }
+
+    #[test]
+    fn host_service_rows_get_a_verbose_report_line() {
+        // D34: the named host loopback forwards are part of the run's
+        // visible policy, like the D21 allowlist line — one line
+        // naming every row, printed only when a layer declared rows.
+        let (repo, mut merged, host) = fixture_report();
+        merged.network = crate::config::Network::ProxyOnly;
+        merged.host_services = vec![
+            crate::config::HostServiceRow {
+                name: "my-mcp".to_owned(),
+                port: 8765,
+            },
+            crate::config::HostServiceRow {
+                name: "bd".to_owned(),
+                port: 9999,
+            },
+        ];
+        let params = Params {
+            shell: "/synth/bin/bash",
+            tools_path: "/synth/bin",
+            bin_sh: None,
+            nix_conf: None,
+            ca_bundle: None,
+            policy_paths: &[],
+            mux_entry: None,
+            agent: None,
+            waypipe: None,
+            workspace: Workspace::Live,
+            inner: None,
+            detachable: false,
+            egress: None,
+            npmrc: None,
+            node_major: None,
+        };
+        let render = |merged: &Merged| {
+            lines(&Report {
+                repo: &repo,
+                sidecar_exists: true,
+                user_config: Path::new("/synth/xdg/mysbx/config.toml"),
+                user_config_exists: true,
+                sidecar_config: Path::new("/synth/repo.mysbx/config.toml"),
+                sidecar_config_exists: false,
+                parent_configs: &[],
+                merged,
+                backend_from_cli: false,
+                user_mount_count: 1,
+                cli_mount_count: 0,
+                host_env: &host,
+                dropped_env: &[],
+                placeholder_env: &[],
+                reserved_env: &[],
+                params: &params,
+                bwrap_bin: "bwrap",
+                backend: "bubblewrap",
+                image: None,
+                payload: &Payload::Shell,
+                dry_run: true,
+                result: false,
+            })
+            .join("\n")
+        };
+        let joined = render(&merged);
+        assert!(
+            joined.contains("host-services:  my-mcp:8765, bd:9999"),
+            "{joined}"
+        );
+        merged.host_services.clear();
+        let joined = render(&merged);
+        assert!(
+            !joined.contains("host-services:"),
+            "no rows, no line: {joined}"
+        );
     }
 }

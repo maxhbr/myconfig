@@ -337,6 +337,17 @@ let
         myconfig.ai.dev.mysbx.config.listenPorts = [ 8080 ];
       }
     ];
+    # The D34 host-service rows (bd myconfig-db56): the attrs option
+    # seeds the generated user layer as `[[host-services]]` rows, in
+    # name order — the exact spelling the crate parses.
+    hostServices = generated [
+      {
+        myconfig.ai.dev.mysbx.config.hostServices = {
+          my-mcp = 8765;
+          "second-svc" = 9999;
+        };
+      }
+    ];
     # The D23 resource-limit keys (bd myconfig-91j) — including the
     # scratch-size default that flows from krun.nix.scratchSize.
     limits = generated [
@@ -996,6 +1007,7 @@ pkgs.runCommand "mysbx-generated-config-test"
       krunBackend
       krunNestedOn
       allowlist
+      hostServices
       limits
       scratchDefault
       scratchDirectOnly
@@ -1150,6 +1162,21 @@ pkgs.runCommand "mysbx-generated-config-test"
       || fail "the listenPorts seed is missing/mistyped" "$allowlist"
     if grep -q '^allow-domains' "$nonoBackend"; then
       fail "an empty allowDomains leaked a key" "$nonoBackend"
+    fi
+
+    # ... the D34 host-service rows reach the layer as TOML table
+    # rows in name order (bd myconfig-db56); an empty module default
+    # leaves the key out.
+    grep -q '^\[\[host-services\]\]$' "$hostServices" \
+      || fail "the hostServices seed is missing the table header" "$hostServices"
+    grep -q '^name = "my-mcp"$' "$hostServices" \
+      || fail "the first row's name is missing/mistyped" "$hostServices"
+    grep -q '^port = 8765$' "$hostServices" \
+      || fail "the first row's port is missing/mistyped" "$hostServices"
+    grep -q '^name = "second-svc"$' "$hostServices" \
+      || fail "the second row's name is missing/mistyped" "$hostServices"
+    if grep -q '^\[\[host-services\]\]' "$nonoBackend"; then
+      fail "an empty hostServices leaked a key" "$nonoBackend"
     fi
 
     # ... the D23 limit keys reach the layer; unset options leave

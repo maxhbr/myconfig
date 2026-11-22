@@ -2809,6 +2809,7 @@ mod tests {
             allow_domains: Vec::new(),
             connect_ports: Vec::new(),
             listen_ports: Vec::new(),
+            host_services: Vec::new(),
             memory: None,
             scratch_size: None,
             cpus: None,

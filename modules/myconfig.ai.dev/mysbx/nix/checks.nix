@@ -920,6 +920,35 @@ in
         echo "$pairing_argv" | grep -qx -- 'MYSBX_EGRESS_PROXY=http://10.0.2.2:4000' \
           || fail "the model-lane endpoint keeps the gateway spelling"
 
+        # 3e. the host-service rows (bd myconfig-db56, config.md D34),
+        #     end to end: rows next to the profile keep the run
+        #     ADMITTED, one --host-service row per entry rides the
+        #     broker argv block verbatim — and a row next to a SHARED
+        #     network is a refusal, never a silently dropped row.
+        printf 'backend = "microvm-qemu"\nnetwork = "proxy-only"\n[[host-services]]\nname = "my-mcp"\nport = 8765\n' > "$work/repo.mysbx/config.toml"
+        rows_argv=$( \
+          cd "$repo" && HOME="$work/home" \
+          MYSBX_EGRESS_SOCKET_NAME=litellm.sock MYSBX_EGRESS_PORT=4000 \
+          MYSBX_EGRESS_ETC=/nix/store/synth-egress-etc \
+          MYSBX_EGRESS_RELAY=/nix/store/synth-relay/bin/mysbx-egress-relay \
+          MYSBX_EGRESS_BROKER=/nix/store/synth-broker/bin/mysbx-egress-broker \
+          XDG_RUNTIME_DIR="$work/rt" \
+          "${pkgQemu}/bin/mysbx" run --dry-run -- true \
+        ) || fail "the host-services dry run refused — run it verbosely for the diagnosis"
+        echo "$rows_argv" | grep -qx -- '--host-service' \
+          || fail "the host-services dry run carries no --host-service row (the broker argv block)"
+        echo "$rows_argv" | grep -qx -- 'my-mcp=127.0.0.1:8765' \
+          || fail "the row is not verbatim in the broker argv block"
+        printf 'backend = "microvm-qemu"\nnetwork = "shared"\n[[host-services]]\nname = "my-mcp"\nport = 8765\n' > "$work/repo.mysbx/config.toml"
+        if ( \
+          cd "$repo" && HOME="$work/home" \
+          "${pkgQemu}/bin/mysbx" run --dry-run -- true \
+        ) >"$work/rows-shared.stdout" 2>"$work/rows-shared.stderr"; then
+          fail "host-services next to a shared network kept the run admitted"
+        fi
+        grep -q -- 'host services' "$work/rows-shared.stderr" \
+          || fail "the shared-network refusal does not name the rows: $(cat "$work/rows-shared.stderr")"
+
         touch $out
       '';
 

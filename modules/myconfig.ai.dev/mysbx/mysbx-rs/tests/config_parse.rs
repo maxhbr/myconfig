@@ -532,3 +532,74 @@ fn forward_env_rejects_non_strings_and_empty_names() {
     assert!(Config::parse("forward-env = \"TIER_TOKEN\"\n").is_err());
     assert!(Config::parse("forward-env = [\"\"]\n").is_err());
 }
+
+// ---- `[[host-services]]` (docs/design/config.md D34, bd
+// ---- myconfig-db56) ------------------------------------------------------
+
+#[test]
+fn host_services_rows_parse_with_name_and_port() {
+    let c = Config::parse(
+        r#"
+[[host-services]]
+name = "my-mcp"
+port = 8765
+
+[[host-services]]
+name = "Other-Service"
+port = 1
+"#,
+    )
+    .unwrap();
+    assert_eq!(c.host_services.len(), 2);
+    assert_eq!(c.host_services[0].name, "my-mcp");
+    assert_eq!(c.host_services[0].port, 8765);
+    // The name is lower-cased at parse: the row's selector matches
+    // CONNECT authorities case-insensitively.
+    assert_eq!(c.host_services[1].name, "other-service");
+    assert_eq!(Config::default().host_services, Vec::new());
+}
+
+#[test]
+fn host_services_reject_wrong_shapes() {
+    // Strict schema (D11): missing keys, unknown keys, wrong types and
+    // out-of-range ports are errors naming the row, never warnings.
+    for (why, text) in [
+        ("missing name", "[[host-services]]\nport = 8\n"),
+        ("missing port", "[[host-services]]\nname = \"x\"\n"),
+        (
+            "unknown key",
+            "[[host-services]]\nname = \"x\"\nport = 8\naddr = \"1.2.3.4\"\n",
+        ),
+        (
+            "wrong port type",
+            "[[host-services]]\nname = \"x\"\nport = \"8\"\n",
+        ),
+        (
+            "port out of range",
+            "[[host-services]]\nname = \"x\"\nport = 0\n",
+        ),
+        (
+            "port too high",
+            "[[host-services]]\nname = \"x\"\nport = 65536\n",
+        ),
+        (
+            "localhost name",
+            "[[host-services]]\nname = \"localhost\"\nport = 8\n",
+        ),
+        (
+            "ip literal name",
+            "[[host-services]]\nname = \"127.0.0.1\"\nport = 8\n",
+        ),
+        (
+            "path in name",
+            "[[host-services]]\nname = \"a/b\"\nport = 8\n",
+        ),
+        ("empty name", "[[host-services]]\nname = \"\"\nport = 8\n"),
+        (
+            "duplicate name in one file",
+            "[[host-services]]\nname = \"x\"\nport = 8\n[[host-services]]\nname = \"X\"\nport = 8\n",
+        ),
+    ] {
+        assert!(Config::parse(text).is_err(), "{why} must be refused");
+    }
+}

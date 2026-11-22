@@ -616,6 +616,15 @@ pub struct Config {
     /// bd myconfig-mo3.1): same backend-agnostic declaration as
     /// [`Config::allow_domains`].
     pub listen_ports: Vec<u16>,
+    /// Host services the broker forwards to (`[[host-services]]`,
+    /// docs/design/config.md D34, bd myconfig-db56): NAMED host
+    /// loopback endpoints, in the same class as `allow-domains` —
+    /// declared per layer, merged per the D15 rule, and enforced (or
+    /// refused) per backend. The ADDRESS is fixed by the design (host
+    /// loopback, always): a row names a service and its HOST port,
+    /// never an address, so no spelling of the key can widen a row
+    /// into a non-loopback grant.
+    pub host_services: Vec<HostServiceRow>,
     /// Memory limit of the sandbox (`memory`, podman `--memory`
     /// grammar: bytes or a `b`/`k`/`m`/`g` suffix, e.g. `"8g"`).
     /// `None` means "not decided by this layer"; the sidecar wins
@@ -715,6 +724,7 @@ impl Default for Config {
             allow_domains: Vec::new(),
             connect_ports: Vec::new(),
             listen_ports: Vec::new(),
+            host_services: Vec::new(),
             memory: None,
             scratch_size: None,
             cpus: None,
@@ -893,6 +903,7 @@ impl Config {
                 "allow-domains" => config.allow_domains = allow_domains(value)?,
                 "connect-ports" => config.connect_ports = ports(value, "connect-ports")?,
                 "listen-ports" => config.listen_ports = ports(value, "listen-ports")?,
+                "host-services" => config.host_services = host_services(value)?,
                 "memory" => config.memory = Some(memory(value)?),
                 "scratch-size" => {
                     config.scratch_size = Some(scratch_size(value)?)
@@ -1067,6 +1078,124 @@ fn allow_domains(value: &Value) -> Result<Vec<String>, Error> {
             Ok(domain.to_owned())
         })
         .collect()
+}
+
+/// One `[[host-services]]` row (docs/design/config.md D34, bd
+/// myconfig-db56): a NAMED host service the broker forwards to.
+/// The address is deliberately not spellable — the design fixes host
+/// loopback — so the row carries a name and a HOST port only, and
+/// the broker argv pins `name=127.0.0.1:<port>`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostServiceRow {
+    /// The row's selector: the plain host-name grammar of
+    /// `allow-domains` (lower-cased by the merge), never `localhost`
+    /// (inside the sandbox that name IS the relay's own listener).
+    pub name: String,
+    /// The host port the service listens on (1-65535).
+    pub port: u16,
+}
+
+/// Parse the `[[host-services]]` table array (D34): strict schema
+/// (D11) — `name` and `port` are both required, unknown keys and
+/// wrong types are errors naming the file, the key and the row. The
+/// per-row name shape check runs here so a bad name never reaches
+/// the merge, and a name repeated WITHIN one file is a schema error;
+/// a name repeated ACROSS layers is the merge's to judge (D15's
+/// first-win, or a refusal when the ports differ).
+fn host_services(value: &Value) -> Result<Vec<HostServiceRow>, Error> {
+    let items = value.as_array().ok_or_else(|| {
+        Error::Schema(format!(
+            "host-services: expected an array of tables ([[host-services]]), found {}",
+            value.type_name()
+        ))
+    })?;
+    let mut out = Vec::with_capacity(items.len());
+    for (n, item) in items.iter().enumerate() {
+        let at = format!("[[host-services]] #{}", n + 1);
+        let t = item.as_table().ok_or_else(|| {
+            Error::Schema(format!(
+                "{at}: expected a table, found {}",
+                item.type_name()
+            ))
+        })?;
+        let mut name = None;
+        let mut port = None;
+        for (key, value) in t {
+            match key.as_str() {
+                "name" => name = Some(string(value, &format!("{at}: name"))?),
+                "port" => {
+                    let p = value.as_integer().ok_or_else(|| {
+                        Error::Schema(format!(
+                            "{at}: port: expected an integer, found {}",
+                            value.type_name()
+                        ))
+                    })?;
+                    if !(1..=65535).contains(&p) {
+                        return Err(Error::Schema(format!(
+                            "{at}: port: expected a port between 1 and 65535, found {p}"
+                        )));
+                    }
+                    port = Some(p as u16);
+                }
+                other => return Err(unknown(&at, other)),
+            }
+        }
+        let name =
+            name.ok_or_else(|| Error::Schema(format!("{at}: missing required key `name`")))?;
+        let port =
+            port.ok_or_else(|| Error::Schema(format!("{at}: missing required key `port`")))?;
+        host_service_name(&name, &at)?;
+        let name = name.to_ascii_lowercase();
+        if out.iter().any(|r: &HostServiceRow| r.name == name) {
+            return Err(Error::Schema(format!(
+                "{at}: name `{name}` is already named by an earlier row — a row's \
+                 name selects exactly one forward (docs/design/config.md D34)"
+            )));
+        }
+        out.push(HostServiceRow { name, port });
+    }
+    Ok(out)
+}
+
+/// The `[[host-services]]` name shape (D34): the `allow-domains`
+/// grammar — a plain host name, no scheme, path, port or whitespace —
+/// never an IP literal (the name is the selector, an address would
+/// make the row an address grant) and never `localhost` (inside the
+/// sandbox that name is the in-sandbox relay's own listener, bound
+/// over /etc/hosts).
+fn host_service_name(name: &str, at: &str) -> Result<(), Error> {
+    let bad = |why: &str| {
+        Error::Schema(format!(
+            "{at}: name {why} — a row's name is the selector the payload \
+             CONNECTs to (docs/design/config.md D34)"
+        ))
+    };
+    if name.is_empty() {
+        return Err(bad("must not be empty"));
+    }
+    if name.eq_ignore_ascii_case("localhost") {
+        return Err(bad(
+            "must not be `localhost` — inside the sandbox that name is the \
+             relay's own listener, not a host service",
+        ));
+    }
+    if name.contains("://")
+        || name.contains('/')
+        || name.contains(':')
+        || name.contains('=')
+        || name.chars().any(|c| c.is_whitespace() || c.is_control())
+        || !name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.')
+    {
+        return Err(bad(
+            "must be a plain host name — no scheme, path, port or gateway syntax",
+        ));
+    }
+    if name.parse::<std::net::IpAddr>().is_ok() {
+        return Err(bad("must not be an IP literal — the name is the policy"));
+    }
+    Ok(())
 }
 
 /// Parse `memory`: a string in podman's `--memory` grammar — a whole
