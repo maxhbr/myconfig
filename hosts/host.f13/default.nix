@@ -334,24 +334,8 @@ in
             );
         }
       ];
-      myconfig.desktop.wayland.launcherCommands = [
-        "alacritty-et-p14"
-        "alacritty-et-p14-wg0"
-        "alacritty-et-nuc"
-        "alacritty-et-nuc-wg0"
-        "alacritty-et-thing"
-        "alacritty-et-thing-wg0"
-        "alacritty-et-workstation"
-        "alacritty-et-workstation-wg0"
-        "alacritty-ssh-p14-wg0"
-        "alacritty-ssh-nuc-wg0"
-        "alacritty-ssh-thing-wg0"
-        "alacritty-ssh-workstation-wg0"
-      ]
-      ++ (builtins.concatMap
+      myconfig.desktop.wayland.launcherCommands = builtins.concatMap
         (h: [
-          "wezterm-et-${h}"
-          "wezterm-et-${h}-wg0"
           "gui-et-${h}"
           "gui-et-${h}-wg0"
         ])
@@ -360,8 +344,7 @@ in
           "nuc"
           "thing"
           "workstation"
-        ]
-      );
+        ];
     }
     # {
     #   fileSystems."/home/${user}/imgwork2" = {
