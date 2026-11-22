@@ -329,6 +329,7 @@ pub fn run(args: Vec<String>) -> i32 {
                         | "doctor"
                         | "ssh-pubkey"
                         | "attach"
+                        | "tui"
                         | "podman-load-image"
                         | "gvisor-load-image"
                 ) =>
@@ -546,6 +547,44 @@ pub fn run(args: Vec<String>) -> i32 {
             eprintln!("mysbx: {} is not valid with `{other}`", flags.first_name());
             eprintln!("try `mysbx --help`");
             2
+        }
+        // `mysbx tui` — the session picker (docs/design/tui.md, bd
+        // myconfig-dm7b): the full-screen form before a launch, seeded
+        // from the merged layers (T3) and composed into the one-run
+        // override flags on Enter (T4). Every flag refusal is the
+        // arms' above, inherited by placement: the run-scoped flags
+        // (`--backend`, `--multiplexer`, `--agent`, `--session`,
+        // `--sidecar`, `--config`, `--result`/`--timeout`, `--ro`/
+        // `--rw`, `--detach`/`--detachable`) by the shared rejection
+        // arm that lists the verb (T7 — the picker IS the interactive
+        // replacement for exactly those flags), `--dry-run`/`--verbose`
+        // by the generic `flags.any()` arm this arm sits AFTER: the
+        // verb's whole job is an interactive side effect, so `--dry-run`
+        // has no argv to print and `--verbose` no report before Enter
+        // (T7's own-reason refusal, the podman-load-image precedent).
+        // The tail is closed the same way: an argument after the verb
+        // is a usage error, never a flag the picker would accept and
+        // ignore. The repo is resolved like on the other verbs that
+        // need one (`init`, D1): a cwd that is not a repo is the same
+        // `70` refusal before any row renders. The once gate allows
+        // the verb (T8), so `mysbx-once tui` reaches this arm too and
+        // seeds from the user layer alone — the `RunMode::Once` the
+        // bare once form dispatches into, the `run_command` precedent.
+        Some("tui") if rest.len() > 1 => {
+            eprintln!("mysbx tui: unexpected argument: {}", rest[1]);
+            eprintln!("try `mysbx --help`");
+            2
+        }
+        Some("tui") => {
+            let repo = match repo::resolve_cwd() {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("mysbx: {e}");
+                    return EXIT_INFRASTRUCTURE;
+                }
+            };
+            let mode = if once { RunMode::Once } else { RunMode::Exec };
+            tui::run(flags, &repo, mode)
         }
         Some("help") | Some("-h") | Some("--help") => {
             usage();

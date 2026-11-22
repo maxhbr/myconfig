@@ -12648,6 +12648,126 @@ fn diagnose_needs_a_known_sub_verb() {
     assert!(stderr.contains("needs a pid"), "{stderr}");
 }
 
+// ---- the session picker verb (docs/design/tui.md, bd myconfig-dm7b) ---------
+
+#[test]
+fn tui_needs_a_terminal_on_stdin_and_stdout() {
+    // T6: the picker reads keys and renders full-screen, so it needs
+    // a terminal on BOTH stdin and stdout. The test harness pipes
+    // both — the natural non-interactive environment — and the tty
+    // gate fires before anything renders: exit 70, the D8-style
+    // boundary, suggesting the bare form.
+    let (inv, _repo, _sidecar) = fixture("tui-no-tty", &["tui"]);
+    let (code, _stdout, stderr) = run_binary_with(&inv, &["tui"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("the picker needs a terminal on stdin and stdout"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("use the bare `mysbx` form"),
+        "the refusal suggests the bare form: {stderr}"
+    );
+}
+
+#[test]
+fn tui_refuses_the_run_scoped_flags_and_dry_run() {
+    // T7: the picker IS the interactive replacement for exactly the
+    // one-run override flags, so every run-scoped flag before the
+    // verb is a usage error naming it (the shared rejection arm),
+    // and `--dry-run`/`--verbose` too — the verb's whole job is an
+    // interactive side effect, so there is no argv to print and no
+    // run to report on (the generic `flags.any()` arm).
+    let (inv, _repo, _sidecar) = fixture("tui-flags", &[]);
+    for args in [
+        vec!["--backend", "krun", "tui"],
+        vec!["--multiplexer", "tmux", "tui"],
+        vec!["--tmux", "tui"],
+        vec!["--no-agent", "tui"],
+        vec!["--ro", "/tmp", "tui"],
+        vec!["--rw", "/tmp", "tui"],
+        vec!["--session", "fix-1", "tui"],
+        vec!["--sidecar", "/tmp", "tui"],
+        vec!["--config", "/tmp", "tui"],
+        vec!["--result", "tui"],
+        vec!["--timeout", "5", "tui"],
+        vec!["--detach", "tui"],
+        vec!["--detachable", "tui"],
+        vec!["--dry-run", "tui"],
+        vec!["--verbose", "tui"],
+    ] {
+        let (code, _, stderr) = run_binary_with(&inv, &args);
+        assert_eq!(code, 2, "{args:?}: {stderr}");
+        assert!(
+            stderr.contains("is not valid with `tui`"),
+            "{args:?}: {stderr}"
+        );
+    }
+}
+
+#[test]
+fn tui_refuses_a_tail() {
+    // T1: the verb takes no tail — an argument after it is a usage
+    // error, never a flag the picker would accept and ignore.
+    let (inv, _repo, _sidecar) = fixture("tui-tail", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["tui", "extra"]);
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(
+        stderr.contains("mysbx tui: unexpected argument: extra"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("try `mysbx --help`"), "{stderr}");
+}
+
+#[test]
+fn tui_refuses_a_cwd_that_is_not_a_repo() {
+    // T3/D1: repo resolution is unchanged — `$HOME` is not a repo,
+    // and the refusal (exit 70) fires before any row renders.
+    let base = tmpdir("tui-home");
+    let home = base.join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(base.join("xdg")).unwrap();
+    let inv = Invocation {
+        args: vec!["tui"],
+        cwd: home.clone(),
+        home,
+        xdg: base.join("xdg"),
+    };
+    let (code, _, stderr) = run_binary(&inv);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("mysbx: ") && stderr.contains("repo"),
+        "the refusal names the repo problem: {stderr}"
+    );
+}
+
+#[test]
+fn tui_is_allowed_in_a_once_run() {
+    // T8/D22: the once gate ALLOWS the verb, so the spelled-out
+    // `mysbx-once tui` must not hit the once refusal — it reaches
+    // the picker, whose own no-tty case prints the ONCE suggestion
+    // (`mysbx-once run -- CMD`), never the plain form's.
+    let (inv, _repo, _sidecar) = fixture("tui-once", &[]);
+    let (code, _stdout, stderr) = run_once(&inv, &["tui"]);
+    assert_eq!(
+        code,
+        mysbx::EXIT_INFRASTRUCTURE,
+        "the picker's no-tty refusal: {stderr}"
+    );
+    assert!(
+        !stderr.contains("is refused in once-mode"),
+        "tui must not hit the once refusal: {stderr}"
+    );
+    assert!(
+        stderr.contains("mysbx-once: the picker needs a terminal on stdin and stdout"),
+        "the once form's own no-tty refusal fired: {stderr}"
+    );
+    assert!(
+        stderr.contains("use `mysbx-once run -- CMD`"),
+        "the refusal suggests the once scripted form: {stderr}"
+    );
+}
+
 #[test]
 fn proxy_only_refuses_a_socket_outside_the_pinned_directory() {
     // bd myconfig-mo3.2.6: the socket path is exactly
