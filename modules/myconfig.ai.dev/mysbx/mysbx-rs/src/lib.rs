@@ -3563,6 +3563,54 @@ fn sandbox_pipeline(
         }
     }
 
+    // The `[[host-services]]` rows (bd myconfig-db56, docs/design/
+    // egress-host-services.md E15, config.md D34): rows reach the
+    // host ONLY through the per-run broker's forward, so the key is
+    // legal only next to the transport that terminates at one —
+    // `network = "proxy-only"` on a Broker-row backend. Every other
+    // combination is refused before the session clone and before the
+    // `--dry-run` return (a dry run audits it), with the reason
+    // naming the row class: a forward next to a shared network is
+    // nothing at all (the payload would reach the host directly),
+    // next to `public` it is a second policy the lane cannot express,
+    // and on nono/podman-krun it has no broker to ride.
+    if !merged.host_services.is_empty() {
+        let broker_row = matches!(
+            backends::find(backend).map(|row| row.allowlist),
+            Some(backends::Allowlist::Broker)
+        );
+        let names = merged
+            .host_services
+            .iter()
+            .map(|r| format!("`{}`", r.name))
+            .collect::<Vec<_>>()
+            .join(", ");
+        if !broker_row {
+            eprintln!(
+                "mysbx: the configuration names host services ({names}) — the `{backend}` backend has no per-run egress broker to forward them through; the nono backend enforces its own allowlist lane and libkrun's TSI is an unfiltered proxy (docs/design/config.md D34, open decision 12)"
+            );
+            eprintln!(
+                "  switch the backend to `bubblewrap` (or another broker-channel backend) with network = \"proxy-only\", or drop the rows"
+            );
+            return EXIT_INFRASTRUCTURE;
+        }
+        if merged.network.is_public() {
+            eprintln!(
+                "mysbx: network = \"public\" is the broker's deny-set lane; host-service rows ({names}) next to it are a second policy the lane cannot express — drop the rows or use network = \"proxy-only\" (docs/design/config.md D34)"
+            );
+            return EXIT_INFRASTRUCTURE;
+        }
+        if merged.network != config::Network::ProxyOnly {
+            eprintln!(
+                "mysbx: the configuration names host services ({names}) — a row's forward rides the per-run egress broker, which only a network = \"proxy-only\" run starts; next to a shared or absent network the payload reaches the host directly and the rows are nothing at all (docs/design/config.md D34)"
+            );
+            eprintln!(
+                "  set network = \"proxy-only\" (docs/design/egress-host-services.md E15) or drop the rows"
+            );
+            return EXIT_INFRASTRUCTURE;
+        }
+    }
+
     // The `network = "proxy-only"` channel (docs/design/config.md D20,
     // bd myconfig-mo3.2.6): resolve and validate the wrapper's pins in
     // step 4b — BEFORE the session clone (step 4a) and before the
@@ -3587,6 +3635,7 @@ fn sandbox_pipeline(
             Vec::new()
         },
         merged.connect_ports.clone(),
+        merged.host_services.clone(),
     ) {
         Ok(pins) => pins,
         Err(()) => return EXIT_INFRASTRUCTURE,
@@ -7085,6 +7134,14 @@ pub struct EgressPins {
     /// refuse an allowlist under the public profile, and the broker's
     /// parse refuses the mixed argv.
     pub public: bool,
+    /// The `[[host-services]]` rows (bd myconfig-db56, docs/design/
+    /// egress-host-services.md E15): argv-pinned forwards to named
+    /// host loopback endpoints, one `--host-service name=127.0.0.1:<port>`
+    /// flag per row. EMPTY for a run without the key. The rows ride
+    /// the proxy-only transport like the channel itself and are
+    /// independent of the CONNECT table (a row is a forward, not a
+    /// grant — no proxy variables, no `connect-ports` requirement).
+    pub host_services: Vec<config::HostServiceRow>,
 }
 
 /// Resolve and validate the `proxy-only` egress channel from
@@ -7114,6 +7171,7 @@ pub fn resolve_egress(
     _dry_run: bool,
     allow_domains: Vec<String>,
     connect_ports: Vec<u16>,
+    host_services: Vec<config::HostServiceRow>,
 ) -> Result<Option<EgressPins>, ()> {
     // Asked of the registry, never matched by name here
     // (backends.rs: every name-matching call site funnels through
@@ -7250,6 +7308,12 @@ pub fn resolve_egress(
         // the profile is the public one — the upstream gates keep
         // the table empty there, so the two are never both set.
         public: network.is_public(),
+        // The host-service rows (bd myconfig-db56): threaded only
+        // when the upstream gates admitted the key (proxy-only on a
+        // Broker-row backend); the broker argv builder turns each
+        // row into a `--host-service` flag and re-validates
+        // fail-closed before its socket exists.
+        host_services,
     }))
 }
 
@@ -8357,6 +8421,16 @@ fn broker_argv(
     // argv as defense in depth).
     if pinned.public {
         argv.push("--public".into());
+    }
+    // The host-service rows (bd myconfig-db56, docs/design/
+    // egress-host-services.md E15): one `--host-service
+    // <name>=127.0.0.1:<port>` flag per row. The rows ride every
+    // broker-backed lane — they are forwards, not grants — and the
+    // dry-run argv block below prints them the same way, so an
+    // operator audits the exact forwards a run would start.
+    for row in &pinned.host_services {
+        argv.push("--host-service".into());
+        argv.push(format!("{}=127.0.0.1:{}", row.name, row.port));
     }
     argv
 }

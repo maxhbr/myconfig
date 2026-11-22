@@ -1425,3 +1425,341 @@ fn a_short_non_connect_prefix_is_served_promptly_not_held_for_the_token() {
         );
     }
 }
+
+// ---- The host-service rows (bd myconfig-db56, docs/design/
+// ---- egress-host-services.md E15) ---------------------------------------
+
+/// A TCP fixture standing in for the HOST SERVICE: a loopback
+/// listener that answers one connection with a fixed line. It does
+/// NOT read first: a real CONNECT client sends nothing after the
+/// head until the tunnel answers, so a fixture that reads before
+/// writing deadlocks against a client that waits for the answer.
+fn host_service_fixture() -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind the service fixture");
+    let addr = listener.local_addr().expect("service addr").to_string();
+    std::thread::spawn(move || {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let _ = stream.write_all(b"SERVICE-ANSWER\r\n");
+            let _ = stream.flush();
+            // Half-close: the client's read side sees EOF after the
+            // answer without either side blocking on the other.
+            let _ = stream.shutdown(std::net::Shutdown::Write);
+            let mut sink = Vec::new();
+            let _ = stream.read_to_end(&mut sink);
+        }
+    });
+    addr
+}
+
+/// The row's port from the fixture address (the row target is
+/// `127.0.0.1:<that port>`).
+fn fixture_port(addr: &str) -> u16 {
+    addr.rsplit_once(':')
+        .expect("host:port")
+        .1
+        .parse()
+        .expect("port")
+}
+
+#[test]
+fn a_host_service_row_forwards_a_connect_by_name() {
+    // E15's acceptance: a proxy-only sandbox CONNECTs the row's NAME
+    // and the broker dials the row's literal loopback target — the
+    // payload reaches exactly the named service, with `allow` logged.
+    let dir = run_dir("row-forward");
+    let model = upstream_fixture();
+    let service = host_service_fixture();
+    let port = fixture_port(&service);
+    let (child, socket) = spawn_ready_with(
+        &dir,
+        &model,
+        &[&format!("--host-service=my-mcp=127.0.0.1:{port}")],
+    );
+    let mut client = std::os::unix::net::UnixStream::connect(&socket).expect("connect");
+    client
+        .write_all(format!("CONNECT my-mcp:{port} HTTP/1.1\r\n\r\n").as_bytes())
+        .expect("write CONNECT");
+    let answer = read_line_until_double_crlf(&mut client);
+    // Half-close the write side like a tunnel client with no payload:
+    // the broker's client-to-upstream copy then sees EOF instead of
+    // blocking the test on a read that never comes.
+    let _ = client.shutdown(std::net::Shutdown::Write);
+    let mut tunneled = String::new();
+    let _ = client.read_to_string(&mut tunneled);
+    let mut child = child;
+    let _ = client.shutdown(std::net::Shutdown::Both);
+    let _ = child.kill();
+    let _ = child.wait();
+    let log = std::fs::read_to_string(log_in(&dir)).expect("read the decision log");
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(
+        answer.starts_with("HTTP/1.1 200"),
+        "the row's tunnel answers 200: {answer}"
+    );
+    assert!(
+        tunneled.contains("SERVICE-ANSWER"),
+        "the dialed service answers through the tunnel: {tunneled}"
+    );
+    assert!(
+        log.contains("\"event\":\"allow\"") && log.contains("host-service row `my-mcp`"),
+        "the row dial is admitted and logged by name: {log}"
+    );
+    assert!(
+        log.contains("host-service rows: my-mcp=127.0.0.1:"),
+        "the listen block names the row set: {log}"
+    );
+}
+
+#[test]
+fn a_row_wrong_port_is_a_deny_and_no_other_port_is_granted() {
+    // The row pins the PORT too (E15's conjunction): `CONNECT
+    // <name>:<other port>` is a `deny` naming the row.
+    let dir = run_dir("row-wrongport");
+    let model = upstream_fixture();
+    let service = host_service_fixture();
+    let port = fixture_port(&service);
+    let (child, socket) = spawn_ready_with(
+        &dir,
+        &model,
+        &[&format!("--host-service=my-mcp=127.0.0.1:{port}")],
+    );
+    // The wrong port on the row's own name.
+    let wrong = if port == 8123 { 8124 } else { 8123 };
+    let mut client = std::os::unix::net::UnixStream::connect(&socket).expect("connect");
+    client
+        .write_all(format!("CONNECT my-mcp:{wrong} HTTP/1.1\r\n\r\n").as_bytes())
+        .expect("write CONNECT");
+    let answer = read_line_until_double_crlf(&mut client);
+    let mut child = child;
+    let _ = client.shutdown(std::net::Shutdown::Both);
+    let _ = child.kill();
+    let _ = child.wait();
+    let log = std::fs::read_to_string(log_in(&dir)).expect("read the decision log");
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(
+        answer.starts_with("HTTP/1.1 403"),
+        "the wrong port is refused, not tunneled: {answer}"
+    );
+    assert!(
+        log.contains("\"event\":\"deny\"") && log.contains("selects ONE endpoint"),
+        "the deny names the row rule: {log}"
+    );
+}
+
+#[test]
+fn a_row_serves_under_the_plain_phase_b_broker() {
+    // Rows are forwards, not grants: a broker WITHOUT a CONNECT table
+    // (the plain phase-B argv a `proxy-only` run with only the key
+    // gets) still serves the rows — the model lane is untouched and
+    // the row lane is the one policy the argv carries.
+    let dir = run_dir("row-plain");
+    let model = upstream_fixture();
+    let service = host_service_fixture();
+    let port = fixture_port(&service);
+    let (child, socket) = spawn_ready_with(
+        &dir,
+        &model,
+        &[&format!("--host-service=mcp.internal=127.0.0.1:{port}")],
+    );
+    // The row works…
+    let mut client = std::os::unix::net::UnixStream::connect(&socket).expect("connect");
+    client
+        .write_all(format!("CONNECT mcp.internal:{port} HTTP/1.1\r\n\r\n").as_bytes())
+        .expect("write CONNECT");
+    let answer = read_line_until_double_crlf(&mut client);
+    let _ = client.shutdown(std::net::Shutdown::Both);
+    assert!(
+        answer.starts_with("HTTP/1.1 200"),
+        "the row forwards without a table: {answer}"
+    );
+    // …and an unnamed host is still denied (no table lane exists).
+    let mut client = std::os::unix::net::UnixStream::connect(&socket).expect("connect");
+    client
+        .write_all(b"CONNECT github.com:443 HTTP/1.1\r\n\r\n")
+        .expect("write CONNECT");
+    let answer = read_line_until_double_crlf(&mut client);
+    let mut child = child;
+    let _ = client.shutdown(std::net::Shutdown::Both);
+    let _ = child.kill();
+    let _ = child.wait();
+    let log = std::fs::read_to_string(log_in(&dir)).expect("read the decision log");
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(
+        answer.starts_with("HTTP/1.1 403"),
+        "an unnamed host is not a row and has no lane: {answer}"
+    );
+}
+
+#[test]
+fn a_non_loopback_row_target_is_refused_with_seventy() {
+    // The blast-radius fence (E15): the row class exists to reach HOST
+    // services — services that chose loopback — and nothing else. A
+    // non-loopback target is a refused argv, exit 70, before the
+    // socket, never a silently-widened row.
+    let dir = run_dir("row-nonloopback");
+    let (code, _stdout, stderr) = run(&[
+        "--listen",
+        &sock(&dir),
+        "--upstream",
+        "127.0.0.1:4000",
+        "--decision-log",
+        &log_in(&dir),
+        "--host-service",
+        "lan-thing=10.0.0.5:8080",
+    ]);
+    let socket_existed = Path::new(&sock(&dir)).exists();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(code, Some(70), "stderr: {stderr}");
+    assert!(
+        stderr.contains("not a loopback address"),
+        "the refusal names the loopback rule: {stderr}"
+    );
+    assert!(!socket_existed, "a refused argv leaves no socket");
+}
+
+#[test]
+fn a_duplicated_row_name_is_refused_with_seventy() {
+    // One name selects exactly one forward: two rows under one name
+    // would make two forwards the log could not tell apart, so the
+    // argv is refused (exit 70) before the socket.
+    let dir = run_dir("row-duplicate");
+    let service = host_service_fixture();
+    let port = fixture_port(&service);
+    let other = if port == 9001 { 9002 } else { 9001 };
+    let (code, _stdout, stderr) = run(&[
+        "--listen",
+        &sock(&dir),
+        "--upstream",
+        "127.0.0.1:4000",
+        "--decision-log",
+        &log_in(&dir),
+        "--host-service",
+        &format!("my-mcp=127.0.0.1:{port}"),
+        "--host-service",
+        &format!("my-mcp=127.0.0.1:{other}"),
+    ]);
+    let socket_existed = Path::new(&sock(&dir)).exists();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(code, Some(70), "stderr: {stderr}");
+    assert!(
+        stderr.contains("names `my-mcp` twice"),
+        "the refusal names the duplicated selector: {stderr}"
+    );
+    assert!(!socket_existed, "a refused argv leaves no socket");
+}
+
+#[test]
+fn localhost_is_refused_as_a_row_name_with_a_usage_error() {
+    // `localhost` inside the sandbox IS the relay's own listener
+    // (bound over /etc/hosts) — a row under that name would shadow
+    // the model lane's endpoint with a forward to the host. Refused
+    // at parse time, exit 2, like every other shape violation.
+    let dir = run_dir("row-localhost");
+    let (code, _stdout, stderr) = run(&[
+        "--listen",
+        &sock(&dir),
+        "--upstream",
+        "127.0.0.1:4000",
+        "--decision-log",
+        &log_in(&dir),
+        "--host-service=localhost=127.0.0.1:8080",
+    ]);
+    let socket_existed = Path::new(&sock(&dir)).exists();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(code, Some(70), "stderr: {stderr}");
+    assert!(
+        stderr.contains("localhost") && stderr.contains("relay"),
+        "the refusal explains the shadowing: {stderr}"
+    );
+    assert!(!socket_existed, "a refused argv leaves no socket");
+}
+
+#[test]
+fn an_ip_literal_row_name_is_refused_fail_closed() {
+    // The name is the policy (the same rule as `allow-domains`): an
+    // address as the selector would make the row an address grant —
+    // the payload could reach ANY loopback service by spelling its
+    // address, which is exactly what E9 exists to prevent. A content
+    // refusal, exit 70, like the CONNECT table's.
+    let dir = run_dir("row-ip-name");
+    for bad in [
+        "--host-service=127.0.0.1=127.0.0.1:8080",
+        "--host-service=::1=127.0.0.1:8080",
+    ] {
+        let (code, _stdout, stderr) = run(&[
+            "--listen",
+            &sock(&dir),
+            "--upstream",
+            "127.0.0.1:4000",
+            "--decision-log",
+            &log_in(&dir),
+            bad,
+        ]);
+        assert_eq!(code, Some(70), "{bad}: stderr: {stderr}");
+        assert!(
+            stderr.contains("IP literal"),
+            "the refusal names the rule: {stderr}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_row_name_with_gateway_or_path_syntax_is_refused() {
+    // The `allow-domains` grammar (E11's constraint, on the rows too):
+    // a row is a forward to one endpoint, never a route — and no
+    // scheme/path/port syntax belongs in the selector. Content rules
+    // are fail-closed (exit 70, before the socket), like the table's.
+    let dir = run_dir("row-badname");
+    for bad in [
+        "--host-service=http://x=127.0.0.1:8080",
+        "--host-service=a/b=127.0.0.1:8080",
+        "--host-service=a:b=127.0.0.1:8080",
+        "--host-service=via x=127.0.0.1:8080",
+        "--host-service==127.0.0.1:8080",
+    ] {
+        let (code, _stdout, stderr) = run(&[
+            "--listen",
+            &sock(&dir),
+            "--upstream",
+            "127.0.0.1:4000",
+            "--decision-log",
+            &log_in(&dir),
+            bad,
+        ]);
+        assert_eq!(code, Some(70), "{bad}: stderr: {stderr}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_row_listen_block_names_every_row_in_a_deterministic_order() {
+    // E10's audit surface on the new rows: the rows block names every
+    // row with its port — what `--dry-run` prints and `mysbx diagnose
+    // egress` reads — in a deterministic (sorted) order.
+    let dir = run_dir("row-listen");
+    let model = upstream_fixture();
+    let service = host_service_fixture();
+    let port = fixture_port(&service);
+    let (child, _socket) = spawn_ready_with(
+        &dir,
+        &model,
+        &[
+            &format!("--host-service=b-svc=127.0.0.1:9443"),
+            &format!("--host-service=a-svc=127.0.0.1:{port}"),
+        ],
+    );
+    let mut child = child;
+    let _ = child.kill();
+    let _ = child.wait();
+    let log = std::fs::read_to_string(log_in(&dir)).expect("read the decision log");
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(
+        log.contains(&format!("a-svc=127.0.0.1:{port}")) && log.contains("b-svc=127.0.0.1:9443"),
+        "the rows block names every row: {log}"
+    );
+    assert!(
+        log.find("a-svc").unwrap() < log.find("b-svc").unwrap(),
+        "rows print sorted by name: {log}"
+    );
+}

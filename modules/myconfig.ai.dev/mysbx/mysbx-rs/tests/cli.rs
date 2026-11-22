@@ -19423,3 +19423,155 @@ fn once_refuses_the_config_override() {
         "stderr: {e}"
     );
 }
+
+// ---- The host-service rows' pipeline gates (bd myconfig-db56, docs/
+// ---- design/egress-host-services.md E15) -----------------------------------
+
+/// The happy half: a `[[host-services]]` row under a paired
+/// `network = "proxy-only"` profile rides the broker argv verbatim —
+/// one `--host-service name=127.0.0.1:port` row per entry, in the same
+/// broker block as the CONNECT table's rows.
+#[test]
+fn a_paired_run_emits_the_host_service_rows_in_the_broker_argv() {
+    let (inv, _repo, sidecar) = fixture("host-services-emit", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"proxy-only\"\n\
+         [[host-services]]\nname = \"my-mcp\"\nport = 8765\n",
+    )
+    .unwrap();
+    let runtime = std::env::temp_dir().join(format!("mysbx-rt-hsvc-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&runtime);
+    std::fs::create_dir_all(&runtime).unwrap();
+    let mut cmd = spawn_proxy_only(&inv, &["--dry-run", "--verbose"]);
+    cmd.env("XDG_RUNTIME_DIR", &runtime).env(
+        "MYSBX_EGRESS_BROKER",
+        "/synth/store/cccc-mysbx/bin/mysbx-egress-broker",
+    );
+    let (code, stdout, stderr) = run_command(cmd);
+    let _ = std::fs::remove_dir_all(&runtime);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    let broker_at = lines
+        .iter()
+        .position(|l| *l == "/synth/store/cccc-mysbx/bin/mysbx-egress-broker")
+        .unwrap_or_else(|| panic!("no broker argv block: {stdout}"));
+    let broker: Vec<&str> = lines[broker_at..]
+        .iter()
+        .take_while(|l| !l.is_empty())
+        .copied()
+        .collect();
+    assert!(
+        broker
+            .windows(2)
+            .any(|w| w[0] == "--host-service" && w[1] == "my-mcp=127.0.0.1:8765"),
+        "the row is verbatim in the broker argv: {stdout}"
+    );
+    // One row per entry, nothing else granted: the rows add no
+    // proxy variable (E13's namespace is the model lane's), no
+    // allow-domain, and no extra flag.
+    assert!(!broker.contains(&"--allow-domain"), "{stdout}");
+    assert_eq!(
+        broker.iter().filter(|l| **l == "--host-service").count(),
+        1,
+        "one row per entry: {stdout}"
+    );
+}
+
+/// The E7 pairing, on the rows too: a row next to a SHARED network is
+/// refused (EXIT_INFRASTRUCTURE) — the transport decides the row's
+/// fate, and a proxy next to a shared netns is advisory.
+#[test]
+fn host_services_next_to_a_shared_network_are_refused() {
+    let (inv, _repo, sidecar) = fixture("host-services-shared", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"shared\"\n\
+         [[host-services]]\nname = \"my-mcp\"\nport = 8765\n",
+    )
+    .unwrap();
+    let (code, _stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(
+        stderr.contains("host-services") && stderr.contains("proxy-only"),
+        "the refusal names the key and the fix: {stderr}"
+    );
+}
+
+/// `network = "none"` (and the default network) refuse the rows the
+/// same way: no transport, no forward.
+#[test]
+fn host_services_next_to_no_network_are_refused() {
+    for (why, text) in [
+        (
+            "none",
+            "backend = \"bubblewrap\"\nnetwork = \"none\"\n\
+             [[host-services]]\nname = \"my-mcp\"\nport = 8765\n",
+        ),
+        (
+            "default",
+            "backend = \"bubblewrap\"\n\
+             [[host-services]]\nname = \"my-mcp\"\nport = 8765\n",
+        ),
+    ] {
+        let (inv, _repo, sidecar) = fixture(&format!("host-services-none-{why}"), &[]);
+        std::fs::write(sidecar.join("config.toml"), text).unwrap();
+        let (code, _stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+        assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "{why}: {stderr}");
+        assert!(
+            stderr.contains("host-services") && stderr.contains("proxy-only"),
+            "{why}: the refusal names the key and the fix: {stderr}"
+        );
+    }
+}
+
+/// `network = "public"` is its own refusal: a public netns needs no
+/// broker, and a row under it would be dead weight at best.
+#[test]
+fn host_services_under_the_public_network_are_refused() {
+    let (inv, _repo, sidecar) = fixture("host-services-public", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nnetwork = \"public\"\n\
+         [[host-services]]\nname = \"my-mcp\"\nport = 8765\n",
+    )
+    .unwrap();
+    let (code, _stdout, stderr) = run_binary_with(&inv, &["--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE);
+    assert!(
+        stderr.contains("host-service rows") && stderr.contains("my-mcp"),
+        "the refusal names the rows and the fix: {stderr}"
+    );
+}
+
+/// A non-Broker backend refuses the rows even under
+/// `network = "proxy-only"`: no broker argv to ride (the layered
+/// nono channel is the other proxy-only transport and it carries its
+/// OWN policy, not this one's rows).
+#[test]
+fn host_services_on_a_non_broker_backend_are_refused() {
+    // `nono` is the one layered proxy-only backend whose pin set is
+    // satisfied here, making its ROW refusal the message under test.
+    // The podman and microvm backends are absent: each refuses
+    // `network = "proxy-only"` on its OWN earlier pins (the broker/
+    // relay/in-image pins, D20) before the row gate can speak — the
+    // stronger refusal wins, and podman-krun refuses the pairing
+    // outright (a permanent refusal).
+    let Some((inv, _, sidecar)) = krun_fixture("host-services-backend-nono", &[]) else {
+        return; // no placeable fixture root here
+    };
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"nono\"\nnetwork = \"proxy-only\"\n\
+         [[host-services]]\nname = \"my-mcp\"\nport = 8765\n",
+    )
+    .unwrap();
+    // The channel pins ride along so the row gate (not a missing-pin
+    // refusal) is the refusal under test.
+    let (code, _stdout, stderr) = run_command(spawn_proxy_only(&inv, &["--dry-run"]));
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "nono: {stderr}");
+    assert!(
+        stderr.contains("nono") && stderr.contains("host services"),
+        "the refusal names the backend and the key: {stderr}"
+    );
+}

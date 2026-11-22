@@ -1466,6 +1466,12 @@ they are a schema error in one file and a refused run (`70`) when the
 layers combine them — the profile already names the one reachable
 endpoint (D20).
 
+The `[[host-services]]` rows (D34) are the proxy-only channel's
+counterpart of these keys: they name HOST loopback services a
+`network = "proxy-only"` run may reach through the per-run egress
+broker, and they ride the same per-backend honesty rule — a backend
+without the broker channel refuses them.
+
 ### D22: the sandbox's own SSH keypair, generated into the sidecar state
 
 Every live-workspace run gets the repository's git-over-SSH credential
@@ -2253,3 +2259,51 @@ subtree listed without its `extraFiles` entry materializes an EMPTY
 DIRECTORY named `mcp.json`, which pi fails to parse — hence gate,
 path and content come from one shared generator, and
 `mysbx-mcp-mounts-test` pins it.
+
+### D34: `host-services` — named HOST loopback forwards for the
+### proxy-only channel (bd myconfig-db56)
+
+`[[host-services]]` rows extend the LiteLLM pattern (D20's broker
+transport, egress-connect.md E7): a `network = "proxy-only"` run can
+reach NAMED services listening on the HOST's loopback — an HTTP MCP
+server on the host (the bd myconfig-9y4c use case D33 left open), bd's
+own socket, any pinned loopback upstream — through the per-run egress
+broker, without the service ever binding a non-loopback address.
+
+A row is `name` + `port`, nothing else spellable:
+
+```toml
+[[host-services]]
+name = "my-mcp"
+port = 8765
+```
+
+The TARGET is not a key: a row always forwards to `127.0.0.1:<port>`
+on the host (the broker's own netns), because a spellable address would
+make the row an address grant — the one thing E9's loopback exemption
+exists to prevent. The NAME is the policy, like `allow-domains`:
+lower-cased at parse, the payload selects the row by
+`CONNECT <name>:<port>`; `localhost` (the in-sandbox relay's own name,
+bound over /etc/hosts) and IP-literal names are refused.
+
+The rows ride the broker argv, pinned and never resolved
+(`--host-service <name>=127.0.0.1:<port>`, one flag per merged row), so
+they earn the E9 loopback exemption the same way the LiteLLM upstream
+row does. The Landlock fence (E10) carries every row's target port, and
+a wrong port under a row's name is a DENY — the row pins the
+name+port conjunction. No proxy variable is injected for a row (E13's
+namespace stays the model lane's); the payload reaches the forward by
+CONNECTing the name explicitly. Full design:
+egress-host-services.md E15.
+
+Pairing (E7's rule on the new key): the rows are legal only on a
+Broker-channel backend (`bubblewrap`) under `network = "proxy-only"`;
+next to a shared, absent or `public` network, or on a non-Broker
+backend (`nono`, podman, microvm), the run is REFUSED
+(EXIT_INFRASTRUCTURE) — never a silently dropped row.
+
+Merge (D15's rule): the user layer's rows first, the sidecar's added,
+deduplicated by name keeping the first occurrence; a name spelled with
+DIFFERENT ports in two trusted layers is a merge refusal, not a
+first-win — either silent resolution would drop a row an operator
+wrote, and one selector cannot select two forwards.

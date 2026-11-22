@@ -77,7 +77,7 @@
 //! item 4 (the argv builder) accepts. `Config` values are layer *inputs*
 //! and never leave this module's boundary as effective configuration.
 
-use crate::config::{Config, Display, Mount, Multiplexer, Network, Store};
+use crate::config::{Config, Display, HostServiceRow, Mount, Multiplexer, Network, Store};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -188,6 +188,15 @@ pub struct Merged {
     /// bd myconfig-mo3.1): same concatenation and dedup rule as
     /// [`Merged::connect_ports`].
     pub listen_ports: Vec<u16>,
+    /// The `[[host-services]]` rows (docs/design/config.md D34, bd
+    /// myconfig-db56): named host loopback forwards, concatenated
+    /// user layer first, deduplicated BY NAME keeping the FIRST
+    /// occurrence — the D15 rule. A name appearing in both layers
+    /// with DIFFERENT ports is a merge REFUSAL (the run is refused,
+    /// exit 70): two forwards for one selector is a policy the argv
+    /// cannot express, and a silent first-win would hide a
+    /// disagreement the operator must see.
+    pub host_services: Vec<HostServiceRow>,
     /// Resource limits (`memory`, `cpus`, `pids-limit`,
     /// docs/design/config.md D23): each from the sidecar when it
     /// decided, else from the user layer — like `multiplexer`, no
@@ -358,6 +367,15 @@ pub enum Error {
     /// to `false` (docs/design/config.md D27) — the same narrowing
     /// violation as [`Error::NetworkUpgrade`].
     NestedVirtUpgrade { message: String },
+    /// Two trusted layers disagree over one `[[host-services]]` name
+    /// (docs/design/config.md D34, bd myconfig-db56): the same selector
+    /// with two different ports. A merge refusal — either silent
+    /// resolution would drop a row the operator wrote.
+    HostServiceConflict {
+        name: String,
+        earlier_port: u16,
+        later_port: u16,
+    },
     /// Reading or parsing one of the layers failed.
     Load(String),
 }
@@ -400,6 +418,17 @@ impl fmt::Display for Error {
             Error::EnvOverride { key, message } => write!(f, "{message} (key: `{key}`)"),
             Error::NetworkUpgrade { message } => f.write_str(message),
             Error::NestedVirtUpgrade { message } => f.write_str(message),
+            Error::HostServiceConflict {
+                name,
+                earlier_port,
+                later_port,
+            } => write!(
+                f,
+                "two configuration layers name the host service `{name}` with \
+                 different ports ({earlier_port} vs {later_port}); a row's name selects \
+                 exactly one forward — align the rows or drop one \
+                 (docs/design/config.md D34)"
+            ),
             Error::Load(m) => f.write_str(m),
         }
     }
@@ -548,6 +577,7 @@ fn fold_two(
         allow_domains: dedupe(&earlier.allow_domains, &later.allow_domains),
         connect_ports: dedupe_ports(&earlier.connect_ports, &later.connect_ports),
         listen_ports: dedupe_ports(&earlier.listen_ports, &later.listen_ports),
+        host_services: merge_host_services(&earlier.host_services, &later.host_services)?,
         memory: later.memory.or(earlier.memory),
         scratch_size: later.scratch_size.or(earlier.scratch_size),
         cpus: later.cpus.or(earlier.cpus),
@@ -566,6 +596,40 @@ fn fold_two(
         // parent of its own.
         parent: None,
     })
+}
+
+/// Merge the `[[host-services]]` rows of two layers (docs/design/
+/// config.md D34, bd myconfig-db56): the D15 rule — the earlier
+/// (user/parent) layer first, the later (sidecar/child) layer's rows
+/// added, deduplicated BY NAME keeping the FIRST occurrence. A name
+/// spelled in BOTH layers with DIFFERENT ports is a REFUSAL: either
+/// silent resolution would drop a row the operator wrote, and two
+/// forwards for one selector is a policy the broker argv cannot
+/// express. Identical rows in both layers are the same row — the
+/// first occurrence wins and nothing is lost.
+fn merge_host_services(
+    earlier: &[HostServiceRow],
+    later: &[HostServiceRow],
+) -> Result<Vec<HostServiceRow>, Error> {
+    let mut rows: Vec<HostServiceRow> = Vec::new();
+    let mut push = |row: &HostServiceRow, rows: &mut Vec<HostServiceRow>| {
+        if let Some(existing) = rows.iter().find(|r| r.name == row.name) {
+            if existing.port != row.port {
+                return Err(Error::HostServiceConflict {
+                    name: row.name.clone(),
+                    earlier_port: existing.port,
+                    later_port: row.port,
+                });
+            }
+            return Ok(());
+        }
+        rows.push(row.clone());
+        Ok(())
+    };
+    for row in earlier.iter().chain(later.iter()) {
+        push(row, &mut rows)?;
+    }
+    Ok(rows)
 }
 
 /// Load the user config and the sidecar config for `repo`'s sidecar
@@ -1234,6 +1298,14 @@ pub fn merge(
     let connect_ports = dedupe_ports(&user.connect_ports, &sidecar.connect_ports);
     let listen_ports = dedupe_ports(&user.listen_ports, &sidecar.listen_ports);
 
+    // host-services (docs/design/config.md D34, bd myconfig-db56): the
+    // D15 rule — user layer first, sidecar adds, dedupe by NAME
+    // keeping the first occurrence. A name in BOTH layers with
+    // different ports is a REFUSAL, not a first-win: the disagreement
+    // is between two trusted layers over one selector, and either
+    // resolution would silently drop a row the operator wrote.
+    let host_services = merge_host_services(&user.host_services, &sidecar.host_services)?;
+
     Ok(Merged {
         backend: sidecar.backend.or(user.backend),
         network,
@@ -1262,6 +1334,7 @@ pub fn merge(
         allow_domains,
         connect_ports,
         listen_ports,
+        host_services,
         // Resource limits (D23): the later layer wins, like
         // `multiplexer`.
         memory: sidecar.memory.or(user.memory),
@@ -3348,6 +3421,62 @@ mod tests {
         assert_eq!(merged.allow_domains, vec!["example.org", "mirror.org"]);
         assert_eq!(merged.connect_ports, vec![443, 22]);
         assert_eq!(merged.listen_ports, vec![8080]);
+    }
+
+    #[test]
+    fn host_services_rows_concatenate_user_first_dedupe_by_name() {
+        // D34's merge is D15's: the user layer's rows first, the
+        // sidecar's added, deduplicated BY NAME keeping the first
+        // occurrence. An identical row in both layers is one row.
+        let merged = merge(
+            cfg("[[host-services]]\nname = \"a-svc\"\nport = 8080\n"),
+            cfg(
+                "[[host-services]]\nname = \"b-svc\"\nport = 9090\n[[host-services]]\nname = \"a-svc\"\nport = 8080\n",
+            ),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert_eq!(merged.host_services.len(), 2);
+        assert_eq!(merged.host_services[0].name, "a-svc");
+        assert_eq!(merged.host_services[0].port, 8080);
+        assert_eq!(merged.host_services[1].name, "b-svc");
+        assert_eq!(merged.host_services[1].port, 9090);
+    }
+
+    #[test]
+    fn host_services_name_conflicts_between_layers_are_a_merge_refusal() {
+        // Two trusted layers disagreeing over one selector is a
+        // REFUSAL, not a first-win: either silent resolution would
+        // drop a row the operator wrote, and two forwards under one
+        // name is a policy the broker argv cannot express.
+        let e = merge(
+            cfg("[[host-services]]\nname = \"a-svc\"\nport = 8080\n"),
+            cfg("[[host-services]]\nname = \"a-svc\"\nport = 9090\n"),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap_err();
+        assert!(
+            e.to_string().contains("a-svc") && e.to_string().contains("different ports"),
+            "{e}"
+        );
+        // The same conflict through the parent chain (fold_two) is
+        // the same refusal — the chain folds into the same layer
+        // shape before the merge.
+        let e = fold_two(
+            cfg("[[host-services]]\nname = \"a-svc\"\nport = 8080\n"),
+            cfg("[[host-services]]\nname = \"a-svc\"\nport = 9090\n"),
+            &user_file(),
+            &sidecar_file(),
+        )
+        .unwrap_err();
+        assert!(
+            e.to_string().contains("a-svc") && e.to_string().contains("different ports"),
+            "{e}"
+        );
     }
 
     #[test]

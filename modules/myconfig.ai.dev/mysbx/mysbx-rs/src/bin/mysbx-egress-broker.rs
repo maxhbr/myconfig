@@ -15,10 +15,13 @@
 //!    --decision-log <path>` plus the optional CONNECT-lane table,
 //!    `--allow-domain <host>` and `--allow-connect-port <port>`
 //!    (repeatable; docs/design/egress-connect.md E7–E10, bd
-//!    myconfig-ew9s), or `--public` (bd myconfig-fvi: the `network =
+//!    myconfig-ew9s), `--public` (bd myconfig-fvi: the `network =
 //!    "public"` lane — every target admitted, gated by the
-//!    private/special-use deny set) (`-h`/`--help` prints the usage
-//!    to stdout and exits 0; a usage error exits 2).
+//!    private/special-use deny set), and the host-service rows,
+//!    `--host-service <name>=127.0.0.1:<port>` (repeatable; bd
+//!    myconfig-db56, docs/design/egress-host-services.md E15)
+//!    (`-h`/`--help` prints the usage to stdout and exits 0; a usage
+//!    error exits 2).
 //! 2. Refuse before doing anything visible (exit 70, one stderr line):
 //!    an upstream that is not loopback, a socket path over
 //!    `SUN_PATH_LIMIT`, a run directory that is not a real directory
@@ -106,7 +109,7 @@ const HELP_REQUESTED: &str = "__help__";
 const USAGE: &str = "usage: mysbx-egress-broker --listen <unix-socket> \
                      --upstream 127.0.0.1:<port> --decision-log <path> \
                      [--allow-domain <host>]... [--allow-connect-port <port>]... \
-                     [--public]";
+                     [--public] [--host-service <name>=127.0.0.1:<port>]...";
 
 /// The parsed invocation.
 #[derive(Debug, PartialEq, Eq)]
@@ -137,6 +140,30 @@ struct Invocation {
     /// (a mixed argv would make two admission rules the log could
     /// not tell apart).
     public: bool,
+    /// The host-service rows (bd myconfig-db56, docs/design/
+    /// egress-host-services.md E15): argv-pinned forwards to NAMED
+    /// host loopback endpoints. A row is the LiteLLM row's shape — a
+    /// literal loopback target the payload can only SELECT by name,
+    /// never choose by address — so it is exempt from the CONNECT
+    /// lane's address-class refusal exactly as the upstream is.
+    host_services: Vec<HostService>,
+}
+
+/// One host-service row (bd myconfig-db56, docs/design/
+/// egress-host-services.md E15): `name` selects the row from a
+/// CONNECT authority; `target` is the literal loopback endpoint the
+/// broker dials when the row is selected. The name is the policy —
+/// the same rule as `allow-domains` — so no address the payload can
+/// spell reaches a row's target except by naming the row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct HostService {
+    /// The row's selector, lower-cased at validation. Plain host-name
+    /// grammar; `localhost` is refused (inside the sandbox that name
+    /// IS the relay's own listener, bound over /etc/hosts).
+    name: String,
+    /// `127.0.0.1:<port>` (or `[::1]:<port>`): the host service's
+    /// loopback endpoint, literal, never resolved.
+    target: SocketAddr,
 }
 
 impl Invocation {
@@ -147,6 +174,7 @@ impl Invocation {
         let mut allow_domains = Vec::new();
         let mut allow_connect_ports = Vec::new();
         let mut public = false;
+        let mut host_services: Vec<HostService> = Vec::new();
         let mut i = 0;
         while i < args.len() {
             match args[i].as_str() {
@@ -200,6 +228,25 @@ impl Invocation {
                     public = true;
                     i += 1;
                 }
+                "--host-service" => {
+                    let raw = args.get(i + 1).ok_or_else(|| {
+                        "`--host-service` needs a `<name>=127.0.0.1:<port>` value".to_owned()
+                    })?;
+                    host_services.push(HostService::parse(raw)?);
+                    i += 2;
+                }
+                // The combined `--host-service=<name>=<target>` spelling:
+                // the row IS one value, so the one-token form reads
+                // better in an argv dump — and the Nix wrapper pins the
+                // same spelling mysbx emits.
+                other if other.starts_with("--host-service=") => {
+                    host_services.push(HostService::parse(
+                        other
+                            .strip_prefix("--host-service=")
+                            .expect("the guard checked the prefix"),
+                    )?);
+                    i += 1;
+                }
                 "-h" | "--help" => return Err(HELP_REQUESTED.to_owned()),
                 other => return Err(format!("unknown argument `{other}`\n{USAGE}")),
             }
@@ -220,7 +267,139 @@ impl Invocation {
             allow_domains,
             allow_connect_ports,
             public,
+            host_services,
         })
+    }
+
+    /// The fail-closed content rules, applied in [`run`] with exit
+    /// 70 (the CONNECT table's class of refusal — the rows are
+    /// policy data, not argv syntax): a row the broker cannot apply
+    /// refuses the run before the socket, never a normalized argv.
+    fn validated_host_services(&self) -> Result<Vec<HostService>, String> {
+        HostService::validate(self.host_services.clone())
+    }
+}
+
+impl HostService {
+    /// Parse one `name=target` row value (a usage error, exit 2):
+    /// the `=` splits the selector from the literal target, and the
+    /// target must PARSE as a socket address — the argv's SHAPE. The
+    /// CONTENT rules (loopback-only target, the name grammar) are
+    /// [`Self::validate`]'s, refused in `run` with exit 70 like the
+    /// CONNECT table's (the rows are policy data, not argv syntax).
+    fn parse(raw: &str) -> Result<HostService, String> {
+        let (name, target) = raw
+            .split_once('=')
+            .ok_or_else(|| format!("`--host-service {raw}` needs a `<name>=<target>` value"))?;
+        let target = target.parse::<SocketAddr>().map_err(|e| {
+            format!("`--host-service {raw}`: the target is not a socket address: {e}")
+        })?;
+        Ok(HostService {
+            name: name.to_ascii_lowercase(),
+            target,
+        })
+    }
+
+    /// The fail-closed content rules (exit 70, before the socket —
+    /// the same class as the CONNECT table's `validate`, so a row
+    /// the broker cannot apply is a refused run, not a normalized
+    /// one): the target must be a non-zero-port loopback endpoint
+    /// (the blast-radius fence: the rows reach HOST services,
+    /// nothing else), the name must be a plain host name that is
+    /// neither `localhost` (inside the sandbox that name IS the
+    /// relay's own listener, bound over /etc/hosts — a row under it
+    /// would shadow the model lane's endpoint) nor an IP literal
+    /// (the name is the policy, an address would make the row an
+    /// address grant), and a duplicated name is a refusal, not a
+    /// last-wins — two forwards under one name are two policies the
+    /// log could not tell apart. Sorted by name so the fence's port
+    /// list and the listen block read deterministically.
+    fn validate(rows: Vec<HostService>) -> Result<Vec<HostService>, String> {
+        let mut seen: Vec<&str> = Vec::new();
+        for row in &rows {
+            if !row.target.ip().is_loopback() {
+                return Err(format!(
+                    "`--host-service {}={}`: the target {} is not a loopback address; a host-service \
+                     row reaches a host service listening on loopback, nothing else \
+                     (docs/design/egress-host-services.md E15)",
+                    row.name,
+                    row.target,
+                    row.target
+                ));
+            }
+            if row.target.port() == 0 {
+                return Err(format!(
+                    "`--host-service {}={}`: the target port must be 1-65535",
+                    row.name, row.target
+                ));
+            }
+            if row.name.is_empty() {
+                return Err(
+                    "`--host-service` needs a plain host name as the row's selector — the \
+                     payload CONNECTs the name to select the forward \
+                     (docs/design/egress-host-services.md E15)"
+                        .to_owned(),
+                );
+            }
+            if row.name.eq_ignore_ascii_case("localhost") {
+                return Err(
+                    "`--host-service localhost=…`: `localhost` is the in-sandbox relay's \
+                     own name (bound over /etc/hosts), not a host service; name the row \
+                     something else (docs/design/egress-host-services.md E15)"
+                        .to_owned(),
+                );
+            }
+            // The IP-literal check runs BEFORE the grammar check: an
+            // IP literal contains `:` (and `::1` contains nothing
+            // else), so the grammar check would eat it with the wrong
+            // message.
+            if row.name.parse::<std::net::IpAddr>().is_ok() {
+                return Err(format!(
+                    "`--host-service {}={}`: the name is an IP literal; a row's name is \
+                     the selector, an address would make the row an address grant \
+                     (docs/design/egress-host-services.md E15)",
+                    row.name, row.target
+                ));
+            }
+            if row.name.contains("://")
+                || row.name.contains('/')
+                || row.name.contains(':')
+                || row.name.contains('=')
+                || row
+                    .name
+                    .chars()
+                    .any(|c| c.is_whitespace() || c.is_control())
+                || !row
+                    .name
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.')
+            {
+                return Err(format!(
+                    "`--host-service {}={}`: the name is not a plain host name — no scheme, \
+                     path, port or gateway syntax belongs in it; the payload selects the \
+                     row by CONNECTing to the name (docs/design/egress-host-services.md E15)",
+                    row.name, row.target
+                ));
+            }
+            if seen.contains(&row.name.as_str()) {
+                return Err(format!(
+                    "`--host-service` names `{}` twice; a row name selects exactly \
+                     one forward (docs/design/egress-host-services.md E15)",
+                    row.name
+                ));
+            }
+            seen.push(&row.name);
+        }
+        let mut rows = rows;
+        rows.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(rows)
+    }
+
+    /// The row's port in the Landlock fence (E10's rule on the new
+    /// rows): the fence carries every row's target port, so the
+    /// fence, the listen line and the dial are exactly equal.
+    fn port(&self) -> u16 {
+        self.target.port()
     }
 }
 
@@ -236,6 +415,13 @@ fn run(inv: &Invocation) -> Result<(), String> {
             inv.upstream
         ));
     }
+    // The host-service rows' content rules (bd myconfig-db56, docs/
+    // design/egress-host-services.md E15), fail-closed HERE — the
+    // same class as the CONNECT table's validate below — so a row
+    // the broker cannot apply refuses the run (exit 70) before the
+    // socket, and the fence/listen/lane code below consumes a row
+    // set that is known-valid.
+    let host_services = inv.validated_host_services()?;
     // The CONNECT lane's policy is applied, never accepted-and-
     // ignored (E9): a name the broker cannot match, or a table that
     // names nothing, is a refused run. `--allow-connect-port` alone
@@ -264,6 +450,22 @@ fn run(inv: &Invocation) -> Result<(), String> {
     // resolved address, not a port fence, and the listen line says
     // so (a Landlock port fence cannot express "every port", so
     // none is claimed).
+    // The host-service rows' fence (E15, docs/design/
+    // egress-host-services.md): every row's target port joins the
+    // fence, so the kernel gate is exactly the row set the listen
+    // line names — the E10 rule the CONNECT table learned as review
+    // finding 3. The rows are loopback-only, so the fence's port is
+    // the only axis a row contributes; the addresses are pinned in
+    // the argv and never resolved. Applied regardless of the lane:
+    // rows and a table can coexist (the rows are forwards, not
+    // grants), so every lane's fence grows the row ports.
+    let mut fence_ports = vec![inv.upstream.port()];
+    fence_ports.extend(policy.dial_ports());
+    for row in &host_services {
+        fence_ports.push(row.port());
+    }
+    fence_ports.sort_unstable();
+    fence_ports.dedup();
     match &policy {
         // The table lane and the plain broker fence exactly their
         // ports (the admission rule's port set, E10). The PUBLIC
@@ -277,8 +479,6 @@ fn run(inv: &Invocation) -> Result<(), String> {
             check_landlock_support()?;
         }
         _ => {
-            let mut fence_ports = vec![inv.upstream.port()];
-            fence_ports.extend(policy.dial_ports());
             confine_to_ports(&fence_ports)?;
         }
     }
@@ -318,8 +518,29 @@ fn run(inv: &Invocation) -> Result<(), String> {
             policy.fence_summary()
         ),
     );
+    if !host_services.is_empty() {
+        log.record(
+            "listen",
+            &format!(
+                "host-service rows: {}",
+                host_services
+                    .iter()
+                    .map(|r| format!("{}={}", r.name, r.target))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        );
+    }
 
-    accept_loop(&listener, inv.upstream, &policy, &log)
+    accept_loop(
+        &listener,
+        inv.upstream,
+        &Lanes {
+            policy,
+            host_services,
+        },
+        &log,
+    )
 }
 
 /// The socket path must fit `sockaddr_un::sun_path` (107 bytes, the same
@@ -921,6 +1142,29 @@ fn is_link_local_v6(v6: std::net::Ipv6Addr) -> bool {
     (v6.segments()[0] & 0xffc0) == 0xfe80
 }
 
+/// The lanes a run's broker serves: the CONNECT policy (the table,
+/// the public lane, or none) plus the host-service rows (bd
+/// myconfig-db56, docs/design/egress-host-services.md E15). Both are
+/// per-run argv facts, cloned into every connection thread.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+struct Lanes {
+    policy: Policy,
+    host_services: Vec<HostService>,
+}
+
+impl Lanes {
+    /// The row a CONNECT authority's host selects, if any (E15): the
+    /// name is the selector, lower-cased the way the rows were — an
+    /// IP-literal host never selects a row (a row's name is a name).
+    fn row_for(&self, host: &str) -> Option<&HostService> {
+        if host.parse::<std::net::IpAddr>().is_ok() {
+            return None;
+        }
+        let lower = host.to_ascii_lowercase();
+        self.host_services.iter().find(|row| row.name == lower)
+    }
+}
+
 /// Accept connections until the process ends, forwarding each one. A
 /// fatal accept error ends the loop as an ERROR: a broker that stopped
 /// accepting must not look like a clean exit to the process that spawned
@@ -928,18 +1172,18 @@ fn is_link_local_v6(v6: std::net::Ipv6Addr) -> bool {
 fn accept_loop(
     listener: &UnixListener,
     upstream: SocketAddr,
-    policy: &Policy,
+    lanes: &Lanes,
     log: &DecisionLog,
 ) -> Result<(), String> {
-    let policy = policy.clone();
+    let lanes = lanes.clone();
     loop {
         match listener.accept() {
             Ok((client, _)) => {
                 let log = log.clone();
-                let policy = policy.clone();
+                let lanes = lanes.clone();
                 // One thread per connection: a slow client must not block
                 // the accept loop, an agent may open several.
-                std::thread::spawn(move || relay_one(client, upstream, &policy, &log));
+                std::thread::spawn(move || relay_one(client, upstream, &lanes, &log));
             }
             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
                 std::thread::sleep(Duration::from_millis(50));
@@ -972,21 +1216,26 @@ fn is_transient_accept_pressure(e: &io::Error) -> bool {
     matches!(e.raw_os_error(), Some(24) | Some(23) | Some(105) | Some(12))
 }
 
-/// Forward one client connection, picking the lane first (E8).
+/// Forward one client connection, picking the lane first (E8, and
+/// the host-service rows of bd myconfig-db56).
 ///
 /// The first bytes decide: a `CONNECT <host>:<port>` request line
-/// takes the policy lane; anything else is the phase-B model lane,
-/// forwarded to the upstream with the pre-read bytes first, so a
-/// client that speaks plain HTTP to the model endpoint needs no
-/// CONNECT awareness and today's behavior is preserved
-/// byte-for-byte.
+/// takes a CONNECT-shaped lane — the ROW lane when the host names a
+/// host-service row (E15: the row's literal loopback target, no
+/// resolution, no address classes — the exemption the upstream row
+/// earns by being argv-pinned), else the policy lane; anything else
+/// is the phase-B model lane, forwarded to the upstream with the
+/// pre-read bytes first, so a client that speaks plain HTTP to the
+/// model endpoint needs no CONNECT awareness and today's behavior
+/// is preserved byte-for-byte.
 ///
 /// The events are separate on purpose: `allow` is the admission
 /// decision, `deny` is the policy refusal, and
 /// `unreachable`/`io`/`resolve` are transport failures AFTER
 /// admission. A reader of the log must not mistake a stopped model
 /// proxy for a policy refusal.
-fn relay_one(client: UnixStream, upstream: SocketAddr, policy: &Policy, log: &DecisionLog) {
+fn relay_one(client: UnixStream, upstream: SocketAddr, lanes: &Lanes, log: &DecisionLog) {
+    let policy = &lanes.policy;
     let peer = match peer_cred(&client) {
         Some((pid, uid)) => format!("pid {pid} uid {uid}"),
         None => "unknown peer".to_owned(),
@@ -1009,7 +1258,20 @@ fn relay_one(client: UnixStream, upstream: SocketAddr, policy: &Policy, log: &De
         Preface::Connect(head_so_far) => {
             let first_line = first_line_of(&head_so_far).to_vec();
             match parse_connect_request(&first_line) {
-                Some(target) => connect_lane(client, target, policy, &peer, log, head_so_far),
+                Some(target) => {
+                    // The row lane is checked FIRST (E15): a row's
+                    // name selects the row on every lane — rows are
+                    // forwards, not grants, so they serve under the
+                    // plain phase-B broker too, and a row name can
+                    // never fall through to the table's name matching
+                    // (the row IS the named-destination policy for
+                    // that name).
+                    if let Some(row) = lanes.row_for(&target.host) {
+                        host_service_lane(client, row.clone(), target, &peer, log, head_so_far);
+                    } else {
+                        connect_lane(client, target, policy, &peer, log, head_so_far);
+                    }
+                }
                 None => model_lane(client, upstream, &peer, log, head_so_far),
             }
         }
@@ -1184,6 +1446,74 @@ fn model_lane(
         }
     }
     pipe_bidirectional(client, upstream_stream, peer, log);
+}
+
+/// The host-service row lane (E15, bd myconfig-db56): a CONNECT whose
+/// authority names a row dials the row's LITERAL loopback target — the
+/// LiteLLM row's shape, selected by name. The row pins the port too:
+/// `CONNECT <name>:<wrong port>` is a `deny` naming the row (the
+/// conjunction the table lane already applies — a row is a forward to
+/// one endpoint, not a name grant for every port). No resolution and
+/// no address classes: the target is argv-pinned and loopback-only,
+/// exactly the two properties that earn the upstream its E9 exemption.
+fn host_service_lane(
+    mut client: UnixStream,
+    row: HostService,
+    target: ConnectTarget,
+    peer: &str,
+    log: &DecisionLog,
+    head_so_far: Vec<u8>,
+) {
+    if target.port != row.target.port() {
+        log.record(
+            "deny",
+            &format!(
+                "{peer} -> {}:{}: the host-service row `{}` forwards to port {}, \
+                 its name selects ONE endpoint (docs/design/egress-host-services.md E15)",
+                target.host,
+                target.port,
+                row.name,
+                row.target.port()
+            ),
+        );
+        let _ = client.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n");
+        let _ = client.shutdown(Shutdown::Both);
+        return;
+    }
+    log.record(
+        "allow",
+        &format!(
+            "{peer} CONNECT {} (host-service row `{}`)",
+            target.host, row.name
+        ),
+    );
+    let upstream_stream = match TcpStream::connect(row.target) {
+        Ok(stream) => stream,
+        Err(e) => {
+            log.record(
+                "unreachable",
+                &format!(
+                    "{peer} -> {} (row `{}`): cannot connect: {e}",
+                    row.target, row.name
+                ),
+            );
+            let _ = client.write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n");
+            let _ = client.shutdown(Shutdown::Both);
+            return;
+        }
+    };
+    // The tunnel tail is the CONNECT lane's (review findings 1/4's
+    // byte-exact framing): consume the request-head rest, answer
+    // `200`, forward any coalesced payload first, then copy both ways.
+    tunnel_tail(
+        client,
+        upstream_stream,
+        target,
+        row.target,
+        peer,
+        log,
+        &head_so_far,
+    );
 }
 
 /// The policy lane (E9): admit, resolve, dial, answer, tunnel. A
@@ -1718,6 +2048,116 @@ mod tests {
             let e = Invocation::parse(&args).unwrap_err();
             assert!(e.contains("mutually exclusive"), "{e}");
         }
+    }
+
+    // ---- The host-service rows (bd myconfig-db56, docs/design/
+    // ---- egress-host-services.md E15) ------------------------------
+
+    #[test]
+    fn parses_the_host_service_rows_in_both_spellings() {
+        for (args, name, port) in [
+            (
+                vec!["--host-service", "my-mcp=127.0.0.1:8080"],
+                "my-mcp",
+                8080,
+            ),
+            (vec!["--host-service=my-mcp=127.0.0.1:8080"], "my-mcp", 8080),
+            (
+                // The name is lower-cased at parse, like the table's
+                // domains; the [::1] target spelling is legal.
+                vec!["--host-service", "My-Mcp=[::1]:9443"],
+                "my-mcp",
+                9443,
+            ),
+        ] {
+            let mut full = s(&[
+                "--listen",
+                "/x/litellm.sock",
+                "--upstream",
+                "127.0.0.1:4000",
+                "--decision-log",
+                "/x/log",
+            ]);
+            full.extend(args.iter().map(|a| (*a).to_string()));
+            let inv = Invocation::parse(&full).unwrap();
+            assert_eq!(inv.host_services.len(), 1);
+            assert_eq!(inv.host_services[0].name, name);
+            assert_eq!(inv.host_services[0].target.port(), port);
+        }
+    }
+
+    #[test]
+    fn a_row_without_a_target_is_a_usage_error() {
+        for bad in [
+            vec!["--host-service", "no-target"],
+            vec!["--host-service", "x=not-an-addr"],
+            vec!["--host-service"],
+        ] {
+            let mut full = s(&[
+                "--listen",
+                "/x/litellm.sock",
+                "--upstream",
+                "127.0.0.1:4000",
+                "--decision-log",
+                "/x/log",
+            ]);
+            full.extend(bad.iter().map(|a| (*a).to_string()));
+            let err = Invocation::parse(&full).unwrap_err();
+            assert!(!err.is_empty(), "{bad:?}");
+            assert_ne!(err, HELP_REQUESTED, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn row_content_rules_are_fail_closed_not_usage_errors() {
+        // The content rules live in `validate` (exit 70 in `run`), so
+        // PARSE accepts the shape and `validate` refuses the content —
+        // the CONNECT table's split: a policy refusal must not look
+        // like a CLI typo.
+        let row = |raw: &str| HostService::parse(raw).unwrap();
+        // A good row passes both halves.
+        let good = HostService::validate(vec![row("my-mcp=127.0.0.1:8080")]).unwrap();
+        assert_eq!(good.len(), 1);
+        // Non-loopback target, `localhost`, an IP literal, gateway
+        // syntax, port 0, a duplicate name: all refused by validate.
+        for raws in [
+            vec!["lan-thing=10.0.0.5:8080"],
+            vec!["localhost=127.0.0.1:8080"],
+            vec!["127.0.0.1=127.0.0.1:8080"],
+            vec!["::1=127.0.0.1:8080"],
+            vec!["via x=127.0.0.1:8080"],
+            vec!["http://x=127.0.0.1:8080"],
+            vec!["a/b=127.0.0.1:8080"],
+            vec!["my-mcp=127.0.0.1:0"],
+            vec!["my-mcp=127.0.0.1:8080", "my-mcp=127.0.0.1:9090"],
+        ] {
+            let rows: Vec<HostService> = raws.iter().map(|r| row(r)).collect();
+            let err = HostService::validate(rows).unwrap_err();
+            assert!(!err.is_empty(), "{raws:?}");
+        }
+        // The parse half accepts the SHAPE of every one of them —
+        // the refusal is the content rule's, exit 70, not 2 (checked
+        // end to end by the binary tests).
+        assert!(HostService::parse("lan-thing=10.0.0.5:8080").is_ok());
+    }
+
+    #[test]
+    fn the_lane_picker_selects_rows_by_name_only() {
+        // E15: the row's selector is its NAME, lower-cased; an
+        // IP-literal CONNECT host never selects a row (a row's name is
+        // a name — `row_for` must not fall through to address
+        // matching).
+        let lanes = Lanes {
+            policy: Policy::None,
+            host_services: vec![HostService {
+                name: "my-mcp".to_owned(),
+                target: "127.0.0.1:8080".parse().unwrap(),
+            }],
+        };
+        assert!(lanes.row_for("my-mcp").is_some());
+        assert!(lanes.row_for("MY-MCP").is_some());
+        assert!(lanes.row_for("127.0.0.1").is_none());
+        assert!(lanes.row_for("other.host").is_none());
     }
 
     #[test]

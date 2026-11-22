@@ -524,6 +524,15 @@ let
   // lib.optionalAttrs (cfg.config.allowDomains != [ ]) { allow-domains = cfg.config.allowDomains; }
   // lib.optionalAttrs (cfg.config.connectPorts != [ ]) { connect-ports = cfg.config.connectPorts; }
   // lib.optionalAttrs (cfg.config.listenPorts != [ ]) { listen-ports = cfg.config.listenPorts; }
+  # The D34 host-service rows (bd myconfig-db56): seeded host-wide as
+  # name->port, rendered in name order so the generated layer (and
+  # its argv) is byte-stable across evaluations.
+  // lib.optionalAttrs (cfg.config.hostServices != { }) {
+    host-services = map (name: {
+      inherit name;
+      port = cfg.config.hostServices.${name};
+    }) (lib.sort builtins.lessThan (builtins.attrNames cfg.config.hostServices));
+  }
   // lib.optionalAttrs (cfg.config.nestedVirt != null) { nested-virt = cfg.config.nestedVirt; }
   // lib.optionalAttrs (cfg.config.memory != null) { inherit (cfg.config) memory; }
   // lib.optionalAttrs (cfg.config.scratchSize != null) { "scratch-size" = cfg.config.scratchSize; }
@@ -2379,6 +2388,31 @@ in
               WITHOUT a domain/connect restriction are refused (with
               only listen ports nono reports "outbound allowed", bd
               myconfig-a14) — seed a real restriction, not port noise.
+            '';
+          };
+
+          hostServices = mkOption {
+            type = types.attrsOf types.port;
+            default = { };
+            example = {
+              my-mcp = 8765;
+            };
+            description = ''
+              Host-wide `[[host-services]]` rows (./docs/design/config.md
+              D34, bd myconfig-db56): named HOST loopback services a
+              `network = "proxy-only"` run may reach through the
+              per-run egress broker, keyed by service name. The
+              address is not spellable — a row always forwards to the
+              host's own loopback.
+
+              Legal only next to the broker channel: a run with rows
+              but without `backend = "bubblewrap"` +
+              `network = "proxy-only"` is refused (never
+              accepted-and-ignored, D34's pairing rule). These seed
+              the user layer; a sidecar adds rows, it cannot override
+              one (the merge dedupes by name, first occurrence wins,
+              and a same-name/different-port conflict across trusted
+              layers is a merge refusal).
             '';
           };
 
