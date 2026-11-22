@@ -2534,25 +2534,74 @@ in
           inherit lib pkgs;
         }
       );
+      # The renderer regression fixture (bd myconfig-vsag): a synthetic
+      # registry with one entry per render rule, rendered through the
+      # SAME generator against the real host config with only the
+      # registry overridden — so a revert of any render fix (exposure
+      # pass-through, placeholder translation, literal-$ escaping,
+      # disabled-server omission, unknown-field refusal) fails this
+      # check derivation, not just a dev-side eval.
+      fixtureServers = {
+        fixture = {
+          url = "https://fixture.invalid/mcp";
+          exposure = "hidden";
+          toolExposure = {
+            "get_*" = "codemode";
+          };
+          headers = {
+            Authorization = "Bearer {env:AUTH_TOKEN}";
+            X-Price = "price$USD";
+          };
+          env = {
+            PLAIN = "literal$X";
+          };
+        };
+        # Disabled WITH a file ref: must be dropped silently, not
+        # block the render (enablement resolves before the throw).
+        off = {
+          url = "https://off.invalid/mcp";
+          enabled = false;
+          env = {
+            TOK.file = "/run/secrets/tok";
+          };
+        };
+      };
+      fixtureConfig = cfg // {
+        home-manager = cfg.home-manager // {
+          users = cfg.home-manager.users // {
+            mhuber = cfg.home-manager.users.mhuber // {
+              programs = cfg.home-manager.users.mhuber.programs // {
+                mcp = cfg.home-manager.users.mhuber.programs.mcp // {
+                  servers = fixtureServers;
+                };
+              };
+            };
+          };
+        };
+      };
+      fixtureMcp = import ../../programs/pi-mcp-servers.nix {
+        config = fixtureConfig;
+        inherit lib pkgs;
+      };
+      # The rendered fixture must keep the exposure fields, translate
+      # the placeholder, escape the literal dollars, and drop the
+      # disabled server — asserted with jq on the realised file.
+      fixtureOk =
+        fixtureMcp.enable
+        && fixtureMcp.json ? outPath
+        &&
+          (builtins.fromJSON (builtins.readFile (toString fixtureMcp.json))).mcpServers.fixture.exposure
+          == "hidden";
       piMounts = mountsOf cfg;
       trMounts = mountsOf thinkrailOnlyCfg;
       emptyMounts = mountsOf emptyRegistryCfg;
-      # The store tree the mount binds from, derived the same way as in
-      # mysbx-pi-mounts-test (from the extensions mount, whose dest only
-      # pi's tree carries).
-      allPiMounts = builtins.filter (
-        m: lib.hasPrefix "/mysbx-home/.pi" m.dest
-      ) cfg.myconfig.ai.dev.mysbx.config.mounts;
-      sandboxTree =
-        lib.removeSuffix "/.pi/agent/extensions"
-          (builtins.head (builtins.filter (m: m.dest == "/mysbx-home/.pi/agent/extensions") allPiMounts))
-          .path;
-      mountedFile = "${sandboxTree}/.pi/agent/mcp.json";
       # The drift catcher needs EVERY owner's tree, not just pi's:
       # thinkrail's mount points into thinkrail's own derivation, and
       # removing its `extraFiles` entry would leave the mount count and
       # mode of the eval phase unchanged — only the realised tree shows
-      # the empty directory. One path per configuration.
+      # the empty directory. One path per configuration, taken from the
+      # mount itself (never reconstructed from another dest's tree).
+      mountedFile = "${(builtins.head piMounts).path}";
       trMountedFile = "${(builtins.head trMounts).path}";
       # The host must not deploy the file: it is sandbox-only content
       # (`extraFiles`), the host's copy stays runtime-managed via
@@ -2584,7 +2633,10 @@ in
           message = "mysbx-mcp-mounts-test: the mcp.json mount must be read-only";
         }
         {
-          assertion = builtins.all (m: lib.hasPrefix sandboxTree m.path) piMounts;
+          # The mount must come from pi's own tree (the derivation the
+          # caller names `pi-sandbox-config`), derived from the mount
+          # itself.
+          assertion = builtins.all (m: lib.hasSuffix "-pi-sandbox-config/.pi/agent/mcp.json" m.path) piMounts;
           message = "mysbx-mcp-mounts-test: the mount path must sit inside the pi-sandbox-config derivation (got ${
             toString (map (m: m.path) piMounts)
           })";
@@ -2594,6 +2646,13 @@ in
           # guards against a render that silently drops everything.
           assertion = piMcp.enable && piMcp.json ? outPath;
           message = "mysbx-mcp-mounts-test: the shared generator must render the non-empty registry";
+        }
+        {
+          # The fixture render must succeed and keep the hidden
+          # exposure (eval-level half; the build phase pins the full
+          # JSON below).
+          assertion = fixtureOk;
+          message = "mysbx-mcp-mounts-test: the renderer fixture did not render as expected (exposure lost?)";
         }
         {
           assertion = !hostDeploysIt;
@@ -2612,6 +2671,8 @@ in
     pkgs.runCommand "mysbx-mcp-mounts-test"
       {
         inherit evalGate mountedFile trMountedFile;
+        inherit (fixtureMcp) json;
+        fixtureFile = "${fixtureMcp.json}";
         nativeBuildInputs = with pkgs; [
           gnugrep
           jq
@@ -2636,6 +2697,35 @@ in
           jq -e '.mcpServers.context7.url' "$f" >/dev/null \
             || fail "$f does not name mcpServers.context7.url: $(cat "$f")"
         done
+
+        # The renderer regression fixture: every render rule of the
+        # generator, asserted on the realised JSON so a revert of any
+        # fix fails here (bd myconfig-vsag).
+        test -f "$fixtureFile" || fail "the fixture render produced no file"
+        # Hidden exposure passes through (pi would default a dropped
+        # field to codemode — the tools would become callable).
+        jq -e '.mcpServers.fixture.exposure == "hidden"' "$fixtureFile" >/dev/null \
+          || fail "exposure was not preserved: $(cat "$fixtureFile")"
+        jq -e '.mcpServers.fixture.toolExposure["get_"+"*"] == "codemode"' "$fixtureFile" >/dev/null \
+          || fail "toolExposure was not preserved: $(cat "$fixtureFile")"
+        # Embedded placeholder translates to pi's spelling (the expected
+        # value rides a jq --arg: a literal brace-dollar sequence inside
+        # this indented string is nix interpolation, so it cannot be
+        # spelled inline).
+        jq -e --arg expected 'Bearer ''\${AUTH_TOKEN}' \
+          '.mcpServers.fixture.headers.Authorization == $expected' "$fixtureFile" >/dev/null \
+          || fail "embedded {env:NAME} was not translated: $(cat "$fixtureFile")"
+        # Literal dollars are escaped for pi's resolver ($$), and the
+        # leading-! command reading never fires from a literal.
+        jq -e --arg expected 'price$$USD' \
+          '.mcpServers.fixture.headers["X-Price"] == $expected' "$fixtureFile" >/dev/null \
+          || fail "literal $ was not escaped: $(cat "$fixtureFile")"
+        jq -e --arg expected 'literal$$X' \
+          '.mcpServers.fixture.env.PLAIN == $expected' "$fixtureFile" >/dev/null \
+          || fail "literal $ in env was not escaped: $(cat "$fixtureFile")"
+        # The disabled server (with its file ref) is omitted entirely.
+        jq -e '.mcpServers.off == null' "$fixtureFile" >/dev/null \
+          || fail "the disabled server was rendered: $(cat "$fixtureFile")"
 
         mkdir "$out"
       '';
