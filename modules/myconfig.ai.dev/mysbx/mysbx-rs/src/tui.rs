@@ -2,11 +2,16 @@
 // SPDX-License-Identifier: MIT
 //! The session picker (bd myconfig-dm7b, docs/design/tui.md): the
 //! full-screen form shown before an interactive launch, one row per
-//! decision a one-run override flag already carries. Three rows
-//! (T2): backend, multiplexer, default-agent — closed sets drawn
-//! from the registries, never free text. Left/Right cycle the
-//! focused row, Up/Down move the focus, Enter dispatches into
-//! `sandbox()`, Esc or `q` exits `0` (nothing was started). Enter
+//! decision a one-run override flag already carries. Three launch
+//! rows (T2): backend, multiplexer, default-agent — closed sets
+//! drawn from the registries, never free text — plus the property
+//! rows: a read-only `network` row (T9), the typed `cpus`/
+//! `memory`/`pids-limit` rows (T10, drafted under a byte grammar and
+//! validated at Enter through config.rs's OWN parsers), and the
+//! tri-state `nested-virt`/`store` cycle rows (T11/T12). Left/Right
+//! cycle the focused row, Up/Down move the focus, typing drafts
+//! into the focused typed row, Backspace edits, Enter dispatches
+//! into `sandbox()`, Esc or `q` exits `0` (nothing was started). Enter
 //! composes a `Flags` where a row the operator never TOUCHED stays
 //! `None`, so the configuration layers decide (T4, config.md D6) —
 //! the picker adds no decision of its own, and every refusal (a
@@ -71,21 +76,45 @@
 //! after Enter — Esc exits `0` before any temp root exists, and the
 //! once lifecycle stays entirely the pipeline's.
 
-use crate::config::Multiplexer;
+use crate::config::{Multiplexer, Store};
 use crate::merge::{self, Merged};
 use crate::repo;
 use crate::sig;
+use crate::toml;
 use crate::{backends, doctor, AgentSelection, Flags, RunMode, EXIT_INFRASTRUCTURE};
 use std::io::{Read, Write};
 use std::path::PathBuf;
 
-/// The rows in focus order (T2): each label is the flag family the
-/// row stands for (`--backend`, `--multiplexer`, `--agent`).
-const ROW_LABELS: [&str; 3] = ["backend", "multiplexer", "default-agent"];
+/// The rows in focus order: the three launch rows (T2), then the
+/// property rows — the read-only `network` (T9), the typed trio
+/// (T10), the tri-state cycles (T11/T12). Each launch-row label is
+/// the flag family the row stands for (`--backend`,
+/// `--multiplexer`, `--agent`); the property rows carry the config
+/// key's own spelling (`network`, `cpus`, `memory`, `pids-limit`,
+/// `nested-virt`, `store`, config.md D20/D23/D27, guest-store.md).
+const ROW_LABELS: [&str; 9] = [
+    "backend",
+    "multiplexer",
+    "default-agent",
+    "network",
+    "cpus",
+    "memory",
+    "pids-limit",
+    "nested-virt",
+    "store",
+];
+
+/// The row count — `ROW_LABELS`' length, spelled for the arrays.
+const ROWS: usize = ROW_LABELS.len();
 
 /// The `none` pseudo-value of the agent row — the `--no-agent`
 /// spelling (cli.md D32), not a kind.
 const AGENT_NONE: &str = "none";
+
+/// The `inherit` spelling of the tri-state rows (T11/T12): the
+/// layers (and the key's own default) decide — composed as no
+/// `Flags` field, exactly like an untouched row.
+const INHERIT: &str = "inherit";
 
 /// One picker row: a closed set of values with one selected (T2).
 /// An empty `values` renders the row disabled with `empty_hint`,
@@ -139,12 +168,141 @@ impl Row {
     }
 }
 
-/// The three rows with their closed sets (T2): backend is
-/// `backends::NAMES` ∩ the host's enabled set — only what a run on
-/// THIS host can start; multiplexer is the config key's universe;
-/// default-agent is the build's pinned kinds plus the `none`
-/// pseudo-value. Pure: the env reads happen in the caller.
-fn rows(enabled: &[&'static str], pinned_agents: &[String]) -> [Row; 3] {
+/// The value layer of one picker row (T2/T9/T10/T11/T12): the
+/// launch rows and the tri-state cycles are a closed set of values
+/// with one selected; the typed rows are a draft under a byte
+/// grammar. `ReadOnly` is the network row (T9): rendered, never
+/// cycled, never composed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Value {
+    /// A closed set with one selected — the launch rows and the
+    /// tri-state cycles. `None` on a disabled row, and on a row
+    /// whose merged value no layer of the set carries (T3).
+    Set(Row),
+    /// A typed row (T10): `draft` is `None` while the row is
+    /// untouched (empty — Enter composes no flag, the layers
+    /// decide) and `Some` once the operator typed a key the
+    /// grammar admitted; `seed` is the merged value's display
+    /// spelling (the fact the layers decided, T3's preselect
+    /// translated to a typed row — context, never a composed
+    /// value: an untouched row's seed must not reach `Flags`).
+    Typed {
+        row: TypedRow,
+        draft: Option<String>,
+        seed: String,
+    },
+    /// The read-only network row (T9): Left/Right are no-ops, no
+    /// key contributes, Enter composes nothing.
+    ReadOnly { text: String, hint: &'static str },
+}
+
+/// The typed row's grammar and Enter-time parser (T10): which keys
+/// the draft accepts byte by byte, and which config.rs parser the
+/// Enter composition runs — the SAME grammar a config file's value
+/// passes through, so the picker cannot accept what a layer could
+/// not.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TypedRow {
+    /// `cpus`: digits and at most one dot — podman's `--cpus` shape.
+    Cpus,
+    /// `memory`: digits plus one optional `b`/`k`/`m`/`g` suffix
+    /// (any case) — the config parser's grammar.
+    Memory,
+    /// `pids-limit`: digits only, a positive `u32`.
+    PidsLimit,
+}
+
+impl TypedRow {
+    /// Whether `b` may extend `draft` (T10): the grammar filters
+    /// key by key — a key outside it is an ignored keystroke, never
+    /// an error mid-draft.
+    fn admits(&self, draft: &str, b: u8) -> bool {
+        let letters = self.letters();
+        let last = draft.as_bytes().last();
+        // memory: the suffix is the LAST byte — nothing may follow
+        // it, not even a digit (`8g2` is not a size).
+        if self == &Self::Memory && last.is_some_and(|c| letters.contains(&c)) {
+            return false;
+        }
+        match (b.is_ascii_digit(), last) {
+            (true, _) => true,
+            // The one optional suffix byte — after at least one
+            // digit (a bare `g` is not a size).
+            (false, Some(c)) if letters.contains(&b) => c.is_ascii_digit(),
+            // cpus admits exactly one dot, between digits (podman's
+            // `--cpus` shape: `2`, `1.5` — never a leading or double
+            // dot).
+            (false, _) if self == &Self::Cpus && b == b'.' => {
+                !draft.is_empty() && !draft.contains('.')
+            }
+            _ => false,
+        }
+    }
+
+    /// The suffix letters the grammar admits after digits (`memory`'s
+    /// `b`/`k`/`m`/`g`, any case; none for the digit-only rows).
+    fn letters(&self) -> &'static [u8] {
+        match self {
+            Self::Cpus | Self::PidsLimit => &[],
+            Self::Memory => b"bkmgBKMG",
+        }
+    }
+
+    /// Parse the finished draft through config.rs's OWN parser at
+    /// Enter (T10): the draft is a number for `cpus`, a string for
+    /// `memory` and an integer for `pids-limit`, so each grammar
+    /// builds the TOML value shape its parser reads — a draft the
+    /// parser refuses is a picker error naming the row, never a
+    /// dispatch. The return is the `Flags` spelling: the string the
+    /// parser canonicalized (`cpus`/`memory`) and, for `pids-limit`,
+    /// the parsed `u32`.
+    fn parse(&self, draft: &str) -> Result<(String, Option<u32>), String> {
+        let value = match self {
+            // The cpus grammar's two shapes keep their EXACT value:
+            // a dot-free draft goes through `i64` directly (an
+            // overflow is an error — the f64 detour would saturate
+            // a 17-digit draft into i64::MAX silently), a dotted
+            // whole one through `f64` CAPPED at 2^53 before the
+            // Integer conversion — below 2^53 every integer is
+            // exactly representable, so `n as i64` is the value the
+            // operator typed; at or above it the conversion could
+            // round and the draft is refused instead.
+            Self::Cpus if !draft.contains('.') => match draft.parse::<i64>() {
+                Ok(n) => toml::Value::Integer(n),
+                Err(_) => return Err("cpus: expected a positive number".to_owned()),
+            },
+            Self::Cpus => match draft.parse::<f64>() {
+                Ok(n) if n.fract() == 0.0 => {
+                    const EXACT_I64_CAP: f64 = 9_007_199_254_740_992.0; // 2^53
+                    if n.abs() >= EXACT_I64_CAP {
+                        return Err("cpus: the value is too large to keep exactly".to_owned());
+                    }
+                    toml::Value::Integer(n as i64)
+                }
+                Ok(n) => toml::Value::Float(n),
+                Err(_) => return Err("cpus: expected a positive number".to_owned()),
+            },
+            Self::Memory => toml::Value::String(draft.to_owned()),
+            Self::PidsLimit => match draft.parse::<i64>() {
+                Ok(n) => toml::Value::Integer(n),
+                Err(_) => return Err("pids-limit: expected a positive integer".to_owned()),
+            },
+        };
+        match self {
+            Self::Cpus => crate::config::cpus(&value)
+                .map(|s| (s, None))
+                .map_err(|e| e.to_string()),
+            Self::Memory => crate::config::memory(&value)
+                .map(|s| (s, None))
+                .map_err(|e| e.to_string()),
+            Self::PidsLimit => crate::config::pids_limit(&value)
+                .map(|n| (n.to_string(), Some(n)))
+                .map_err(|e| e.to_string()),
+        }
+    }
+}
+
+fn rows(enabled: &[&'static str], pinned_agents: &[String]) -> [Value; ROWS] {
     let backend = Row {
         values: backends::NAMES
             .iter()
@@ -173,7 +331,93 @@ fn rows(enabled: &[&'static str], pinned_agents: &[String]) -> [Row; 3] {
         selected: None,
         empty_hint: "(no agent pinned on this build)",
     };
-    [backend, mux, agent]
+    // The property rows carry no registry reads here: their values
+    // come from the merge in `seed` (the network text, the typed
+    // rows' seeds, the tri-state cycles), so `rows` builds them
+    // unseeded and `seed` fills them in — the same split the three
+    // launch rows have.
+    let network = Value::ReadOnly {
+        text: String::new(),
+        hint: "(read-only — the merged network policy)",
+    };
+    let cpus = Value::Typed {
+        row: TypedRow::Cpus,
+        draft: None,
+        seed: String::new(),
+    };
+    let memory = Value::Typed {
+        row: TypedRow::Memory,
+        draft: None,
+        seed: String::new(),
+    };
+    let pids_limit = Value::Typed {
+        row: TypedRow::PidsLimit,
+        draft: None,
+        seed: String::new(),
+    };
+    let nested_virt = Value::Set(Row {
+        values: vec![INHERIT.to_owned(), "on".to_owned(), "off".to_owned()],
+        selected: None,
+        empty_hint: "(no nested-virt row)",
+    });
+    let store = Value::Set(Row {
+        values: [INHERIT]
+            .iter()
+            .map(|n| n.to_string())
+            .chain(Store::NAMES.iter().map(|n| n.to_string()))
+            .collect(),
+        selected: None,
+        empty_hint: "(no store row)",
+    });
+    [
+        Value::Set(backend),
+        Value::Set(mux),
+        Value::Set(agent),
+        network,
+        cpus,
+        memory,
+        pids_limit,
+        nested_virt,
+        store,
+    ]
+}
+
+/// The tri-state `nested-virt` seed T11 needs: the LAYERS' decision
+/// before the merge applies the D27 off-default — `Some(true)` seeds
+/// `on`, `Some(false)` seeds `off`, `None` seeds `inherit`. The
+/// plain mode reads the folded chains (`LoadedLayers::user_files`/
+/// `sidecar_files`, sidecar-over-user like the merge itself); the
+/// once mode reads the folded user chain alone (T8/D22 — the host
+/// sidecar the Enter run will not use must not seed, the same
+/// reason `load_merged` ignores it).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct NestedVirtSeed {
+    /// The user chain's folded tri-state.
+    user: Option<bool>,
+    /// The sidecar layer's tri-state — `None` in once-mode.
+    sidecar: Option<bool>,
+}
+
+impl NestedVirtSeed {
+    /// The tri-state the merge would resolve — `merge::merge`'s own
+    /// table, case for case: ANY-enable-wins (a user `true` stays
+    /// `on` under a silent sidecar, a sidecar `true` wins over a
+    /// silent user — the key is not a grant, either layer may
+    /// enable it), any explicit `false` denies when nothing
+    /// enabled, the one widening pair the merge REFUSES shows as
+    /// undecided. The seed must never resolve differently from the
+    /// run: the row is the fact the merge acts on.
+    fn resolved(&self) -> Option<bool> {
+        match (self.user, self.sidecar) {
+            // The merge's hard error — unreachable through `run`
+            // (the merge refused the config before the picker
+            // rendered), shown as `inherit` for the same reason.
+            (Some(false), Some(true)) => None,
+            (Some(true), _) | (_, Some(true)) => Some(true),
+            (Some(false), _) | (_, Some(false)) => Some(false),
+            (None, None) => None,
+        }
+    }
 }
 
 /// Preselect what a bare `mysbx` would do (T3): the merged values
@@ -186,59 +430,191 @@ fn rows(enabled: &[&'static str], pinned_agents: &[String]) -> [Row; 3] {
 /// same treatment for every row). Enter then composes no flag and
 /// the pipeline's own refusal names the value, instead of the
 /// picker guessing (T4).
-fn seed(mut rows: [Row; 3], merged: &Merged) -> [Row; 3] {
+///
+/// The property rows (T9–T12): the network row's read-only text is
+/// the RESOLVED merged value (`Merged::network` is never
+/// tri-state); the typed rows seed their draft from the merged
+/// value (a draft IS a touch — a seeded draft that was never typed
+/// into must not compose, so the seed is display-only and the
+/// draft starts empty/None); the tri-state cycles seed from
+/// `NestedVirtSeed::resolved()` and `merged.store`.
+fn seed(mut rows: [Value; ROWS], merged: &Merged, nv: NestedVirtSeed) -> [Value; ROWS] {
     let at = |row: &Row, value: &str| row.values.iter().position(|v| v == value);
-    rows[0].selected = merged
-        .backend
-        .as_deref()
-        .and_then(|name| at(&rows[0], name));
-    rows[1].selected = at(&rows[1], merged.multiplexer.name());
+    let Value::Set(backend) = &mut rows[0] else {
+        unreachable!("rows() builds row 0 as a Set")
+    };
+    backend.selected = merged.backend.as_deref().and_then(|name| at(backend, name));
+    let Value::Set(mux) = &mut rows[1] else {
+        unreachable!("rows() builds row 1 as a Set")
+    };
+    mux.selected = at(mux, merged.multiplexer.name());
     // The `none` pseudo-value is a POSITION (the last element
     // `rows()` appends), never a name: a pinned kind literally
     // spelled `none` must not shadow the `--no-agent` spelling.
-    rows[2].selected = match merged.default_agent.as_deref() {
-        Some(kind) => at(&rows[2], kind),
-        None => Some(rows[2].values.len() - 1),
+    let Value::Set(agent) = &mut rows[2] else {
+        unreachable!("rows() builds row 2 as a Set")
     };
+    agent.selected = match merged.default_agent.as_deref() {
+        Some(kind) => at(agent, kind),
+        None => Some(agent.values.len() - 1),
+    };
+    // T9: the resolved merged network — the row is read-only, the
+    // text is the fact.
+    if let Value::ReadOnly { text, .. } = &mut rows[3] {
+        *text = merged.network.name().to_owned();
+    }
+    // T10: the typed rows' display seed — the merged value the
+    // row would run with (`—` when no layer set one). The draft
+    // stays untouched: a seed must never compose (T4), it is the
+    // fact the operator types OVER.
+    if let Value::Typed { seed, .. } = &mut rows[4] {
+        *seed = merged.cpus.clone().unwrap_or_else(|| "—".to_owned());
+    }
+    if let Value::Typed { seed, .. } = &mut rows[5] {
+        *seed = merged.memory.clone().unwrap_or_else(|| "—".to_owned());
+    }
+    if let Value::Typed { seed, .. } = &mut rows[6] {
+        *seed = merged
+            .pids_limit
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| "—".to_owned());
+    }
+    // T11: the tri-state seed — `on`/`off` from the layers'
+    // decision, `inherit` when none made one.
+    if let Value::Set(nv_row) = &mut rows[7] {
+        nv_row.selected = match nv.resolved() {
+            Some(true) => at(nv_row, "on"),
+            Some(false) => at(nv_row, "off"),
+            None => at(nv_row, INHERIT),
+        };
+    }
+    // T12: the store tri-state — `resolved_store()` is NOT consulted:
+    // the row seeds what the LAYERS said, and `inherit` is the
+    // honest spelling when no layer decided (the backend-shaped
+    // default the resolution would apply is the pipeline's, shown
+    // nowhere in the picker).
+    if let Value::Set(st) = &mut rows[8] {
+        st.selected = match merged.store {
+            Some(Store::Host) => at(st, "host"),
+            Some(Store::Baked) => at(st, "baked"),
+            None => at(st, INHERIT),
+        };
+    }
     rows
 }
 
-/// Which rows the operator touched — set by a cycle that MOVED
-/// (T4). An untouched row leaves its flag `None`, so the
-/// configuration layers decide (config.md D6); the picker never
-/// freezes a decision the configuration owns.
+/// Which rows the operator touched — set by a cycle that MOVED, a
+/// typed byte a grammar admitted, or a Backspace that left a
+/// draft standing (T4). An untouched row leaves its flag `None`, so
+/// the configuration layers decide (config.md D6); the picker
+/// never freezes a decision the configuration owns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-struct Touched([bool; 3]);
+struct Touched([bool; ROWS]);
 
-/// Compose the rows into the `Flags` a bare run parses (T4): a
-/// touched row becomes its one-run override flag, an untouched one
-/// stays `None`. This is the picker's whole output — it writes
-/// nothing else.
-fn to_flags(touched: Touched, rows: &[Row; 3]) -> Flags {
+/// Compose the touched rows into the `Flags` a bare run parses
+/// (T4): a touched row becomes its one-run override flag, an
+/// untouched one stays `None`. The typed rows' drafts were already
+/// validated at Enter (the picker error path); the cycle rows'
+/// `inherit` composes NO field — the layers decide, the same as
+/// untouched. This is the picker's whole output — it writes nothing
+/// else.
+fn to_flags(touched: Touched, rows: &[Value; ROWS]) -> Flags {
     let mut flags = Flags::default();
     if touched.0[0] {
-        if let Some(i) = rows[0].selected {
-            flags.backend = Some(rows[0].values[i].clone());
+        if let Value::Set(row) = &rows[0] {
+            if let Some(i) = row.selected {
+                flags.backend = Some(row.values[i].clone());
+            }
         }
     }
     if touched.0[1] {
-        if let Some(i) = rows[1].selected {
-            // `parse_cli` is the same mapping the `--multiplexer`
-            // flag itself uses (cli.md D14) — the row strings are
-            // its spellings.
-            flags.multiplexer = rows[1]
-                .values
-                .get(i)
-                .and_then(|v| Multiplexer::parse_cli(v).ok());
+        if let Value::Set(row) = &rows[1] {
+            if let Some(i) = row.selected {
+                // `parse_cli` is the same mapping the `--multiplexer`
+                // flag itself uses (cli.md D14) — the row strings are
+                // its spellings.
+                flags.multiplexer = row
+                    .values
+                    .get(i)
+                    .and_then(|v| Multiplexer::parse_cli(v).ok());
+            }
         }
     }
     if touched.0[2] {
-        if let Some(i) = rows[2].selected {
-            // The pseudo-value by index, like `seed` — never by name.
-            if i == rows[2].values.len() - 1 {
-                flags.agent = Some(AgentSelection::None);
-            } else {
-                flags.agent = Some(AgentSelection::Kind(rows[2].values[i].clone()));
+        if let Value::Set(row) = &rows[2] {
+            if let Some(i) = row.selected {
+                // The pseudo-value by index, like `seed` — never by name.
+                if i == row.values.len() - 1 {
+                    flags.agent = Some(AgentSelection::None);
+                } else {
+                    flags.agent = Some(AgentSelection::Kind(row.values[i].clone()));
+                }
+            }
+        }
+    }
+    // T10: the typed rows — drafts validated at Enter (`run`'s
+    // error line fired on the invalid one, and the loop
+    // continued, so the compose below never sees a draft a
+    // parser refuses). The composition is the parser's canonical
+    // spelling, and a parse failure here — unreachable — stays
+    // `None` rather than dispatch a value no parser accepts.
+    if touched.0[4] {
+        if let Value::Typed {
+            row: TypedRow::Cpus,
+            draft: Some(d),
+            ..
+        } = &rows[4]
+        {
+            if let Ok((canonical, _)) = TypedRow::Cpus.parse(d) {
+                flags.cpus = Some(canonical);
+            }
+        }
+    }
+    if touched.0[5] {
+        if let Value::Typed {
+            row: TypedRow::Memory,
+            draft: Some(d),
+            ..
+        } = &rows[5]
+        {
+            if let Ok((canonical, _)) = TypedRow::Memory.parse(d) {
+                flags.memory = Some(canonical);
+            }
+        }
+    }
+    if touched.0[6] {
+        if let Value::Typed {
+            row: TypedRow::PidsLimit,
+            draft: Some(d),
+            ..
+        } = &rows[6]
+        {
+            if let Ok((_, pids)) = TypedRow::PidsLimit.parse(d) {
+                flags.pids_limit = pids;
+            }
+        }
+    }
+    // T11: `on`/`off` compose the bool; `inherit` composes nothing.
+    if touched.0[7] {
+        if let Value::Set(row) = &rows[7] {
+            if let Some(i) = row.selected {
+                flags.nested_virt = match row.values[i].as_str() {
+                    "on" => Some(true),
+                    "off" => Some(false),
+                    _ => None,
+                };
+            }
+        }
+    }
+    // T12: `host`/`baked` compose the store; `inherit` nothing.
+    if touched.0[8] {
+        if let Value::Set(row) = &rows[8] {
+            if let Some(i) = row.selected {
+                flags.store = match row.values[i].as_str() {
+                    "host" => Some(Store::Host),
+                    "baked" => Some(Store::Baked),
+                    _ => None,
+                };
             }
         }
     }
@@ -256,10 +632,20 @@ fn to_flags(touched: Touched, rows: &[Row; 3]) -> Flags {
 #[allow(dead_code)] // the dispatcher arm (myconfig-dm7b.3) is the first caller
 pub(crate) fn run(flags: Flags, repo: &repo::Repo, mode: RunMode) -> i32 {
     // T7/T8's contract: the dispatcher refuses every run-scoped flag
-    // with the verb, so the three fields the picker owns are `None`
-    // on entry — the overwrite in the Enter arm must never silently
-    // swallow a flag a dispatcher bug let through.
-    debug_assert!(flags.backend.is_none() && flags.multiplexer.is_none() && flags.agent.is_none());
+    // with the verb, and the T9–T12 fields have no CLI spelling at
+    // all — so every field the picker owns is `None` on entry, and
+    // the overwrite in the Enter arm must never silently swallow a
+    // flag a dispatcher bug let through.
+    debug_assert!(
+        flags.backend.is_none()
+            && flags.multiplexer.is_none()
+            && flags.agent.is_none()
+            && flags.cpus.is_none()
+            && flags.memory.is_none()
+            && flags.pids_limit.is_none()
+            && flags.nested_virt.is_none()
+            && flags.store.is_none()
+    );
     let once = matches!(mode, RunMode::Once);
     if !stdin_stdout_tty() {
         if once {
@@ -285,7 +671,7 @@ pub(crate) fn run(flags: Flags, repo: &repo::Repo, mode: RunMode) -> i32 {
                 }
             }
         }
-        let merged = match load_merged(repo, once) {
+        let (merged, nv) = match load_merged(repo, once) {
             Ok(m) => m,
             Err(e) => {
                 eprintln!("mysbx: {e}");
@@ -295,14 +681,27 @@ pub(crate) fn run(flags: Flags, repo: &repo::Repo, mode: RunMode) -> i32 {
         let picker = seed(
             rows(&doctor::enabled_backends(), &crate::pinned_agent_names()),
             &merged,
+            nv,
         );
         return match picker_loop(picker, once) {
             Ok(Some((touched, rows))) => {
+                // T10: the touched typed rows' drafts are parsed
+                // HERE, before any flag is composed — an invalid
+                // draft is a PICKER error (the loop showed the
+                // error line and continued), so a draft that
+                // reaches the compose is one a config.rs parser
+                // accepted. The validation lives in the loop's
+                // Enter arm; this arm only composes.
                 let mut run_flags = flags;
                 let selected = to_flags(touched, &rows);
                 run_flags.backend = selected.backend;
                 run_flags.multiplexer = selected.multiplexer;
                 run_flags.agent = selected.agent;
+                run_flags.cpus = selected.cpus;
+                run_flags.memory = selected.memory;
+                run_flags.pids_limit = selected.pids_limit;
+                run_flags.nested_virt = selected.nested_virt;
+                run_flags.store = selected.store;
                 // T4: raw mode is already left and the alternate
                 // screen left — the display restore completed before
                 // the dispatch, so the payload owns the terminal from
@@ -383,7 +782,7 @@ fn confirm_not_inited(msg: &str) -> Result<(), i32> {
 /// the repo-root containment check is skipped for the same reason
 /// a real once run skips it — no repo root is derivable from the
 /// temp sidecar a run carries.
-fn load_merged(repo: &repo::Repo, once: bool) -> Result<Merged, String> {
+fn load_merged(repo: &repo::Repo, once: bool) -> Result<(Merged, NestedVirtSeed), String> {
     let home = std::env::var_os("HOME")
         .map(PathBuf::from)
         .unwrap_or_default();
@@ -391,6 +790,15 @@ fn load_merged(repo: &repo::Repo, once: bool) -> Result<Merged, String> {
     if !once {
         let layers =
             merge::load_layers(&home, xdg.as_deref(), &repo.sidecar).map_err(|e| e.to_string())?;
+        // T11: the tri-state seed from the folded chains — the
+        // user chain's fold first, the sidecar layer's own value
+        // over it, exactly the two inputs the merge resolves from
+        // (the upgrade hard error stays the merge's; the seed shows
+        // `inherit` for the pair the merge would refuse).
+        let nv = NestedVirtSeed {
+            user: layers.user.0.nested_virt,
+            sidecar: layers.sidecar.0.nested_virt,
+        };
         return merge::merge(
             layers.user.0,
             layers.sidecar.0,
@@ -398,11 +806,19 @@ fn load_merged(repo: &repo::Repo, once: bool) -> Result<Merged, String> {
             &layers.sidecar.1,
             &home,
         )
+        .map(|m| (m, nv))
         .map_err(|e| e.to_string());
     }
     let user_path = merge::user_config_path(&home, xdg.as_deref());
     let user =
         merge::load_layer_chain(&user_path, "user", &home, None).map_err(|e| e.to_string())?;
+    // Once-mode (T8/D22): the user chain ALONE — the host sidecar's
+    // tri-state must not seed a row whose Enter run will not read
+    // it, the same isolation `load_merged`'s merge half keeps.
+    let nv = NestedVirtSeed {
+        user: user.config.nested_virt,
+        sidecar: None,
+    };
     merge::merge(
         user.config,
         crate::config::Config::default(),
@@ -410,6 +826,7 @@ fn load_merged(repo: &repo::Repo, once: bool) -> Result<Merged, String> {
         &user.top,
         &home,
     )
+    .map(|m| (m, nv))
     .map_err(|e| e.to_string())
 }
 
@@ -735,11 +1152,22 @@ impl<'a, R: Read> KeyReader<'a, R> {
             bytes += 1;
             if bytes >= PASTE_CAP_BYTES {
                 // A "paste" past 64 KiB is emulator misbehavior
-                // — no operator pastes that much into a three-row
-                // picker. Give up: the residue decodes as plain
-                // keys (documented residual, accepted — the
-                // alternative is an unbounded consume that pins
-                // the picker forever).
+                // — no operator pastes that much into a
+                // row-per-decision picker. Give up, and DROP the
+                // residue: everything still QUEUED drains here, so
+                // no content byte of the oversized paste ever
+                // decodes as a key. That was a documented residual
+                // when the picker only cycled — a leaked `q`
+                // aborted, harmless — but the typed rows draft
+                // byte by byte, so residue would type itself into
+                // a draft. Only the QUEUE drains: bytes the source
+                // delivers later are fresh keypresses the picker
+                // cannot tell from new input, and draining the
+                // source itself would be the unbounded consume the
+                // cap exists to prevent.
+                while self.peek().is_some() {
+                    self.take();
+                }
                 return;
             }
             tail.push(b);
@@ -979,7 +1407,10 @@ fn fd0_readable_within(millis: u64) -> bool {
 /// and the alternate-screen leave goes out FIRST — still inside
 /// the armed window — so both restores complete here, before `run`
 /// dispatches and `sandbox()` writes its first byte.
-fn picker_loop(mut rows: [Row; 3], once: bool) -> Result<Option<(Touched, [Row; 3])>, ()> {
+fn picker_loop(
+    mut picker: [Value; ROWS],
+    once: bool,
+) -> Result<Option<(Touched, [Value; ROWS])>, ()> {
     // A terminal whose raw mode cannot be entered is `Err(())` —
     // `run` maps it to `70` (EXIT_INFRASTRUCTURE): a broken
     // terminal is infrastructure, never the operator's abort, so
@@ -993,33 +1424,68 @@ fn picker_loop(mut rows: [Row; 3], once: bool) -> Result<Option<(Touched, [Row; 
     enter_screen();
     let mut touched = Touched::default();
     let mut focus = 0usize;
+    // The one mutable render state beyond the rows (T10): the
+    // Enter-time validation error line — shown until any key
+    // redraws, so the operator reads it and edits the draft.
+    let mut error: Option<String> = None;
     // ONE reader for the loop's whole life: the queue survives
     // across keypresses, so a coalesced burst (`xq`, an arrow and
     // Enter in one read) decodes key by key, nothing lost — a
     // fresh reader per keypress would drop the queue every time.
     let mut reader = tty_key_reader();
     loop {
-        render(&rows, focus, once);
+        render(&picker, focus, once, error.as_deref());
         let key = read_key(&mut reader);
+        // Any key but Enter clears the error line — the operator
+        // has seen it; the next render shows the rows alone.
         let delta = match key {
             Key::Up => -1,
             Key::Down => 1,
             Key::Left => {
-                if rows[focus].cycle(-1) {
+                if cycle_value(&mut picker, focus, -1) {
                     touched.0[focus] = true;
                 }
+                error = None;
                 continue;
             }
             Key::Right => {
-                if rows[focus].cycle(1) {
+                if cycle_value(&mut picker, focus, 1) {
                     touched.0[focus] = true;
                 }
+                error = None;
                 continue;
             }
             Key::Enter => {
-                leave_screen();
-                drop(guard);
-                return Ok(Some((touched, rows)));
+                // T10: the typed rows' touched drafts are validated
+                // HERE, through config.rs's own parsers — an invalid
+                // draft is a PICKER error: the line renders inside
+                // the picker, Enter dispatches NOTHING (neither the
+                // valid rows nor this one), and the loop continues
+                // with every draft intact and editable. The
+                // read-only and cycle rows validate trivially.
+                match validate_enter(&picker, &touched) {
+                    Ok(()) => {
+                        leave_screen();
+                        drop(guard);
+                        return Ok(Some((touched, picker)));
+                    }
+                    Err(msg) => {
+                        error = Some(msg);
+                        continue;
+                    }
+                }
+            }
+            Key::Char(0x7f) => {
+                // Backspace (T10): delete the focused typed row's
+                // last draft byte — an empty draft returns the row
+                // to untouched (Enter composes no flag).
+                let had_draft = draft_of(&picker[focus]).is_some();
+                backspace_value(&mut picker, focus);
+                if had_draft {
+                    touched.0[focus] = true;
+                }
+                error = None;
+                continue;
             }
             // ISIG is off in raw mode, so ^C arrives as byte 3 —
             // bound to the abort like Esc and `q` so the operator
@@ -1033,10 +1499,107 @@ fn picker_loop(mut rows: [Row; 3], once: bool) -> Result<Option<(Touched, [Row; 
             // F-key, a modifier arrow, a bracketed paste): one
             // unit, consumed, bound to nothing — the render loop
             // simply redraws. Esc stays the operator's abort.
-            Key::Ignored | Key::Char(_) => continue,
+            Key::Ignored => {
+                error = None;
+                continue;
+            }
+            // Every other plain byte is offered to the focused
+            // typed row's grammar (T10): admitted bytes draft,
+            // keys outside the grammar — letters at the digit-only
+            // rows, a second dot, a suffix before digits — are
+            // ignored keystrokes, never errors. `q`, `^C` and the
+            // aborts were matched above; the grammars admit no
+            // letters but the memory suffix, so no binding is
+            // shadowed.
+            Key::Char(b) => {
+                if type_byte_value(&mut picker, focus, b) {
+                    touched.0[focus] = true;
+                }
+                error = None;
+                continue;
+            }
         };
-        focus = ((focus as i64 + delta).rem_euclid(3)) as usize;
+        focus = ((focus as i64 + delta).rem_euclid(ROWS as i64)) as usize;
+        error = None;
     }
+}
+
+/// The row operations the loop and the tests share — each spelled
+/// ONCE, on the raw `[Value; ROWS]` array `picker_loop` owns:
+/// `cycle_value` (Left/Right on a Set row, a no-op on the others),
+/// `type_byte_value` (the focused typed row's grammar filter),
+/// `backspace_value` (the draft's last byte), `draft_of` (the
+/// tests' window into a typed row) and `validate_enter` (the
+/// Enter-time parse).
+fn cycle_value(rows: &mut [Value; ROWS], focus: usize, delta: i64) -> bool {
+    match &mut rows[focus] {
+        Value::Set(row) => row.cycle(delta),
+        Value::Typed { .. } | Value::ReadOnly { .. } => false,
+    }
+}
+
+fn type_byte_value(rows: &mut [Value; ROWS], focus: usize, b: u8) -> bool {
+    match &mut rows[focus] {
+        Value::Typed { row, draft, .. } => {
+            let current = draft.clone().unwrap_or_default();
+            if !row.admits(&current, b) {
+                return false;
+            }
+            let mut next = current;
+            next.push(b as char);
+            *draft = Some(next);
+            true
+        }
+        _ => false,
+    }
+}
+
+fn backspace_value(rows: &mut [Value; ROWS], focus: usize) {
+    if let Value::Typed { draft, .. } = &mut rows[focus] {
+        if let Some(d) = draft.as_mut() {
+            d.pop();
+            if d.is_empty() {
+                *draft = None;
+            }
+        }
+    }
+}
+
+fn draft_of(value: &Value) -> Option<&str> {
+    match value {
+        Value::Typed { draft, .. } => draft.as_deref(),
+        _ => None,
+    }
+}
+
+/// The Enter-time validation (T10): every TOUCHED typed row's draft
+/// must parse through its config.rs grammar parser; the cycle and
+/// read-only rows validate trivially (their spellings are the
+/// closed sets). `Err` is the picker error line — the loop renders
+/// it and continues; `Ok` is the dispatch.
+fn validate_enter(rows: &[Value; ROWS], touched: &Touched) -> Result<(), String> {
+    for idx in 4..7 {
+        if !touched.0[idx] {
+            continue;
+        }
+        if let Value::Typed {
+            row,
+            draft: Some(d),
+            ..
+        } = &rows[idx]
+        {
+            if let Err(msg) = row.parse(d) {
+                // The config parser's message already names its key
+                // (`memory: expected a size …`) — the two shapes
+                // the pre-conversion checks refuse (a draft the
+                // grammar cannot hand the parser at all) carry the
+                // picker's own message; everything else is the
+                // parser's text, what a config layer would print.
+                return Err(msg);
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Full-screen ANSI render (T6): a redraw per key is the whole point
@@ -1045,37 +1608,66 @@ fn picker_loop(mut rows: [Row; 3], once: bool) -> Result<Option<(Touched, [Row; 
 /// picker runs on the alternate screen ([`enter_screen`]), so on
 /// a capable terminal every clear hits the alternate buffer, and
 /// an incapable one gets today's clear-per-redraw behavior.
-fn render(rows: &[Row; 3], focus: usize, once: bool) {
+fn render(rows: &[Value; ROWS], focus: usize, once: bool, error: Option<&str>) {
     let mut out = std::io::stdout();
     let _ = write!(out, "\x1b[2J\x1b[H");
     let verb = if once { "mysbx-once" } else { "mysbx tui" };
     let _ = writeln!(out, "{verb} — pick this session's sandbox\n");
-    for (i, row) in rows.iter().enumerate() {
+    for (i, value) in rows.iter().enumerate() {
         if i == focus {
             let _ = write!(out, "\x1b[7m>{:<14}\x1b[0m", ROW_LABELS[i]);
         } else {
             let _ = write!(out, " {:<14}", ROW_LABELS[i]);
         }
-        for (j, v) in row.values.iter().enumerate() {
-            if j > 0 {
-                let _ = write!(out, " ");
+        match value {
+            Value::Set(row) => {
+                for (j, v) in row.values.iter().enumerate() {
+                    if j > 0 {
+                        let _ = write!(out, " ");
+                    }
+                    if row.selected == Some(j) {
+                        let _ = write!(out, "[{v}]");
+                    } else {
+                        let _ = write!(out, "{v}");
+                    }
+                }
+                if row.values.is_empty() {
+                    // The disabled-row spelling (T2): visible, never hidden —
+                    // the hint already announces it.
+                    let _ = write!(out, "{}", row.current());
+                }
             }
-            if row.selected == Some(j) {
-                let _ = write!(out, "[{v}]");
-            } else {
-                let _ = write!(out, "{v}");
+            // T10: the draft over the seed — the merged value the
+            // row would run with is the context (bracketed, the
+            // preselect spelling), the draft the override being
+            // typed after it; `—` when no layer set one.
+            Value::Typed { draft, seed, .. } => {
+                let _ = write!(out, "[{seed}]");
+                if let Some(d) = draft {
+                    let _ = write!(out, " {d}");
+                }
             }
-        }
-        if row.values.is_empty() {
-            // The disabled-row spelling (T2): visible, never hidden —
-            // the hint already announces it.
-            let _ = write!(out, "{}", row.current());
+            // T9: the read-only row — the disabled-row spelling
+            // (T2's precedent): visible, the hint announcing the
+            // read-only-ness, Left/Right never moving it.
+            Value::ReadOnly { text, hint } => {
+                if text.is_empty() {
+                    let _ = write!(out, "{hint}");
+                } else {
+                    let _ = write!(out, "{text} {hint}");
+                }
+            }
         }
         let _ = writeln!(out);
     }
+    // T10: the Enter-time validation error — the one line the
+    // picker adds of its own, inside its own screen.
+    if let Some(msg) = error {
+        let _ = writeln!(out, "\n  error: {msg}");
+    }
     let _ = writeln!(
         out,
-        "\n  ←/→ cycle · ↑/↓ move · Enter start · Esc or q abort"
+        "\n  ←/→ cycle · ↑/↓ move · type to draft · Enter start · Esc or q abort"
     );
     let _ = out.flush();
 }
@@ -1375,13 +1967,42 @@ mod tests {
         names.iter().map(|n| n.to_string()).collect()
     }
 
+    /// The neutral tri-state seed (`NestedVirtSeed` with both layers
+    /// undecided) — the seed of every test that does not exercise
+    /// the T11 row.
+    fn nv() -> NestedVirtSeed {
+        NestedVirtSeed {
+            user: None,
+            sidecar: None,
+        }
+    }
+
+    /// The `Value::Set` of a seeded row — the tests' view into the
+    /// launch/cycle rows.
+    fn set_of(v: &Value) -> &Row {
+        match v {
+            Value::Set(r) => r,
+            _ => panic!("the test asked for a Set row"),
+        }
+    }
+
+    /// A picker built and seeded the way `run` builds it — the
+    /// default test fixture.
+    fn seeded_picker(
+        backend: Option<&str>,
+        mux: Multiplexer,
+        agent: Option<&str>,
+    ) -> [Value; ROWS] {
+        seed(rows(&[], &pins(&[])), &merged(backend, mux, agent), nv())
+    }
+
     #[test]
     fn the_backend_row_is_the_registry_intersected_with_the_host_gate() {
         // The ∩ keeps the REGISTRY's order and drops what the gate
         // did not name — never a name a run here cannot start.
         let r = rows(&["podman-krun", "zzz-not-a-backend", "nono"], &pins(&[]));
         assert_eq!(
-            r[0].values,
+            set_of(&r[0]).values,
             vec!["nono".to_owned(), "podman-krun".to_owned()]
         );
     }
@@ -1389,16 +2010,16 @@ mod tests {
     #[test]
     fn an_empty_backend_registry_renders_one_disabled_row() {
         let r = rows(&["zzz-not-a-backend"], &pins(&[]));
-        assert!(r[0].values.is_empty());
-        assert_eq!(r[0].selected, None);
-        assert_eq!(r[0].current(), "(no backend enabled on this host)");
+        assert!(set_of(&r[0]).values.is_empty());
+        assert_eq!(set_of(&r[0]).selected, None);
+        assert_eq!(set_of(&r[0]).current(), "(no backend enabled on this host)");
     }
 
     #[test]
     fn the_multiplexer_row_lists_the_config_key_universe() {
         let r = rows(&[], &pins(&[]));
         assert_eq!(
-            r[1].values,
+            set_of(&r[1]).values,
             Multiplexer::NAMES
                 .iter()
                 .map(|n| n.to_string())
@@ -1410,7 +2031,7 @@ mod tests {
     fn the_agent_row_is_the_pins_plus_the_none_pseudo_value() {
         let r = rows(&[], &pins(&["pi", "opencode"]));
         assert_eq!(
-            r[2].values,
+            set_of(&r[2]).values,
             vec!["pi".to_owned(), "opencode".to_owned(), "none".to_owned()]
         );
     }
@@ -1418,7 +2039,7 @@ mod tests {
     #[test]
     fn a_build_without_pins_carries_only_the_none_pseudo_value() {
         let r = rows(&[], &pins(&[]));
-        assert_eq!(r[2].values, vec!["none".to_owned()]);
+        assert_eq!(set_of(&r[2]).values, vec!["none".to_owned()]);
     }
 
     #[test]
@@ -1427,19 +2048,19 @@ mod tests {
         let seeded = seed(
             r,
             &merged(Some("nono"), Multiplexer::Herdr, Some("opencode")),
+            nv(),
         );
-        assert_eq!(seeded[0].current(), "nono");
-        assert_eq!(seeded[1].current(), "herdr");
-        assert_eq!(seeded[2].current(), "opencode");
+        assert_eq!(set_of(&seeded[0]).current(), "nono");
+        assert_eq!(set_of(&seeded[1]).current(), "herdr");
+        assert_eq!(set_of(&seeded[2]).current(), "opencode");
     }
 
     #[test]
     fn an_undecided_multiplexer_seeds_the_pipeline_default() {
         // T3: an omitted key is the plain shell — the merged value
         // is already `Multiplexer::None`, and the row selects `none`.
-        let r = rows(&[], &pins(&[]));
-        let seeded = seed(r, &merged(None, Multiplexer::None, None));
-        assert_eq!(seeded[1].current(), "none");
+        let seeded = seeded_picker(None, Multiplexer::None, None);
+        assert_eq!(set_of(&seeded[1]).current(), "none");
     }
 
     #[test]
@@ -1449,9 +2070,12 @@ mod tests {
         // composed as `--agent none`, while no default resolves to
         // the `--no-agent` spelling.
         let r = rows(&[], &pins(&["none"]));
-        assert_eq!(r[2].values, vec!["none".to_owned(), "none".to_owned()]);
-        let seeded = seed(r, &merged(None, Multiplexer::None, Some("none")));
-        assert_eq!(seeded[2].selected, Some(0));
+        assert_eq!(
+            set_of(&r[2]).values,
+            vec!["none".to_owned(), "none".to_owned()]
+        );
+        let seeded = seed(r, &merged(None, Multiplexer::None, Some("none")), nv());
+        assert_eq!(set_of(&seeded[2]).selected, Some(0));
         let mut touched = Touched::default();
         touched.0[2] = true;
         match to_flags(touched, &seeded).agent {
@@ -1459,29 +2083,29 @@ mod tests {
             other => panic!("wrong agent flag: {other:?}"),
         }
         let r = rows(&[], &pins(&["none"]));
-        let seeded = seed(r, &merged(None, Multiplexer::None, None));
-        assert_eq!(seeded[2].selected, Some(1));
-        assert_eq!(seeded[2].current(), "none");
+        let seeded = seed(r, &merged(None, Multiplexer::None, None), nv());
+        assert_eq!(set_of(&seeded[2]).selected, Some(1));
+        assert_eq!(set_of(&seeded[2]).current(), "none");
     }
 
     #[test]
     fn a_default_agent_that_resolves_to_nothing_preselects_none() {
         let r = rows(&[], &pins(&["pi"]));
-        let seeded = seed(r, &merged(None, Multiplexer::None, None));
-        assert_eq!(seeded[2].current(), AGENT_NONE);
+        let seeded = seed(r, &merged(None, Multiplexer::None, None), nv());
+        assert_eq!(set_of(&seeded[2]).current(), AGENT_NONE);
     }
 
     #[test]
     fn a_backend_no_layer_names_is_the_row_with_nothing_preselected() {
         let r = rows(&["nono", "bubblewrap"], &pins(&[]));
-        let seeded = seed(r, &merged(None, Multiplexer::None, None));
-        assert_eq!(seeded[0].selected, None);
+        let seeded = seed(r, &merged(None, Multiplexer::None, None), nv());
+        assert_eq!(set_of(&seeded[0]).selected, None);
         // `current()` of a selected-less row shows the first value
         // unbracketed; Enter composes no backend flag either way
         // (`to_flags` keys on `selected`), so the pipeline's own
         // "no backend configured" refusal decides — the picker never
         // guesses one.
-        assert_eq!(seeded[0].current(), "bubblewrap");
+        assert_eq!(set_of(&seeded[0]).current(), "bubblewrap");
     }
 
     #[test]
@@ -1490,26 +2114,37 @@ mod tests {
         // nothing selected and Enter composes no flag — the
         // pipeline's refusal names the value (T4), never the picker.
         let r = rows(&["nono"], &pins(&["pi"]));
-        let seeded = seed(r, &merged(Some("krun"), Multiplexer::None, Some("orca")));
-        assert_eq!(seeded[0].selected, None);
-        assert_eq!(seeded[1].current(), "none");
-        assert_eq!(seeded[2].selected, None);
+        let seeded = seed(
+            r,
+            &merged(Some("krun"), Multiplexer::None, Some("orca")),
+            nv(),
+        );
+        assert_eq!(set_of(&seeded[0]).selected, None);
+        assert_eq!(set_of(&seeded[1]).current(), "none");
+        assert_eq!(set_of(&seeded[2]).selected, None);
     }
 
     #[test]
     fn an_untouched_row_leaves_its_flag_unset() {
         let r = rows(&["nono"], &pins(&["pi"]));
-        let seeded = seed(r, &merged(Some("nono"), Multiplexer::Tmux, None));
+        let seeded = seed(r, &merged(Some("nono"), Multiplexer::Tmux, None), nv());
         let flags = to_flags(Touched::default(), &seeded);
         assert_eq!(flags.backend, None);
         assert_eq!(flags.multiplexer, None);
         assert_eq!(flags.agent, None);
+        // T9–T12: the property rows compose nothing either — the
+        // untouched direction spans every row the picker carries.
+        assert_eq!(flags.cpus, None);
+        assert_eq!(flags.memory, None);
+        assert_eq!(flags.pids_limit, None);
+        assert_eq!(flags.nested_virt, None);
+        assert_eq!(flags.store, None);
     }
 
     #[test]
     fn a_touched_row_composes_its_flag() {
         let r = rows(&["nono"], &pins(&["pi", "opencode"]));
-        let seeded = seed(r, &merged(Some("nono"), Multiplexer::None, None));
+        let seeded = seed(r, &merged(Some("nono"), Multiplexer::None, None), nv());
         let mut touched = Touched::default();
         touched.0[0] = true;
         touched.0[2] = true;
@@ -1525,7 +2160,7 @@ mod tests {
     #[test]
     fn cycling_moves_within_the_closed_set_and_wraps() {
         let r = rows(&["nono", "bubblewrap"], &pins(&["pi", "opencode"]));
-        let mut row = r[2].clone();
+        let mut row = set_of(&r[2]).clone();
         assert!(row.cycle(1));
         assert_eq!(row.current(), "opencode");
         assert!(row.cycle(1));
@@ -1542,12 +2177,12 @@ mod tests {
         // And a cycle that does not move leaves the row untouched:
         // only a real selection is a decision (T4).
         let r = rows(&["zzz"], &pins(&[]));
-        let mut disabled = r[0].clone();
+        let mut disabled = set_of(&r[0]).clone();
         assert!(!disabled.cycle(1));
         assert_eq!(disabled.selected, None);
 
         let r = rows(&["nono"], &pins(&[]));
-        let mut single = r[0].clone();
+        let mut single = set_of(&r[0]).clone();
         assert!(single.selected.is_none()); // rows() never preselects
         assert!(!single.cycle(1));
         assert_eq!(single.selected, None);
@@ -1556,9 +2191,9 @@ mod tests {
     #[test]
     fn a_cycled_row_composes_the_cycled_value() {
         let r = rows(&[], &pins(&["pi", "opencode"]));
-        let mut seeded = seed(r, &merged(None, Multiplexer::None, None));
-        assert!(seeded[2].cycle(1)); // none → pi
-        assert!(seeded[2].cycle(1)); // pi → opencode
+        let mut seeded = seed(r, &merged(None, Multiplexer::None, None), nv());
+        assert!(cycle_value(&mut seeded, 2, 1)); // none → pi
+        assert!(cycle_value(&mut seeded, 2, 1)); // pi → opencode
         let mut touched = Touched::default();
         touched.0[2] = true;
         let flags = to_flags(touched, &seeded);
@@ -1570,12 +2205,11 @@ mod tests {
 
     #[test]
     fn a_touched_multiplexer_row_maps_the_row_string_to_the_enum() {
-        let r = rows(&[], &pins(&[]));
-        let mut seeded = seed(r, &merged(None, Multiplexer::None, None));
+        let mut seeded = seeded_picker(None, Multiplexer::None, None);
         // `none` sits last in `Multiplexer::NAMES`; three rights wrap
         // to `herdr`.
-        assert!(seeded[1].cycle(3));
-        assert_eq!(seeded[1].current(), "herdr");
+        assert!(cycle_value(&mut seeded, 1, 3));
+        assert_eq!(set_of(&seeded[1]).current(), "herdr");
         let mut touched = Touched::default();
         touched.0[1] = true;
         let flags = to_flags(touched, &seeded);
@@ -1589,11 +2223,11 @@ mod tests {
         // never SELECT the value the merge already showed — it can
         // only compose a decision that differs from the layers'.
         let r = rows(&[], &pins(&["pi", "opencode"]));
-        let mut row = r[2].clone();
+        let mut row = set_of(&r[2]).clone();
         row.selected = None;
         assert!(row.cycle(1));
         assert_eq!(row.current(), "opencode");
-        let mut row = r[2].clone();
+        let mut row = set_of(&r[2]).clone();
         row.selected = None;
         assert!(row.cycle(-1));
         assert_eq!(row.current(), AGENT_NONE);
@@ -1604,12 +2238,395 @@ mod tests {
         // The undecided-backend case: the operator cannot make a
         // choice a disabled registry does not offer, so the flag
         // stays `None` and the pipeline's refusal decides.
-        let r = rows(&[], &pins(&[]));
-        let seeded = seed(r, &merged(None, Multiplexer::None, None));
+        let seeded = seeded_picker(None, Multiplexer::None, None);
         let mut touched = Touched::default();
         touched.0[0] = true;
         let flags = to_flags(touched, &seeded);
         assert_eq!(flags.backend, None);
+    }
+
+    // ---- T9: the read-only network row ----
+
+    #[test]
+    fn the_network_row_shows_the_resolved_merged_value() {
+        let seeded = seeded_picker(None, Multiplexer::None, None);
+        match &seeded[3] {
+            Value::ReadOnly { text, hint } => {
+                // The merge's default: `shared` (D20's built-in).
+                assert_eq!(text, "shared");
+                assert!(!hint.is_empty(), "the read-only-ness is visible");
+            }
+            other => panic!("the network row is read-only: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn left_and_right_on_the_network_row_move_nothing_and_never_touch() {
+        let mut seeded = seeded_picker(None, Multiplexer::None, None);
+        assert!(!cycle_value(&mut seeded, 3, 1));
+        assert!(!cycle_value(&mut seeded, 3, -1));
+        // No key contributes a draft either — typing at it is an
+        // ignored keystroke, never a touch.
+        assert!(!type_byte_value(&mut seeded, 3, b'7'));
+        // And Enter with the row "touched" (which cannot happen —
+        // nothing sets the bit) would compose no flag anyway: there
+        // is no `Flags` field for network.
+        let mut touched = Touched::default();
+        touched.0[3] = true;
+        let flags = to_flags(touched, &seeded);
+        assert_eq!(flags.backend, None, "no network flag exists to compose");
+    }
+
+    // ---- T10: the typed rows ----
+
+    #[test]
+    fn the_typed_row_grammars_admit_only_their_shapes() {
+        // cpus: digits and one dot.
+        let mut v = rows(&[], &pins(&[]));
+        assert!(type_byte_value(&mut v, 4, b'1'));
+        assert!(type_byte_value(&mut v, 4, b'.'));
+        assert!(type_byte_value(&mut v, 4, b'5'));
+        assert_eq!(draft_of(&v[4]), Some("1.5"));
+        assert!(!type_byte_value(&mut v, 4, b'.'), "a second dot is ignored");
+        assert!(!type_byte_value(&mut v, 4, b'g'), "letters are ignored");
+        // A leading dot is ignored too.
+        let mut v = rows(&[], &pins(&[]));
+        assert!(!type_byte_value(&mut v, 4, b'.'));
+
+        // memory: digits plus one optional suffix, after digits.
+        let mut v = rows(&[], &pins(&[]));
+        assert!(type_byte_value(&mut v, 5, b'8'));
+        assert!(type_byte_value(&mut v, 5, b'g'));
+        assert_eq!(draft_of(&v[5]), Some("8g"));
+        assert!(!type_byte_value(&mut v, 5, b'm'), "a second suffix byte");
+        assert!(!type_byte_value(&mut v, 5, b'2'), "digits after the suffix");
+        let mut v = rows(&[], &pins(&[]));
+        assert!(!type_byte_value(&mut v, 5, b'g'), "a bare suffix");
+        // Any case.
+        let mut v = rows(&[], &pins(&[]));
+        assert!(type_byte_value(&mut v, 5, b'4'));
+        assert!(type_byte_value(&mut v, 5, b'M'));
+
+        // pids-limit: digits only.
+        let mut v = rows(&[], &pins(&[]));
+        assert!(type_byte_value(&mut v, 6, b'4'));
+        assert!(type_byte_value(&mut v, 6, b'2'));
+        assert!(!type_byte_value(&mut v, 6, b'.'), "no dot");
+        assert!(!type_byte_value(&mut v, 6, b'g'), "no suffix");
+        assert_eq!(draft_of(&v[6]), Some("42"));
+    }
+
+    #[test]
+    fn backspace_deletes_and_an_empty_draft_is_untouched() {
+        let mut v = rows(&[], &pins(&[]));
+        assert!(type_byte_value(&mut v, 4, b'2'));
+        assert!(type_byte_value(&mut v, 4, b'.'));
+        assert_eq!(draft_of(&v[4]), Some("2."));
+        backspace_value(&mut v, 4);
+        assert_eq!(draft_of(&v[4]), Some("2"));
+        backspace_value(&mut v, 4);
+        // The empty draft is the untouched row: `None`, Enter composes
+        // no flag.
+        assert_eq!(draft_of(&v[4]), None);
+        // Backspace on an empty draft is a no-op.
+        backspace_value(&mut v, 4);
+        assert_eq!(draft_of(&v[4]), None);
+        // And on a non-typed row it is a no-op too.
+        backspace_value(&mut v, 0);
+        backspace_value(&mut v, 3);
+    }
+
+    #[test]
+    fn a_typed_draft_composes_its_flag_through_the_config_parser() {
+        let mut v = rows(&[], &pins(&[]));
+        assert!(type_byte_value(&mut v, 4, b'1'));
+        assert!(type_byte_value(&mut v, 4, b'2'));
+        assert!(type_byte_value(&mut v, 5, b'5'));
+        assert!(type_byte_value(&mut v, 5, b'1'));
+        assert!(type_byte_value(&mut v, 5, b'2'));
+        assert!(type_byte_value(&mut v, 5, b'm'));
+        assert!(type_byte_value(&mut v, 6, b'6'));
+        assert!(type_byte_value(&mut v, 6, b'4'));
+        // The drafts parse — validate_enter accepts.
+        let mut touched = Touched::default();
+        touched.0[4] = true;
+        touched.0[5] = true;
+        touched.0[6] = true;
+        assert_eq!(validate_enter(&v, &touched), Ok(()));
+        // And compose their flags.
+        let flags = to_flags(touched, &v);
+        assert_eq!(flags.cpus.as_deref(), Some("12"));
+        assert_eq!(flags.memory.as_deref(), Some("512m"));
+        assert_eq!(flags.pids_limit, Some(64));
+    }
+
+    #[test]
+    fn the_cpus_grammar_keeps_the_exact_value_no_saturation() {
+        // m1 regression: the dot-free draft must go through i64
+        // DIRECTLY — the f64 detour saturated a 17-digit draft
+        // into i64::MAX silently, and a 18-digit one rounded.
+        let mut v = rows(&[], &pins(&[]));
+        for _ in 0..19 {
+            assert!(type_byte_value(&mut v, 4, b'9'));
+        }
+        let mut touched = Touched::default();
+        touched.0[4] = true;
+        assert!(
+            validate_enter(&v, &touched).is_err(),
+            "a 19-digit draft (past i64::MAX) is an overflow error, never a saturated i64::MAX"
+        );
+        assert_eq!(to_flags(touched, &v).cpus, None);
+        // 2^53 and above: a dotted whole draft the f64 cannot keep
+        // exactly is refused, never rounded.
+        let mut v = rows(&[], &pins(&[]));
+        for b in b"9007199254740992.0" {
+            assert!(
+                type_byte_value(&mut v, 4, *b),
+                "byte {:?} drafted",
+                *b as char
+            );
+        }
+        let mut touched = Touched::default();
+        touched.0[4] = true;
+        assert!(
+            validate_enter(&v, &touched).is_err(),
+            "a dotted whole draft at 2^53 is refused, never rounded"
+        );
+        // The last exact values still compose: 2^53 - 1 dot-free,
+        // and an ordinary dotted one.
+        let mut v = rows(&[], &pins(&[]));
+        for b in b"9007199254740991" {
+            assert!(type_byte_value(&mut v, 4, *b));
+        }
+        let mut touched = Touched::default();
+        touched.0[4] = true;
+        assert_eq!(validate_enter(&v, &touched), Ok(()));
+        assert_eq!(
+            to_flags(touched, &v).cpus.as_deref(),
+            Some("9007199254740991")
+        );
+        let mut v = rows(&[], &pins(&[]));
+        for b in b"2.5" {
+            assert!(type_byte_value(&mut v, 4, *b));
+        }
+        let mut touched = Touched::default();
+        touched.0[4] = true;
+        assert_eq!(validate_enter(&v, &touched), Ok(()));
+        assert_eq!(to_flags(touched, &v).cpus.as_deref(), Some("2.5"));
+    }
+
+    #[test]
+    fn an_invalid_draft_is_a_picker_error_and_never_a_dispatch() {
+        // `0` is digits-only valid per the grammar, but the config
+        // parser refuses it (a positive number is required) — the
+        // Enter validation catches it and the loop would show the
+        // error line; `to_flags` (post-validation) composes nothing
+        // for a draft its parser refuses.
+        let mut v = rows(&[], &pins(&[]));
+        assert!(type_byte_value(&mut v, 4, b'0'));
+        let mut touched = Touched::default();
+        touched.0[4] = true;
+        assert!(validate_enter(&v, &touched).is_err(), "cpus = 0 is refused");
+        let flags = to_flags(touched, &v);
+        assert_eq!(flags.cpus, None, "a refused draft composes nothing");
+        // The memory row: `0m` — same refusal shape.
+        let mut v = rows(&[], &pins(&[]));
+        assert!(type_byte_value(&mut v, 5, b'0'));
+        assert!(type_byte_value(&mut v, 5, b'm'));
+        let mut touched = Touched::default();
+        touched.0[5] = true;
+        assert!(validate_enter(&v, &touched).is_err());
+        // pids-limit = 0: refused (positive).
+        let mut v = rows(&[], &pins(&[]));
+        assert!(type_byte_value(&mut v, 6, b'0'));
+        let mut touched = Touched::default();
+        touched.0[6] = true;
+        assert!(validate_enter(&v, &touched).is_err());
+        // And a huge pids draft the u32 cannot hold — the grammar
+        // admits the digits, the parser refuses at Enter.
+        let mut v = rows(&[], &pins(&[]));
+        for _ in 0..11 {
+            assert!(type_byte_value(&mut v, 6, b'9'));
+        }
+        let mut touched = Touched::default();
+        touched.0[6] = true;
+        assert!(validate_enter(&v, &touched).is_err());
+    }
+
+    #[test]
+    fn the_typed_rows_seed_the_merged_value_as_display_only() {
+        // The merged value shows as the row's context (`seed`), but
+        // an untouched row composes no flag — the seed must never
+        // reach `Flags`.
+        let base = crate::merge::merge(
+            crate::config::Config::default(),
+            crate::config::Config::default(),
+            Path::new("/tmp/fake-user.toml"),
+            Path::new("/tmp/fake-sidecar.toml"),
+            Path::new("/nonexistent-home"),
+        )
+        .unwrap();
+        let m = Merged {
+            cpus: Some("2.5".to_owned()),
+            memory: Some("8g".to_owned()),
+            pids_limit: Some(1024),
+            ..base
+        };
+        let seeded = seed(rows(&[], &pins(&[])), &m, nv());
+        for (idx, expected) in [(4usize, "2.5"), (5, "8g"), (6, "1024")] {
+            match &seeded[idx] {
+                Value::Typed { draft, seed, .. } => {
+                    assert_eq!(seed, expected);
+                    assert_eq!(*draft, None, "the seed is display-only");
+                }
+                other => panic!("row {idx} is typed: {other:?}"),
+            }
+        }
+        // Untouched Enter composes nothing.
+        let flags = to_flags(Touched::default(), &seeded);
+        assert_eq!(flags.cpus, None);
+        assert_eq!(flags.memory, None);
+        assert_eq!(flags.pids_limit, None);
+    }
+
+    // ---- T11: the nested-virt cycle ----
+
+    #[test]
+    fn the_nested_virt_row_seeds_from_the_tri_state_and_cycles() {
+        // None → inherit.
+        let seeded = seeded_picker(None, Multiplexer::None, None);
+        assert_eq!(set_of(&seeded[7]).current(), INHERIT);
+        // Some(true) → on.
+        let seeded = seed(
+            rows(&[], &pins(&[])),
+            &merged(None, Multiplexer::None, None),
+            NestedVirtSeed {
+                user: Some(true),
+                sidecar: None,
+            },
+        );
+        assert_eq!(set_of(&seeded[7]).current(), "on");
+        // Some(false) → off.
+        let seeded = seed(
+            rows(&[], &pins(&[])),
+            &merged(None, Multiplexer::None, None),
+            NestedVirtSeed {
+                user: Some(false),
+                sidecar: None,
+            },
+        );
+        assert_eq!(set_of(&seeded[7]).current(), "off");
+        // The merge's own rule is ANY-ENABLE-WINS (merge.rs, D27):
+        // either layer's `true` enables, either layer's explicit
+        // `false` denies only when nothing enabled.
+        let seeded = seed(
+            rows(&[], &pins(&[])),
+            &merged(None, Multiplexer::None, None),
+            NestedVirtSeed {
+                user: Some(false),
+                sidecar: Some(true),
+            },
+        );
+        // The user deny + sidecar enable is the merge's hard error —
+        // the seed shows inherit, never a resolution the merge
+        // refuses to make.
+        assert_eq!(set_of(&seeded[7]).current(), INHERIT);
+        let seeded = seed(
+            rows(&[], &pins(&[])),
+            &merged(None, Multiplexer::None, None),
+            NestedVirtSeed {
+                user: Some(true),
+                sidecar: Some(false),
+            },
+        );
+        // Any-enable-wins: the user's `true` stays `on` under the
+        // silent-denying sidecar — the row shows exactly what the
+        // run would do (the sidecar's `false` denies nothing here;
+        // only a USER deny is un-liftable, D27).
+        assert_eq!(set_of(&seeded[7]).current(), "on");
+        // And the symmetrical direction: the sidecar enables, the
+        // user layer stayed silent.
+        let seeded = seed(
+            rows(&[], &pins(&[])),
+            &merged(None, Multiplexer::None, None),
+            NestedVirtSeed {
+                user: None,
+                sidecar: Some(true),
+            },
+        );
+        assert_eq!(set_of(&seeded[7]).current(), "on");
+    }
+
+    #[test]
+    fn the_nested_virt_cycle_composes_the_bool_and_inherit_composes_nothing() {
+        let seeded = seeded_picker(None, Multiplexer::None, None);
+        let mut v = seeded;
+        assert!(cycle_value(&mut v, 7, 1)); // inherit → on
+        let mut touched = Touched::default();
+        touched.0[7] = true;
+        assert_eq!(to_flags(touched, &v).nested_virt, Some(true));
+        assert!(cycle_value(&mut v, 7, 1)); // on → off
+        assert_eq!(to_flags(touched, &v).nested_virt, Some(false));
+        assert!(cycle_value(&mut v, 7, 1)); // off → inherit (wraps)
+        assert_eq!(
+            to_flags(touched, &v).nested_virt,
+            None,
+            "inherit composes no field — the layers decide"
+        );
+    }
+
+    // ---- T12: the store cycle ----
+
+    #[test]
+    fn the_store_row_seeds_from_the_layer_decision_and_cycles() {
+        // No layer → inherit.
+        let seeded = seeded_picker(None, Multiplexer::None, None);
+        assert_eq!(set_of(&seeded[8]).current(), INHERIT);
+        // The row's set is the config key's own spellings.
+        assert_eq!(
+            set_of(&seeded[8]).values,
+            vec!["inherit".to_owned(), "host".to_owned(), "baked".to_owned()]
+        );
+    }
+
+    #[test]
+    fn the_store_cycle_composes_the_store_and_inherit_composes_nothing() {
+        let mut v = seeded_picker(None, Multiplexer::None, None);
+        assert!(cycle_value(&mut v, 8, 1)); // inherit → host
+        let mut touched = Touched::default();
+        touched.0[8] = true;
+        assert_eq!(to_flags(touched, &v).store, Some(Store::Host));
+        assert!(cycle_value(&mut v, 8, 1)); // host → baked
+        assert_eq!(to_flags(touched, &v).store, Some(Store::Baked));
+        assert!(cycle_value(&mut v, 8, 1)); // baked → inherit (wraps)
+        assert_eq!(to_flags(touched, &v).store, None);
+    }
+
+    #[test]
+    fn a_seeded_store_row_cycled_to_inherit_composes_nothing() {
+        // A layer said `baked`, the operator cycled away and back:
+        // the row shows the layer's value again but `inherit` (the
+        // wrapped position) is still no field — the layers decide.
+        let base = crate::merge::merge(
+            crate::config::Config::default(),
+            crate::config::Config::default(),
+            Path::new("/tmp/fake-user.toml"),
+            Path::new("/tmp/fake-sidecar.toml"),
+            Path::new("/nonexistent-home"),
+        )
+        .unwrap();
+        let m = Merged {
+            store: Some(Store::Baked),
+            ..base
+        };
+        let mut v = seed(rows(&[], &pins(&[])), &m, nv());
+        assert_eq!(set_of(&v[8]).current(), "baked");
+        assert!(cycle_value(&mut v, 8, 1)); // baked → inherit
+        assert!(cycle_value(&mut v, 8, 1)); // inherit → host
+        assert!(cycle_value(&mut v, 8, 1)); // host → baked (back)
+        let mut touched = Touched::default();
+        touched.0[8] = true;
+        assert_eq!(to_flags(touched, &v).store, Some(Store::Baked));
     }
 
     /// Feed `bytes` to a fresh [`KeyReader`] through a `Cursor`, so
@@ -1853,6 +2870,50 @@ mod tests {
     }
 
     #[test]
+    fn the_paste_cap_drops_the_residue_instead_of_leaking_keys() {
+        // m2 regression: a "paste" past PASTE_CAP_BYTES is emulator
+        // misbehavior; the give-up used to return the residue to
+        // the stream (harmless when the picker only cycled — a
+        // leaked `q` aborted), but the typed rows draft byte by
+        // byte, so residue would type itself into a draft. The cap
+        // now DROPS everything still queued: no content byte of
+        // the oversized paste decodes as a key, and the paste
+        // still counts as ONE Ignored.
+        let mut chunks: Vec<Vec<u8>> = Vec::new();
+        chunks.push(b"\x1b[200~".to_vec());
+        // (cap + 4) content bytes — the cap trips before the
+        // terminator, with `\r`, `q` and digits sprinkled through
+        // the residue: none may surface (an Enter would dispatch,
+        // a `q` abort, a digit would draft). The content arrives
+        // in 32-byte chunks — the read shape the reader asks for.
+        let over: Vec<u8> = std::iter::repeat_n(b'x', PASTE_CAP_BYTES + 4)
+            .enumerate()
+            .map(|(i, b)| {
+                if i % 1000 == 0 {
+                    b'\r'
+                } else if i % 1000 == 1 {
+                    b'q'
+                } else if i % 1000 == 2 {
+                    b'7'
+                } else {
+                    b
+                }
+            })
+            .collect();
+        for piece in over.chunks(32) {
+            chunks.push(piece.to_vec());
+        }
+        chunks.push(b"\x1b[201~".to_vec()); // never reached
+        let refs: Vec<&[u8]> = chunks.iter().map(|c| c.as_slice()).collect();
+        let mut r = split_reader(&refs, 8);
+        assert_eq!(r.next_key(), Key::Ignored);
+        assert!(
+            r.buf.is_empty(),
+            "the residue was dropped, not returned to the stream"
+        );
+    }
+
+    #[test]
     fn a_split_paste_introducer_still_takes_the_paste_arm() {
         // MINOR-1 regression: a read boundary INSIDE the `\x1b[200`
         // head (`\x1b[2` now, `00~...` in the next read) must fill
@@ -1945,7 +3006,7 @@ mod tests {
         std::fs::create_dir_all(&repo.sidecar).unwrap();
         std::fs::write(
             repo.sidecar.join("config.toml"),
-            "backend = \"podman-gvisor\"\nmultiplexer = \"herdr\"\ndefault-agent = \"opencode\"\n",
+            "backend = \"podman-gvisor\"\nmultiplexer = \"herdr\"\ndefault-agent = \"opencode\"\nnested-virt = true\n",
         )
         .unwrap();
 
@@ -1976,16 +3037,25 @@ mod tests {
 
         // The plain mode loads both layers: the sidecar's
         // podman-gvisor wins the merge (the run would use it).
-        let plain = plain_merged.expect("the plain load succeeds");
+        let (plain, plain_nv) = plain_merged.expect("the plain load succeeds");
         assert_eq!(plain.backend.as_deref(), Some("podman-gvisor"));
         assert_eq!(plain.default_agent.as_deref(), Some("opencode"));
+        // The tri-state seed reads both layers (T11): the sidecar's
+        // `nested-virt = true` over the user chain's silence.
+        assert_eq!(plain_nv.sidecar, Some(true));
+        assert_eq!(plain_nv.user, None);
         // The once mode ignores the sidecar entirely: the user
         // layer's backend, and NO agent — never the sidecar's
         // `default-agent` a touched row would have carried over.
-        let once = once_merged.expect("the once load succeeds");
+        let (once, once_nv) = once_merged.expect("the once load succeeds");
         assert_eq!(once.backend.as_deref(), Some("bubblewrap"));
         assert_eq!(once.default_agent, None);
         assert_eq!(once.multiplexer, Multiplexer::None);
+        // Once-mode seeds the tri-state from the user chain ALONE
+        // (T8/D22): the host sidecar's decision must not reach the
+        // row, the same isolation the merge half keeps.
+        assert_eq!(once_nv.sidecar, None);
+        assert_eq!(once_nv.user, None);
 
         let _ = std::fs::remove_dir_all(&base);
     }

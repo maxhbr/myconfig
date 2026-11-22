@@ -765,6 +765,38 @@ pub struct Flags {
     /// error — the command line is fine, the backend it names does
     /// not exist.
     pub backend: Option<String>,
+    /// The one-run resource overrides of the session picker's typed
+    /// rows (docs/design/tui.md T10): TUI-ONLY, no CLI spelling — the
+    /// dispatcher never parses them, `any()`/`first_name()`/`once_gate`
+    /// never read them, and the bare-once branch compares against
+    /// `Flags::default()` so they cannot open the picker from a
+    /// command line. Each is Some ONLY for a row the operator touched
+    /// AND validated at Enter through config.rs's own grammar
+    /// parsers; `None` means the configuration layers decide (D6).
+    /// The pipeline applies them where `--backend` already overrides
+    /// the merge, with no per-backend support matrix in the picker —
+    /// the existing gates decide, unchanged (T4).
+    pub cpus: Option<String>,
+    /// The picker's typed `memory` row: podman's `--memory` grammar
+    /// (the config.rs parser's), TUI-only like `cpus` (T10).
+    pub memory: Option<String>,
+    /// The picker's typed `pids-limit` row: a positive integer, TUI-
+    /// only like `cpus` (T10).
+    pub pids_limit: Option<u32>,
+    /// The picker's cycled `nested-virt` row (T11): `Some(true)` is
+    /// the `on` spelling, `Some(false)` the explicit `off` — both
+    /// override the merge for this run; the `inherit` spelling never
+    /// composes a field (the layers decide, like an untouched row).
+    /// TUI-only like `cpus` (T10). No CLI spelling. `on` over a
+    /// user-layer deny is refused at the override site with the
+    /// merge's own `NestedVirtUpgrade` message shape — the deny
+    /// re-check the pipeline composes like `--backend`'s validation.
+    pub nested_virt: Option<bool>,
+    /// The picker's cycled `store` row (T12): `inherit` never composes
+    /// a field (the layers and `resolved_store()` decide); `host`/
+    /// `baked` override the merge for this run, `config::Store`'s own
+    /// spellings. TUI-only like `cpus` (T10).
+    pub store: Option<config::Store>,
     /// The `--session NAME` flag (workspace.md D1): select clone mode
     /// — the named session's clone at `<repo>.mysbx/clones/NAME` is
     /// the workspace of this run, bound rw at the repo's own path
@@ -2934,6 +2966,16 @@ fn sandbox_pipeline(
             }
         }
     }
+    // The USER layer's nested-virt tri-state (config.md D27), read
+    // before the merge consumes the configs: the picker's one-run
+    // `on` override (tui.md T11) must meet the same deny a sidecar
+    // layer would — a user-config `nested-virt = false` is a
+    // host-wide deny NO layer (and no one-run override) may lift,
+    // and the merge's own `NestedVirtUpgrade` check cannot see a
+    // flag that arrives after it ran. The re-check lives at the
+    // override site below, composed like `--backend`'s validation.
+    let user_nested_virt = layers.user.0.nested_virt;
+    let user_nested_virt_file = layers.user.1.clone();
     let mut merged = match merge::merge(
         layers.user.0,
         layers.sidecar.0,
@@ -2993,6 +3035,57 @@ fn sandbox_pipeline(
     // can be assigned directly.
     if let Some(mux) = cli_mux {
         merged.multiplexer = mux;
+    }
+
+    // 3a-p: the picker's typed/cycled one-run overrides
+    // (docs/design/tui.md T10/T11/T12): TUI-only `Flags` fields with
+    // no CLI spelling, composed by the picker's Enter from rows the
+    // operator touched — the same D6 precedence every flag has
+    // (flags > sidecar > user > defaults), applied at the same site
+    // `--backend`/`--multiplexer` apply theirs. The values were
+    // validated by config.rs's own grammar parsers at Enter, so
+    // they assign directly; the pipeline's per-backend gates — the
+    // unenforced-limits warnings, the krun `PidsLimit` refusal, the
+    // `baked` store fallback, the nested-virt pre-flights — are
+    // untouched and stay the single decision surface (T4: the
+    // picker adds no matrix of its own).
+    if let Some(cpus) = flags.cpus.clone() {
+        merged.cpus = Some(cpus);
+    }
+    if let Some(memory) = flags.memory.clone() {
+        merged.memory = Some(memory);
+    }
+    if let Some(pids) = flags.pids_limit {
+        merged.pids_limit = Some(pids);
+    }
+    if let Some(nv) = flags.nested_virt {
+        // The D27 deny re-check (tui.md T11): the merge's own
+        // `NestedVirtUpgrade` guard fired BEFORE this override
+        // existed (it sees only the two layers), so the one
+        // widening shape the merge would refuse for a sidecar is
+        // re-checked here for the picker's one-run `on` — a
+        // user-config `nested-virt = false` is a host-wide deny no
+        // layer and no override may lift. The message is the
+        // merge's own shape, with the picker's flag in the sidecar's
+        // role, so the two refusal paths read identically (exit
+        // `70`, nothing dispatched — the same D8 boundary a refused
+        // `--backend` meets). NOT a per-backend matrix: the
+        // warn-and-drop and host pre-flight gates below are
+        // untouched and stay the only backend-shaped decisions.
+        if nv && user_nested_virt == Some(false) {
+            eprintln!(
+                "mysbx: the picker's nested-virt = on re-enables the nested virtualization \
+                 the user config {} denied with `nested-virt = false` — the picker may deny \
+                 it for this run, never re-enable it (docs/design/config.md D27, \
+                 docs/design/tui.md T11)",
+                user_nested_virt_file.display(),
+            );
+            return EXIT_INFRASTRUCTURE;
+        }
+        merged.nested_virt = nv;
+    }
+    if let Some(store) = flags.store {
+        merged.store = Some(store);
     }
 
     // 3ab. the agent resolution (config.md D32, bd myconfig-fv4h):
@@ -10138,6 +10231,11 @@ mod tests {
                 multiplexer: None,
                 agent: None,
                 backend: None,
+                cpus: None,
+                memory: None,
+                pids_limit: None,
+                nested_virt: None,
+                store: None,
                 ro: Vec::new(),
                 rw: Vec::new(),
                 timeout: None,

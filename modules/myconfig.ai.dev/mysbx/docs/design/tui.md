@@ -13,13 +13,13 @@ myconfig-dm7b.2–.6).
 
 This is the decision record for the one interactive surface of the
 mysbx CLI: a minimal full-screen terminal form, shown before a
-sandbox is launched, that preselects the three interactive-session
+sandbox is launched, that preselects the interactive-session
 decisions from the merged configuration layers, lets the operator
-cycle values with Left/Right and move rows with Up/Down, and starts
-the sandbox with Enter. The picker composes the one-run override
-flags that already exist (cli.md D14/D18/D32); it writes nothing,
-and every key it does not carry (network, mounts, store, cpu,
-memory, …) is out of scope for the MVP.
+cycle values with Left/Right, move rows with Up/Down, type into the
+typed rows (T10) and start the sandbox with Enter. The picker
+composes the one-run override flags that already exist
+(cli.md D14/D18/D32); it writes nothing, and every key it does not
+carry (mounts, allowlists, ports, …) is out of scope for the MVP.
 
 Vocabulary, on top of [`../../CONTEXT.md`](../../CONTEXT.md):
 
@@ -28,9 +28,11 @@ Vocabulary, on top of [`../../CONTEXT.md`](../../CONTEXT.md):
   into the one-run override flags on Enter: the `mysbx tui` form (T1)
   and the bare `mysbx-once` form (T8). "TUI" alone is avoided — it
   already names the aoe interface ([detach.md](./detach.md) B7).
-- **row** — one of the picker's three decisions: backend,
-  multiplexer, default-agent (T2). A row is a closed set with one
-  preselected value, never free text.
+- **row** — one of the picker's decisions: backend, multiplexer,
+  default-agent (T2), network (T9), cpus/memory/pids-limit (T10),
+  nested-virt (T11), store (T12). A row is a closed set with one
+  preselected value — or, for the typed rows, a byte grammar and a
+  draft — never free-form text.
 
 ## The problem
 
@@ -67,8 +69,11 @@ focus, Enter dispatches, Esc or `q` exits `0`. `q` never dispatches.
 
 ### T2: the rows are closed sets from the registries
 
-Each row lists the closed set its flag accepts — never free text,
-never a command (config.md D4):
+The three launch rows list the closed set their flag accepts —
+never free text, never a command (config.md D4). The later property
+rows keep the SHAPE with their own source: T10's typed rows replace
+the closed set with a byte grammar, T11/T12 cycle their config
+key's tri-state, T9 renders read-only.
 
 - **backend**: `backends::NAMES` ∩ `doctor::enabled_backends()` —
   the registry's universe (`backends.rs`) narrowed to what this
@@ -207,6 +212,107 @@ a human is deciding on the spot. The plain bare form stays instant
 (D2): it is the primary action, and a daily action must not grow a
 keypress.
 
+### T9: the network row is read-only
+
+The merged `network` (T3's merge, resolved: `none` < `proxy-only` <
+`public` < `shared`, never tri-state by the time a run sees it)
+renders as a fourth row — READ-ONLY, the disabled-row precedent of
+T2: Left/Right on it are no-ops (the row never moves, so it can
+never be TOUCHED), it never contributes a `Flags` field (there is
+none — `network` has no one-run override flag, and the row invents
+nothing), and its read-only-ness is VISIBLE the way T2's empty
+registries are: the row renders with the disabled hint, not the
+cycling values, so the operator sees the decision exists but is
+not theirs to make here. The row exists for one reason: the
+network is the one fact an operator about to launch most needs to
+see (D20's boundary) and could not — `status` shows it, but the
+picker is the surface the launch happens on.
+
+### T10: the typed rows — cpus, memory, pids-limit
+
+Three rows are TYPED ENTRY, not cycling: `cpus`, `memory`,
+`pids-limit` (config.md D23) have no closed set to cycle — any
+positive number is a valid value — so the row shows the merged
+value (or `—` when no layer set one) as a seed and accepts typing.
+Each row carries a DRAFT, invisible until the first key it
+accepts; the grammar filters key by key (T2's closed-set rule
+translated to a byte grammar):
+
+- **cpus**: digits and one dot — podman's `--cpus` shape
+  (`2`, `1.5`); a second dot, a leading dot, letters are ignored
+  keystrokes.
+- **memory**: digits plus ONE optional `b`/`k`/`m`/`g` suffix
+  (any case) — the config parser's own grammar (`8g`, `512m`).
+- **pids-limit**: digits only — a positive integer (`u32`).
+
+Keys outside the grammar are ignored like `Key::Ignored` — never
+an error mid-draft, never a beep surface; `q`, `^C` and Esc keep
+their loop bindings (a `q` typed at a typed row is the abort,
+never a draft byte — the rows' grammars admit no letters).
+Backspace (`0x7f`) deletes the draft's last byte; an empty draft
+is an UNTOUCHED row (T4): Enter composes no flag and the layers
+decide.
+
+At Enter the draft is parsed through config.rs's OWN parsers —
+`cpus`/`memory`/`pids_limit`, the same code path a config file's
+value takes — so the picker cannot accept what a layer could not.
+An invalid draft is a PICKER error: the error line renders inside
+the picker (the only new surface it has), Enter dispatches nothing,
+and the loop continues (the draft stays, editable). A valid draft
+becomes the one-run override — `Flags::cpus`/`memory`/`pids_limit`
+(the fields exist for the picker alone; there is no CLI spelling,
+and the argv parser, the T7 refusal arm and `usage.txt` are
+untouched). The pipeline applies them where `--backend` already
+overrides the merge, and the per-backend gates — the unenforced-
+limits warnings, the krun `PidsLimit` refusal — stay the single
+decision surface: the picker carries NO per-backend support
+matrix (T4's argument applied to limits: a memory on a backend
+that cannot enforce it is the pipeline's warning, not the
+picker's guess).
+
+### T11: the nested-virt row cycles inherit/on/off
+
+`nested-virt` (config.md D27) is tri-state in the LAYERS
+(`Some(true)`/`Some(false)`/omitted) but resolved to a bool in
+the merge — so the row shows the resolution and the seed: `on`
+when the resolved value is true, `off` when false, and `inherit`
+for the omitted case — which requires the tri-state BEFORE the
+merge applies the off-default, so the seed reads the folded
+layer configs, not the merged bool. Cycling moves
+`inherit → on → off → inherit`; `inherit` composes NO field (an
+untouched row's behavior — the layers and the D27 default
+resolve), `on` composes `Flags::nested_virt = Some(true)`, `off`
+`Some(false)`. The seed mirrors the merge's own resolution table
+(ANY-enable-wins — either layer's `true` enables, either layer's
+explicit `false` denies only when nothing enabled), so the row
+never shows a resolution the run would not make.
+
+`on` over a user-layer deny is the one shape the picker's
+override can WIDEN, and the merge's own `NestedVirtUpgrade`
+guard cannot catch it — the guard sees only the two layers, and
+it runs BEFORE the override exists. So the override site
+re-checks exactly that one shape: `Flags::nested_virt =
+Some(true)` while the USER layer's chain folded to
+`nested-virt = false` is a refusal composed like `--backend`'s
+validation — the merge's own message shape, exit `70`, nothing
+dispatched. NOT a per-backend matrix (T4's argument holds): the
+warn-and-drop and host pre-flight gates stay untouched and stay
+the only backend-shaped decisions; the re-check is a DENY
+re-check, the same D27 rule the merge applies to a sidecar,
+applied to the one layer the merge already consumed.
+
+### T12: the store row cycles inherit/host/baked
+
+`store` (guest-store.md) is tri-state in the layers (`host`/
+`baked`/omitted) and stays an `Option` in the merge — only
+`resolved_store()` collapses the backend-shaped default. The row
+cycles `inherit → host → baked → inherit` with the config
+key's own spellings (`config::Store::NAMES`); `inherit` composes
+no field, `host`/`baked` compose `Flags::store` overriding the
+layer decision for this run. `baked` on a backend that cannot
+attach a disk is the pipeline's warn-and-fall-back — not the
+picker's: no per-backend matrix (T4).
+
 ## Resolved open questions
 
 1. **Esc aborts the not-inited confirmation** (T5) — Enter is the
@@ -228,9 +334,13 @@ keypress.
 
 ## Non-goals
 
-- No later keys in the MVP: network, mounts, store, cpu, memory, …
-  are out of scope (the intro); the picker shows the
-  three decisions the one-run flags already carry.
+- No later keys beyond T9–T12: mounts, allowlists, ports, … remain
+  out of scope; the picker shows the decisions the one-run override
+  pipeline can carry.
+- No CLI spelling for the T9–T12 fields: `Flags` gains picker-only
+  fields, and the argv parser, the T7 refusal arm, `usage.txt` and
+  the completions stay untouched — a property the shell must set
+  goes in a config layer, never a new flag.
 - No state anywhere: the picker writes nothing (T4) and remembers no
   last selection.
 - No new dependencies (T6).
