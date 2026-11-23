@@ -2,6 +2,7 @@
   config,
   lib,
   pkgs,
+  inputs,
   ...
 }:
 
@@ -28,7 +29,7 @@ let
   #      keyed on this module's `enable`).
   #   2. codex's *configuration* visible inside the sandbox -> read-only
   #      mounts from the shared `mkSandboxConfig` helper
-  #      (../../../../mysbx/nix/sandbox-config.nix), one per deployed child of
+  #      (../../../mysbx flake lib (nix/sandbox-config.nix)), one per deployed child of
   #      `~/.codex` (`childSubtrees`), so the tmpfs `.codex` stays writable
   #      and the state-dirs below it are not covered. `~/.codex` (Home Manager's
   #      `configDir` default: `home.preferXdgDirectories` is off, so it is
@@ -63,7 +64,7 @@ let
   # The shared mysbx sandbox-config helper (the dereferenced-store-tree
   # machinery, bd myconfig-ooh); consumed like the entry scripts consume
   # ../../../../mysbx/nix/mux-entry-lib.nix.
-  sandboxConfigLib = import ../../../../mysbx/nix/sandbox-config.nix {
+  sandboxConfigLib = inputs.mysbx.lib.sandboxConfigLib {
     inherit lib;
     runCommand = pkgs.runCommand;
   };

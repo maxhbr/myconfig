@@ -6,11 +6,12 @@
 # (providers, jail marker, subagent/handoff examples) and the mysbx
 # tier integration: pi's config is mounted into mysbx sandboxes from a
 # dereferenced store tree built by the shared
-# ../../../../mysbx/nix/sandbox-config.nix helper (bd myconfig-ooh).
+# ../../../mysbx flake lib (nix/sandbox-config.nix) helper (bd myconfig-ooh).
 {
   config,
   lib,
   pkgs,
+  inputs,
   jail,
   ...
 }:
@@ -34,7 +35,7 @@ let
   # The shared mysbx sandbox-config helper (the dereferenced-store-tree
   # machinery, bd myconfig-ooh); consumed like the entry scripts consume
   # ../../../../mysbx/nix/mux-entry-lib.nix.
-  sandboxConfigLib = import ../../../../mysbx/nix/sandbox-config.nix {
+  sandboxConfigLib = inputs.mysbx.lib.sandboxConfigLib {
     inherit lib;
     runCommand = pkgs.runCommand;
   };
@@ -1622,7 +1623,7 @@ let
   #   2. pi's *configuration* visible inside the sandbox -> read-only mounts
   #      in the generated user config layer (`…mysbx.config.mounts`), each
   #      bound from a self-contained store tree of dereferenced copies built
-  #      by the shared `mysbx/nix/sandbox-config.nix` helper (the sandbox
+  #      by the shared `nix/sandbox-config.nix` helper of the mysbx flake (the sandbox
   #      binds real files because the podman-gvisor container mounts nothing
   #      from the host /nix/store — see the helper for the full rationale)
   #   3. the jail-marker extension must NOT flag the session as un-jailed:
@@ -1669,7 +1670,7 @@ let
   # never sit above a mount point.
 
   # The pi-config mounts for the mysbx sandbox, built by the shared
-  # helper (../../../../mysbx/nix/sandbox-config.nix — the dereferenced-store-
+  # helper (../../../mysbx flake lib (nix/sandbox-config.nix) — the dereferenced-store-
   # tree machinery that landed here with bd myconfig-576, extracted into
   # the mysbx library with bd myconfig-ooh so other tool modules can
   # mount their home-manager-deployed config the same way). The helper

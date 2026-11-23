@@ -53,7 +53,7 @@
 #                 completed.
 #
 #   mysbx-hermes-test
-#                 the hermes tier (../../modules/myconfig.ai.dev/hermes-agent/mysbx.nix) on the
+#                 the hermes tier (hermes-agent/mysbx.nix of myconfig) on the
 #                 reference host that enables both halves (`test-p14`):
 #                 the launcher on the sandbox PATH AND in the podman image,
 #                 `.hermes` as a `state-dirs` entry, `CUSTOM_BASE_URL` for
@@ -99,8 +99,18 @@
   self,
   inputs,
   system,
+  # The myconfig module fixtures this suite needs but the mysbx tree
+  # cannot reach by relative path (it is consumed through its flake,
+  # store-copied): the pi subtree/MCP contracts shared with the pi
+  # module's mounts. Wired in by the parent flake call site.
+  fixtures ? { },
 }:
 let
+  fixture =
+    name:
+    fixtures.${name}
+      or (throw "mysbx/nix/checks.nix: fixture '${name}' not wired by the calling flake (the parent passes the myconfig module paths the integration scenarios evaluate)");
+
   pkgs = inputs.nixpkgs.legacyPackages.${system};
   lib = inputs.nixpkgs.lib;
 
@@ -144,7 +154,14 @@ in
   # sandbox.
   # The generator, evaluated: what a host actually gets in
   # `~/.config/mysbx/config.toml` (review-4 item 4).
-  mysbx-generated-config-test = import ./config-eval-test.nix { inherit inputs system; };
+  mysbx-generated-config-test = import ./config-eval-test.nix {
+    inherit inputs system;
+    fixtures = {
+      sandboxToolsModule = fixture "sandboxToolsModule";
+      litellmForwarderModule = fixture "litellmForwarderModule";
+      orcaModule = fixture "orcaModule";
+    };
+  };
 
   # The launcher's patched library runs real passthrough/server tests without KVM.
   mysbx-libkrun-readdirplus-test = pkgs.callPackage ./libkrun.nix { };
@@ -2282,7 +2299,7 @@ in
   # self-contained store tree of dereferenced copies (built by the
   # shared `mkSandboxConfig` helper, ../../nix/sandbox-config.nix, from
   # `mysbxSandboxConfig` in
-  # ../../modules/myconfig.ai.dev/programs/programs.pi-coding-agent/default.nix), because the
+  # programs/programs.pi-coding-agent/default.nix of myconfig), because the
   # podman-gvisor backend mounts nothing from the host /nix/store and the
   # raw home-manager symlink tree dangles inside the container. The
   # assertion pin runs at EVAL time (a throw builds no derivation), and
@@ -2297,11 +2314,11 @@ in
   # mysbx module alone, and the pi module reads options across the whole
   # `myconfig.ai.dev` umbrella (workmux, skills, …) — evaluating it
   # standalone means re-importing half of `modules/` by hand. Using the
-  # reference host is the same pattern as ../../../tests/microvm.nix
+  # reference host is the same pattern as tests/microvm.nix of myconfig
   # (`self.nixosConfigurations.test-f13`).
   #
   # The expected dest set is DERIVED from the shared subtree list
-  # (../../modules/myconfig.ai.dev/programs/pi-sandbox-subtrees.nix) instead of being pinned:
+  # (the piSandboxSubtrees fixture) instead of being pinned:
   # a pinned count only notices that the number changed, and reports
   # nothing about which mount is wrong. bd myconfig-2xld hit exactly
   # that: thinkrail mirrored pi's subtrees from its own list, so six
@@ -2330,7 +2347,7 @@ in
       expectedDestsOf =
         cfg:
         map (sub: "/mysbx-home/${sub}") (
-          (import ../../modules/myconfig.ai.dev/programs/pi-sandbox-subtrees.nix {
+          (import (fixture "piSandboxSubtrees") {
             config = cfg;
             inherit lib pkgs;
           }).subtrees
@@ -2339,7 +2356,7 @@ in
       # pi module mounts through — a rename there cannot leave this check
       # asserting a stale name.
       sandboxOnlyFiles =
-        (import ../../modules/myconfig.ai.dev/programs/pi-sandbox-subtrees.nix {
+        (import (fixture "piSandboxSubtrees") {
           config = cfg;
           inherit lib pkgs;
         }).sandboxOnlyFiles;
@@ -2381,7 +2398,7 @@ in
       # them): they must be absent from the host's `home.file` — deploying
       # them would silence the trust prompt for un-jailed pi sessions too.
       # The target paths come from the same shared contract the pi module
-      # mounts through (../../modules/myconfig.ai.dev/programs/pi-sandbox-subtrees.nix), so a
+      # mounts through (the piSandboxSubtrees fixture), so a
       # rename there cannot leave this check asserting a stale name.
       # `home.file` keys are relative or absolute-home spellings; check
       # both (the sandbox-config helper normalizes them the same way).
@@ -2396,7 +2413,7 @@ in
             mysbx-pi-mounts-test: two mounts share an in-sandbox dest, but only the last
             bind wins (../mysbx-rs/src/nono.rs), so the sandbox would see a mixture of
             two source trees: ${lib.concatStringsSep ", " duplicateDests}
-            Mount each dest from exactly one tree (see ../../modules/myconfig.ai.dev/programs/pi-sandbox-subtrees.nix).'';
+            Mount each dest from exactly one tree (see the piSandboxSubtrees fixture).'';
         }
         {
           assertion = trDuplicateDests == [ ];
@@ -2504,7 +2521,7 @@ in
   # `.pi/agent/mcp.json` must exist EXACTLY when the home-manager MCP
   # registry renders non-empty content, and it must be a real FILE —
   # the drift catcher between the shared subtree list
-  # (../../modules/myconfig.ai.dev/programs/pi-sandbox-subtrees.nix) and the per-caller
+  # (the piSandboxSubtrees fixture) and the per-caller
   # `extraFiles` entries (programs.pi-coding-agent/default.nix,
   # programs.thinkrail.nix). A subtree listed without its extraFiles
   # entry makes `mkSandboxConfig` materialize an EMPTY DIRECTORY named
@@ -2558,7 +2575,7 @@ in
       # non-empty. (The build phase below realises the mounted file
       # itself, via `mountedFile`.)
       piMcp = (
-        import ../../modules/myconfig.ai.dev/programs/pi-mcp-servers.nix {
+        import (fixture "piMcpServers") {
           inherit (self.nixosConfigurations.test-f13) config;
           inherit lib pkgs;
         }
@@ -2616,7 +2633,7 @@ in
           };
         };
       };
-      fixtureMcp = import ../../modules/myconfig.ai.dev/programs/pi-mcp-servers.nix {
+      fixtureMcp = import (fixture "piMcpServers") {
         config = fixtureConfig;
         inherit lib pkgs;
       };
@@ -2787,7 +2804,7 @@ in
         mkdir "$out"
       '';
 
-  # The hermes tier (../../modules/myconfig.ai.dev/hermes-agent/mysbx.nix), evaluated against the
+  # The hermes tier (hermes-agent/mysbx.nix of myconfig), evaluated against the
   # REAL reference host that enables both halves (`test-p14`:
   # `hermes.enable` in hosts/host.p14/hermes-agent.nix, `mysbx.enable` in
   # hosts/host.p14/ai.p14.nix). Two properties are asserted:

@@ -16,6 +16,7 @@
   myconfig,
   lib,
   pkgs,
+  inputs,
   ...
 }:
 let
@@ -51,7 +52,7 @@ in
     ./sandboxes/myconfig.ai.qemu-agent-sandbox
     ./sandboxes/myconfig.ai.microvm
     ./services.orca.nix
-    ../../mysbx
+    inputs.mysbx.nixosModules.mysbx
     ./hermes-agent
     ./programs/programs.agent-browser
     ./programs/programs.agent-of-empires

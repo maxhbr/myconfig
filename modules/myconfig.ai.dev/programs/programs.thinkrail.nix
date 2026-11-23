@@ -18,17 +18,15 @@
   config,
   lib,
   pkgs,
+  inputs,
   ...
 }:
 let
   osconfig = config;
 
   # The shared mysbx sandbox-config helper (the dereferenced-store-tree
-  # machinery, bd myconfig-ooh). One directory less than pi's
-  # `../../../mysbx/…` — this module is a FLAT file in programs/, while
-  # pi's and opencode's live one directory deeper
-  # (programs/programs.<name>/default.nix).
-  sandboxConfigLib = import ../../../mysbx/nix/sandbox-config.nix {
+  # machinery, bd myconfig-ooh), via the mysbx flake's lib output.
+  sandboxConfigLib = inputs.mysbx.lib.sandboxConfigLib {
     inherit lib;
     runCommand = pkgs.runCommand;
   };

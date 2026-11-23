@@ -2,6 +2,7 @@
   config,
   lib,
   pkgs,
+  inputs,
   jail,
   ...
 }:
@@ -64,7 +65,7 @@ let
   #      `enable`).
   #   2. the *configuration* visible inside the sandbox -> read-only mounts
   #      from the shared `mkSandboxConfig` helper
-  #      (../../../../mysbx/nix/sandbox-config.nix), one per deployed child of
+  #      (../../../mysbx flake lib (nix/sandbox-config.nix)), one per deployed child of
   #      `.claude` (`childSubtrees`), so the tmpfs `.claude` stays writable
   #      and the state-dirs below it are not covered. `.claude` holds everything
   #      `programs.claude-code` renders (settings.json, hooks/, agents/,
@@ -95,7 +96,7 @@ let
   #
   # Home Manager uses `useGlobalPkgs`, so the shared helper is imported with
   # the NixOS scope's `pkgs`, like in ../../programs/programs.opencode.
-  sandboxConfigLib = import ../../../../mysbx/nix/sandbox-config.nix {
+  sandboxConfigLib = inputs.mysbx.lib.sandboxConfigLib {
     inherit lib;
     runCommand = pkgs.runCommand;
   };

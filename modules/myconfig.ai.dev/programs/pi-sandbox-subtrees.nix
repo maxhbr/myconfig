@@ -3,7 +3,7 @@
 #
 # The canonical set of `~/.pi/agent` subtrees a mysbx sandbox mounts, as
 # relative paths under `$HOME`. A plain function file (no module
-# machinery), consumed like `../../../mysbx/nix/sandbox-config.nix` — the
+# machinery), consumed like `../../mysbx flake lib (nix/sandbox-config.nix)` — the
 # single source of truth for the agents that read pi's configuration
 # store:
 #

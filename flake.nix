@@ -39,6 +39,13 @@
     zephyr-flake.url = "github:maxhbr/zephyr-flake";
     zephyr-flake.inputs.nixpkgs.follows = "nixpkgs";
 
+    # The mysbx project as a path input: the tree is store-copied at
+    # evaluation, so nothing under mysbx/ can reach back into this repo
+    # by relative path — the flake outputs (lib, nixosModules, packages)
+    # are the only interface.
+    mysbx.url = "path:./mysbx";
+    mysbx.inputs.nixpkgs.follows = "nixpkgs";
+
     # octrc.url = "github:maxhbr/octrc";
     # octrc.inputs.nixpkgs.follows = "nixpkgs";
 
@@ -733,9 +740,25 @@
             import ./tests/microvm.nix { inherit self inputs system; }
           )
           // lib.optionalAttrs (system == "x86_64-linux") (
-            # Rust mysbx cargo test suite (mysbx).
-            import ./mysbx/nix/checks.nix {
+            # Rust mysbx cargo test suite — the checks file lives in the
+            # mysbx tree, reached through the mysbx flake input (no
+            # relative-path bypass). The scenarios inside evaluate
+            # PARENT hosts (self.nixosConfigurations.test-f13/test-p14)
+            # and import parent modules as fixtures, so they stay a
+            # parent-flake concern.
+            import (inputs.mysbx + "/nix/checks.nix") {
               inherit self inputs system;
+              # The myconfig module fixtures the integration scenarios
+              # inside evaluate — the mysbx tree cannot reach them by
+              # relative path (store-copied flake input), so the parent
+              # passes the paths in.
+              fixtures = {
+                piSandboxSubtrees = ./modules/myconfig.ai.dev/programs/pi-sandbox-subtrees.nix;
+                piMcpServers = ./modules/myconfig.ai.dev/programs/pi-mcp-servers.nix;
+                sandboxToolsModule = ./modules/myconfig.ai.dev/sandboxes/myconfig.ai.sandboxTools.nix;
+                litellmForwarderModule = ./modules/myconfig.ai.dev/myconfig.ai.dev.litellm-forwarder.nix;
+                orcaModule = ./modules/myconfig.ai.dev/services.orca.nix;
+              };
             }
           );
 

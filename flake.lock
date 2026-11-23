@@ -496,6 +496,22 @@
         "type": "github"
       }
     },
+    "mysbx": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "path": "./mysbx",
+        "type": "path"
+      },
+      "original": {
+        "path": "./mysbx",
+        "type": "path"
+      },
+      "parent": []
+    },
     "niri": {
       "inputs": {
         "nixpkgs": "nixpkgs_4"
@@ -908,6 +924,7 @@
         "microvm": "microvm",
         "my-wallpapers": "my-wallpapers",
         "myphoto": "myphoto",
+        "mysbx": "mysbx",
         "niri": "niri",
         "nix-index-database": "nix-index-database",
         "nixos-hardware": "nixos-hardware",

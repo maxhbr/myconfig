@@ -5,11 +5,12 @@
 # agent-bubblewrap-opencode, worktree variants), plus the mysbx tier
 # integration: opencode's config is mounted into mysbx sandboxes from
 # a dereferenced store tree built by the shared
-# ../../../../mysbx/nix/sandbox-config.nix helper (bd myconfig-ooh).
+# ../../../mysbx flake lib (nix/sandbox-config.nix) helper (bd myconfig-ooh).
 {
   config,
   lib,
   pkgs,
+  inputs,
   jail,
   ...
 }:
@@ -32,7 +33,7 @@ let
   # The shared mysbx sandbox-config helper (the dereferenced-store-tree
   # machinery, bd myconfig-ooh); consumed like the entry scripts consume
   # ../../../../mysbx/nix/mux-entry-lib.nix.
-  sandboxConfigLib = import ../../../../mysbx/nix/sandbox-config.nix {
+  sandboxConfigLib = inputs.mysbx.lib.sandboxConfigLib {
     inherit lib;
     runCommand = pkgs.runCommand;
   };
@@ -113,7 +114,7 @@ let
   #   2. opencode's *configuration* visible inside the sandbox -> read-only
   #      mounts in the generated user config layer (`…mysbx.config.mounts`),
   #      each bound from a self-contained store tree of dereferenced copies
-  #      built by the shared `mysbx/nix/sandbox-config.nix` helper (bd
+  #      built by the shared `nix/sandbox-config.nix` helper of the mysbx flake (bd
   #      myconfig-ooh): the subtrees the helper copies mirror exactly what
   #      home-manager deploys, so a D8 missing-source mount error can no
   #      longer occur for these entries — the source is always the built

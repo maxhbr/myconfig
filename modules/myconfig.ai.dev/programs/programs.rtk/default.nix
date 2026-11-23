@@ -26,7 +26,7 @@
 #
 # The mysbx tier integration mounts `~/.config/rtk` into mysbx sandboxes
 # from a dereferenced store tree built by the shared
-# ../../../../mysbx/nix/sandbox-config.nix helper (bd myconfig-ooh).
+# ../../../mysbx flake lib (nix/sandbox-config.nix) helper (bd myconfig-ooh).
 #
 # No state file needs to be pre-created: rtk creates its tracking database
 # (`~/.local/share/rtk/history.db`) lazily on first use, and a missing
@@ -36,6 +36,7 @@
   config,
   lib,
   pkgs,
+  inputs,
   ...
 }:
 let
@@ -64,7 +65,7 @@ let
   # helper needs to normalize the absolute `xdg.configFile` keys) and
   # referenced only under `mkIf aiCfg.mysbx.enable` below (Nix is lazy);
   # not circular — no subtree matches `.config/mysbx`.
-  sandboxConfigLib = import ../../../../mysbx/nix/sandbox-config.nix {
+  sandboxConfigLib = inputs.mysbx.lib.sandboxConfigLib {
     inherit lib;
     runCommand = pkgs.runCommand;
   };
