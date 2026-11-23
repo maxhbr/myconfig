@@ -7,8 +7,13 @@
 //! drawn from the registries, never free text — plus the property
 //! rows: a read-only `network` row (T9), the typed `cpus`/
 //! `memory`/`pids-limit` rows (T10, drafted under a byte grammar and
-//! validated at Enter through config.rs's OWN parsers), and the
-//! tri-state `nested-virt`/`store` cycle rows (T11/T12). Left/Right
+//! validated at Enter through config.rs's OWN parsers), the
+//! tri-state `nested-virt`/`store` cycle rows (T11/T12), and the
+//! launch trio dry-run/detachable/session (T13–T15): two `off`/
+//! `on` cycles over flags with no TOML surface (`off` always the
+//! preselect) and one typed row drafting a session NAME under the
+//! argv grammar, validated at Enter through `session::valid_name`.
+//! Left/Right
 //! cycle the focused row, Up/Down move the focus, typing drafts
 //! into the focused typed row, Backspace edits, Enter dispatches
 //! into `sandbox()`, Esc or `q` exits `0` (nothing was started). Enter
@@ -87,12 +92,15 @@ use std::path::PathBuf;
 
 /// The rows in focus order: the three launch rows (T2), then the
 /// property rows — the read-only `network` (T9), the typed trio
-/// (T10), the tri-state cycles (T11/T12). Each launch-row label is
-/// the flag family the row stands for (`--backend`,
-/// `--multiplexer`, `--agent`); the property rows carry the config
-/// key's own spelling (`network`, `cpus`, `memory`, `pids-limit`,
-/// `nested-virt`, `store`, config.md D20/D23/D27, guest-store.md).
-const ROW_LABELS: [&str; 9] = [
+/// (T10), the tri-state cycles (T11/T12) — then the dry-run/
+/// detachable/session trio (T13–T15), appended after the store
+/// row. Each launch-row label is the flag family the row stands
+/// for (`--backend`, `--multiplexer`, `--agent`); the property
+/// rows carry the config key's own spelling (`network`, `cpus`,
+/// `memory`, `pids-limit`, `nested-virt`, `store`, config.md
+/// D20/D23/D27, guest-store.md); the trio carries the flags'
+/// own spellings (`--dry-run`, `--detachable`, `--session`).
+const ROW_LABELS: [&str; 12] = [
     "backend",
     "multiplexer",
     "default-agent",
@@ -102,6 +110,9 @@ const ROW_LABELS: [&str; 9] = [
     "pids-limit",
     "nested-virt",
     "store",
+    "dry-run",
+    "detachable",
+    "session",
 ];
 
 /// The row count — `ROW_LABELS`' length, spelled for the arrays.
@@ -115,6 +126,22 @@ const AGENT_NONE: &str = "none";
 /// layers (and the key's own default) decide — composed as no
 /// `Flags` field, exactly like an untouched row.
 const INHERIT: &str = "inherit";
+
+/// The session row's display seed (T15): the mode a bare run uses
+/// — the live checkout, the default `--session` leaves untouched.
+/// Display-only like every typed seed (a seed never composes).
+const LIVE: &str = "live";
+
+/// The once-mode disabled-row hint of the session and detachable
+/// rows (T13.1/T14.1/T15.1): the reason D22 refuses the flags —
+/// the temp root cannot carry what the row would compose.
+const ONCE_REFUSED_HINT: &str = "(refused in once-mode — the temp root cannot carry it)";
+
+/// The `MYSBX_DETACHED` disabled-row hint of the detachable row
+/// (T14.1): the dispatcher's nested-detach guard, mirrored — a
+/// second detached run for the same workspace is not valid inside
+/// the one this picker runs in.
+const NESTED_DETACHED_HINT: &str = "(refused inside a detached run — MYSBX_DETACHED is set)";
 
 /// One picker row: a closed set of values with one selected (T2).
 /// An empty `values` renders the row disabled with `empty_hint`,
@@ -168,18 +195,24 @@ impl Row {
     }
 }
 
-/// The value layer of one picker row (T2/T9/T10/T11/T12): the
-/// launch rows and the tri-state cycles are a closed set of values
-/// with one selected; the typed rows are a draft under a byte
-/// grammar. `ReadOnly` is the network row (T9): rendered, never
-/// cycled, never composed.
+/// The value layer of one picker row (T2/T9/T10/T11/T12, and
+/// T13–T15): the launch rows and the tri-state cycles are a closed
+/// set of values with one selected; the typed rows are a draft
+/// under a byte grammar. `ReadOnly` is the network row (T9):
+/// rendered, never cycled, never composed. `Disabled` is the
+/// environment-refused row (the once-mode session/detachable rows,
+/// the MYSBX_DETACHED detachable row, T13.1/T14.1/T15.1): visible
+/// never hidden (the T2 disabled-row precedent), annotated with the
+/// reason, no key changes it, it never contributes to the Enter
+/// state — the picker must not compose what the CLI form would
+/// refuse.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Value {
     /// A closed set with one selected — the launch rows and the
     /// tri-state cycles. `None` on a disabled row, and on a row
     /// whose merged value no layer of the set carries (T3).
     Set(Row),
-    /// A typed row (T10): `draft` is `None` while the row is
+    /// A typed row (T10/T15): `draft` is `None` while the row is
     /// untouched (empty — Enter composes no flag, the layers
     /// decide) and `Some` once the operator typed a key the
     /// grammar admitted; `seed` is the merged value's display
@@ -194,13 +227,20 @@ enum Value {
     /// The read-only network row (T9): Left/Right are no-ops, no
     /// key contributes, Enter composes nothing.
     ReadOnly { text: String, hint: &'static str },
+    /// An environment-refused row (T13.1/T14.1/T15.1): the once-mode
+    /// session/detachable rows, the `MYSBX_DETACHED` detachable row
+    /// — visible, annotated with `hint`, untouchable, never
+    /// composed. The disabled-row spelling of T2's empty
+    /// registries: the operator sees the decision exists but is not
+    /// theirs to make here.
+    Disabled { hint: &'static str },
 }
 
-/// The typed row's grammar and Enter-time parser (T10): which keys
-/// the draft accepts byte by byte, and which config.rs parser the
-/// Enter composition runs — the SAME grammar a config file's value
-/// passes through, so the picker cannot accept what a layer could
-/// not.
+/// The typed row's grammar and Enter-time parser (T10/T15): which
+/// keys the draft accepts byte by byte, and which parser the Enter
+/// composition runs — the SAME grammar a config file's value (or
+/// the argv flag's own value) passes through, so the picker cannot
+/// accept what a layer or the parser could not.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TypedRow {
     /// `cpus`: digits and at most one dot — podman's `--cpus` shape.
@@ -210,13 +250,26 @@ enum TypedRow {
     Memory,
     /// `pids-limit`: digits only, a positive `u32`.
     PidsLimit,
+    /// `session` (T15): the `--session NAME` argv grammar's own
+    /// byte set — `[A-Za-z0-9._-]`, capped at 64 chars (the
+    /// validator's own bound). The `q` CONFLICT is resolved at the
+    /// LOOP, never here: a grammar-side refusal would turn the
+    /// abort key into an ignored keystroke at the row's steady
+    /// state, and the loop's routing keeps `q` the abort at an
+    /// EMPTY draft (the row's steady state, the untouched row)
+    /// while admitting it into a non-empty one — the record's
+    /// decision (tui.md T15).
+    Session,
 }
 
 impl TypedRow {
-    /// Whether `b` may extend `draft` (T10): the grammar filters
+    /// Whether `b` may extend `draft` (T10/T15): the grammar filters
     /// key by key — a key outside it is an ignored keystroke, never
     /// an error mid-draft.
     fn admits(&self, draft: &str, b: u8) -> bool {
+        if matches!(self, Self::Session) {
+            return Self::session_admits(draft, b);
+        }
         let letters = self.letters();
         let last = draft.as_bytes().last();
         // memory: the suffix is the LAST byte — nothing may follow
@@ -243,9 +296,22 @@ impl TypedRow {
     /// `b`/`k`/`m`/`g`, any case; none for the digit-only rows).
     fn letters(&self) -> &'static [u8] {
         match self {
-            Self::Cpus | Self::PidsLimit => &[],
+            Self::Cpus | Self::PidsLimit | Self::Session => &[],
             Self::Memory => b"bkmgBKMG",
         }
+    }
+
+    /// The byte grammar of the session row (T15): the argv
+    /// grammar's own set `[A-Za-z0-9._-]`, capped at 64 chars —
+    /// `session::valid_name`'s own bound, so a draft can never
+    /// grow past what the validator could accept. `q` is NOT
+    /// special-cased here — the loop routes the abort conflict
+    /// (see [`TypedRow::Session`], the record's T15 decision).
+    fn session_admits(draft: &str, b: u8) -> bool {
+        if draft.len() >= 64 {
+            return false;
+        }
+        matches!(b, b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'.' | b'_' | b'-')
     }
 
     /// Parse the finished draft through config.rs's OWN parser at
@@ -257,7 +323,35 @@ impl TypedRow {
     /// parser canonicalized (`cpus`/`memory`) and, for `pids-limit`,
     /// the parsed `u32`.
     fn parse(&self, draft: &str) -> Result<(String, Option<u32>), String> {
+        // T15: the session draft is validated through the SAME
+        // validator the `--session` argv parser uses
+        // (`session::valid_name`, lib.rs's parse arm) — the picker
+        // cannot accept what the flag could not. An invalid draft
+        // is the picker error line's own message: the argv parser's
+        // refusal names the grammar, so the picker's does too (the
+        // reserved `__worktrees` suffix included — the validator's
+        // own rule, never re-derived here).
+        if matches!(self, Self::Session) {
+            if crate::session::valid_name(draft) {
+                return Ok((draft.to_owned(), None));
+            }
+            // The argv parser's message names the grammar; the
+            // PICKER's error line adds the validator's OTHER rule a
+            // draft can trip — the reserved `__worktrees` suffix —
+            // so a draft like `a__worktrees` fails with a message
+            // that names why (the draft satisfies the byte grammar
+            // the plain message cites). The argv parser's own
+            // message stays untouched.
+            return Err("session: invalid session name — the grammar is \
+                 [A-Za-z0-9][A-Za-z0-9._-]{0,63} — no slashes, no leading dot, \
+                 and it must not end in the reserved `__worktrees` suffix"
+                .to_owned());
+        }
         let value = match self {
+            // (Session never reaches this construction — its parse
+            // arm above returns before it — but the match must stay
+            // exhaustive; the String shape is what a NAME is.)
+            Self::Session => toml::Value::String(draft.to_owned()),
             // The cpus grammar's two shapes keep their EXACT value:
             // a dot-free draft goes through `i64` directly (an
             // overflow is an error — the f64 detour would saturate
@@ -298,11 +392,54 @@ impl TypedRow {
             Self::PidsLimit => crate::config::pids_limit(&value)
                 .map(|n| (n.to_string(), Some(n)))
                 .map_err(|e| e.to_string()),
+            Self::Session => Ok((draft.to_owned(), None)),
         }
     }
 }
 
+/// The environment the Enter run dispatches into (T13.1/T14.1/
+/// T15.1): the two facts that decide whether the session and
+/// detachable rows are offerable or disabled — the once mode and
+/// the nested-detached marker. Both mirror the dispatcher's OWN
+/// refusal scope exactly: `once_gate` refuses `--session` and
+/// `--detach`/`--detachable` (D22), and the nested guard refuses
+/// `--detach`/`--detachable` under `MYSBX_DETACHED` (lib.rs, B4
+/// step 3) — session and dry-run are UNAFFECTED by the marker, the
+/// guard's exact scope. The picker must not compose what the CLI
+/// form would refuse.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct Env {
+    /// The once picker (T8): the session and detachable rows are
+    /// disabled — a clone would vanish with the temp root, and a
+    /// detached run would outlive it with no owner to tear it down.
+    once: bool,
+    /// `MYSBX_DETACHED` set and non-empty (the dispatcher's own
+    /// probe spelling): the detachable row is disabled — a nested
+    /// `--detachable` is not valid inside the detached run this
+    /// picker runs in.
+    nested_detached: bool,
+}
+
+impl Env {
+    /// The env of a picker about to run in `once` mode, reading the
+    /// nested-detached marker the way the dispatcher's guard does.
+    fn detect(once: bool) -> Env {
+        Env {
+            once,
+            nested_detached: std::env::var_os("MYSBX_DETACHED").is_some_and(|v| !v.is_empty()),
+        }
+    }
+}
+
+/// [`rows_in`] for the persistent, not-nested environment — the
+/// test fixture's default (all rows offerable) and the spelling
+/// the plain-mode picker's rows are built through before `Env`
+/// decides the trio's disabled-ness.
 fn rows(enabled: &[&'static str], pinned_agents: &[String]) -> [Value; ROWS] {
+    rows_in(enabled, pinned_agents, Env::default())
+}
+
+fn rows_in(enabled: &[&'static str], pinned_agents: &[String], env: Env) -> [Value; ROWS] {
     let backend = Row {
         values: backends::NAMES
             .iter()
@@ -369,6 +506,54 @@ fn rows(enabled: &[&'static str], pinned_agents: &[String]) -> [Value; ROWS] {
         selected: None,
         empty_hint: "(no store row)",
     });
+    // T13: the dry-run row — `off` ALWAYS the preselect (no layer
+    // can ask for a dry run, D9's promise has no TOML surface),
+    // `on` the only other value. Offerable in BOTH modes (D22
+    // allows `--dry-run` for once).
+    let dry_run = Value::Set(Row {
+        values: vec!["off".to_owned(), "on".to_owned()],
+        selected: Some(0),
+        empty_hint: "(no dry-run row)",
+    });
+    // T14: the detachable row — same shape as dry-run (`off` always
+    // the preselect), but DISABLED in the two environments whose
+    // CLI form the dispatcher itself refuses: once-mode (D22 — a
+    // detached run outlives the temp root) and inside a detached
+    // run (the nested guard, `MYSBX_DETACHED`). NEVER `Flags::detach`
+    // — detach.md B2: the picker's shape is the attach-the-terminal
+    // one, `mysbx tui` runs ON a terminal (T6).
+    let detachable = if env.once || env.nested_detached {
+        Value::Disabled {
+            hint: if env.once {
+                ONCE_REFUSED_HINT
+            } else {
+                NESTED_DETACHED_HINT
+            },
+        }
+    } else {
+        Value::Set(Row {
+            values: vec!["off".to_owned(), "on".to_owned()],
+            selected: Some(0),
+            empty_hint: "(no detachable row)",
+        })
+    };
+    // T15: the session row — typed (the flag has no TOML surface,
+    // nothing to cycle over), seeded with the live mode's own
+    // spelling, an empty draft the untouched live mode. DISABLED in
+    // once-mode (D22: `--session` is refused — the clone would
+    // vanish with the temp root); UNAFFECTED by `MYSBX_DETACHED`
+    // (the nested guard scopes to the detach flags alone).
+    let session = if env.once {
+        Value::Disabled {
+            hint: ONCE_REFUSED_HINT,
+        }
+    } else {
+        Value::Typed {
+            row: TypedRow::Session,
+            draft: None,
+            seed: LIVE.to_owned(),
+        }
+    };
     [
         Value::Set(backend),
         Value::Set(mux),
@@ -379,6 +564,9 @@ fn rows(enabled: &[&'static str], pinned_agents: &[String]) -> [Value; ROWS] {
         pids_limit,
         nested_virt,
         store,
+        dry_run,
+        detachable,
+        session,
     ]
 }
 
@@ -438,6 +626,12 @@ impl NestedVirtSeed {
 /// into must not compose, so the seed is display-only and the
 /// draft starts empty/None); the tri-state cycles seed from
 /// `NestedVirtSeed::resolved()` and `merged.store`.
+///
+/// The trio (T13–T15) needs no seeding: the dry-run and
+/// detachable rows preselect `off` at build time (the flags have
+/// no TOML surface — there is nothing a layer could decide for
+/// them), and the session row's display seed is `live`, the
+/// mode a bare run uses, set by `rows()` for the same reason.
 fn seed(mut rows: [Value; ROWS], merged: &Merged, nv: NestedVirtSeed) -> [Value; ROWS] {
     let at = |row: &Row, value: &str| row.values.iter().position(|v| v == value);
     let Value::Set(backend) = &mut rows[0] else {
@@ -618,6 +812,51 @@ fn to_flags(touched: Touched, rows: &[Value; ROWS]) -> Flags {
             }
         }
     }
+    // T13: `on` composes the dry-run promise — the EXISTING field
+    // the argv parser's `--dry-run` sets. A picker composed
+    // `dry_run` composes a DRY RUN: Enter prints the argv and exits
+    // `0`, nothing started (the audit contract of D9, the picker's
+    // Enter included). `off` composes nothing (the untouched
+    // direction — a dry run is never the default).
+    if touched.0[9] {
+        if let Value::Set(row) = &rows[9] {
+            if let Some(i) = row.selected {
+                flags.dry_run = row.values[i] == "on";
+            }
+        }
+    }
+    // T14: `on` composes `--detachable` — and NEVER `Flags::detach`
+    // (detach.md B2: the two are two ways to start ONE detached
+    // run, never both, and the picker's shape is the
+    // attach-the-terminal one). A `Value::Disabled` row is never
+    // `Set`, so a disabled row composes nothing even if a bug set
+    // its touched bit — the disabled spelling is a different
+    // variant, not a frozen selection.
+    if touched.0[10] {
+        if let Value::Set(row) = &rows[10] {
+            if let Some(i) = row.selected {
+                flags.detachable = row.values[i] == "on";
+            }
+        }
+    }
+    // T15: a valid session draft composes `Flags::session` — the
+    // EXISTING field the argv parser's `--session NAME` sets,
+    // validated through the same `session::valid_name` at Enter
+    // (the validation lives in the loop's Enter arm; this arm
+    // only composes). An empty draft is the untouched row: the
+    // live mode, the layers' and the flag's own default.
+    if touched.0[11] {
+        if let Value::Typed {
+            row: TypedRow::Session,
+            draft: Some(name),
+            ..
+        } = &rows[11]
+        {
+            if crate::session::valid_name(name) {
+                flags.session = Some(name.clone());
+            }
+        }
+    }
     flags
 }
 
@@ -645,6 +884,9 @@ pub(crate) fn run(flags: Flags, repo: &repo::Repo, mode: RunMode) -> i32 {
             && flags.pids_limit.is_none()
             && flags.nested_virt.is_none()
             && flags.store.is_none()
+            && !flags.dry_run
+            && !flags.detachable
+            && flags.session.is_none()
     );
     let once = matches!(mode, RunMode::Once);
     if !stdin_stdout_tty() {
@@ -679,7 +921,11 @@ pub(crate) fn run(flags: Flags, repo: &repo::Repo, mode: RunMode) -> i32 {
             }
         };
         let picker = seed(
-            rows(&doctor::enabled_backends(), &crate::pinned_agent_names()),
+            rows_in(
+                &doctor::enabled_backends(),
+                &crate::pinned_agent_names(),
+                Env::detect(once),
+            ),
             &merged,
             nv,
         );
@@ -702,6 +948,34 @@ pub(crate) fn run(flags: Flags, repo: &repo::Repo, mode: RunMode) -> i32 {
                 run_flags.pids_limit = selected.pids_limit;
                 run_flags.nested_virt = selected.nested_virt;
                 run_flags.store = selected.store;
+                run_flags.dry_run = selected.dry_run;
+                run_flags.detachable = selected.detachable;
+                run_flags.session = selected.session;
+                // T14: the row's `on` maps to `RunMode::Detachable`
+                // HERE, mirroring the dispatcher's own bare-form
+                // arm (lib.rs ~258) — the mode is what routes the
+                // pipeline to `detach::launch_outer`, where the
+                // guards T14 promises live (B9's podman refusal,
+                // B10's dtach pin, B3's runtime root); a composed
+                // `detachable` flag with the mode unchanged would
+                // be accept-and-ignore, the exact anti-pattern
+                // the dispatcher's comment warns about. The
+                // dispatcher's own tty guard
+                // (`detachable && !dry_run && !stdin_is_tty`, lib.rs
+                // ~249) is dispatcher-side and not hit by this path,
+                // but its precondition holds by construction: the
+                // picker already refused at `stdin_stdout_tty()`
+                // (T6), and once-mode and `MYSBX_DETACHED` disable
+                // the row, so only `RunMode::Exec` can arrive here
+                // with the flag set. dry-run+detachable composes
+                // fine: `preflight_only` covers Detachable, so the
+                // Enter run prints the argv and exits `0`, the
+                // same as the argv spelling.
+                let mode = if run_flags.detachable && matches!(mode, crate::RunMode::Exec) {
+                    crate::RunMode::Detachable
+                } else {
+                    mode
+                };
                 // T4: raw mode is already left and the alternate
                 // screen left — the display restore completed before
                 // the dispatch, so the payload owns the terminal from
@@ -1490,7 +1764,55 @@ fn picker_loop(
             // ISIG is off in raw mode, so ^C arrives as byte 3 —
             // bound to the abort like Esc and `q` so the operator
             // can always interrupt (exit `0`, nothing started).
-            Key::Esc | Key::Char(b'q') | Key::Char(0x03) => {
+            //
+            // The `q` conflict of the session row (T15, the
+            // record's decision): `q` is a draft byte ONLY while
+            // the focused session row's draft is non-empty — at an
+            // EMPTY draft (the row's steady state, the untouched
+            // row) it is the abort, exactly as everywhere else in
+            // the picker. The abort set stays reachable in ONE
+            // keypress from every state: Esc and ^C abort
+            // unconditionally (no grammar admits byte `0x1b` or
+            // byte `3`), and `q` aborts the common case. The cost
+            // is named in the record: a session name whose FIRST
+            // byte is `q` aborts — that name is spelled on the
+            // argv, the full-grammar surface.
+            Key::Esc | Key::Char(0x03) => {
+                leave_screen();
+                drop(guard);
+                return Ok(None);
+            }
+            Key::Char(b'q')
+                if matches!(
+                    &picker[focus],
+                    Value::Typed {
+                        row: TypedRow::Session,
+                        draft: Some(_),
+                        ..
+                    },
+                ) && draft_of(&picker[focus])
+                    .is_some_and(|d| TypedRow::Session.admits(d, b'q')) =>
+            {
+                // A `q` INSIDE a non-empty session draft: the loop
+                // routes it to the grammar before the abort arm —
+                // the gate the record decided, never a shadowing of
+                // the abort (the empty draft, the steady state,
+                // falls through to the abort arm below). The guard
+                // checks the GRAMMAR too: a `q` the grammar refuses
+                // (the 64-char cap at a full draft) falls through
+                // to the abort as well — a gate that swallowed it
+                // there would leave the row in a state where `q`
+                // is neither draft nor abort nor error, a silent
+                // no-op; the invariant "the abort reachable in one
+                // keypress from every state" then holds for `q`
+                // literally, not just via Esc/^C.
+                if type_byte_value(&mut picker, focus, b'q') {
+                    touched.0[focus] = true;
+                }
+                error = None;
+                continue;
+            }
+            Key::Char(b'q') => {
                 leave_screen();
                 drop(guard);
                 return Ok(None);
@@ -1504,13 +1826,14 @@ fn picker_loop(
                 continue;
             }
             // Every other plain byte is offered to the focused
-            // typed row's grammar (T10): admitted bytes draft,
+            // typed row's grammar (T10/T15): admitted bytes draft,
             // keys outside the grammar — letters at the digit-only
-            // rows, a second dot, a suffix before digits — are
-            // ignored keystrokes, never errors. `q`, `^C` and the
-            // aborts were matched above; the grammars admit no
-            // letters but the memory suffix, so no binding is
-            // shadowed.
+            // rows, a second dot, a suffix before digits, bytes
+            // past the session cap — are ignored keystrokes, never
+            // errors. `q`, `^C` and the aborts were matched above;
+            // the digit grammars admit no letters but the memory
+            // suffix, and the session grammar's `q` is routed at
+            // the arm above, so no binding is shadowed.
             Key::Char(b) => {
                 if type_byte_value(&mut picker, focus, b) {
                     touched.0[focus] = true;
@@ -1534,7 +1857,7 @@ fn picker_loop(
 fn cycle_value(rows: &mut [Value; ROWS], focus: usize, delta: i64) -> bool {
     match &mut rows[focus] {
         Value::Set(row) => row.cycle(delta),
-        Value::Typed { .. } | Value::ReadOnly { .. } => false,
+        Value::Typed { .. } | Value::ReadOnly { .. } | Value::Disabled { .. } => false,
     }
 }
 
@@ -1578,7 +1901,14 @@ fn draft_of(value: &Value) -> Option<&str> {
 /// closed sets). `Err` is the picker error line — the loop renders
 /// it and continues; `Ok` is the dispatch.
 fn validate_enter(rows: &[Value; ROWS], touched: &Touched) -> Result<(), String> {
-    for idx in 4..7 {
+    // The typed rows: cpus/memory/pids-limit (4–6, T10) and the
+    // session row (11, T15) — every TOUCHED row's draft must parse
+    // through its own validator (config.rs's parsers, the argv
+    // grammar's `session::valid_name`), so the picker cannot accept
+    // what a config layer or the flag could not. The cycle and
+    // read-only rows validate trivially (their spellings are the
+    // closed sets).
+    for idx in [4usize, 5, 6, 11] {
         if !touched.0[idx] {
             continue;
         }
@@ -1595,6 +1925,8 @@ fn validate_enter(rows: &[Value; ROWS], touched: &Touched) -> Result<(), String>
                 // grammar cannot hand the parser at all) carry the
                 // picker's own message; everything else is the
                 // parser's text, what a config layer would print.
+                // The session row's message names the argv grammar,
+                // the `--session` parser's own refusal shape.
                 return Err(msg);
             }
         }
@@ -1656,6 +1988,13 @@ fn render(rows: &[Value; ROWS], focus: usize, once: bool, error: Option<&str>) {
                 } else {
                     let _ = write!(out, "{text} {hint}");
                 }
+            }
+            // T13.1/T14.1/T15.1: the environment-refused row — the
+            // disabled-row spelling (T2's empty-registry precedent,
+            // the same greyed treatment): visible, never hidden, the
+            // hint announcing the reason, no key changes it.
+            Value::Disabled { hint } => {
+                let _ = write!(out, "{hint}");
             }
         }
         let _ = writeln!(out);
@@ -2627,6 +2966,352 @@ mod tests {
         let mut touched = Touched::default();
         touched.0[8] = true;
         assert_eq!(to_flags(touched, &v).store, Some(Store::Baked));
+    }
+
+    // ---- T13: the dry-run cycle ----
+
+    #[test]
+    fn the_dry_run_row_preselects_off_in_both_modes_and_cycles() {
+        // T13: no layer can ask for a dry run (D9's promise has no
+        // TOML surface), so `off` is ALWAYS the preselect — in the
+        // persistent picker and the once picker alike.
+        for env in [
+            Env::default(),
+            Env {
+                once: true,
+                nested_detached: false,
+            },
+        ] {
+            let seeded = seed(
+                rows_in(&[], &pins(&[]), env),
+                &merged(None, Multiplexer::None, None),
+                nv(),
+            );
+            assert_eq!(set_of(&seeded[9]).current(), "off");
+            assert_eq!(
+                set_of(&seeded[9]).values,
+                vec!["off".to_owned(), "on".to_owned()]
+            );
+            // The untouched row composes nothing — a dry run is
+            // never the default.
+            let flags = to_flags(Touched::default(), &seeded);
+            assert!(!flags.dry_run);
+        }
+    }
+
+    #[test]
+    fn the_dry_run_cycle_composes_the_flag_and_back_to_off() {
+        let mut v = seed(
+            rows(&[], &pins(&[])),
+            &merged(None, Multiplexer::None, None),
+            nv(),
+        );
+        assert!(cycle_value(&mut v, 9, 1)); // off → on
+        let mut touched = Touched::default();
+        touched.0[9] = true;
+        assert!(to_flags(touched, &v).dry_run);
+        assert!(cycle_value(&mut v, 9, 1)); // on → off (wraps)
+        assert!(!to_flags(touched, &v).dry_run);
+    }
+
+    // ---- T14: the detachable cycle and its two disabled envs ----
+
+    #[test]
+    fn the_detachable_row_preselects_off_and_composes_only_detachable() {
+        // T14: `on` composes `Flags::detachable` and NEVER
+        // `Flags::detach` — B2: two ways to start ONE detached run,
+        // and the picker's shape is the attach-the-terminal one.
+        let seeded = seed(
+            rows(&[], &pins(&[])),
+            &merged(None, Multiplexer::None, None),
+            nv(),
+        );
+        assert_eq!(set_of(&seeded[10]).current(), "off");
+        let mut v = seeded;
+        assert!(cycle_value(&mut v, 10, 1)); // off → on
+        let mut touched = Touched::default();
+        touched.0[10] = true;
+        let flags = to_flags(touched, &v);
+        assert!(flags.detachable);
+        assert!(!flags.detach, "--detach is never composed");
+        assert!(cycle_value(&mut v, 10, 1)); // on → off (wraps)
+        assert!(!to_flags(touched, &v).detachable);
+        // Untouched composes nothing.
+        assert!(!to_flags(Touched::default(), &v).detachable);
+    }
+
+    #[test]
+    fn the_once_mode_disables_the_session_and_detachable_rows() {
+        // T14.1/T15.1: D22 refuses `--session` and
+        // `--detach`/`--detachable` for the bare once form — the
+        // picker must not compose what the CLI form would refuse.
+        // The rows stay VISIBLE (the T2 disabled-row precedent):
+        // a Disabled value, the once hint, no key can touch them.
+        let v = rows_in(
+            &[],
+            &pins(&[]),
+            Env {
+                once: true,
+                nested_detached: false,
+            },
+        );
+        assert!(matches!(
+            &v[10],
+            Value::Disabled {
+                hint: ONCE_REFUSED_HINT
+            }
+        ));
+        assert!(matches!(
+            &v[11],
+            Value::Disabled {
+                hint: ONCE_REFUSED_HINT
+            }
+        ));
+        // No key changes them: cycles are no-ops, typing is a
+        // no-op, backspace is a no-op — and the touched bit cannot
+        // even be set through the row operations.
+        let mut v = v;
+        assert!(!cycle_value(&mut v, 10, 1));
+        assert!(!cycle_value(&mut v, 10, -1));
+        assert!(!cycle_value(&mut v, 11, 1));
+        assert!(!type_byte_value(&mut v, 10, b'o'));
+        assert!(!type_byte_value(&mut v, 11, b'x'));
+        backspace_value(&mut v, 10);
+        backspace_value(&mut v, 11);
+        assert!(draft_of(&v[11]).is_none());
+        // And even a FORGED touched bit composes nothing: the
+        // disabled spelling is a different variant, not a frozen
+        // selection — `to_flags` matches `Set`/`Typed` only.
+        let mut touched = Touched::default();
+        touched.0[10] = true;
+        touched.0[11] = true;
+        let flags = to_flags(touched, &v);
+        assert!(!flags.detachable);
+        assert_eq!(flags.session, None);
+        // The dry-run row stays offerable in once-mode (D22 allows
+        // it) — it cycles and composes.
+        assert!(cycle_value(&mut v, 9, 1)); // off → on
+        let mut touched = Touched::default();
+        touched.0[9] = true;
+        assert!(to_flags(touched, &v).dry_run);
+    }
+
+    #[test]
+    fn a_nested_detached_environment_disables_only_the_detachable_row() {
+        // T14.1: `MYSBX_DETACHED` mirrors the dispatcher's nested
+        // guard — which scopes to `--detach`/`--detachable` ALONE:
+        // the session and dry-run rows stay offerable.
+        let v = rows_in(
+            &[],
+            &pins(&[]),
+            Env {
+                once: false,
+                nested_detached: true,
+            },
+        );
+        assert!(matches!(
+            &v[10],
+            Value::Disabled {
+                hint: NESTED_DETACHED_HINT
+            }
+        ));
+        // Session stays typed and offerable, dry-run stays a cycle.
+        assert!(matches!(
+            &v[11],
+            Value::Typed {
+                row: TypedRow::Session,
+                draft: None,
+                seed,
+            } if seed == LIVE
+        ));
+        assert!(matches!(&v[9], Value::Set(_)));
+    }
+
+    #[test]
+    fn env_detect_reads_the_nested_detached_marker_like_the_guard() {
+        // The dispatcher's own probe spelling: set AND non-empty.
+        let saved = std::env::var_os("MYSBX_DETACHED");
+        unsafe { std::env::set_var("MYSBX_DETACHED", "") };
+        assert!(!Env::detect(false).nested_detached, "empty is unset");
+        unsafe { std::env::set_var("MYSBX_DETACHED", "/run/user/0/mysbx/x/live.sock") };
+        assert!(Env::detect(false).nested_detached);
+        assert!(
+            Env::detect(true).once,
+            "the once fact comes from the mode, not the env"
+        );
+        match saved {
+            Some(v) => unsafe { std::env::set_var("MYSBX_DETACHED", v) },
+            None => unsafe { std::env::remove_var("MYSBX_DETACHED") },
+        }
+    }
+
+    // ---- T15: the session typed row ----
+
+    #[test]
+    fn the_session_row_grammar_admits_the_argv_byte_set_capped_at_64() {
+        // The argv grammar's own set `[A-Za-z0-9._-]`, capped at the
+        // validator's own bound (64). A leading dot IS drafted —
+        // the no-leading-dot rule is an ENTER validation (the
+        // error names it), never a mid-draft mangling.
+        let mut v = rows(&[], &pins(&[]));
+        assert!(type_byte_value(&mut v, 11, b'f'));
+        assert!(type_byte_value(&mut v, 11, b'i'));
+        assert!(type_byte_value(&mut v, 11, b'x'));
+        assert!(type_byte_value(&mut v, 11, b'-'));
+        assert!(type_byte_value(&mut v, 11, b'1'));
+        assert!(type_byte_value(&mut v, 11, b'.'));
+        assert!(type_byte_value(&mut v, 11, b'_'));
+        assert!(type_byte_value(&mut v, 11, b'q')); // inside a draft
+        assert_eq!(draft_of(&v[11]), Some("fix-1._q"));
+        // Outside the grammar: a slash, a space, a byte-3 ^C shape.
+        assert!(!type_byte_value(&mut v, 11, b'/'));
+        assert!(!type_byte_value(&mut v, 11, b' '));
+        assert!(!type_byte_value(&mut v, 11, 0x03));
+        assert_eq!(draft_of(&v[11]), Some("fix-1._q"));
+        // The 64 cap: a 64-char draft is the validator's own bound.
+        let mut v = rows(&[], &pins(&[]));
+        for _ in 0..63 {
+            assert!(type_byte_value(&mut v, 11, b'a'));
+        }
+        assert!(type_byte_value(&mut v, 11, b'a'), "64 chars is in");
+        assert!(!type_byte_value(&mut v, 11, b'a'), "the 65th is out");
+        assert_eq!(draft_of(&v[11]).map(str::len), Some(64));
+        // A leading dot drafts (the Enter validation refuses it).
+        let mut v = rows(&[], &pins(&[]));
+        assert!(type_byte_value(&mut v, 11, b'.'));
+        assert_eq!(draft_of(&v[11]), Some("."));
+    }
+
+    #[test]
+    fn a_session_draft_validates_through_the_argv_validator_at_enter() {
+        // `session::valid_name` — the SAME validator the
+        // `--session` argv parser uses — decides at Enter: a
+        // valid draft composes `Flags::session`, an invalid one is
+        // the picker error line and NEVER a dispatch.
+        let mut v = rows(&[], &pins(&[]));
+        for b in b"fix-1" {
+            assert!(type_byte_value(&mut v, 11, *b));
+        }
+        let mut touched = Touched::default();
+        touched.0[11] = true;
+        assert_eq!(validate_enter(&v, &touched), Ok(()));
+        assert_eq!(to_flags(touched, &v).session.as_deref(), Some("fix-1"));
+        // A leading dot: drafted, refused at Enter (the typed-row
+        // precedent — the error line, nothing dispatched).
+        let mut v = rows(&[], &pins(&[]));
+        assert!(type_byte_value(&mut v, 11, b'.'));
+        let mut touched = Touched::default();
+        touched.0[11] = true;
+        let err = validate_enter(&v, &touched).expect_err("a leading dot is refused");
+        assert!(err.contains("session"), "the error names the row: {err}");
+        assert!(err.contains("no leading dot"), "{err}");
+        assert_eq!(to_flags(touched, &v).session, None, "never composed");
+        // The reserved `__worktrees` suffix: the validator's own
+        // rule, never re-derived here.
+        let mut v = rows(&[], &pins(&[]));
+        for b in b"a__worktrees" {
+            assert!(type_byte_value(&mut v, 11, *b));
+        }
+        let mut touched = Touched::default();
+        touched.0[11] = true;
+        assert!(validate_enter(&v, &touched).is_err());
+        assert_eq!(to_flags(touched, &v).session, None);
+        // The empty draft is the untouched row: the live mode.
+        let v = rows(&[], &pins(&[]));
+        assert_eq!(draft_of(&v[11]), None);
+        let flags = to_flags(Touched::default(), &v);
+        assert_eq!(flags.session, None, "empty draft = unset = live mode");
+    }
+
+    #[test]
+    fn session_backspace_deletes_and_the_emptied_draft_is_untouched() {
+        let mut v = rows(&[], &pins(&[]));
+        for b in b"ab" {
+            assert!(type_byte_value(&mut v, 11, *b));
+        }
+        backspace_value(&mut v, 11);
+        assert_eq!(draft_of(&v[11]), Some("a"));
+        backspace_value(&mut v, 11);
+        assert_eq!(draft_of(&v[11]), None, "empty is untouched again");
+        backspace_value(&mut v, 11); // a no-op on empty
+        assert_eq!(draft_of(&v[11]), None);
+        let flags = to_flags(Touched::default(), &v);
+        assert_eq!(flags.session, None);
+    }
+
+    #[test]
+    fn the_session_row_seeds_the_live_mode_as_display_only() {
+        // T15: the display seed is `live`, the mode a bare run uses
+        // — context, never a composed value (a seed never reaches
+        // `Flags`, the T10 rule).
+        let v = rows(&[], &pins(&[]));
+        match &v[11] {
+            Value::Typed { row, draft, seed } => {
+                assert_eq!(*row, TypedRow::Session);
+                assert_eq!(seed, LIVE);
+                assert_eq!(*draft, None);
+            }
+            other => panic!("the session row is typed: {other:?}"),
+        }
+        assert_eq!(to_flags(Touched::default(), &v).session, None);
+    }
+
+    #[test]
+    fn the_q_conflict_resolves_at_the_grammar_gate_not_the_abort() {
+        // T15's record decision: `q` is a draft byte ONLY while the
+        // session draft is non-empty. The GRAMMAR admits it (the
+        // loop's routing is what keeps the empty-draft `q` the
+        // abort — pinned by the pty test); a grammar-side refusal
+        // would leak into the other typed rows' rule and turn the
+        // abort key into an ignored keystroke at the row.
+        assert!(TypedRow::Session.admits("fix-", b'q'));
+        assert!(TypedRow::Session.admits("", b'x'));
+        assert!(TypedRow::Session.admits("fix", b'Q'));
+        // The loop's side of the contract (the gate lives in
+        // `picker_loop`, but the value-layer half is pinned here):
+        // an EMPTY draft still accepts every non-`q` grammar byte,
+        // so the operator can always get past the first byte and
+        // then draft `q` freely — backspace can rebuild the draft.
+        let mut v = rows(&[], &pins(&[]));
+        assert!(type_byte_value(&mut v, 11, b'x'));
+        assert!(type_byte_value(&mut v, 11, b'q'));
+        assert_eq!(draft_of(&v[11]), Some("xq"));
+        backspace_value(&mut v, 11);
+        assert_eq!(draft_of(&v[11]), Some("x"));
+        // NIT-1 regression: at a 64-char (capped) draft the grammar
+        // refuses `q` — so the loop's gate arm must NOT match and
+        // the key falls through to the ABORT, never a silent
+        // no-op. The loop's guard checks `admits` itself; this
+        // pins the value-layer half of that contract: at a full
+        // draft `admits` is false, so the gate cannot swallow the
+        // key and the abort invariant holds for `q` literally,
+        // from every state.
+        let mut v = rows(&[], &pins(&[]));
+        for _ in 0..64 {
+            assert!(type_byte_value(&mut v, 11, b'a'));
+        }
+        let full = draft_of(&v[11]).unwrap().to_owned();
+        assert_eq!(full.len(), 64);
+        assert!(
+            !TypedRow::Session.admits(&full, b'q'),
+            "a capped draft refuses q — the loop routes it to the abort, never a no-op"
+        );
+        assert!(!type_byte_value(&mut v, 11, b'q'));
+        assert_eq!(draft_of(&v[11]), Some(full.as_str()), "nothing drafted");
+        // And the same corner at the message level: the reserved
+        // `__worktrees` suffix is named by the PICKER's error line
+        // (the argv parser's message is untouched).
+        let mut v = rows(&[], &pins(&[]));
+        for b in b"a__worktrees" {
+            assert!(type_byte_value(&mut v, 11, *b));
+        }
+        let mut touched = Touched::default();
+        touched.0[11] = true;
+        let err = validate_enter(&v, &touched).expect_err("the reserved suffix is refused");
+        assert!(
+            err.contains("`__worktrees` suffix"),
+            "the picker's error names the reserved suffix: {err}"
+        );
     }
 
     /// Feed `bytes` to a fresh [`KeyReader`] through a `Cursor`, so

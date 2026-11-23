@@ -9,7 +9,9 @@ Status: agreed design (bd myconfig-dm7b; this record is
 myconfig-dm7b.1, written before any code exists — `src/tui.rs`, the
 dispatcher arm, the once-mode change, the usage/completions
 contract and the validation are the implementation beads
-myconfig-dm7b.2–.6).
+myconfig-dm7b.2–.6). The property rows T9–T12 and the launch trio
+T13–T15 extend it (bd myconfig-y8rl): the record is the same
+decision surface, extended in place.
 
 This is the decision record for the one interactive surface of the
 mysbx CLI: a minimal full-screen terminal form, shown before a
@@ -30,9 +32,10 @@ Vocabulary, on top of [`../../CONTEXT.md`](../../CONTEXT.md):
   already names the aoe interface ([detach.md](./detach.md) B7).
 - **row** — one of the picker's decisions: backend, multiplexer,
   default-agent (T2), network (T9), cpus/memory/pids-limit (T10),
-  nested-virt (T11), store (T12). A row is a closed set with one
-  preselected value — or, for the typed rows, a byte grammar and a
-  draft — never free-form text.
+  nested-virt (T11), store (T12), dry-run/detachable/session
+  (T13–T15). A row is a closed set with one preselected value —
+  or, for the typed rows, a byte grammar and a draft — never
+  free-form text.
 
 ## The problem
 
@@ -313,6 +316,144 @@ layer decision for this run. `baked` on a backend that cannot
 attach a disk is the pipeline's warn-and-fall-back — not the
 picker's: no per-backend matrix (T4).
 
+### T13: the dry-run row cycles off/on — the one flag without a TOML surface
+
+`--dry-run` is a PROMISE, not a configuration: no layer can ask
+for a dry run (D9's whole point is that the operator asks for one
+per invocation), so the row has nothing to inherit — `off` is
+ALWAYS the preselect, in both modes, and `on` is the only other
+value (`off → on → off`). `on` composes `Flags::dry_run = true`,
+the existing field the argv parser sets; the row is offerable in
+BOTH the persistent and the once picker (D22 allows `--dry-run`
+for the bare once form). The argv surface is untouched: T7's arm
+refuses `--dry-run` with the verb exactly as before — the row is
+the picker's own spelling of the promise, and a picker composed
+`dry_run` composes a DRY RUN, never a real one: Enter prints the
+argv and exits `0`, nothing started (the audit contract of D9,
+the picker's Enter included).
+
+### T14: the detachable row cycles off/on — the attach-the-terminal shape only
+
+`--detachable` (detach.md B2) is the "start working now, detach
+later" composition: start the run detached, attach this terminal
+immediately. The row cycles `off → on → off` with `off` always
+the preselect (detached runs are per-invocation decisions, like
+dry-run — no config layer asks for one). `on` composes
+`Flags::detachable = true` and NEVER `Flags::detach`: B2 spells
+them as two ways to start ONE detached run, never both, and the
+picker's shape is the attach-the-terminal one — `mysbx tui` runs
+ON a terminal (T6 refuses one without), so `--detachable` is the
+composition that fits, and `--detach` would strand the operator
+on a terminal the run never comes back to.
+
+The wiring mirrors the dispatcher's own bare-form arm: the flag
+alone routes nothing — the dispatcher's `--detachable` arm maps
+it to `RunMode::Detachable` (lib.rs), and the picker's Enter arm
+performs the SAME mapping on a composed flag, so the row's `on`
+reaches `detach::launch_outer` and the pipeline's own guards
+unchanged (T4): the podman detach refusal (B9), the dtach pin
+(B10), the runtime root (B3) — the row adds no matrix of its
+own, and the mapping is what makes those guards reachable from
+the picker at all. The dispatcher's own tty guard
+(`detachable && !dry_run && !stdin_is_tty`, lib.rs) is
+dispatcher-side and not hit by the picker's path, but its
+precondition holds by construction: the picker already refused
+at its own tty gate (T6), and the two environments that disable
+the row (below) mean only `RunMode::Exec` can arrive at the
+Enter arm with the flag set. dry-run+detachable composes fine:
+the pipeline's `preflight_only` covers Detachable, so that Enter
+prints the argv and exits `0` — the same run the argv spelling
+`--detachable --dry-run` produces.
+
+The row is DISABLED — visible, greyed, no key changes it, never
+composed — in the two environments whose CLI form the dispatcher
+itself refuses:
+
+- **once-mode**: D22 refuses `--detach/--detachable` — a detached
+  run outlives the temp root with no owner to tear it down. The
+  picker must not compose what the CLI form would refuse.
+- **inside a detached run** (`MYSBX_DETACHED` set): the nested
+  guard (lib.rs, B4 step 3) refuses a second `--detachable` for
+  the same workspace. The tui verb is reachable there only as
+  the inner invocation's own choice — the row composes nothing.
+
+The session and dry-run rows are UNAFFECTED by `MYSBX_DETACHED`:
+the dispatcher's nested guard scopes to `--detach`/`--detachable`
+alone, and the picker mirrors exactly that scope.
+
+### T15: the session row drafts a NAME under the argv grammar
+
+`--session NAME` (workspace.md D1) selects clone mode; the flag is
+the whole switch, with NO TOML surface — so the row is TYPED (the
+T10 mechanics), not cycled, with a draft that builds on the
+focused row: Backspace deletes, an EMPTY draft is UNSET (the
+live mode, today's default — an untouched row, T4; the row's
+display seed is `live`, the mode a bare run uses, display-only
+like every typed seed). The keystroke filter is the argv
+grammar's own byte set, `[A-Za-z0-9._-]`, capped at 64 chars (the
+validator's own bound); at Enter the draft is validated through
+`session::valid_name` — the SAME validator the `--session` argv
+parser uses (first char alnum, no leading dot, not the reserved
+`__worktrees` suffix) — and an invalid draft is the typed-row
+error line, naming the rule it tripped INCLUDING the reserved
+suffix (the argv parser's own message names only the grammar;
+the picker's line adds the suffix clause so a draft like
+`a__worktrees` fails with a message that names why): the
+picker shows it, Enter dispatches NOTHING, the loop continues
+with the draft editable (the T10 precedent). A
+valid draft composes `Flags::session = Some(name)`, the existing
+field; the pipeline's own clone-mode decisions — the first-run
+clone creation (reported before the run), the `--rw` refusal
+(D4) — fire as if the flag had been typed. The row is DISABLED in
+once-mode (D22: `--session` is refused — the clone would vanish
+with the temp root), the same visible-not-hidden spelling as the
+detachable row's.
+
+**The `q` conflict.** The session grammar admits `q` — it is a
+letter — and `q` is the abort binding: a naive typed row would
+either shadow the abort or refuse every name containing the
+letter. The row's own grammar gate resolves it at the LOOP,
+never in the grammar (a grammar-side refusal would turn `q`
+into an ignored keystroke and the row into a place the abort
+does not work): `q` is a draft byte ONLY while the session
+row's draft is non-empty AND its grammar admits the byte — a
+`q` the grammar refuses (the 64-char cap at a full draft)
+falls through to the abort like the empty-draft one, so no
+state exists where `q` is neither draft nor abort; at an
+EMPTY draft `q` is the abort, exactly as everywhere else in
+the picker. The abort set stays reachable in ONE keypress from
+every state — `Esc` and `^C` abort unconditionally (no grammar
+admits byte `0x1b` or byte `3`), and `q` itself aborts both
+the row's steady state (the empty draft, the untouched row and
+the common case) and the one state the grammar would refuse
+it in (the capped draft). The cost is bounded and named here:
+a session name whose FIRST byte is `q` cannot be drafted in
+the picker — typing it aborts with exit `0`, nothing started
+— so a `q`-initial name is spelled on the argv, `mysbx
+--session qux`, which stays the full-grammar surface. The
+rejected alternatives: shadowing `q` entirely at the row (the
+abort binding is unchanged, and a mid-draft operator could
+not abort with the key every other row answers to), and a
+dedicated edit-arming key (a new binding the record's key set
+does not carry, for a conflict one gate resolves).
+
+### T13.1/T14.1/T15.1: seeding and disabled rows are per environment
+
+The three rows seed from the ENVIRONMENT the Enter run dispatches
+into, the same rule every row follows (T3's "what a bare run
+would do"):
+
+- **once-mode**: the session and detachable rows are DISABLED —
+  the T2 disabled-row precedent, visible never hidden, greyed
+  with the reason (`(refused in once-mode — the temp root cannot
+  carry it)`), no key changes them, they never contribute to
+  the Enter state. The dry-run row stays offerable (D22 allows
+  it).
+- **`MYSBX_DETACHED` set**: the detachable row is disabled the
+  same way (the dispatcher's nested-detach guard, mirrored);
+  session and dry-run are unaffected (the guard's scope).
+- **persistent mode, no `MYSBX_DETACHED`**: all three offerable.
+
 ## Resolved open questions
 
 1. **Esc aborts the not-inited confirmation** (T5) — Enter is the
@@ -329,18 +470,29 @@ picker's: no per-backend matrix (T4).
    the rows. Nothing about `gui` adapts to it (no window title, no
    size hint); it is recorded here as working by construction,
    and polishing it is a later change.
-5. **`tui` + `--detachable` is deferred** (T7): refused with the
-   verb until the composition is decided.
+5. **`tui` + `--detachable` stays refused on the argv** (T7):
+   the composition the ROW makes is decided (T14 — the row
+   composes the flag the Enter run dispatches with), but the
+   `mysbx tui --detachable` argv spelling stays a usage error:
+   picking and then typing the same decision twice is what T7
+   exists to prevent, and the detachable ROW is the picker's
+   spelling of the flag.
 
 ## Non-goals
 
-- No later keys beyond T9–T12: mounts, allowlists, ports, … remain
+- No later keys beyond T9–T15: mounts, allowlists, ports, … remain
   out of scope; the picker shows the decisions the one-run override
   pipeline can carry.
 - No CLI spelling for the T9–T12 fields: `Flags` gains picker-only
   fields, and the argv parser, the T7 refusal arm, `usage.txt` and
   the completions stay untouched — a property the shell must set
-  goes in a config layer, never a new flag.
+  goes in a config layer, never a new flag. T13–T15 are the
+  opposite shape BY DESIGN: they compose the flags that already
+  have argv spellings (`--dry-run`, `--detachable`, `--session`),
+  which is why their rows exist at all — and the argv surface
+  around them (usage.txt, completions, the T7 arm, the once gate)
+  stays byte-untouched; the row is a second spelling, never a
+  widened parser.
 - No state anywhere: the picker writes nothing (T4) and remembers no
   last selection.
 - No new dependencies (T6).

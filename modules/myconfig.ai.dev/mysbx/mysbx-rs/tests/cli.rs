@@ -20107,6 +20107,459 @@ fn the_nested_virt_and_store_cycles_reach_the_pipeline() {
     );
 }
 
+#[test]
+fn the_dry_run_cycle_composes_a_dry_run_and_starts_nothing() {
+    // T13, live: cycling the dry-run row (focus 9) to `on` and
+    // Enter composes `Flags::dry_run = true` — the observable is
+    // the dry run's OWN contract (D9): the argv prints (the
+    // once-shaped `mysbx-once/dry-run` paths pin that the pipeline
+    // ran to its argv-building end), the exit is `0`, NOTHING was
+    // started (no temp root exists) and no backend was exec'd (no
+    // `cannot exec` refusal — the dry run returns before the
+    // spawn).
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture_uninited("once-picker-dry-run", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let mut cmd = once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &[]);
+    let mut child = cmd
+        .spawn()
+        .expect("failed to spawn the bare mysbx-once under a pty");
+    let mut master = master;
+    use std::io::Write;
+    // ONE wait, on the LAST row's own needle: `pty_wait_for`
+    // returns the moment its needle arrives and anything later in
+    // the same read is kept in ITS seen — a second wait would start
+    // with an empty buffer and an idle child. The dry-run row's
+    // line is late enough in the render that the whole screen is
+    // in `seen` when it matches.
+    let mut seen = pty_wait_for(
+        &mut master,
+        &mut child,
+        "dry-run       [off] on",
+        "the dry-run row never rendered — the trio is missing from the render",
+    );
+    assert!(
+        seen.contains("mysbx-once — pick this session's sandbox"),
+        "the header rendered: {seen}"
+    );
+    // Focus the dry-run row (9 Downs, one write — the coalesced
+    // burst the persistent reader decodes), one Right: off → on,
+    // then Enter.
+    master
+        .write_all(b"\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B")
+        .unwrap();
+    master.write_all(b"\x1b[C").unwrap();
+    seen.push_str(&pty_wait_for(
+        &mut master,
+        &mut child,
+        // The focused row renders INVERTED (`\x1b[7m>label...\x1b[0m
+        // values`), so the reset escape sits between the padded
+        // label and the values — the needle spans it.
+        "dry-run       \x1b[0moff [on]",
+        "the dry-run cycle never rendered `on`",
+    ));
+    master.write_all(b"\r").unwrap();
+    let (tail, out) = pty_drain_until_exit(&mut master, &mut child, "the dry-run Enter run");
+    seen.push_str(&tail);
+    assert_eq!(
+        out.code(),
+        Some(0),
+        "a dry run exits 0 — nothing was started; pty said: {seen}"
+    );
+    assert!(
+        seen.contains("mysbx-once/dry-run/worktrees"),
+        "the ONCE dry-run argv printed (the pipeline ran to the argv): {seen}"
+    );
+    assert!(
+        !tail.contains("## creating:") && !tail.contains("## created:"),
+        "the dry run created nothing: {tail}"
+    );
+    // And the temp root was never created — `sandbox()`'s Once arm
+    // takes the placeholder path a composed dry_run selects.
+    assert!(
+        !inv.home.join("runtime/mysbx-once").exists(),
+        "no temp root was created: {seen}"
+    );
+}
+
+#[test]
+fn the_session_freetext_composes_the_clone_mode_plan() {
+    // T15, live: the persistent picker (the once form's session row
+    // is disabled, the sibling test below), typing `fix` into the
+    // session row (focus 11) and Enter composes
+    // `Flags::session = Some("fix")` — pinned through the
+    // clone-mode path's OWN observable: a non-git host repo meets
+    // the clone-plan refusal (exit 70, `has no commits — there is
+    // nothing to clone`), the pipeline's own message for the name
+    // a `--session fix` argv spelling would reach — no git binary
+    // needed, the refusal still proves the flag crossed the Enter
+    // boundary (an untouched Enter runs the backend refusal
+    // instead, the contrast the sibling tests carry).
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture("tui-picker-session", &["tui"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let mut cmd =
+        once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &["tui"]);
+    cmd.env_remove("MYSBX_ONCE");
+    let mut child = cmd.spawn().expect("failed to spawn mysbx tui under a pty");
+    let mut master = master;
+    use std::io::Write;
+    // ONE wait, on the LAST row's own needle — a header match
+    // returns while the rest of the render is still streaming,
+    // and the trailing bytes land in THIS wait's `seen` only.
+    let mut seen = pty_wait_for(
+        &mut master,
+        &mut child,
+        "[live]",
+        "the session row never rendered — its `live` seed is missing",
+    );
+    // The session row's display seed is `live`, the mode a bare run
+    // uses (T15) — the honest spelling, never a composed value.
+    assert!(
+        seen.contains("mysbx tui — pick this session's sandbox"),
+        "the header rendered: {seen}"
+    );
+    // Focus the session row (11 Downs, one write), type the draft.
+    // The FIRST byte is not `q` (the record's named cost: a
+    // q-initial name is an argv spelling), so the typing exercises
+    // the plain grammar path; the `q`-inside-draft routing is the
+    // sibling test below.
+    master
+        .write_all(b"\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B")
+        .unwrap();
+    master.write_all(b"fix").unwrap();
+    let _ = pty_wait_for(
+        &mut master,
+        &mut child,
+        "[live] fix",
+        "the session draft never rendered",
+    );
+    master.write_all(b"\r").unwrap();
+    let (tail, out) = pty_drain_until_exit(&mut master, &mut child, "the session Enter run");
+    seen.push_str(&tail);
+    assert_eq!(
+        out.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "the clone-plan refusal is the pipeline's exit 70; pty said: {seen}"
+    );
+    assert!(
+        tail.contains("has no commits — there is nothing to clone"),
+        "the refusal is the clone-mode path's own — `Flags::session` crossed Enter: {tail}"
+    );
+    assert!(
+        tail.contains("cannot create the session clone"),
+        "the refusal names the session clone: {tail}"
+    );
+}
+
+#[test]
+fn the_session_draft_q_is_routed_by_the_loop_not_shadowed() {
+    // T15's q-conflict, live at the WIRED level: `q` typed at the
+    // session row with a NON-EMPTY draft is a draft byte (the
+    // grammar's own letter), and at an EMPTY draft it is the abort
+    // — the loop's routing, never a shadowing. The first `q` at
+    // the empty row aborts with exit 0, nothing started; the
+    // second run types `fi` first and the `q` drafts (`fiq`),
+    // pinned by the draft rendering and by the eventual Enter run
+    // reaching the pipeline (the picker never aborted on the `q`).
+    //
+    // First: the EMPTY-draft `q` is the abort.
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    {
+        let (inv, _repo, _sidecar) = fixture("tui-picker-q-empty", &["tui"]);
+        std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+        std::fs::write(
+            inv.xdg.join("mysbx").join("config.toml"),
+            "backend = \"bubblewrap\"\n",
+        )
+        .unwrap();
+        let mut cmd =
+            once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &["tui"]);
+        cmd.env_remove("MYSBX_ONCE");
+        let mut child = cmd.spawn().expect("failed to spawn mysbx tui under a pty");
+        let mut master = master;
+        use std::io::Write;
+        let _ = pty_wait_for(
+            &mut master,
+            &mut child,
+            "[live]",
+            "the session row never rendered — its `live` seed is missing",
+        );
+        // 11 Downs to the session row (its draft is empty), then `q`.
+        master
+            .write_all(b"\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B")
+            .unwrap();
+        master.write_all(b"q").unwrap();
+        let (seen, out) = pty_drain_until_exit(&mut master, &mut child, "the empty-draft q abort");
+        assert_eq!(
+            out.code(),
+            Some(0),
+            "the empty-draft q is the abort (exit 0, nothing started); pty said: {seen}"
+        );
+    }
+    // Second: `q` inside a non-empty draft DRAFTS — the run does
+    // not abort on it.
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty for the second half");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture("tui-picker-q-inside", &["tui"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let mut cmd =
+        once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &["tui"]);
+    cmd.env_remove("MYSBX_ONCE");
+    let mut child = cmd.spawn().expect("failed to spawn mysbx tui under a pty");
+    let mut master = master;
+    use std::io::Write;
+    let _ = pty_wait_for(
+        &mut master,
+        &mut child,
+        "[live]",
+        "the session row never rendered — its `live` seed is missing",
+    );
+    master
+        .write_all(b"\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B")
+        .unwrap();
+    master.write_all(b"fi").unwrap();
+    let _ = pty_wait_for(
+        &mut master,
+        &mut child,
+        "[live] fi",
+        "the pre-q draft never rendered",
+    );
+    master.write_all(b"q").unwrap();
+    let seen = pty_wait_for(
+        &mut master,
+        &mut child,
+        "[live] fiq",
+        "the q inside the draft never drafted — the abort shadowed the grammar",
+    );
+    let _ = seen;
+    // The picker is still up (the q drafted, no abort) — Enter runs
+    // the pipeline, whose refusal is the proof nothing aborted.
+    master.write_all(b"\r").unwrap();
+    let (tail, out) = pty_drain_until_exit(&mut master, &mut child, "the post-draft Enter");
+    assert_eq!(
+        out.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "the Enter ran the pipeline — the q never aborted: {tail}"
+    );
+    assert!(
+        tail.contains("has no commits — there is nothing to clone"),
+        "the drafted session name (fiq) composed and the clone-plan refusal ran — the q never aborted: {tail}"
+    );
+}
+
+#[test]
+fn the_once_mode_renders_the_session_and_detachable_rows_disabled() {
+    // T13.1/T14.1/T15.1, live: the once picker renders the session
+    // and detachable rows DISABLED — visible, annotated with the
+    // once hint, and no key enables them: the coalesced focus walk
+    // reaches the detachable row, Left/Right are no-ops (the render
+    // never shows an `[on]`), typing at the session row drafts
+    // nothing, and Enter runs the layers' decision (the missing
+    // backend binary) — the disabled rows composed nothing. The
+    // dry-run row stays offerable (D22 allows it) and still
+    // renders `[off]` — the trio is not disabled as a block.
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture_uninited("once-picker-disabled-rows", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let mut cmd = once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &[]);
+    let mut child = cmd
+        .spawn()
+        .expect("failed to spawn the bare mysbx-once under a pty");
+    let mut master = master;
+    use std::io::Write;
+    let mut seen = pty_wait_for(
+        &mut master,
+        &mut child,
+        "session       (refused in once-mode",
+        "the once picker never rendered its disabled rows",
+    );
+    // The disabled rows are VISIBLE with the once hint (the T2
+    // disabled-row precedent), and the dry-run row stays a cycle.
+    assert!(
+        seen.contains("mysbx-once — pick this session's sandbox"),
+        "the header rendered: {seen}"
+    );
+    assert!(
+        seen.contains("detachable    (refused in once-mode"),
+        "the detachable row renders disabled with the once hint: {seen}"
+    );
+    assert!(
+        seen.contains("session       (refused in once-mode"),
+        "the session row renders disabled with the once hint: {seen}"
+    );
+    assert!(
+        seen.contains("dry-run       [off] on"),
+        "the dry-run row stays offerable in once-mode: {seen}"
+    );
+    // Focus the detachable row (10 Downs, one write): cycles are
+    // no-ops there. The focus marker is the proof the keys went to
+    // the disabled row; the next render must still show the hint
+    // (never `[on]`).
+    master
+        .write_all(b"\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B")
+        .unwrap();
+    seen.push_str(&pty_wait_for(
+        &mut master,
+        &mut child,
+        "\x1b[7m>detachable",
+        "the focus never reached the disabled detachable row",
+    ));
+    master.write_all(b"\x1b[D\x1b[C").unwrap();
+    // Focus the session row (one more Down), try to type into it.
+    // (No sleep after the no-op cycles: the pty queue preserves
+    // key order, and the following `\x1b[7m>session` needle
+    // re-syncs on the Down's re-render — the queue order is the
+    // pty's own guarantee, same as the coalesced bursts.)
+    master.write_all(b"\x1b[B").unwrap();
+    let _ = pty_wait_for(
+        &mut master,
+        &mut child,
+        "\x1b[7m>session",
+        "the focus never reached the disabled session row",
+    );
+    master.write_all(b"xyz").unwrap();
+    // (No sleep here either — every key redraws, and Enter's
+    // drain re-syncs; the queue keeps the order.)
+    // Enter: the run is exactly the untouched picker's — the layers'
+    // backend refusal, no clone-plan message, no detachable
+    // composition (the missing dtach pin would refuse a real
+    // detachable start with its OWN message — absent here).
+    master.write_all(b"\r").unwrap();
+    let (tail, out) = pty_drain_until_exit(&mut master, &mut child, "the once Enter run");
+    seen.push_str(&tail);
+    assert_eq!(
+        out.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "the run is the layers' decision; pty said: {seen}"
+    );
+    assert!(
+        tail.contains("cannot exec the backend"),
+        "Enter ran the plain once pipeline: {tail}"
+    );
+    assert!(
+        !tail.contains("cannot create the session clone"),
+        "the disabled session row composed nothing: {tail}"
+    );
+    assert!(
+        !tail.contains("MYSBX_DTACH"),
+        "the disabled detachable row composed nothing (no detach refusal fired): {tail}"
+    );
+}
+
+#[test]
+fn the_detachable_cycle_maps_to_run_mode_detachable_at_enter() {
+    // T14, live — the row's `on` is NOT inert: the Enter arm maps
+    // a composed `detachable` to `RunMode::Detachable` (mirroring
+    // the dispatcher's own bare-form arm), so the pipeline reaches
+    // `detach::launch_outer` and its guards. The observable is the
+    // B10 dtach-pin refusal — the test env pins no dtach — exit 70,
+    // naming `MYSBX_DTACH`, with NO backend spawn (no `cannot exec
+    // the backend`: a foreground run would have tried the missing
+    // bubblewrap binary instead). This is the positive counterpart
+    // the once-mode test's `!MYSBX_DTACH` assertion guards against:
+    // while the flag was inert that assert was vacuous — the
+    // mapping is what makes a detached refusal reachable at all.
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture("tui-picker-detachable", &["tui"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let mut cmd =
+        once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &["tui"]);
+    cmd.env_remove("MYSBX_ONCE");
+    // No dtach pin — B10's refusal shape (the spawn helpers' default;
+    // spelled here so the test's meaning does not depend on it).
+    cmd.env_remove("MYSBX_DTACH");
+    let mut child = cmd.spawn().expect("failed to spawn mysbx tui under a pty");
+    let mut master = master;
+    use std::io::Write;
+    // ONE wait, on the detachable row's own line — the last rows of
+    // the render stream (a header match would return before the
+    // row's bytes arrived).
+    let _ = pty_wait_for(
+        &mut master,
+        &mut child,
+        "detachable    [off] on",
+        "the detachable row never rendered",
+    );
+    // Focus the detachable row (10 Downs, one write — the coalesced
+    // burst the persistent reader decodes), one Right: off → on.
+    master
+        .write_all(b"\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B")
+        .unwrap();
+    master.write_all(b"\x1b[C").unwrap();
+    let _ = pty_wait_for(
+        &mut master,
+        &mut child,
+        // The focused row renders inverted, the reset escape between
+        // the padded label and the values.
+        "detachable    \x1b[0moff [on]",
+        "the detachable cycle never rendered `on`",
+    );
+    // Enter: the mapping routes the run into the detached pipeline,
+    // whose dtach-pin guard (B10) refuses — the observable.
+    master.write_all(b"\r").unwrap();
+    let (tail, out) = pty_drain_until_exit(&mut master, &mut child, "the detachable Enter run");
+    assert_eq!(
+        out.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "the B10 dtach-pin refusal is exit 70; pty said: {tail}"
+    );
+    assert!(
+        tail.contains("--detach, --detachable and attach require a usable dtach"),
+        "the refusal is the B10 dtach-pin one — the row's `on` reached the detached pipeline: {tail}"
+    );
+    assert!(
+        tail.contains("MYSBX_DTACH"),
+        "the refusal names the pin: {tail}"
+    );
+    assert!(
+        !tail.contains("cannot exec the backend"),
+        "no foreground backend spawn — the run is the detached pre-flight's, never a plain Exec: {tail}"
+    );
+}
+
 /// Whether one of `fds` is readable within `millis` — `select(2)`
 /// through the raw libc symbol, the pty test's read budget. The
 /// fd_set word indexing is `fd / 64` (the bit is `fd % 64`): a

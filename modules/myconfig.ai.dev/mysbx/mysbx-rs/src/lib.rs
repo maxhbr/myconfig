@@ -837,9 +837,10 @@ pub struct Flags {
     pub detach: bool,
     /// The `--detachable` flag (detach.md B2): the "start working
     /// now, detach later" composition `--detach && attach` under
-    /// one lock. Refused as not implemented (bd myconfig-7ioq.5) —
-    /// parsed here so the dispatcher owns the refusal, never an
-    /// accept-and-ignore.
+    /// one lock (dispatched as [`RunMode::Detachable`]). The
+    /// session picker's T14 row composes it too — the attach-the-
+    /// terminal shape only, never `--detach` (B2: the two are two
+    /// ways to start ONE detached run, never both).
     pub detachable: bool,
 }
 
