@@ -475,7 +475,7 @@ configuration layer selects what the **interactive** form
 | `"herdr"` | [herdr](https://herdr.dev), the agent multiplexer ([`modules/myconfig.ai.dev/programs/programs.herdr.nix`](../modules/myconfig.ai.dev/programs/programs.herdr.nix)) |
 | `"aoe"` | Agent of Empires ([`../modules/myconfig.ai.dev/programs/programs.agent-of-empires/`](../modules/myconfig.ai.dev/programs/programs.agent-of-empires)) |
 | `"orca"` | [Orca](https://onorca.dev) ([`modules/myconfig.ai.dev/services.orca.nix`](../modules/myconfig.ai.dev/services.orca.nix)) — the runtime server (`orca serve`) inside the sandbox, reached from the Orca desktop/mobile client over the pairing endpoint; needs the shared network **and the `bubblewrap` backend** (bd myconfig-2m8) |
-| `"thinkrail"` | [ThinkRail](https://github.com/JetBrains/thinkrail) ([`modules/myconfig.ai.dev/programs/programs.thinkrail.nix`](../modules/myconfig.ai.dev/programs/programs.thinkrail.nix)) — the engine host (`thinkrail --no-open <repo>`) inside the sandbox, its browser IDE opened from the host over the shared loopback; needs **`bubblewrap` or `nono`** — the UI is reached inbound, and only shared-netns backends give that path |
+| `"thinkrail"` | [ThinkRail](https://github.com/JetBrains/thinkrail) ([`modules/myconfig.ai.dev/programs/programs.thinkrail.nix`](../modules/myconfig.ai.dev/programs/programs.thinkrail.nix)) — a foreground browser IDE on `127.0.0.1`; needs **`bubblewrap` with `network = "shared"`** |
 | `"none"` | a plain interactive shell (the default) |
 
 mysbx execs the entry its wrapper pinned for that value
@@ -483,10 +483,12 @@ mysbx execs the entry its wrapper pinned for that value
 run naming the variable, never a silent bare shell. `orca` is
 additionally refused on the `nono` and `podman-gvisor` backends — its
 Electron/AppImage payload needs the device set and unmediated syscall
-stream only bubblewrap provides (bd myconfig-2m8). `thinkrail` is the
-mirror image: refused on every backend **except `bubblewrap` and
-`nono`**, because its browser UI is reached inbound over the loopback
-and only a shared-netns backend carries that. `mysbx run -- CMD`
+stream only bubblewrap provides (bd myconfig-2m8). For `thinkrail`,
+open the URL printed at startup. `--detach` and `--detachable` are
+refused because startup output can be lost. The IDE has no application
+authentication; for remote access, forward the printed port over an
+authenticated SSH tunnel bound to the client's loopback, not a direct
+LAN bind. `mysbx run -- CMD`
 starts no session and is byte-identical to a `"none"` run
 (`docs/design/cli.md` D11). Either layer may decide, and the sidecar
 wins — the user config is the host-wide default, the sidecar is the

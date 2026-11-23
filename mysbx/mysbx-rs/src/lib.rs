@@ -3319,6 +3319,46 @@ fn sandbox_pipeline(
         }
     }
 
+    // ThinkRail needs a host-reachable loopback listener and a visible
+    // startup URL. Check the effective configuration before setting up
+    // egress, cloning, or launching dtach, including in dry runs.
+    if matches!(payload, bwrap::Payload::Shell)
+        && merged.multiplexer == config::Multiplexer::Thinkrail
+    {
+        if backend != "bubblewrap" {
+            eprintln!(
+                "mysbx: multiplexer = \"thinkrail\" is not supported on the `{backend}` backend"
+            );
+            if backend == "nono" {
+                eprintln!("  Landlock denies the nested mounts required by the ThinkRail package");
+            } else {
+                eprintln!("  the ThinkRail web UI needs the host's loopback network");
+            }
+            eprintln!(
+                "  switch the backend to `bubblewrap` for a ThinkRail session, or select another multiplexer"
+            );
+            return EXIT_INFRASTRUCTURE;
+        }
+        if !merged.network.is_shared() {
+            eprintln!(
+                "mysbx: multiplexer = \"thinkrail\" requires network = \"shared\"; got network = \"{}\"",
+                merged.network.name()
+            );
+            eprintln!("  the host browser cannot reach the ThinkRail UI without shared loopback");
+            return EXIT_INFRASTRUCTURE;
+        }
+        if matches!(
+            mode,
+            RunMode::Detached | RunMode::Detachable | RunMode::DetachedInner
+        ) {
+            eprintln!(
+                "mysbx: multiplexer = \"thinkrail\" does not support --detach or --detachable"
+            );
+            eprintln!("  run it in the foreground to see the URL ThinkRail prints at startup");
+            return EXIT_INFRASTRUCTURE;
+        }
+    }
+
     // 4h. the podman backends' `--detach` refusal (detach.md B9,
     // bd myconfig-cad): the container name is per repo root and
     // the argv carries `--replace`, so any later podman run in the
@@ -3927,47 +3967,6 @@ fn sandbox_pipeline(
         eprintln!(
             "  switch the backend to `bubblewrap` for an orca session, or select \
              another multiplexer"
-        );
-        return EXIT_INFRASTRUCTURE;
-    }
-
-    // 4e. the thinkrail multiplexer's backend support — the second
-    // payload that is not a terminal (after orca, 4c), with the
-    // OPPOSITE shape: nothing about it needs a display (the engine
-    // host is a plain Bun HTTP+WS server, no Electron, no Xvfb), but
-    // its interactive surface is INBOUND — the operator opens the
-    // web UI at the `http://localhost:24242` the startup mark prints,
-    // from OUTSIDE the sandbox. Only the shared-netns backends give
-    // that connection a path: `bubblewrap` and `nono` share the host
-    // network namespace (programs.thinkrail.nix pins the same reach-
-    // ability story), while every other backend proxies OUTBOUND
-    // connections only — krun's TSI, microvm-qemu's SLiRP, passt,
-    // and the podman backends' pasta have no inbound port mapping —
-    // so a sandboxed engine host there serves a UI nothing outside
-    // the guest can open: a practically dead session, discovered
-    // only after the sandbox came up. A selection a backend cannot
-    // deliver is refused here — exit 70, before the session clone (a
-    // broken configuration creates nothing) and before the
-    // `--dry-run` early return (a dry run audits the refusal too),
-    // the same accepted-never-ignored rule 4c follows. `run -- CMD`
-    // never starts a session (cli.md D11), so the refusal sees only
-    // the interactive payload's choice.
-    if matches!(payload, bwrap::Payload::Shell)
-        && merged.multiplexer == config::Multiplexer::Thinkrail
-        && backend != "bubblewrap"
-        && backend != "nono"
-    {
-        eprintln!("mysbx: multiplexer = \"thinkrail\" is not supported on the `{backend}` backend");
-        eprintln!(
-            "  the thinkrail payload is the ThinkRail engine host — an HTTP+WS server \\
-             whose web UI the operator opens from OUTSIDE the sandbox; only the \
-             `bubblewrap` and `nono` backends share the host network namespace, \
-             and the other backends proxy outbound connections only, so the UI \
-             would be unreachable — a practically dead session, refused up front"
-        );
-        eprintln!(
-            "  switch the backend to `bubblewrap` or `nono` for a thinkrail \
-             session, or select another multiplexer"
         );
         return EXIT_INFRASTRUCTURE;
     }

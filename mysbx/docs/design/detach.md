@@ -374,6 +374,9 @@ repos with other grants. So:
   line, then the backend argv the inner run would spawn, including
   `MYSBX_DETACHABLE=1`. Nothing is created. `attach --dry-run` prints
   the dtach attach argv.
+- **ThinkRail.** Both `--detach` and `--detachable` are refused (`70`),
+  including with `--dry-run`. ThinkRail prints its actual browser URL
+  once at startup, and dtach can drop that output before attach.
 - **`status` (cli.md D19)** gains a `detached:` section after
   `worktrees:`: one line per entry with the workspace (`live` or the
   session name), the state (`running`, `lost`, or the finished state

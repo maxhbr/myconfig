@@ -447,12 +447,8 @@ let
       # ./nix/orca-entry.nix already started. The key must exist or the
       # `.${cfg.config.multiplexer}` lookup below would throw.
       orca = [ ];
-      # The thinkrail CLI IS directly PATH-usable (a plain Bun binary,
-      # not an AppImage), so a pane can run it — `thinkrail --version`,
-      # a restart after a crash — against the engine host the entry
-      # started. The programs module already ships it on every sandbox's
-      # PATH when enabled; this row covers a host that pins the
-      # package without the module.
+      # The programs module ships the CLI on PATH when enabled; this
+      # row also covers hosts that pin the package without the module.
       thinkrail = [ cfg.thinkrail.package ];
     }
     .${cfg.config.multiplexer}
@@ -1115,8 +1111,9 @@ in
         that runs *inside* the sandbox when
         `config.multiplexer = "thinkrail"`
         (./docs/design/config.md D17): the payload is the ThinkRail
-        engine host (`thinkrail --no-open`), whose web UI the operator
-        opens from a host browser over the shared network namespace —
+        engine host (`thinkrail --no-open --host 127.0.0.1`), whose
+        web UI the operator opens from a host browser. The session
+        must run in the foreground on `bubblewrap` with shared networking —
         see ./nix/thinkrail-entry.nix for the headless/network/state
         decisions.
 

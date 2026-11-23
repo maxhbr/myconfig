@@ -326,11 +326,9 @@ Options:
                 Electron/AppImage payload cannot run under `nono`
                 (bd myconfig-2m8) or `podman-gvisor`, and the
                 selection is refused there, never a broken half-run;
-                `thinkrail` additionally requires the `bubblewrap` or
-                `nono` backend — its web UI is reached INBOUND, and
-                every other backend has no port mapping to the
-                sandbox, so the selection is refused there too.
-                layer selecting it
+                `thinkrail` requires a foreground run on `bubblewrap`
+                with `network = "shared"`. Open the loopback URL
+                printed at startup.
                 Shorthands (bd myconfig-6tt): every value is also its
                 own flag — `--tmux`, `--workmux`, `--herdr`, `--aoe`,
                 `--orca`, `--thinkrail`, `--none` ==

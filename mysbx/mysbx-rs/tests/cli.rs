@@ -14716,119 +14716,129 @@ fn orca_multiplexer_is_refused_on_nono_and_podman_gvisor() {
 }
 
 #[test]
-fn thinkrail_multiplexer_is_refused_on_every_non_shared_netns_backend() {
-    // D17's second server payload (after orca, 4c), with the OPPOSITE
-    // network shape: the thinkrail payload needs no display, but its
-    // interactive surface is INBOUND — the operator opens the web UI
-    // at the `http://localhost:24242` the startup mark prints, from
-    // OUTSIDE the sandbox. Only `bubblewrap` and `nono` share the
-    // host network namespace; the other backends proxy outbound
-    // connections only (gvisor's runsc, krun's TSI, qemu's SLiRP,
-    // pasta), so a sandboxed engine host there serves a UI nothing
-    // outside the guest can open. A selection a backend cannot
-    // deliver is refused — exit 70, before the session clone and
-    // before the dry-run early return, so `--dry-run` audits the
-    // refusal too. The entry is PINNED in these tests: the refusal
-    // is the backend's, not the entry-pin one that would fire first
-    // otherwise.
-    for backend in ["podman-gvisor", "krun"] {
-        let (inv, _, sidecar) = fixture(&format!("thinkrail-refused-{backend}"), &[]);
+fn thinkrail_requires_bubblewrap() {
+    for &backend in mysbx::backends::NAMES {
+        let (inv, _, sidecar) = fixture(&format!("thinkrail-{backend}"), &[]);
         std::fs::write(
             sidecar.join("config.toml"),
-            format!("backend = \"{backend}\"\nmultiplexer = \"thinkrail\"\n"),
+            format!("backend = \"{backend}\"\nnetwork = \"shared\"\n"),
         )
         .unwrap();
-        let mut cmd = spawn_with_args(&inv, &["--verbose", "--dry-run"]);
-        cmd.env(
-            "MYSBX_MUX_ENTRY_THINKRAIL",
-            "/nix/store/aaaa-thinkrail-entry",
-        );
-        let out = cmd.output().expect("failed to spawn the mysbx binary");
-        let stdout = String::from_utf8_lossy(&out.stdout);
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        assert_eq!(
-            out.status.code(),
-            Some(mysbx::EXIT_INFRASTRUCTURE),
-            "{backend}: {stderr}"
-        );
+        let (code, stdout, stderr) =
+            thinkrail_run(&inv, &["--multiplexer", "thinkrail", "--dry-run"]);
+        if backend == "bubblewrap" {
+            assert_eq!(code, 0, "{stderr}");
+            assert!(stdout.contains("--share-net\n"), "{stdout}");
+            assert!(
+                stdout.ends_with(&format!("{THINKRAIL_TEST_ENTRY}\n")),
+                "{stdout}"
+            );
+            continue;
+        }
+        assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "{backend}: {stderr}");
         assert!(
             stderr.contains(&format!(
                 "multiplexer = \"thinkrail\" is not supported on the `{backend}` backend"
             )),
-            "{backend}: the refusal names the value and the backend: {stderr}"
+            "{backend}: {stderr}"
         );
-        assert!(
-            stderr.contains("switch the backend to `bubblewrap` or `nono`"),
-            "{backend}: the remedy is named: {stderr}"
-        );
-        assert!(
-            !stdout.contains("aaaa-thinkrail-entry"),
-            "no argv: {stdout}"
-        );
+        if backend == "nono" {
+            assert!(stderr.contains("Landlock"), "{stderr}");
+        }
+        assert!(stdout.is_empty(), "{backend}: {stdout}");
     }
+}
 
-    // BOTH shared-netns backends ACCEPT thinkrail: bubblewrap and nono
-    // share the host netns, so the inbound web UI has its path — the
-    // divergence from orca, which nono refuses (4c).
-    for backend in ["bubblewrap", "nono"] {
-        let (inv, _, sidecar) = fixture(&format!("thinkrail-accepted-{backend}"), &[]);
+const THINKRAIL_TEST_ENTRY: &str = "/nix/store/aaaa-thinkrail-entry";
+
+fn thinkrail_run(inv: &Invocation, args: &[&str]) -> (i32, String, String) {
+    let out = spawn_with_args(inv, args)
+        .env("MYSBX_MUX_ENTRY_THINKRAIL", THINKRAIL_TEST_ENTRY)
+        .output()
+        .expect("failed to spawn the mysbx binary");
+    (
+        out.status.code().unwrap(),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+#[test]
+fn thinkrail_refuses_non_shared_network_before_cloning() {
+    for (name, value) in [
+        ("none", "\"none\""),
+        ("proxy-only", "\"proxy-only\""),
+        ("public", "\"public\""),
+        ("false", "false"),
+    ] {
+        let (inv, _, sidecar) = fixture(&format!("thinkrail-network-{name}"), &[]);
         std::fs::write(
             sidecar.join("config.toml"),
-            format!("backend = \"{backend}\"\nmultiplexer = \"thinkrail\"\n"),
+            format!("backend = \"bubblewrap\"\nmultiplexer = \"thinkrail\"\nnetwork = {value}\n"),
         )
         .unwrap();
-        let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
-        cmd.env(
-            "MYSBX_MUX_ENTRY_THINKRAIL",
-            "/nix/store/aaaa-thinkrail-entry",
-        );
-        let out = cmd.output().expect("failed to spawn the mysbx binary");
-        let stdout = String::from_utf8_lossy(&out.stdout);
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        assert_eq!(out.status.code(), Some(0), "{backend}: stderr: {stderr}");
-        assert!(
-            stdout.ends_with("/nix/store/aaaa-thinkrail-entry\n"),
-            "{backend}: the thinkrail entry is the payload: {stdout}"
-        );
+        for args in [
+            &["--session", "review"][..],
+            &["--session", "review", "--dry-run"][..],
+        ] {
+            let (code, stdout, stderr) = thinkrail_run(&inv, args);
+            assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "{name}: {stderr}");
+            assert!(
+                stderr.contains("requires network = \"shared\""),
+                "{name}: {stderr}"
+            );
+            assert!(stdout.is_empty(), "{stdout}");
+            assert!(!sidecar.join(mysbx::session::CLONES_DIR).exists());
+        }
     }
+}
 
-    // The `--multiplexer thinkrail` FLAG path (cli.md D14) hits the
-    // same refusal — the flag is merged (3a) before the backend
-    // check, so it grants no exception a configuration would not
-    // have.
-    let (inv, _, sidecar) = fixture("thinkrail-flag-refused", &[]);
-    std::fs::write(sidecar.join("config.toml"), "backend = \"krun\"\n").unwrap();
-    let (code, _stdout, stderr) =
-        run_binary_with(&inv, &["--multiplexer", "thinkrail", "--dry-run"]);
-    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
-    assert!(
-        stderr.contains("is not supported on the `krun` backend"),
-        "the flag selection is refused like a config one: {stderr}"
-    );
+#[test]
+fn thinkrail_refuses_detached_startup() {
+    let (inv, _, sidecar) = fixture("thinkrail-detach", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nmultiplexer = \"thinkrail\"\n",
+    )
+    .unwrap();
+    for args in [
+        &["--detach"][..],
+        &["--detach", "--dry-run"][..],
+        &["--detachable", "--dry-run"][..],
+    ] {
+        let (code, stdout, stderr) = thinkrail_run(&inv, args);
+        assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "{args:?}: {stderr}");
+        assert!(
+            stderr.contains("does not support --detach or --detachable"),
+            "{stderr}"
+        );
+        assert!(stdout.is_empty(), "{stdout}");
+    }
+}
 
-    // `run -- CMD` never starts a session (cli.md D11): the refusal
-    // guards the INTERACTIVE payload's choice only, so a one-shot on
-    // a refused backend is untouched by a thinkrail multiplexer key.
-    let (inv, _, sidecar) = fixture("thinkrail-run-unaffected", &["run", "--"]);
+#[test]
+fn thinkrail_does_not_affect_a_podman_one_shot() {
+    let (inv, _, sidecar) = fixture("thinkrail-run-unaffected", &[]);
     std::fs::write(
         sidecar.join("config.toml"),
         "backend = \"podman-gvisor\"\nmultiplexer = \"thinkrail\"\n",
     )
     .unwrap();
-    let (code, stdout, stderr) = run_binary_with(&inv, &["run", "--dry-run", "--", "true"]);
-    assert_eq!(code, 0, "stderr: {stderr}");
+    let out = spawn_with_args(&inv, &["run", "--dry-run", "--", "true"])
+        .env("MYSBX_PODMAN", "/synth/bin/podman")
+        .env("MYSBX_PODMAN_IMAGE", "localhost/test:latest")
+        .env("MYSBX_MUX_ENTRY_THINKRAIL", THINKRAIL_TEST_ENTRY)
+        .output()
+        .expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "{stderr}");
+    assert!(stdout.starts_with("/synth/bin/podman\n"), "{stdout}");
     assert!(
-        stdout.starts_with("bwrap\n"),
-        "the one-shot argv is built: {stdout}"
+        stdout.ends_with("localhost/test:latest\ntrue\n"),
+        "{stdout}"
     );
-    assert!(
-        !stdout.contains("aaaa-thinkrail-entry"),
-        "no thinkrail entry payload in a run argv: {stdout}"
-    );
-    assert!(
-        stdout.ends_with("true\n"),
-        "the one-shot payload is the command: {stdout}"
-    );
+    assert!(!stdout.contains(THINKRAIL_TEST_ENTRY), "{stdout}");
 }
 
 #[test]

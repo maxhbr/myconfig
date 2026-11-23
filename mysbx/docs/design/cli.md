@@ -428,12 +428,10 @@ exit `70` with the `mysbx: ` message naming the value and the missing
 variable — never a silent plain shell. `orca` on a non-`bubblewrap`
 backend is refused the same way (D17's backend rule, bd myconfig-2m8):
 the flag grants no exception a configuration would not have.
-`thinkrail` on any backend other than `bubblewrap`/`nono` is refused
-with the mirror-image rule (D17): same exit `70`, same audit by
-`--dry-run`. The flag
-grants no access a
-configuration would not have: it selects a payload from mysbx's own
-closure either way.
+`thinkrail` similarly requires a foreground run on `bubblewrap` with
+`network = "shared"` (D17): same exit `70`, same audit by `--dry-run`.
+The flag grants no access a configuration would not have: it selects
+a payload from mysbx's own closure either way.
 
 **No verb accepts it.** `run -- CMD` never starts a session (D11), so
 `--multiplexer` is a usage error there — accept-and-ignore would let an

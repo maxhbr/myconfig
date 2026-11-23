@@ -163,6 +163,28 @@ in
     };
   };
 
+  mysbx-thinkrail-entry-test =
+    let
+      thinkrail = pkgs.writeShellScriptBin "thinkrail" ''
+        set -euo pipefail
+        test "$#" -eq 4
+        test "$1" = --no-open
+        test "$2" = --host
+        test "$3" = 127.0.0.1
+        test "$4" = "$PWD"
+        test "$THINKRAIL_PORT" = 24243
+      '';
+      entry = pkgs.callPackage ./thinkrail-entry.nix { inherit thinkrail; };
+    in
+    pkgs.runCommand "mysbx-thinkrail-entry-test" { } ''
+      export TMUX_TMPDIR="$TMPDIR/mux"
+      export THINKRAIL_HOST=0.0.0.0 THINKRAIL_PORT=24243
+      mkdir "project with spaces"
+      cd "project with spaces"
+      ${lib.getExe entry}
+      touch "$out"
+    '';
+
   # The launcher's patched library runs real passthrough/server tests without KVM.
   mysbx-libkrun-readdirplus-test = pkgs.callPackage ./libkrun.nix { };
 

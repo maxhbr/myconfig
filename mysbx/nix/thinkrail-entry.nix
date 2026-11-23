@@ -14,11 +14,8 @@
 # in-process and serves the UI from it. The interactive payload of the
 # sandbox is therefore the engine host itself, and the operator reaches
 # it with the URL it prints on readiness (`thinkrail →
-# http://<host>:<port>`), opened in a browser OUTSIDE the sandbox over
-# the shared network namespace (config.md D5/D9 — `network` defaults to
-# `true`; a `network = false` layer makes the UI unreachable from
-# outside the sandbox, which is a refused-for-practical-purposes
-# session, not a sandboxed escape).
+# http://127.0.0.1:<port>`). The launcher requires a foreground run
+# on bubblewrap with a shared network namespace (config.md D17).
 #
 # The display decision: there is none. No Electron, no Xvfb, no
 # `$DISPLAY` — the engine host is a plain Bun HTTP server, and the
@@ -27,22 +24,10 @@
 # `xdg-open` call, which would be a no-op inside the sandbox anyway
 # (mysbx attaches no host display and no browser exists in the payload).
 #
-# The endpoint knobs (source-verified against thinkrail 0.3.2,
-# apps/cli/src/args.ts — flags > env > defaults) are read by the CLI
-# from the environment, so they are config-layer surface, not argv:
-# mysbx forwards only its fixed allowlist, so set them in a layer's
-# `[env]` table:
-#
-#   THINKRAIL_PORT  pin the port (unset: 24242, or a free-port fallback
-#                   when 24242 is taken — the startup mark on stdout is
-#                   the source of truth). Pin it when the HOST itself
-#                   runs thinkrail: the sandbox shares the host
-#                   loopback, so two unpinned instances would race for
-#                   24242 and the sandboxed one would silently move.
-#   THINKRAIL_HOST  the address the server binds (unset: `localhost`).
-#                   A browser on another machine needs the LAN/Tailscale
-#                   name here, exactly like `THINKRAIL_HOST` host-side
-#                   (programs.thinkrail.nix).
+# Set THINKRAIL_PORT in the layer's [env] to request a port. ThinkRail
+# can fall back to a free port, so use the URL it prints. The CLI's
+# explicit --host overrides THINKRAIL_HOST (apps/cli/src/args.ts):
+# the IDE has no application authentication and must bind to loopback.
 #
 # Analytics: the programs module exports `THINKRAIL_NO_ANALYTICS` via its
 # config.env when enabled, which applies to every mysbx sandbox of that
@@ -94,7 +79,7 @@ writeShellApplication {
     # exit code propagates unchanged (../docs/design/cli.md D8).
     # `--no-open`: the browser opens on the operator's machine, not in
     # the sandbox (see the header).
-    exec ${lib.getExe thinkrail} --no-open "$PWD"
+    exec ${lib.getExe thinkrail} --no-open --host 127.0.0.1 "$PWD"
   '';
 
   meta = {

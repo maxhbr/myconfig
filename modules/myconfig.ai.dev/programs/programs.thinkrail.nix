@@ -11,9 +11,9 @@
 # from a host browser. That endpoint is reachable from the host only on
 # the shared-netns backends (`bubblewrap`, `nono`): the VM backends
 # (krun's TSI, microvm-qemu's SLiRP) proxy outbound connections only and
-# have no inbound port mapping, so a sandboxed `thinkrail` there serves a
-# UI nothing outside the guest can open — the same network-shape
-# limitation `orca` has (../../../mysbx/docs/design/config.md D17).
+# have no inbound port mapping. The managed `thinkrail` multiplexer
+# additionally refuses `nono` because the Linux package needs nested
+# mounts, and pins its listener to loopback (mysbx config.md D17).
 {
   config,
   lib,
