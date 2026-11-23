@@ -953,16 +953,26 @@ in
         # NOTE: NixOS' own `requiredPackages` (coreutils-full, curl, openssh,
         # which, ...) is load-bearing for a bootable system and deliberately
         # NOT asserted absent — only the module's discretionary additions are.
-        assertion = builtins.all (p: !(builtins.elem p.outPath guestPkgPaths)) (
-          with pkgs;
-          [
-            fd
-            file
-            gnumake
-            tree
-            unzip
-          ]
-        );
+        # The shared cross-tier hook (`myconfig.ai.dev.sandboxTools`)
+        # is equally out of scope: its whole point is that a feature module
+        # (e.g. programs.pi-coding-agent's `fd`, bd d1c30f056c) can opt a
+        # tool into EVERY sandbox tier, so hook packages are subtracted
+        # before the forbidden set is asserted.
+        assertion =
+          let
+            hookPkgPaths = map (p: p.outPath) enabledCfg.myconfig.ai.dev.sandboxTools.extraPackages;
+            discretionaryGuestPkgPaths = builtins.filter (p: !(builtins.elem p hookPkgPaths)) guestPkgPaths;
+          in
+          builtins.all (p: !(builtins.elem p.outPath discretionaryGuestPkgPaths)) (
+            with pkgs;
+            [
+              fd
+              file
+              gnumake
+              tree
+              unzip
+            ]
+          );
         message = "the guest still carries a discretionary package with no documented in-guest consumer";
       }
       {

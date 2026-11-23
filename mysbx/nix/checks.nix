@@ -2117,165 +2117,171 @@ in
         ];
       }
       ''
-                fail() {
-                  echo "mysbx-default-agent-test: $*" >&2
-                  exit 1
-                }
+        fail() {
+          echo "mysbx-default-agent-test: $*" >&2
+          exit 1
+        }
 
-                herdr_entry='${lib.getExe herdrEntry}'
-                workmux_entry='${lib.getExe workmuxEntry}'
-                for e in "$herdr_entry" "$workmux_entry"; do
-                  test -x "$e" || fail "entry not executable: $e"
-                  bash -n "$e" || fail "bash -n rejects $e"
-                done
+        herdr_entry='${lib.getExe herdrEntry}'
+        workmux_entry='${lib.getExe workmuxEntry}'
+        for e in "$herdr_entry" "$workmux_entry"; do
+          test -x "$e" || fail "entry not executable: $e"
+          bash -n "$e" || fail "bash -n rejects $e"
+        done
 
-                # (1a) The env gate, in both entries.
-                for e in "$herdr_entry" "$workmux_entry"; do
-                  grep -qF '[ -n "''${MYSBX_AGENT_KIND:-}" ] && [ -n "''${MYSBX_AGENT_COMMAND:-}" ]' "$e" \
-                    || fail "the agent block of $e is not gated on the resolved-agent env"
-                done
+        # (1a) The env gate, in both entries.
+        for e in "$herdr_entry" "$workmux_entry"; do
+          grep -qF '[ -n "''${MYSBX_AGENT_KIND:-}" ] && [ -n "''${MYSBX_AGENT_COMMAND:-}" ]' "$e" \
+            || fail "the agent block of $e is not gated on the resolved-agent env"
+        done
 
-                # (1b) Quoted reads, never a baked command: the only
-                # spellings of the command and the args are the env
-                # variables, and no agent binary name is baked in.
-                for e in "$herdr_entry" "$workmux_entry"; do
-                  grep -q 'MYSBX_AGENT_COMMAND' "$e" || fail "$e does not read MYSBX_AGENT_COMMAND"
-                  grep -q 'MYSBX_AGENT_ARGC' "$e" || fail "$e does not read MYSBX_AGENT_ARGC"
-                  grep -qF 'MYSBX_AGENT_ARG$agent_i' "$e" || fail "$e does not walk MYSBX_AGENT_ARG<n>"
-                  grep -qF '"''${!agent_arg_var}"' "$e" || fail "$e does not use bash indirection for the args"
-                  if grep -qE '(^|[^[:alnum:]_-])pi([^[:alnum:]_-]|$)' "$e"; then
-                    fail "$e bakes a literal agent name (agent-agnostic since bd myconfig-fv4h)"
-                  fi
-                  if grep -q 'eval ' "$e"; then
-                    fail "$e evals (the argv must arrive as quoted env reads)"
-                  fi
-                done
+        # (1b) Quoted reads, never a baked command: the only
+        # spellings of the command and the args are the env
+        # variables, and no agent binary name is baked in.
+        for e in "$herdr_entry" "$workmux_entry"; do
+          grep -q 'MYSBX_AGENT_COMMAND' "$e" || fail "$e does not read MYSBX_AGENT_COMMAND"
+          grep -q 'MYSBX_AGENT_ARGC' "$e" || fail "$e does not read MYSBX_AGENT_ARGC"
+          grep -qF 'MYSBX_AGENT_ARG$agent_i' "$e" || fail "$e does not walk MYSBX_AGENT_ARG<n>"
+          grep -qF '"''${!agent_arg_var}"' "$e" || fail "$e does not use bash indirection for the args"
+          if grep -qE '(^|[^[:alnum:]_-])pi([^[:alnum:]_-]|$)' "$e"; then
+            fail "$e bakes a literal agent name (agent-agnostic since bd myconfig-fv4h)"
+          fi
+          if grep -q 'eval ' "$e"; then
+            fail "$e evals (the argv must arrive as quoted env reads)"
+          fi
+        done
 
-                # The env-gated agent block of the herdr entry, as it
-                # renders: from the gate line to the block's closing
-                # `fi` at the loop tail.
-                agent_gate_block="$(sed -n '/MYSBX_AGENT_KIND:-/,/^fi$/p' "$herdr_entry")"
-                # The gate still names `MYSBX_AGENT_COMMAND` (the CLI
-                # emits it for BOTH entries), but the start itself must
-                # NOT forward it — herdr derives the executable from
-                # `--kind` and would otherwise run `hermes hermes`.
-                printf '%s\n' "$agent_gate_block" | grep -q 'MYSBX_AGENT_COMMAND' \
-                  || fail "the herdr agent block does not read the resolved command"
-                printf '%s\n' "$agent_gate_block" | grep -q 'MYSBX_AGENT_COMMAND"' \
-                  && fail "the herdr agent start forwards MYSBX_AGENT_COMMAND as argv (herdr derives the executable from --kind; the workmux entry is the one that needs the command)"
+        # The env-gated agent block of the herdr entry, as it
+        # renders: from the gate line to the block's closing
+        # `fi` at the loop tail.
+        agent_gate_block="$(sed -n '/MYSBX_AGENT_KIND:-/,/^fi$/p' "$herdr_entry")"
+        # The gate still names `MYSBX_AGENT_COMMAND` (the CLI
+        # emits it for BOTH entries), but the start itself must
+        # NOT forward it — herdr derives the executable from
+        # `--kind` and would otherwise run `hermes hermes`.
+        printf '%s\n' "$agent_gate_block" | grep -q 'MYSBX_AGENT_COMMAND' \
+          || fail "the herdr agent block does not read the resolved command"
+        printf '%s\n' "$agent_gate_block" | grep -q 'MYSBX_AGENT_COMMAND"' \
+          && fail "the herdr agent start forwards MYSBX_AGENT_COMMAND as argv (herdr derives the executable from --kind; the workmux entry is the one that needs the command)"
 
-                # (1c) herdr keeps the 1s retry pacing of the agent start
-                # (nono token bucket, bd myconfig-27o).
-                printf '%s\n' "$agent_gate_block" | grep -q 'sleep 1' \
-                  || fail "the herdr agent start retry is not paced at 1s"
+        # (1c) herdr keeps the 1s retry pacing of the agent start
+        # (nono token bucket, bd myconfig-27o).
+        printf '%s\n' "$agent_gate_block" | grep -q 'sleep 1' \
+          || fail "the herdr agent start retry is not paced at 1s"
 
-                # (2) herdr, behaviorally: extract the entry's OWN agent
-                # block (from the env gate to its closing fi, the innermost
-                # `pane_id` guard included) and run it with a stub `herdr`
-                # that records its argv.
-                agent_block="$agent_gate_block"
-                printf '%s\n' "$agent_block" | grep -q 'herdr agent start' \
-                  || fail "the extracted herdr block does not start the agent"
-                stub_dir="$(mktemp -d)"
-                cat > "$stub_dir/herdr" <<'STUB'
-        #!/usr/bin/env bash
-        printf '%s\n' "$@" >> "''${HERDR_CALLS:?}"
-        STUB
-                chmod +x "$stub_dir/herdr"
+        # (2) herdr, behaviorally: extract the entry's OWN agent
+        # block (from the env gate to its closing fi, the innermost
+        # `pane_id` guard included) and run it with a stub `herdr`
+        # that records its argv.
+        agent_block="$agent_gate_block"
+        printf '%s\n' "$agent_block" | grep -q 'herdr agent start' \
+          || fail "the extracted herdr block does not start the agent"
+        stub_dir="$(mktemp -d)"
+        # The shebang must name the STORE bash: the build sandbox
+        # has no /usr/bin/env, so a `#!/usr/bin/env bash` stub
+        # fails with `bad interpreter` (rc 126) — silently,
+        # because the block under test redirects the call's
+        # stdout/stderr — and the check then reports the stub
+        # was never called. `pkgs.runtimeShell` is the same
+        # bash the block's own `bash -c` runs under.
+        stub_herdr="$stub_dir/herdr"
+        printf '#!%s\n' "${pkgs.runtimeShell}" > "$stub_herdr"
+        printf "printf '%%s\\n' \"\$@\" >> \"\''${HERDR_CALLS:?}\"\n" >> "$stub_herdr"
+        chmod +x "$stub_herdr"
 
-                mkdir -p "$(mktemp -d)/ws"
-                htmp="$(mktemp -d)"
-                calls="$htmp/calls"
-                # WITH the resolved agent: kind, pane and args verbatim.
-                (
-                  export PATH="$stub_dir:$PATH"
-                  export HERDR_CALLS="$calls"
-                  export MYSBX_AGENT_KIND=fake-agent
-                  export MYSBX_AGENT_COMMAND=fake-agent
-                  export MYSBX_AGENT_ARGC=2
-                  export MYSBX_AGENT_ARG1=--continue
-                  export MYSBX_AGENT_ARG2="two words"
-                  export pane_id=%42
-                  cd "$(mktemp -d)" && bash -c "$agent_block"
-                ) || fail "the herdr agent block failed with the env set"
-                grep -qxF -- 'fake-agent' "$calls" || fail "the agent start does not name the kind"
-                grep -qxF -- '--kind' "$calls" || fail "the agent start does not pass --kind"
-                grep -qxF -- '%42' "$calls" || fail "the agent start does not target the captured pane"
-                grep -qxF -- '--continue' "$calls" || fail "the first arg was not forwarded"
-                grep -qxF -- 'two words' "$calls" || fail "the second arg was not forwarded verbatim"
-                # The command itself must NOT appear after `--`: the
-                # stub call line ends with the args, and `fake-agent`
-                # appears exactly twice (the kind NAME and --kind value),
-                # never as a forwarded argv element.
-                [ "$(grep -cxF -- 'fake-agent' "$calls")" -eq 2 ] \
-                  || fail "the agent start forwarded the command as argv (expected exactly the kind name and --kind value, got $(grep -cxF -- 'fake-agent' "$calls"))"
-                # WITHOUT the resolved agent: the stub is never called.
-                rm -f "$calls"
-                (
-                  export PATH="$stub_dir:$PATH"
-                  export HERDR_CALLS="$calls"
-                  unset MYSBX_AGENT_KIND MYSBX_AGENT_COMMAND MYSBX_AGENT_ARGC \
-                        MYSBX_AGENT_ARG1 MYSBX_AGENT_ARG2
-                  export pane_id=%42
-                  cd "$(mktemp -d)" && bash -c "$agent_block"
-                ) || fail "the herdr agent block failed with the env unset"
-                test ! -e "$calls" || fail "herdr was called although no agent resolved"
+        mkdir -p "$(mktemp -d)/ws"
+        htmp="$(mktemp -d)"
+        calls="$htmp/calls"
+        # WITH the resolved agent: kind, pane and args verbatim.
+        (
+          export PATH="$stub_dir:$PATH"
+          export HERDR_CALLS="$calls"
+          export MYSBX_AGENT_KIND=fake-agent
+          export MYSBX_AGENT_COMMAND=fake-agent
+          export MYSBX_AGENT_ARGC=2
+          export MYSBX_AGENT_ARG1=--continue
+          export MYSBX_AGENT_ARG2="two words"
+          export pane_id=%42
+          cd "$(mktemp -d)" && bash -c "$agent_block"
+        ) || fail "the herdr agent block failed with the env set"
+        grep -qxF -- 'fake-agent' "$calls" || fail "the agent start does not name the kind"
+        grep -qxF -- '--kind' "$calls" || fail "the agent start does not pass --kind"
+        grep -qxF -- '%42' "$calls" || fail "the agent start does not target the captured pane"
+        grep -qxF -- '--continue' "$calls" || fail "the first arg was not forwarded"
+        grep -qxF -- 'two words' "$calls" || fail "the second arg was not forwarded verbatim"
+        # The command itself must NOT appear after `--`: the
+        # stub call line ends with the args, and `fake-agent`
+        # appears exactly twice (the kind NAME and --kind value),
+        # never as a forwarded argv element.
+        [ "$(grep -cxF -- 'fake-agent' "$calls")" -eq 2 ] \
+          || fail "the agent start forwarded the command as argv (expected exactly the kind name and --kind value, got $(grep -cxF -- 'fake-agent' "$calls"))"
+        # WITHOUT the resolved agent: the stub is never called.
+        rm -f "$calls"
+        (
+          export PATH="$stub_dir:$PATH"
+          export HERDR_CALLS="$calls"
+          unset MYSBX_AGENT_KIND MYSBX_AGENT_COMMAND MYSBX_AGENT_ARGC \
+                MYSBX_AGENT_ARG1 MYSBX_AGENT_ARG2
+          export pane_id=%42
+          cd "$(mktemp -d)" && bash -c "$agent_block"
+        ) || fail "the herdr agent block failed with the env unset"
+        test ! -e "$calls" || fail "herdr was called although no agent resolved"
 
-                # (3) workmux, behaviorally: a real tmux server on a private
-                # socket, a stub workmux and the fake agent on PATH, the
-                # entry exec'd as the sandbox would (the final attach fails
-                # without a terminal — AFTER the bootstrap and the agent
-                # split, so its exit code is irrelevant; the pane's work is
-                # what is asserted).
-                wtmp="$(mktemp -d)"
-                mkdir -p "$wtmp/home" "$wtmp/socket"
-                export AGENT_PATH="${
-                  lib.makeBinPath [
-                    stubs.workmux
-                    fakeAgent
-                  ]
-                }"
-                # WITH the resolved agent: the split pane receives the
-                # command and runs it (the marker appears with the args).
-                env -i \
-                  PATH="$AGENT_PATH" \
-                  HOME="$wtmp/home" \
-                  TMUX_TMPDIR="$wtmp/socket" \
-                  AGENT_MARKER="$wtmp/marker" \
-                  MYSBX_AGENT_KIND=fake-agent \
-                  MYSBX_AGENT_COMMAND=fake-agent \
-                  MYSBX_AGENT_ARGC=1 \
-                  MYSBX_AGENT_ARG1=--continue \
-                  "$workmux_entry" >/dev/null 2>&1 || true
-                for _ in $(seq 1 50); do
-                  test -e "$wtmp/marker" && break
-                  sleep 0.1
-                done
-                test -e "$wtmp/marker" \
-                  || fail "the split pane did not run the resolved agent command"
-                grep -qxF -- '--continue' "$wtmp/marker" \
-                  || fail "the split pane did not receive the agent args verbatim"
+        # (3) workmux, behaviorally: a real tmux server on a private
+        # socket, a stub workmux and the fake agent on PATH, the
+        # entry exec'd as the sandbox would (the final attach fails
+        # without a terminal — AFTER the bootstrap and the agent
+        # split, so its exit code is irrelevant; the pane's work is
+        # what is asserted).
+        wtmp="$(mktemp -d)"
+        mkdir -p "$wtmp/home" "$wtmp/socket"
+        export AGENT_PATH="${
+          lib.makeBinPath [
+            stubs.workmux
+            fakeAgent
+          ]
+        }"
+        # WITH the resolved agent: the split pane receives the
+        # command and runs it (the marker appears with the args).
+        env -i \
+          PATH="$AGENT_PATH" \
+          HOME="$wtmp/home" \
+          TMUX_TMPDIR="$wtmp/socket" \
+          AGENT_MARKER="$wtmp/marker" \
+          MYSBX_AGENT_KIND=fake-agent \
+          MYSBX_AGENT_COMMAND=fake-agent \
+          MYSBX_AGENT_ARGC=1 \
+          MYSBX_AGENT_ARG1=--continue \
+          "$workmux_entry" >/dev/null 2>&1 || true
+        for _ in $(seq 1 50); do
+          test -e "$wtmp/marker" && break
+          sleep 0.1
+        done
+        test -e "$wtmp/marker" \
+          || fail "the split pane did not run the resolved agent command"
+        grep -qxF -- '--continue' "$wtmp/marker" \
+          || fail "the split pane did not receive the agent args verbatim"
 
-                # WITHOUT the resolved agent: a fresh socket, no split, no
-                # marker — the pre-D32 behavior.
-                rm -rf "$wtmp/socket" "$wtmp/marker"
-                mkdir -p "$wtmp/socket"
-                env -i \
-                  PATH="$AGENT_PATH" \
-                  HOME="$wtmp/home" \
-                  TMUX_TMPDIR="$wtmp/socket" \
-                  AGENT_MARKER="$wtmp/marker" \
-                  "$workmux_entry" >/dev/null 2>&1 || true
-                sleep 1
-                test ! -e "$wtmp/marker" \
-                  || fail "an agent ran although no agent resolved"
-                for sess in $(tmux -S "$wtmp/socket/socket" list-sessions -F '#{session_name}' 2>/dev/null); do
-                  started="$(tmux -S "$wtmp/socket/socket" show-options -t "=$sess:" -qv @workmux_agent_started 2>/dev/null)"
-                  test "$started" != 1 \
-                    || fail "@workmux_agent_started was set although no agent resolved"
-                done
+        # WITHOUT the resolved agent: a fresh socket, no split, no
+        # marker — the pre-D32 behavior.
+        rm -rf "$wtmp/socket" "$wtmp/marker"
+        mkdir -p "$wtmp/socket"
+        env -i \
+          PATH="$AGENT_PATH" \
+          HOME="$wtmp/home" \
+          TMUX_TMPDIR="$wtmp/socket" \
+          AGENT_MARKER="$wtmp/marker" \
+          "$workmux_entry" >/dev/null 2>&1 || true
+        sleep 1
+        test ! -e "$wtmp/marker" \
+          || fail "an agent ran although no agent resolved"
+        for sess in $(tmux -S "$wtmp/socket/socket" list-sessions -F '#{session_name}' 2>/dev/null); do
+          started="$(tmux -S "$wtmp/socket/socket" show-options -t "=$sess:" -qv @workmux_agent_started 2>/dev/null)"
+          test "$started" != 1 \
+            || fail "@workmux_agent_started was set although no agent resolved"
+        done
 
-                mkdir "$out"
+        mkdir "$out"
       '';
 
   #   mysbx-default-agent-test
