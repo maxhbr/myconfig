@@ -45,8 +45,8 @@
 #
 # Feature modules may add to the list too, gated behind their own enable
 # option, when their tool is wanted in every tier and belongs to no single
-# one: ../../programs/programs.hunk, ../../programs/programs.agent-browser and
-# ../../skills/playwright-cli append their package this way, so the reviewing
+# one: ../../../modules/myconfig.ai.dev/programs/programs.hunk, ../../../modules/myconfig.ai.dev/programs/programs.agent-browser and
+# ../../../modules/myconfig.ai.dev/skills/playwright-cli append their package this way, so the reviewing
 # and browser-automation tools exist wherever an agent produces a changeset.
 { lib, ... }:
 {

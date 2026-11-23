@@ -9,9 +9,9 @@ Status: agreed. This is the decision record for plan.md phase 2e (bd
 myconfig-o6z): whether `mysbx` grows a workspace mode beside the implicit
 live repo of [config.md](./config.md) D13, what its configuration surface
 is, and what the result handoff is. The gvisor tier
-(`../../myconfig.ai.gvisor-agent-sandbox/docs/spec.md` §9) is the
+(`../../../../modules/myconfig.ai.dev/sandboxes/myconfig.ai.gvisor-agent-sandbox/docs/spec.md` §9) is the
 precedent for the handoff mechanics; the microvm tier
-(`../../myconfig.ai.dev/sandboxes/myconfig.ai.microvm/docs/workspace-layout.md`)
+(`../../../modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/docs/workspace-layout.md`)
 is the precedent for keeping clones beside the repo.
 
 Vocabulary, on top of [`../../CONTEXT.md`](../../CONTEXT.md):

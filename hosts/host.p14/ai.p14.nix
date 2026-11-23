@@ -34,7 +34,7 @@
             litellmUrl = "http://localhost:4000";
           };
 
-          # The `mysbx` sandboxing CLI (modules/myconfig.ai.dev/mysbx/README.md).
+          # The `mysbx` sandboxing CLI (mysbx/README.md).
           # Like the other sandbox tiers it is enabled EXPLICITLY per host and
           # never implicitly through the broad `myconfig.ai.llmops.enable`; it only
           # puts the CLI on PATH.

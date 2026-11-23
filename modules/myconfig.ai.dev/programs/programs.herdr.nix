@@ -5,7 +5,7 @@
 # (https://herdr.dev, nixpkgs `legacyPackages.x86_64-linux.herdr`). It is a
 # companion to the agentic coding harnesses, so it is installed whenever at
 # least one agentic coding agent is enabled on this host. The harness set
-# mirrors `../../skills/default.nix` (opencode, codex, claude-code,
+# mirrors `../../../modules/myconfig.ai.dev/skills/default.nix` (opencode, codex, claude-code,
 # pi-coding-agent) and is extended with the remaining agentic terminal coding
 # agents (`qwen-code`, `github-copilot-cli`).
 #
@@ -57,7 +57,7 @@ let
   # version, so the skill stays in sync with the CLI instead of being a
   # stale vendored copy. Registered in the
   # `myconfig.ai.dev.skills.handcrafted` registry, which
-  # ../../skills/default.nix deploys to every enabled agent harness. Implicitly
+  # ../../../modules/myconfig.ai.dev/skills/default.nix deploys to every enabled agent harness. Implicitly
   # enabled by herdr — there is no separate enable flag.
   herdrSkillSrc = pkgs.runCommand "herdr-skill" { nativeBuildInputs = [ herdr ]; } ''
     mkdir -p $out
@@ -640,7 +640,7 @@ let
   # The coding-agent CLIs this repo can install on the host, mapped from
   # their `myconfig.ai.<name>.enable` flag to the package attribute the
   # matching host wrapper uses. Mirrors the `agentPackagesByFlag` set in
-  # modules/myconfig.ai.dev/mysbx/podman.nix so the `agent-qemu-herdr` guest
+  # mysbx/podman.nix so the `agent-qemu-herdr` guest
   # carries exactly the same agents the host (and the mysbx container
   # image) offers.
   agentPackagesByFlag = {
@@ -680,7 +680,7 @@ let
   #
   # Workspace handling, credential forwarding and the refuse-$HOME guard are
   # identical to `agent-qemu-pi`. See
-  # ../../sandboxes/myconfig.ai.qemu-agent-sandbox/builders.nix
+  # ../../../modules/myconfig.ai.dev/sandboxes/myconfig.ai.qemu-agent-sandbox/builders.nix
   # (`mkAgentQemuHerdrRunner`) and
   # ../../docs/agent-qemu-herdr.README.md.
   agent-qemu-herdr = pkgs.writeShellApplication {
@@ -847,7 +847,7 @@ in
 {
   config = lib.mkIf agenticCodingEnabled {
     # Install the herdr skill for every enabled agent harness (see
-    # ../../skills/default.nix); string form (the derivation's outPath), same
+    # ../../../modules/myconfig.ai.dev/skills/default.nix); string form (the derivation's outPath), same
     # convention as the workmux and simple-english skill registrations.
     myconfig.ai.dev.skills.handcrafted.herdr = "${herdrSkillSrc}";
 

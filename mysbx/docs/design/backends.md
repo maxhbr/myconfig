@@ -1589,7 +1589,7 @@ The division of labor across the layers:
 - BUILD time (./nix/mysbx.nix): `enabledBackends` is validated
   against the crate's universe and pinned; a disabled backend's
   closure inputs are simply not built.
-- RUN time (../mysbx-rs): both backend validation sites (the early
+- RUN time (../../../mysbx-rs): both backend validation sites (the early
   `--backend` flag check and the authoritative merged-config match,
   which covers the `--krun`/`--podman-krun`/… shorthands) consult
   `doctor::enabled_backends()` and refuse with the message above,

@@ -41,7 +41,7 @@
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
-repo=$(cd "$here/../../../.." && pwd)
+repo=$(cd "$here/../.." && pwd)
 
 fail() {
     printf 'FAIL %s — %s\n' "$1" "$2" >&2
@@ -76,7 +76,7 @@ kernel=$(nix build --impure --no-link --print-out-paths --out-link /tmp/mysbx-ch
   let
     flake = builtins.getFlake ("git+file://" + toString '"$repo"');
     np = flake.inputs.nixpkgs.legacyPackages.x86_64-linux;
-  in np.callPackage '"$repo"'/modules/myconfig.ai.dev/mysbx/nix/microvm-qemu-kernel.nix {
+  in np.callPackage '"$repo"'/mysbx/nix/microvm-qemu-kernel.nix {
     kernelPackages = np.linuxKernel.packages.linux_6_12;
   }')/bzImage
 

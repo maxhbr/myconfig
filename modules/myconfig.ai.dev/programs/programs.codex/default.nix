@@ -17,18 +17,18 @@ let
   # a worktree pane) whenever workmux is enabled.
   workmuxDevTools = lib.optional osconfig.myconfig.ai.dev.workmux.enable osconfig.myconfig.ai.dev.workmux.package;
 
-  # --- mysbx integration (../../mysbx) -------------------------------------
+  # --- mysbx integration (../../../../mysbx) -------------------------------------
   #
   # The same three-piece wiring pi/opencode/claude-code use
   # (../../programs/programs.{pi-coding-agent,opencode,claude-code}):
   #
   #   1. the `codex` binary on the sandbox PATH ->
   #      `myconfig.ai.dev.mysbx.extraTools` (the podman backends get it via
-  #      their own `agentPackagesByFlag` default in ../../mysbx/podman.nix,
+  #      their own `agentPackagesByFlag` default in ../../../../mysbx/podman.nix,
   #      keyed on this module's `enable`).
   #   2. codex's *configuration* visible inside the sandbox -> read-only
   #      mounts from the shared `mkSandboxConfig` helper
-  #      (../../mysbx/nix/sandbox-config.nix), one per deployed child of
+  #      (../../../../mysbx/nix/sandbox-config.nix), one per deployed child of
   #      `~/.codex` (`childSubtrees`), so the tmpfs `.codex` stays writable
   #      and the state-dirs below it are not covered. `~/.codex` (Home Manager's
   #      `configDir` default: `home.preferXdgDirectories` is off, so it is
@@ -42,7 +42,7 @@ let
   #      `extraFiles` when that manages them — the one exception to
   #      "home.file is the source of truth", same as the other agents.
   #   3. codex's *state* persists across runs -> `state-dirs` entries
-  #      (`…mysbx.config.stateDirs`, ../../mysbx/docs/design/config.md D15),
+  #      (`…mysbx.config.stateDirs`, ../../../../mysbx/docs/design/config.md D15),
   #      backed by `<repo>.mysbx/state/` in the sidecar.
   #
   # NOT mounted: `~/.codex/auth.json` (the OAuth/API credential) and the
@@ -62,8 +62,8 @@ let
   #
   # The shared mysbx sandbox-config helper (the dereferenced-store-tree
   # machinery, bd myconfig-ooh); consumed like the entry scripts consume
-  # ../../mysbx/nix/mux-entry-lib.nix.
-  sandboxConfigLib = import ../../mysbx/nix/sandbox-config.nix {
+  # ../../../../mysbx/nix/mux-entry-lib.nix.
+  sandboxConfigLib = import ../../../../mysbx/nix/sandbox-config.nix {
     inherit lib;
     runCommand = pkgs.runCommand;
   };
@@ -158,7 +158,7 @@ in
     # would otherwise be generated for a host that has no mysbx config file
     # to carry them. The state dirs replace what the bubblewrap jail tiers
     # bind rw (`writableDirs`): codex's sessions and history persist per
-    # repository in the sidecar (../../mysbx/docs/design/config.md D15)
+    # repository in the sidecar (../../../../mysbx/docs/design/config.md D15)
     # instead of dying with the tmpfs home.
     myconfig.ai.dev.mysbx = lib.mkIf config.myconfig.ai.dev.mysbx.enable {
       extraTools = [ pkgs.codex ];

@@ -5,7 +5,7 @@
 # agent-bubblewrap-opencode, worktree variants), plus the mysbx tier
 # integration: opencode's config is mounted into mysbx sandboxes from
 # a dereferenced store tree built by the shared
-# ../../mysbx/nix/sandbox-config.nix helper (bd myconfig-ooh).
+# ../../../../mysbx/nix/sandbox-config.nix helper (bd myconfig-ooh).
 {
   config,
   lib,
@@ -31,8 +31,8 @@ let
 
   # The shared mysbx sandbox-config helper (the dereferenced-store-tree
   # machinery, bd myconfig-ooh); consumed like the entry scripts consume
-  # ../../mysbx/nix/mux-entry-lib.nix.
-  sandboxConfigLib = import ../../mysbx/nix/sandbox-config.nix {
+  # ../../../../mysbx/nix/mux-entry-lib.nix.
+  sandboxConfigLib = import ../../../../mysbx/nix/sandbox-config.nix {
     inherit lib;
     runCommand = pkgs.runCommand;
   };
@@ -104,7 +104,7 @@ let
     gitDirEnv = "WORKTREE_GIT_DIR";
   };
 
-  # --- mysbx integration (../mysbx) -------------------------------------
+  # --- mysbx integration (../../../../mysbx) -------------------------------------
   #
   # opencode is wired into the `mysbx` sandbox tier the same way pi is
   # (../programs.pi-coding-agent/default.nix):
@@ -120,7 +120,7 @@ let
   #      tree, and the helper materialises an (empty) directory for a
   #      subtree home-manager deployed nothing into.
   #   3. opencode's *state* persists across runs -> `state-dirs` entries
-  #      (`…mysbx.config.stateDirs`, ../../mysbx/docs/design/config.md D15)
+  #      (`…mysbx.config.stateDirs`, ../../../../mysbx/docs/design/config.md D15)
   #      backed by `<repo>.mysbx/state/` in the sidecar — never the host
   #      `~/.local`, which stays out of the sandbox entirely.
   #
@@ -137,7 +137,7 @@ let
   # valid). The gate is kept anyway — read from the user whose config
   # layer mysbx generates — so the generated layer only carries the
   # entry when there is something to mount. Same pattern (and the same
-  # laziness argument) as `hmRipgrep` in ../../mysbx/default.nix.
+  # laziness argument) as `hmRipgrep` in ../../../../mysbx/default.nix.
   hmMcpServers = config.home-manager.users.mhuber.programs.mcp.servers or { };
 
   # Read from the user whose config layer mysbx generates, like
@@ -281,7 +281,7 @@ in
     # config file to carry them. The state dirs replace what the
     # bubblewrap jail tiers bind rw (`userDataDirs`): opencode's session
     # and TUI state persist per repository in the sidecar
-    # (../mysbx/docs/design/config.md D15) instead of dying with the
+    # (../../../../mysbx/docs/design/config.md D15) instead of dying with the
     # tmpfs home.
     myconfig.ai.dev.mysbx = lib.mkIf config.myconfig.ai.dev.mysbx.enable {
       extraTools = [ pkgs.opencode ];

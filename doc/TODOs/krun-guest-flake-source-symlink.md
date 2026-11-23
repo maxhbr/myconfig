@@ -50,7 +50,7 @@ catch the creation live.
 
 1. Catch the creation live: DONE instrumentationally (2026-10-31,
    branch `todo-review-krun-symlink`): the guest nix wrappers
-   (`modules/myconfig.ai.dev/mysbx/nix/krun-guest-nix.nix`) now log
+   (`mysbx/nix/krun-guest-nix.nix`) now log
    every guest-root nix argv to `/tmp/mysbx-store-watch.log` and
    start a static inotify watcher
    (`.../mysbx/nix/krun-store-watch.{nix,c}`) on `/nix/store` that
@@ -87,7 +87,7 @@ ACTIONABLE (the bead's own "instrument rather than hope" next step)
 — done in this branch:
 
 - Shipped the store-watcher instrumentation: new
-  `modules/myconfig.ai.dev/mysbx/nix/krun-store-watch.c` + `.nix`
+  `mysbx/nix/krun-store-watch.c` + `.nix`
   (static musl, the store-scan twin's pattern: inotify on a store
   dir, one typed log line per new `*-source` entry — DIR, or
   SYMLINK with its readlink target — plus a flock single-instance

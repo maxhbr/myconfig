@@ -64,7 +64,7 @@ configuration choice here; see
 [`../../../doc/TODOs/herdr-per-repo-worktree-directory.md`](../../../doc/TODOs/herdr-per-repo-worktree-directory.md).
 
 The mysbx tier (`multiplexer = "herdr"`,
-[`../mysbx/nix/herdr-entry.nix`](../mysbx/nix/herdr-entry.nix)) closes
+[`../../../mysbx/nix/herdr-entry.nix`](../../../mysbx/nix/herdr-entry.nix)) closes
 the same gap with the same one-repository argument: its entry script
 writes a session config whose `[worktrees] directory` points at the
 sibling when mysbx bound it (an interactive mysbx run creates the sibling

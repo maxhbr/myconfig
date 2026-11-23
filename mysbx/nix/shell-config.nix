@@ -127,7 +127,7 @@ let
   # replacing, keeps the host's own right prompt intact.
   #
   # The `MYSBX_*` identity variables are the same ones the pi status
-  # extension reads (../../programs/programs.pi-coding-agent): a config
+  # extension reads (../../modules/myconfig.ai.dev/programs/programs.pi-coding-agent): a config
   # layer cannot spoof them, so a present `MYSBX_BACKEND` means a real
   # sandbox. Every segment is added only when its variable is non-empty
   # and says something beyond the built-in default (`shared` is the

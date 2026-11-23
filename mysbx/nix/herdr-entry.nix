@@ -7,7 +7,7 @@
 #
 # herdr (https://herdr.dev) is an "agent multiplexer that lives in your
 # terminal"; the host installation and the bubblewrap-jail tier of it
-# live in ../../programs/programs.herdr.nix. This is the mysbx tier, expressed as
+# live in ../../modules/myconfig.ai.dev/programs/programs.herdr.nix. This is the mysbx tier, expressed as
 # configuration instead of a wrapper binary: `cd <repo> && mysbx` with
 # `multiplexer = "herdr"` in a layer.
 #
@@ -38,7 +38,7 @@
 #     lands on the private socket instead of `/tmp/tmux-<uid>`.
 #
 # Worktree placement follows the workmux convention
-# (`../../programs/programs.herdr.README.md`): herdr's `[worktrees]
+# (`../../modules/myconfig.ai.dev/programs/programs.herdr.README.md`): herdr's `[worktrees]
 # directory` is a single global root with no per-repo placeholders, but
 # a mysbx sandbox has exactly ONE repository, so the option is made
 # repository-local at start time — the same trick the bubblewrap-jail
@@ -59,7 +59,7 @@
 # start, so it can never be stale, and the host's `~/.config/herdr` is
 # deliberately not bound. `onboarding = false` is what keeps herdr from
 # showing its first-run wizard in every sandbox (the tmpfs home makes
-# every start a first run) — the same reason ../../programs/programs.herdr.nix
+# every start a first run) — the same reason ../../modules/myconfig.ai.dev/programs/programs.herdr.nix
 # gives for its jail config.
 {
   lib,
@@ -83,7 +83,7 @@ let
   muxLib = import ./mux-entry-lib.nix { inherit lib; };
 
   # Deliberately minimal: the keybinding mirror of
-  # ../../programs/programs.herdr.nix belongs to the HOST configuration, and
+  # ../../modules/myconfig.ai.dev/programs/programs.herdr.nix belongs to the HOST configuration, and
   # duplicating it here would make two files drift. What the sandbox
   # needs is a config that (a) does not run the onboarding wizard and
   # (b) opens new tabs in the focused pane's directory, i.e. the repo.

@@ -26,7 +26,7 @@
 #
 # The mysbx tier integration mounts `~/.config/rtk` into mysbx sandboxes
 # from a dereferenced store tree built by the shared
-# ../../mysbx/nix/sandbox-config.nix helper (bd myconfig-ooh).
+# ../../../../mysbx/nix/sandbox-config.nix helper (bd myconfig-ooh).
 #
 # No state file needs to be pre-created: rtk creates its tracking database
 # (`~/.local/share/rtk/history.db`) lazily on first use, and a missing
@@ -59,12 +59,12 @@ let
 
   # The shared mysbx sandbox-config helper (the dereferenced-store-tree
   # machinery, bd myconfig-ooh); consumed like the entry scripts consume
-  # ../../mysbx/nix/mux-entry-lib.nix. Read from the user whose config
+  # ../../../../mysbx/nix/mux-entry-lib.nix. Read from the user whose config
   # layer mysbx generates (plus that user's home directory, which the
   # helper needs to normalize the absolute `xdg.configFile` keys) and
   # referenced only under `mkIf aiCfg.mysbx.enable` below (Nix is lazy);
   # not circular — no subtree matches `.config/mysbx`.
-  sandboxConfigLib = import ../../mysbx/nix/sandbox-config.nix {
+  sandboxConfigLib = import ../../../../mysbx/nix/sandbox-config.nix {
     inherit lib;
     runCommand = pkgs.runCommand;
   };
@@ -131,11 +131,11 @@ in
     # podman image and mysbx).
     myconfig.ai.dev.sandboxTools.extraPackages = [ cfg.package ];
 
-    # mysbx tier integration (../../mysbx), following the pattern of
+    # mysbx tier integration (../../../../mysbx), following the pattern of
     # ../programs.opencode/default.nix: mount the
     # generated config read-only under the sandbox home (`HOME` is
     # `/mysbx-home` there) — from a self-contained store tree of
-    # dereferenced copies built by the shared `../../mysbx/nix/sandbox-
+    # dereferenced copies built by the shared `../../../../mysbx/nix/sandbox-
     # config.nix` helper (bd myconfig-ooh; the raw `~/…` mount would dangle
     # under the podman-gvisor backend, which mounts nothing from the host
     # /nix/store) — and give rtk a per-repository state directory so its

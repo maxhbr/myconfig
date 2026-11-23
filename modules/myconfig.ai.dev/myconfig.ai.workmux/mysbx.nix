@@ -10,8 +10,8 @@
 # but expressed as `mysbx` CONFIGURATION instead of a Nix call site: no
 # new wrapper binary is added here. `cd <repo> && mysbx` is the entry
 # point, and with this module the interactive payload of that sandbox is
-# the workmux session (../mysbx/docs/design/config.md D16,
-# ../mysbx/docs/design/cli.md D11).
+# the workmux session (../../../mysbx/docs/design/config.md D16,
+# ../../../mysbx/docs/design/cli.md D11).
 #
 # What differs from the jail tier, deliberately:
 #
@@ -45,7 +45,7 @@ let
   # credentials.
   #
   # The in-sandbox agent map is DERIVED from the WHOLE mysbx agent
-  # registry (bd myconfig-fv4h, ../mysbx/docs/design/config.md D32):
+  # registry (bd myconfig-fv4h, ../../../mysbx/docs/design/config.md D32):
   # every kind the sandbox's `extraTools` closure carries is
   # selectable at RUN time (`mysbx --<kind>`, or a layer's
   # `default-agent`), and the session's started agent is the
@@ -75,7 +75,7 @@ in
       description = ''
         Make the interactive payload of every `mysbx` sandbox a workmux
         tmux session (on a socket inside the sandbox — see
-        ../mysbx/docs/design/config.md D16). Defaults to on wherever
+        ../../../mysbx/docs/design/config.md D16). Defaults to on wherever
         `myconfig.ai.dev.workmux` is enabled; it only takes effect on hosts
         that also enable `myconfig.ai.dev.mysbx`.
       '';

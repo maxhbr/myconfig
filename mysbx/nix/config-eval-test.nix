@@ -4,7 +4,7 @@
 # A module-EVALUATION test of the user configuration layer
 # ../default.nix generates (review-4 item 4).
 #
-# The Rust suite in ../mysbx-rs/tests/ covers what the CLI does with a
+# The Rust suite in ../../mysbx-rs/tests/ covers what the CLI does with a
 # `config.toml`, but it hand-writes that file: a regression in the
 # GENERATOR — a dropped `[env]` entry, a mount whose `dest` stops
 # pointing below `/mysbx-home`, a baseline value a host can no longer
@@ -41,7 +41,7 @@ let
   # a renamed bin).
   #
   # `myconfig.ai.dev.sandboxTools`
-  # (../../sandboxes/myconfig.ai.sandboxTools.nix) is imported next to
+  # (../../modules/myconfig.ai.dev/sandboxes/myconfig.ai.sandboxTools.nix) is imported next to
   # mysbx because mysbx consumes the hook (plan.md phase 2d): on real
   # hosts the `myconfig.ai.dev` umbrella imports both, so the minimal
   # evaluation here must do it by hand.
@@ -59,12 +59,12 @@ let
       specialArgs.myconfig.user = "mhuber";
       modules = [
         inputs.home.nixosModules.home-manager
-        ../../sandboxes/myconfig.ai.sandboxTools.nix
+        ../../modules/myconfig.ai.dev/sandboxes/myconfig.ai.sandboxTools.nix
         # ... and the shared LiteLLM forwarder
-        # (../../myconfig.ai.dev.litellm-forwarder.nix), whose endpoint
+        # (../../modules/myconfig.ai.dev/myconfig.ai.dev.litellm-forwarder.nix), whose endpoint
         # and advertised address the podman-gvisor pins of the mysbx
         # module read — imported for the same reason as the hook above.
-        ../../myconfig.ai.dev.litellm-forwarder.nix
+        ../../modules/myconfig.ai.dev/myconfig.ai.dev.litellm-forwarder.nix
         # ... and the orca module, which `myconfig.ai.dev`'s own
         # import list carries on real hosts but a minimal eval does
         # not — the `muxOrca` scenario below needs
@@ -74,7 +74,7 @@ let
         # which this minimal system defines neither of — stub both
         # OFF and let the orca service half be what the scenario
         # exercises.
-        ../../services.orca.nix
+        ../../modules/myconfig.ai.dev/services.orca.nix
         {
           options.myconfig.ai.dev.enable = lib.mkOption {
             type = lib.types.bool;
@@ -278,8 +278,8 @@ let
     sandboxToolsEnvOff = generated [ ripgrepOn ];
     # The other selectable multiplexers (D17). `herdr` is available by
     # default (`herdr.package` defaults to `pkgs.herdr`), `aoe` is not
-    # (it is gated on ../../programs/programs.agent-of-empires/ being enabled) and
-    # `orca` is not (gated on ../../services.orca.nix being enabled),
+    # (it is gated on ../../modules/myconfig.ai.dev/programs/programs.agent-of-empires/ being enabled) and
+    # `orca` is not (gated on ../../modules/myconfig.ai.dev/services.orca.nix being enabled),
     # so the two exercise both halves of the availability gate.
     muxHerdr = generated [
       { myconfig.ai.dev.mysbx.config.multiplexer = "herdr"; }
@@ -504,7 +504,7 @@ let
     else
       "ok";
   # The podman-gvisor pins that carry the host's LiteLLM endpoint into a
-  # container (../../myconfig.ai.dev.litellm-forwarder.nix): the pasta
+  # container (../../modules/myconfig.ai.dev/myconfig.ai.dev.litellm-forwarder.nix): the pasta
   # translation of the advertised address, and the endpoint itself as
   # backend environment. Both are options, not file content, so they are
   # checked here like the assertions above.
@@ -614,7 +614,7 @@ let
       "ok";
 
   # The host forwarder carries ONE confinement block
-  # (../../myconfig.ai.dev.litellm-forwarder.nix, bd myconfig-n8kv.1.5):
+  # (../../modules/myconfig.ai.dev/myconfig.ai.dev.litellm-forwarder.nix, bd myconfig-n8kv.1.5):
   # no privileges and a DESTINATION fence, so a compromised forwarder
   # cannot reach the LAN, the VPN or a cloud-metadata endpoint. Checked at
   # eval time because a dropped or widened setting would otherwise only

@@ -7,7 +7,7 @@ with bd myconfig-e6z.
 ## What to remove
 
 The `version` / `src` / `vendorHash` / `patches = [ ]` override in
-`modules/myconfig.ai.dev/mysbx/nix/gvisor-overlay.nix`
+`mysbx/nix/gvisor-overlay.nix`
 pins gVisor `20260817.0` (`b1b561450fc2f05b9626b7e269c08fbc9f5029ff`,
 "Merge release-20260817.0-38-ged1b001b8 (automated)" on the synthetic
 `go` branch) ahead of nixpkgs, which still ships `20260406.0`
@@ -17,7 +17,7 @@ pins gVisor `20260817.0` (`b1b561450fc2f05b9626b7e269c08fbc9f5029ff`,
 When removing the override:
 
 - Keep the `gvisor-remove-p2p-addresses.patch` patch (it is not upstream,
-  see `modules/myconfig.ai.dev/mysbx/docs/debug-runsc-tun0-netns.md`
+  see `mysbx/docs/debug-runsc-tun0-netns.md`
   and `doc/TODOs/` — it must continue to apply; verify hunks still match).
 - Drop the `patches = [ ];` reset only if nixpkgs' `fix-go-mod-tidy.diff`
   still applies to whatever gVisor revision nixpkgs ships at that point
@@ -65,7 +65,7 @@ Still blocked — do not touch the overlay yet.
 Verified:
 
 - Override is still present and unchanged in
-  `modules/myconfig.ai.dev/mysbx/nix/gvisor-overlay.nix`
+  `mysbx/nix/gvisor-overlay.nix`
   (pins `20260817.0` / `b1b561450fc2f05b9626b7e269c08fbc9f5029ff`, resets
   `patches`, re-adds `./patches/gvisor-remove-p2p-addresses.patch`, which
   still exists).
@@ -87,11 +87,11 @@ Verified (nix eval is unavailable in this sandbox; `flake.lock` was read
 directly and upstream checked via GitHub raw/API):
 
 - Overlay is still present and unchanged:
-  `modules/myconfig.ai.dev/mysbx/nix/gvisor-overlay.nix` pins
+  `mysbx/nix/gvisor-overlay.nix` pins
   `20260817.0` / `b1b561450fc2f05b9626b7e269c08fbc9f5029ff`, resets
   `patches`, re-adds `./patches/gvisor-remove-p2p-addresses.patch`.
   After bd myconfig-e6z it is wired in via
-  `modules/myconfig.ai.dev/mysbx/podman.nix` (`nixpkgs.overlays =
+  `mysbx/podman.nix` (`nixpkgs.overlays =
   [ (import ./nix/gvisor-overlay.nix) ]`), same shape as before.
 - Pinned nixpkgs input (`flake.lock` rev `9ae611a455b9`, 2026-06-10)
   still ships `20260406.0` / `db8d2c9abca39156c61ee2769d52b8a11accbe16`

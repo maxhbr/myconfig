@@ -316,7 +316,7 @@ Condensed:
 **Overlap**: both reuse the same config-seeding allowlist/denylist library
 (`../fns/seed-agent-config.nix`) and near-identical "why herdr" rationale text
 (kept manually in sync between `./agent-qemu-herdr.README.md` and
-`../../sandboxes/myconfig.ai.microvm/docs/agent-microvm.md`). `agent-microvm`'s herdr guest
+`../../../modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/docs/agent-microvm.md`). `agent-microvm`'s herdr guest
 is a strict security superset of `agent-qemu-herdr`'s on every shared axis
 (store exposure, credential exposure, network egress, workspace isolation),
 but `agent-qemu-herdr` is not redundant: it needs zero host configuration and
@@ -329,8 +329,8 @@ ad hoc case; use `agent-microvm` when the task is untrusted enough to keep
 the model key off the guest, needs a throwaway workspace, or is unattended.
 The only worthwhile cleanup is deduplicating the copy-pasted rationale text
 and the thrice-repeated "which coding-agent CLIs to bake in" logic
-(`../../programs/programs.herdr.nix`, `../../sandboxes/myconfig.ai.microvm/agents.nix`,
-`../mysbx/podman.nix`'s `agentPackagesByFlag`) —
+(`../../../modules/myconfig.ai.dev/programs/programs.herdr.nix`, `../../../modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/agents.nix`,
+`../../../mysbx/podman.nix`'s `agentPackagesByFlag`) —
 a documentation/DRY change, not a behavior change.
 
 ## Choosing a tier
@@ -358,8 +358,8 @@ quick reference for which models a host serves.
 ## Related
 
 Rootless Podman with the **gVisor** runtime is the `podman-gvisor` backend of
-[`mysbx`](../mysbx/) (the container image and the podman host setup are in
-[`../mysbx/podman.nix`](../mysbx/podman.nix)). In isolation
+[`mysbx`](../../../mysbx/) (the container image and the podman host setup are in
+[`../../../mysbx/podman.nix`](../../../mysbx/podman.nix)). In isolation
 strength it sits between the bubblewrap jail (tier 2) and the QEMU microVM
 (tier 3): like the jail it runs on the host kernel (no full VM), but `runsc`
 interposes a user-space kernel between the sandbox and the host kernel, which

@@ -6,7 +6,7 @@ support and the [validation log](krun-validation-log.md) for recorded
 runs. Sections 2.2 and 2.3 target the OCI-image guest. Their nested-Podman
 provisioning and tmpfs fallback do not apply to direct VM init.
 
-Run the relative `./nix/` commands from `modules/myconfig.ai.dev/mysbx/`.
+Run the relative `./nix/` commands from `mysbx/`.
 For direct host-store probes, explicitly select `store = "host"` and
 make sure that the dry-run share records include `store@/nix/store`,
 not `--store-disk`. A pinned baked image changes the silent VM default.
@@ -370,7 +370,7 @@ Run this command from the configuration repository:
 
 ```bash
 MYSBX=/path/to/rebuilt/mysbx python3 \
-  modules/myconfig.ai.dev/mysbx/nix/krun-fd-stress.py /path/to/test/repo
+  mysbx/nix/krun-fd-stress.py /path/to/test/repo
 ```
 
 The probe creates 100000 files in a temporary directory inside the test repository.
@@ -421,8 +421,8 @@ is the process that exhausted. Collect its evidence from the HOST
 before killing anything:
 
 ```bash
-modules/myconfig.ai.dev/mysbx/nix/krun-inspect-and-collect.sh            # snapshot
-modules/myconfig.ai.dev/mysbx/nix/krun-inspect-and-collect.sh --watch 5  # + fd samples every 5s
+mysbx/nix/krun-inspect-and-collect.sh            # snapshot
+mysbx/nix/krun-inspect-and-collect.sh --watch 5  # + fd samples every 5s
 ```
 
 The script is read-only (no signals, no fd contents) and writes
@@ -494,7 +494,7 @@ Validate both ends on a host with writable `/dev/kvm`:
 
 ```bash
 MYSBX=/path/to/rebuilt/mysbx python3 \
-  modules/myconfig.ai.dev/mysbx/nix/krun-fd-stress.py \
+  mysbx/nix/krun-fd-stress.py \
   --store-scan /path/to/test/repo
 ```
 

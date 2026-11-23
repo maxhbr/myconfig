@@ -5,7 +5,7 @@
 # `multiplexer = "orca"` mysbx sandbox (../docs/design/config.md D17,
 # ../docs/design/cli.md D11).
 #
-# Orca (https://onorca.dev, packaged in ../../services.orca.nix) is the
+# Orca (https://onorca.dev, packaged in ../../modules/myconfig.ai.dev/services.orca.nix) is the
 # odd one out among the multiplexers: it is not a terminal multiplexer
 # at all but an Electron desktop app / agent orchestrator. What runs as
 # the interactive payload of a sandbox is therefore NOT the Orca desktop
@@ -56,7 +56,7 @@
 # visible in the `--dry-run` audit, refused nowhere.
 #
 # The endpoint knobs mirror the host-side `orca-serve` unit of
-# ../../services.orca.nix (`--port`, `--pairing-address`) and are
+# ../../modules/myconfig.ai.dev/services.orca.nix (`--port`, `--pairing-address`) and are
 # config-layer surface, not host env: mysbx forwards only its fixed
 # allowlist, so set them in a layer's `[env]` table:
 #
@@ -102,7 +102,7 @@
   # `appimage-run` extracts the AppImage's squashfs payload (no FUSE
   # device, no /dev/fuse needed inside the sandbox) and provides the
   # FHS runtime the AppImage expects — the same launch path the
-  # ../../services.orca.nix launcher and `orca-serve` systemd service
+  # ../../modules/myconfig.ai.dev/services.orca.nix launcher and `orca-serve` systemd service
   # use, so the sandbox runs the identical bits.
   appimage-run,
   # `xvfb` is on $PATH for Orca's own `:99` auto-start; it is NOT
@@ -111,7 +111,7 @@
   xvfb,
   # The Orca AppImage that runs inside the sandbox
   # (`myconfig.ai.dev.mysbx.orca.package`, normally
-  # `myconfig.ai.dev.orca.package` of ../../services.orca.nix).
+  # `myconfig.ai.dev.orca.package` of ../../modules/myconfig.ai.dev/services.orca.nix).
   orca,
 }:
 let
@@ -130,7 +130,7 @@ writeShellApplication {
     ${muxLib.pinShell (if payloadShell != null then payloadShell else lib.getExe bashInteractive)}
 
     # Software rendering, like the host-side `orca-serve` unit of
-    # ../../services.orca.nix: a sandbox has no GPU guarantees, and
+    # ../../modules/myconfig.ai.dev/services.orca.nix: a sandbox has no GPU guarantees, and
     # LIBGL_ALWAYS_SOFTWARE=1 keeps Electron off the host's DRI
     # devices (which are not mounted anyway).
     export LIBGL_ALWAYS_SOFTWARE=1

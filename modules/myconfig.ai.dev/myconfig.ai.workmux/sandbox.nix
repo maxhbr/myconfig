@@ -62,7 +62,7 @@ let
   # paths, baked into the `agent-qemu-alacritty-workmux-tmux` wrapper and read
   # (via SANDBOXED_WORKMUX_EXTRA_PACKAGES) by the impure runner expression that
   # builds the per-invocation VM runner. Same pattern as
-  # AGENT_QEMU_HERDR_AGENT_PACKAGES in ../../programs/programs.herdr.nix.
+  # AGENT_QEMU_HERDR_AGENT_PACKAGES in ../../../modules/myconfig.ai.dev/programs/programs.herdr.nix.
   sandboxToolsJson = builtins.toJSON (
     map (p: p.outPath) config.myconfig.ai.dev.sandboxTools.extraPackages
   );

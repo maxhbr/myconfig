@@ -20,7 +20,7 @@
 #     has no `/etc/passwd`, so tmux would fall back to a login shell it
 #     cannot resolve and every pane would die immediately ("no server
 #     running"). Same pin, and the same one-invocation bootstrap, as
-#     ../../myconfig.ai.workmux/jail.nix.
+#     ../../modules/myconfig.ai.dev/myconfig.ai.workmux/jail.nix.
 #   * with a session name derived from the repo and the optional
 #     session name (when `--session NAME` is used), so the mysbx
 #     sandboxes of two repositories never look like one session in a
@@ -120,7 +120,7 @@ writeShellApplication {
     # `set-option` in a second process would fail with "no server
     # running" — leaving the default-shell unpinned and every pane
     # dead. Same reasoning (and the same fix) as
-    # ../../myconfig.ai.workmux/jail.nix.
+    # ../../modules/myconfig.ai.dev/myconfig.ai.workmux/jail.nix.
     if ! tmux has-session -t "=$session" 2>/dev/null; then
       tmux \
         set-option -g default-shell "$shell" \; \

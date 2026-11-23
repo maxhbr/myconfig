@@ -675,7 +675,7 @@ empty — every non-forwarded dial fails at connect, not at resolve.
 guest: echo MODEL-PROBE | nc -w 5 10.0.2.2 4000
   -> UPSTREAM-REPLY: MODEL-PROBE          (nc rc=0)
 broker decisions.jsonl:
-  listen ... /tmp/.../mysbx-egress/<pid>/litellm.sock -> 127.0.0.1:4000, confined by Landlock to that one port
+  listen ... /tmp/.../../mysbx-egress/<pid>/litellm.sock -> 127.0.0.1:4000, confined by Landlock to that one port
   allow  ... pid <relay> uid 0 -> 127.0.0.1:4000
 ```
 

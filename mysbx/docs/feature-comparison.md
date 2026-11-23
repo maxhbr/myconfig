@@ -19,9 +19,9 @@ Podman host setup moved to [`../podman.nix`](../podman.nix). Nothing here
 reintroduces that tier.
 
 The historical comparison covers the sandbox tiers under
-`../../sandboxes/` and bubblewrap jail wrappers under `../../fns/`;
+`../../modules/myconfig.ai.dev/sandboxes/` and bubblewrap jail wrappers under `../../modules/myconfig.ai.dev/fns/`;
 the historical per-tier prose is
-[`agent-sandboxing-tiers.README.md`](../../docs/agent-sandboxing-tiers.README.md).
+[`agent-sandboxing-tiers.README.md`](../../modules/myconfig.ai.dev/docs/agent-sandboxing-tiers.README.md).
 The `mysbx` cells below summarize current behavior, with sources in
 [`design/`](./design) and the implementation. Historical live results
 are not acceptance of every current option combination.
@@ -30,12 +30,12 @@ are not acceptance of every current option combination.
 
 | Key | Module / entry point (legacy rows: snapshot paths) | Commands | Availability (legacy rows: snapshot eval of `test-<host>`) |
 | --- | --- | --- | --- |
-| `jail` | [`fns/bubblewrap-app.nix`](../../fns/bubblewrap-app.nix), options in [`myconfig.ai.jail.nix`](../../sandboxes/myconfig.ai.jail.nix) | `agent-bubblewrap-{pi,opencode,claude,herdr,…}`, `…-worktree`, `agent-bubblewrap-alacritty-workmux-tmux` | every host with the agent modules |
-| `nono-tier` | [`myconfig.ai.nono-agent-sandbox.nix`](../../sandboxes/myconfig.ai.nono-agent-sandbox.nix) + [`fns/nono-app.nix`](../../fns/nono-app.nix) | `agent-nono-{pi,opencode,claude,codex}` | f13, p14, thing, workstation (`mkDefault true` under `myconfig.ai.dev.enable`) |
-| `qemu` | [`myconfig.ai.qemu-agent-sandbox/`](../../sandboxes/myconfig.ai.qemu-agent-sandbox) | `agent-qemu-pi`, `agent-qemu-herdr`, `agent-qemu-workmux-tmux`, `agent-qemu-alacritty-workmux-tmux` | every host with pi/herdr |
+| `jail` | [`fns/bubblewrap-app.nix`](../../modules/myconfig.ai.dev/fns/bubblewrap-app.nix), options in [`myconfig.ai.jail.nix`](../../modules/myconfig.ai.dev/sandboxes/myconfig.ai.jail.nix) | `agent-bubblewrap-{pi,opencode,claude,herdr,…}`, `…-worktree`, `agent-bubblewrap-alacritty-workmux-tmux` | every host with the agent modules |
+| `nono-tier` | [`myconfig.ai.nono-agent-sandbox.nix`](../../modules/myconfig.ai.dev/sandboxes/myconfig.ai.nono-agent-sandbox.nix) + [`fns/nono-app.nix`](../../modules/myconfig.ai.dev/fns/nono-app.nix) | `agent-nono-{pi,opencode,claude,codex}` | f13, p14, thing, workstation (`mkDefault true` under `myconfig.ai.dev.enable`) |
+| `qemu` | [`myconfig.ai.qemu-agent-sandbox/`](../../modules/myconfig.ai.dev/sandboxes/myconfig.ai.qemu-agent-sandbox) | `agent-qemu-pi`, `agent-qemu-herdr`, `agent-qemu-workmux-tmux`, `agent-qemu-alacritty-workmux-tmux` | every host with pi/herdr |
 | `gvisor` | `myconfig.ai.gvisor-agent-sandbox/` (removed; historical path) | `agent-gvisor`, `agent-gvisor-load-image` | f13, p14, thing, workstation (`myconfig.ai.dev/default.nix`) |
-| `microvm` | [`myconfig.ai.microvm/`](../../sandboxes/myconfig.ai.microvm) | `agent-microvm`, workmux `microvm-<agent>` panes | none (`myconfig.ai.dev.microvm.enable` is off everywhere) |
-| `mysbx` (current) | [`mysbx/`](..) | `mysbx` | bubblewrap/nono always available when mysbx is enabled; heavier backends are host opt-ins (`backends.md` D10) |
+| `microvm` | [`myconfig.ai.microvm/`](../../modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm) | `agent-microvm`, workmux `microvm-<agent>` panes | none (`myconfig.ai.dev.microvm.enable` is off everywhere) |
+| `mysbx` (current) | [`mysbx/`](../../mysbx) | `mysbx` | bubblewrap/nono always available when mysbx is enabled; heavier backends are host opt-ins (`backends.md` D10) |
 
 `mysbx` has **six backends**. `backend` in a configuration layer or
 `--backend` selects one (`cli.md` D7/D18). The generated user layer

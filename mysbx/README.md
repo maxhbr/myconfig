@@ -472,9 +472,9 @@ configuration layer selects what the **interactive** form
 | --- | --- |
 | `"tmux"` | plain tmux, one session per repo |
 | `"workmux"` | a [workmux](https://github.com/raine/workmux) session (sidebar + dashboard) |
-| `"herdr"` | [herdr](https://herdr.dev), the agent multiplexer ([`../../programs/programs.herdr.nix`](../../programs/programs.herdr.nix)) |
-| `"aoe"` | Agent of Empires ([`../../programs/programs.agent-of-empires/`](../../programs/programs.agent-of-empires)) |
-| `"orca"` | [Orca](https://onorca.dev) ([`../services.orca.nix`](../services.orca.nix)) — the runtime server (`orca serve`) inside the sandbox, reached from the Orca desktop/mobile client over the pairing endpoint; needs the shared network **and the `bubblewrap` backend** (bd myconfig-2m8) |
+| `"herdr"` | [herdr](https://herdr.dev), the agent multiplexer ([`modules/myconfig.ai.dev/programs/programs.herdr.nix`](../modules/myconfig.ai.dev/programs/programs.herdr.nix)) |
+| `"aoe"` | Agent of Empires ([`../modules/myconfig.ai.dev/programs/programs.agent-of-empires/`](../modules/myconfig.ai.dev/programs/programs.agent-of-empires)) |
+| `"orca"` | [Orca](https://onorca.dev) ([`modules/myconfig.ai.dev/services.orca.nix`](../modules/myconfig.ai.dev/services.orca.nix)) — the runtime server (`orca serve`) inside the sandbox, reached from the Orca desktop/mobile client over the pairing endpoint; needs the shared network **and the `bubblewrap` backend** (bd myconfig-2m8) |
 | `"none"` | a plain interactive shell (the default) |
 
 mysbx execs the entry its wrapper pinned for that value
@@ -536,7 +536,7 @@ On myconfig hosts the host-wide default is
 *available* follows from the packages the host carries
 (`myconfig.ai.mysbx.{tmux,workmux,herdr,aoe,orca}.package`). The workmux
 value is wired by
-[`../myconfig.ai.workmux/mysbx.nix`](../myconfig.ai.workmux/mysbx.nix) —
+[`modules/myconfig.ai.dev/myconfig.ai.workmux/mysbx.nix`](../modules/myconfig.ai.dev/myconfig.ai.workmux/mysbx.nix) —
 the mysbx sibling of the bubblewrap-jail (`jail.nix`) and microVM
 (`sandbox.nix`) workmux tiers — which switches
 `myconfig.ai.mysbx.workmux` on wherever `myconfig.ai.workmux` and
@@ -744,7 +744,7 @@ through `myconfig.ai.dev.sandboxTools.extraPackages` — drives that
 exact build instead of probing the `PATH` or downloading its own
 Chrome into the tmpfs home on every run. The same build is pinned as
 `PLAYWRIGHT_MCP_EXECUTABLE_PATH`, which is what `playwright-cli`
-([`../skills/playwright-cli.nix`](../skills/playwright-cli.nix)) launches: the
+([`modules/myconfig.ai.dev/skills/playwright-cli.nix`](../modules/myconfig.ai.dev/skills/playwright-cli.nix)) launches: the
 host value of that variable names a `/nix/store` path the podman backends
 cannot see, so each tier pins its own.
 
@@ -774,7 +774,7 @@ needs is part of the base binds for every run (bubblewrap's `--dev`
 creates none), not something this option adds.
 
 ## Integrated coding agents
-`pi` ([`programs.pi-coding-agent`](../../programs/programs.pi-coding-agent/default.nix)) is
+`pi` ([`programs.pi-coding-agent`](../modules/myconfig.ai.dev/programs/programs.pi-coding-agent/default.nix)) is
 the first coding agent integrated with mysbx: on hosts where both features are
 enabled it adds its binary to the sandbox `PATH` via
 `myconfig.ai.mysbx.extraTools` — on top of the shared
@@ -786,7 +786,7 @@ directory `~/.pi` only `.pi/agent/sessions` is persisted, as a
 `state-dirs` entry in `<repo>.mysbx/state/`; `settings.json`,
 `auth.json` and `trust.json` stay in the tmpfs home, so no pi
 credential reaches the sidecar.
-`opencode` ([`programs.opencode`](../../programs/programs.opencode/default.nix)) is wired
+`opencode` ([`programs.opencode`](../modules/myconfig.ai.dev/programs/programs.opencode/default.nix)) is wired
 in the same way: its binary goes on the sandbox `PATH` and its generated
 configuration (`~/.config/opencode` plus `~/.config/mcp`) is mounted
 read-only below `/mysbx-home`. Its writable state
@@ -803,7 +803,7 @@ MCP server definitions are not per-agent wiring but part of the same
 pattern: they come from home-manager's registry
 (`programs.mcp.servers`, the single source of truth), are rendered
 into pi's user-level shape by the shared
-[`pi-mcp-servers.nix`](../../programs/pi-mcp-servers.nix) generator
+[`pi-mcp-servers.nix`](../modules/myconfig.ai.dev/programs/pi-mcp-servers.nix) generator
 and mounted read-only into the sandbox at `.pi/agent/mcp.json` via
 `mkSandboxConfig`'s `extraFiles` — sandbox-only, the host's copy stays
 runtime-managed via `pi mcp add`. The mount exists exactly when the
@@ -811,7 +811,7 @@ registry renders non-empty content; the `myconfig.ai.dev.mysbx.mcp`
 option seeds `programs.mcp.enable` for hosts that install neither
 opencode nor claude-code.
 
-`hermes` ([`hermes-agent/mysbx.nix`](../hermes-agent/mysbx.nix)) is wired
+`hermes` ([`hermes-agent/mysbx.nix`](../modules/myconfig.ai.dev/hermes-agent/mysbx.nix)) is wired
 in the same way, with one deliberate difference: nothing of the host
 `~/.hermes` is mounted. hermes keeps `config.yaml`, `.env`, `auth.json`,
 `state.db` and `sessions/` in ONE root, so configuration cannot be
@@ -823,7 +823,7 @@ memories persist per repository while no host credential enters the
 sandbox. On the podman backends the launcher is baked into the image and
 `CUSTOM_BASE_URL` points hermes at the forwarded LiteLLM endpoint.
 
-`hunk` ([`programs.hunk`](../../programs/programs.hunk/default.nix)) follows the same
+`hunk` ([`programs.hunk`](../modules/myconfig.ai.dev/programs/programs.hunk/default.nix)) follows the same
 pattern for the *reviewing* side: on hosts with `myconfig.ai.hunk.enable`
 its binary goes on the sandbox `PATH` and `~/.config/hunk` is mounted
 read-only below `/mysbx-home`. It needs nothing else — no auth, no state,
@@ -831,7 +831,7 @@ no `init` run. Its unconditional companion `tig` is part of the baseline
 dev-tool closure in [`nix/mysbx.nix`](./nix/mysbx.nix) instead, next to
 `git`.
 
-`playwright-cli` ([`../skills/playwright-cli.nix`](../skills/playwright-cli.nix))
+`playwright-cli` ([`modules/myconfig.ai.dev/skills/playwright-cli.nix`](../modules/myconfig.ai.dev/skills/playwright-cli.nix))
 is a tool rather than an agent, and is wired through the shared
 `sandboxTools` hook: the binary lands on every tier's `PATH`, while its
 skill (and that of the harnesses that would use it) is mounted with the

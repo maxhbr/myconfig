@@ -11,7 +11,7 @@
 #
 # A plain function file, no module machinery — the same pattern as
 # ./pi-sandbox-subtrees.nix (the subtrees list) and
-# ../mysbx/nix/sandbox-config.nix (the mkSandboxConfig helper). Both
+# ../../../mysbx/nix/sandbox-config.nix (the mkSandboxConfig helper). Both
 # consumers import it directly:
 #
 #   * programs.pi-coding-agent/default.nix — the extraFiles entry of its

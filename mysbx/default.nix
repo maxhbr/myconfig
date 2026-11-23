@@ -18,7 +18,7 @@
 # (`~/.config/mysbx/config.toml`, see ./docs/design/config.md D6) from
 # `myconfig.ai.dev.mysbx.config`: the host-wide layer, mounted into every
 # sandbox of this user. Per-agent modules (e.g.
-# ../programs/programs.pi-coding-agent/) are expected to extend
+# modules/myconfig.ai.dev/programs/programs.pi-coding-agent/) are expected to extend
 # `myconfig.ai.dev.mysbx.config.mounts` with their own agent config files.
 {
   config,
@@ -109,7 +109,7 @@ let
       throw "myconfig.ai.dev.mysbx: homeDest expects a `~/…` path, got `${p}`";
 
   # The shared helper, consumed like the tool modules consume it
-  # (../../programs/programs.rtk/default.nix): a plain function file, no
+  # (modules/myconfig.ai.dev/programs/programs.rtk/default.nix): a plain function file, no
   # option machinery. Read from the SAME user the config layer is
   # generated for (`hmUser`), referenced only under `mkIf cfg.enable`
   # below (Nix is lazy); not circular — no subtree matches
@@ -159,7 +159,7 @@ let
   hmUser = config.home-manager.users."${myconfig.user}";
   hmFish = hmUser.programs.fish;
 
-  # The shared host-side LiteLLM forwarder (../myconfig.ai.dev.litellm-forwarder.nix):
+  # The shared host-side LiteLLM forwarder (modules/myconfig.ai.dev/myconfig.ai.dev.litellm-forwarder.nix):
   # the endpoint a podman-gvisor container reaches the host proxy at.
   litellmForwarder = config.myconfig.ai.dev.litellm-forwarder;
 
@@ -289,7 +289,7 @@ let
     })
     // (lib.optionalAttrs cfg.browser.enable {
       AGENT_BROWSER_EXECUTABLE_PATH = lib.getExe browserPackage;
-      # The same build for `playwright-cli` (../../skills/playwright-cli.nix),
+      # The same build for `playwright-cli` (modules/myconfig.ai.dev/skills/playwright-cli.nix),
       # whose host value names a path the podman backends cannot see. Both keys
       # carry one executable, so an agent switching between the two CLIs lands
       # on the same browser.
@@ -336,7 +336,7 @@ let
   # naming one without a pin is a refused run (D17), never a silent
   # plain shell. `tmux` always is; the others are gated on their
   # package option, which the host (or the tier module next door,
-  # ../myconfig.ai.workmux/mysbx.nix) sets.
+  # modules/myconfig.ai.dev/myconfig.ai.workmux/mysbx.nix) sets.
 
   # The shell the multiplexer panes get (`pinShell` of
   # ./nix/mux-entry-lib.nix): the same payload shell as a plain
@@ -442,7 +442,7 @@ let
   # point at the jailed launchers (`pi-workmux-launch` → `pi-bwrap`),
   # and running one inside this sandbox would start a NESTED sandbox
   # with its own tmpfs home — losing the agent's configuration exactly
-  # as it does in the jail tier (../myconfig.ai.workmux/jail.nix). The
+  # as it does in the jail tier (modules/myconfig.ai.dev/myconfig.ai.workmux/jail.nix). The
   # in-sandbox agents are therefore the plain binaries, chosen by the
   # module that fills `workmux.settings`.
   workmuxConfigFile =
@@ -450,7 +450,7 @@ let
       cfg.workmux.settings;
 
   # Mounts the workmux payload needs, appended to the generated user
-  # layer like every other agent module's (../programs.opencode).
+  # layer like every other agent module's (modules/myconfig.ai.dev/programs/programs.opencode).
   # Gated on the PACKAGE, not on `workmux.enable`: what makes the
   # in-sandbox configuration necessary is that a workmux session can
   # run at all — a host may install the payload and leave the
@@ -786,7 +786,7 @@ in
         Shared tooling that EVERY sandbox tier should carry does NOT
         belong here: it goes through
         `myconfig.ai.dev.sandboxTools.extraPackages`
-        (../../sandboxes/myconfig.ai.sandboxTools.nix), which this
+        (modules/myconfig.ai.dev/sandboxes/myconfig.ai.sandboxTools.nix), which this
         module consumes as well — the two lists concatenate in the
         dev-tool closure.
 
@@ -964,7 +964,7 @@ in
       description = ''
         The herdr package that runs *inside* the sandbox when
         `config.multiplexer = "herdr"` (./docs/design/config.md D17) —
-        the mysbx tier of ../programs.herdr.nix, which owns the host
+        the mysbx tier of modules/myconfig.ai.dev/programs/programs.herdr.nix, which owns the host
         installation and the bubblewrap-jail tier of the same tool.
 
         `null` means "this host does not carry herdr": no entry is
@@ -1008,8 +1008,8 @@ in
         that can execute is configuration that can escape).
 
         The agent PROGRAM modules register here
-        (../programs.pi-coding-agent sets `pi`,
-        ../programs.opencode sets `opencode`); `defaultAgent` names
+        (modules/myconfig.ai.dev/programs/programs.pi-coding-agent sets `pi`,
+        modules/myconfig.ai.dev/programs/programs.opencode sets `opencode`); `defaultAgent` names
         one of these keys as the default.
       '';
     };
@@ -1032,7 +1032,7 @@ in
       type = types.nullOr types.package;
       # Gated on the agent-of-empires module being ENABLED, not merely
       # present: `aoe` is a heavy from-source Rust build from a flake
-      # input (../programs.agent-of-empires/), so pulling it into every
+      # input (modules/myconfig.ai.dev/programs/programs.agent-of-empires/), so pulling it into every
       # mysbx host's closure to make a selection possible would be the
       # wrong default. `or null` keeps this module independent of that
       # module's existence, exactly like the workmux tier wiring.
@@ -1063,7 +1063,7 @@ in
         if (config.myconfig.ai.dev.orca.enable or false) then config.myconfig.ai.dev.orca.package else null;
       defaultText = literalExpression "config.myconfig.ai.dev.orca.package (when that module is enabled, else null)";
       description = ''
-        The Orca AppImage package (../../services.orca.nix) that runs
+        The Orca AppImage package (modules/myconfig.ai.dev/services.orca.nix) that runs
         *inside* the sandbox when `config.multiplexer = "orca"`
         (./docs/design/config.md D17): the payload is the Orca
         runtime server (`orca serve`), reached from the Orca
@@ -1289,7 +1289,7 @@ in
         # The host's LiteLLM proxy binds 127.0.0.1 only, and inside a
         # container that address is the CONTAINER's loopback, so the
         # sandbox needs the shared forwarder of
-        # ../myconfig.ai.dev.litellm-forwarder.nix plus pasta's
+        # modules/myconfig.ai.dev/myconfig.ai.dev.litellm-forwarder.nix plus pasta's
         # `--map-guest-addr` translation of its advertised address.
         default =
           let
@@ -1967,7 +1967,7 @@ in
       # The nono backend (mysbx-rs/src/nono.rs): `nono run` under
       # Landlock + seccomp — the same sandbox the tier-2 standalone
       # wrappers of
-      # ../../sandboxes/myconfig.ai.nono-agent-sandbox.nix use. The
+      # modules/myconfig.ai.dev/sandboxes/myconfig.ai.nono-agent-sandbox.nix use. The
       # package below is what the wrapper pins as `MYSBX_NONO`
       # (./nix/mysbx.nix); `MYSBX_NONO_PROFILE` keeps its `"default"`
       # inside the package file.
@@ -1982,7 +1982,7 @@ in
           The nono sandbox binary of the nono backend (Landlock +
           seccomp; upstream nolabs-ai/nono, `pkgs.nono` — the same
           tool the tier-2 wrappers of
-          ../../sandboxes/myconfig.ai.nono-agent-sandbox.nix use),
+          modules/myconfig.ai.dev/sandboxes/myconfig.ai.nono-agent-sandbox.nix use),
           pinned into the wrapper as `MYSBX_NONO`.
 
           `null` pins nothing: `backend = "nono"` is a refused run,
@@ -2012,7 +2012,7 @@ in
 
           Off here by default: the wiring that turns it on where the
           host runs workmux lives with the other workmux tiers,
-          ../myconfig.ai.workmux/mysbx.nix (next to `jail.nix` and
+          modules/myconfig.ai.dev/myconfig.ai.workmux/mysbx.nix (next to `jail.nix` and
           `sandbox.nix`), which also fills `settings` and `tmuxConf`.
         '';
       };
@@ -2041,7 +2041,7 @@ in
           already the sandbox, and a jailed launcher started in a pane
           would open a nested sandbox with its own tmpfs home, losing
           the agent's configuration (the same rule the bubblewrap jail
-          tier follows, ../myconfig.ai.workmux/jail.nix).
+          tier follows, modules/myconfig.ai.dev/myconfig.ai.workmux/jail.nix).
         '';
       };
 
@@ -2552,7 +2552,7 @@ in
             myconfig.ai.dev.mysbx.workmux.enable is on but
             myconfig.ai.dev.mysbx.workmux.package is null — set it to the
             workmux package that should run inside the sandbox (on
-            myconfig hosts ../myconfig.ai.workmux/mysbx.nix does that).
+            myconfig hosts modules/myconfig.ai.dev/myconfig.ai.workmux/mysbx.nix does that).
           '';
         }
         {
@@ -2569,7 +2569,7 @@ in
             ${cfg.config.multiplexer} for the sandbox — set
             myconfig.ai.dev.mysbx.${cfg.config.multiplexer}.package (for
             workmux: myconfig.ai.dev.mysbx.workmux.enable, which
-            ../myconfig.ai.workmux/mysbx.nix does), or select another
+            modules/myconfig.ai.dev/myconfig.ai.workmux/mysbx.nix does), or select another
             multiplexer (docs/design/config.md D17).
           '';
         }
@@ -2752,7 +2752,7 @@ in
 
     # The host side of model access for the podman-gvisor backend: the
     # shared port-scoped forwarder of
-    # ../myconfig.ai.dev.litellm-forwarder.nix, whose advertised address
+    # modules/myconfig.ai.dev/myconfig.ai.dev.litellm-forwarder.nix, whose advertised address
     # `podman.pastaSpec` maps into the container. Gated on an image
     # being available — that is what makes `backend = "podman-gvisor"`
     # runnable on this host at all — and on the host running LiteLLM.
@@ -2769,8 +2769,8 @@ in
     # The endpoint as the CONTAINER sees it, for tools that read
     # `OPENAI_BASE_URL`. The agent CLIs whose model
     # configuration is a generated file add their own entries from their
-    # own modules (../programs/programs.pi-coding-agent,
-    # ../programs/programs.opencode).
+    # own modules (modules/myconfig.ai.dev/programs/programs.pi-coding-agent,
+    # modules/myconfig.ai.dev/programs/programs.opencode).
     myconfig.ai.dev.mysbx.podman.env = lib.mkIf (cfg.podman.enable && litellmForwarder.enable) {
       OPENAI_BASE_URL = litellmForwarder.endpoint;
     };
@@ -2781,7 +2781,7 @@ in
     # the SLiRP gateway `10.0.2.2` maps to the host loopback, where
     # the keyless LiteLLM proxy listens. No host-side forwarder is
     # needed (the port-scoped forwarder of
-    # ../myconfig.ai.dev.litellm-forwarder.nix exists for pasta's
+    # modules/myconfig.ai.dev/myconfig.ai.dev.litellm-forwarder.nix exists for pasta's
     # `--map-guest-addr`, which maps an address, not a loopback). The
     # same per-agent modules that fill `podman.env` add their own
     # `microvm-qemu.env` entries.
@@ -2814,7 +2814,7 @@ in
     # the config but not the binaries prints `You need to install grc!`
     # on every prompt.
     #
-    # Shared sandbox tooling (../../sandboxes/myconfig.ai.sandboxTools.nix),
+    # Shared sandbox tooling (modules/myconfig.ai.dev/sandboxes/myconfig.ai.sandboxTools.nix),
     # phase 2d: mysbx honours the cross-tier hook like the other
     # tiers. The hook's packages land on the sandbox PATH here, via
     # the same `extraTools` the agent modules append to — one `listOf`

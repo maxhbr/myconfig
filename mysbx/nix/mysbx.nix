@@ -604,7 +604,7 @@ let
   # so `toolsPath` stays one absolute path.
   #
   # This is the MVP's hardcoded dev-tool closure, mirroring
-  # ../fns/bubblewrap-app.nix `devTools` minus the package-management
+  # ../../modules/myconfig.ai.dev/fns/bubblewrap-app.nix `devTools` minus the package-management
   # and linting extras (`wget`, `shfmt`, `shellcheck` — `curl` already
   # covers fetching, and linting tools are per-project taste agents
   # fetch via nix/flake, not from the sandbox base), plus `hostname`
@@ -628,7 +628,7 @@ let
   # `extraTools` is the ONE extension point on top of that list — the
   # shared sandbox-tool packages of the hook plus mysbx-specific
   # additions (the selected multiplexer's payload, per-agent CLIs like
-  # the `pi` of ../../programs/programs.pi-coding-agent) — instead of
+  # the `pi` of ../../modules/myconfig.ai.dev/programs/programs.pi-coding-agent) — instead of
   # editing this list.
   toolsEnv = buildEnv {
     name = "mysbx-tools";

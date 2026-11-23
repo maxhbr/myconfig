@@ -19,7 +19,7 @@ live VM tests; earlier host-store logs are not baked-store verification.
 In `store = "host"` mode, `krun` and `microvm-qemu` share the WHOLE
 host `/nix/store` into the guest, read-only, as one ro virtiofs slot
 of the stage-ro device (backends.md D3, `stage_binds` in
-`../../mysbx-rs/src/krun.rs`). The payload's shell, the `toolsEnv`
+`../../../mysbx-rs/src/krun.rs`). The payload's shell, the `toolsEnv`
 `PATH` tree and arbitrary host-built toolchains resolve through it.
 This was the original layout, not an unconditional current default:
 with no explicit choice, a VM run uses `baked` when

@@ -73,7 +73,7 @@ What is seeded (the `pi` allowlist, from
   jail-marker extension, the subagent/handoff examples, etc.
 - `.pi/agent/keybindings.json`, `.pi/agent/themes`, `.pi/agent/prompts`.
 - `.pi/agent/AGENTS.md` — the global agent instructions
-  (`myconfig.ai.dev.agentsMd`, `../agentsMd/AGENTS.md`).
+  (`myconfig.ai.dev.agentsMd`, `../../../../modules/myconfig.ai.dev/agentsMd/AGENTS.md`).
 - `.agents/skills` — the handcrafted skills tree.
 - `.config/git/{config,attributes}` — git identity/tools.
 

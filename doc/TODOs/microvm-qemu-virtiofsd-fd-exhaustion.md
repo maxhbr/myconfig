@@ -42,11 +42,11 @@ help here.
 
 ## Relevant code
 
-- `modules/myconfig.ai.dev/mysbx/nix/microvm-qemu-launcher.nix` —
+- `mysbx/nix/microvm-qemu-launcher.nix` —
   virtiofsd spawn and its limits
-- `modules/myconfig.ai.dev/mysbx/microvm-qemu-rs/src/main.rs` —
+- `mysbx/microvm-qemu-rs/src/main.rs` —
   device/daemon lifecycle
-- `modules/myconfig.ai.dev/mysbx/docs/microvm-qemu-validation-log.md`
+- `mysbx/docs/microvm-qemu-validation-log.md`
 - krun twin: `nix/krun-rootfs.nix` watchdog; bd myconfig-jjfy,
   bd myconfig-wm28
 
@@ -135,4 +135,4 @@ Still needing a live host (f13 or thing):
 
 Next check: after the next live validation pass on a
 microvm-qemu host (see
-`modules/myconfig.ai.dev/mysbx/docs/microvm-qemu-validation-log.md`).
+`mysbx/docs/microvm-qemu-validation-log.md`).

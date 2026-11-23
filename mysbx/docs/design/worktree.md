@@ -70,7 +70,7 @@ clone run the directory a session sees at that path is the session's OWN
 (`<sidecar>/clones/NAME__worktrees`, workspace.md D3a) — these verbs
 always resolve the HOST's sibling, from the host side.
 
-The resolution reuses [`Repo::worktrees`](../../mysbx-rs/src/repo.rs) —
+The resolution reuses [`Repo::worktrees`](../../../mysbx-rs/src/repo.rs) —
 the sibling spelling `<parent>/<basename>__worktrees`, recorded when it
 exists. An absent sibling is the empty registry: `worktree list` prints
 nothing and exits `0` (a listing, not a verdict), the same as

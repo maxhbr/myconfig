@@ -13,7 +13,7 @@
 # as SYMLINKS into its `<hash>-home-manager-files` generation tree,
 # whose leaves may themselves be symlinks into package store paths — a
 # two-hop chain. The podman-gvisor backend deliberately mounts NOTHING
-# from the host /nix/store (../mysbx-rs/src/podman_gvisor.rs: the
+# from the host /nix/store (../../mysbx-rs/src/podman_gvisor.rs: the
 # image's own userland provides everything), and while the FINAL hop is
 # in the image, the INTERMEDIATE home-manager-files path is not, so a
 # mount of the raw host tree hands the container dangling symlinks and

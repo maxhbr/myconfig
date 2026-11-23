@@ -72,15 +72,15 @@ as the authoritative values if this file is stale:
 The design docs of the mysbx deployment live with the myconfig
 repository this sandbox serves:
 
-- `modules/myconfig.ai.dev/mysbx/docs/design/config.md` — D13
+- `mysbx/docs/design/config.md` — D13
   (the implicit repo/worktrees binds), D14 (identity/infra env
   vars), D15 (state-dirs persistence), D20 (the `network` profile),
   D21 (allowlists), D27 (nested virt)
-- `modules/myconfig.ai.dev/mysbx/docs/design/workspace.md` — the
+- `mysbx/docs/design/workspace.md` — the
   clone-session lifecycle and its handoff verbs
-- `modules/myconfig.ai.dev/mysbx/docs/design/backends.md` — the
+- `mysbx/docs/design/backends.md` — the
   backend table and per-backend contracts
-- `modules/myconfig.ai.dev/mysbx/README.md` — the sandbox's identity
+- `mysbx/README.md` — the sandbox's identity
   and network variables, operator view
 
 Read them only when a decision needs the exact mechanism; the facts

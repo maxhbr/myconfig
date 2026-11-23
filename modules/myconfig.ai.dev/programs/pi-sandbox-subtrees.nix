@@ -3,7 +3,7 @@
 #
 # The canonical set of `~/.pi/agent` subtrees a mysbx sandbox mounts, as
 # relative paths under `$HOME`. A plain function file (no module
-# machinery), consumed like `../mysbx/nix/sandbox-config.nix` — the
+# machinery), consumed like `../../../mysbx/nix/sandbox-config.nix` — the
 # single source of truth for the agents that read pi's configuration
 # store:
 #
@@ -15,7 +15,7 @@
 # The list lives here, not in either module, because both mount into the
 # SAME in-sandbox dests. Two independently maintained lists drift, and a
 # second bind on one dest silently wins in every mysbx backend
-# (`../mysbx/mysbx-rs/src/nono.rs`: "a later bind on the same dest
+# (`../../../mysbx/mysbx-rs/src/nono.rs`: "a later bind on the same dest
 # wins"), so the sandbox payload would see a MIXTURE of two store trees
 # with the winner decided by module merge order.
 #
@@ -60,7 +60,7 @@ let
   # Sandbox-only content (never `home.file`): pi's `project_trust`
   # handler that answers the trust prompt per-process for jailed
   # sessions. Declared here, next to the subtrees, because the check
-  # (../../mysbx/nix/checks.nix) must assert the same target path the
+  # (../../../mysbx/nix/checks.nix) must assert the same target path the
   # pi module mounts — two pinned spellings drift apart silently.
   sandboxOnlyFiles = [ ".pi/agent/extensions/myconfig-mysbx-trust.ts" ];
 in
@@ -89,7 +89,7 @@ in
     # `home.file` (the host's mcp.json stays runtime-managed via
     # `pi mcp add`).
   ]
-  # The global AGENTS.md (../../agentsMd), deployed through a `home.file`
+  # The global AGENTS.md (../../../modules/myconfig.ai.dev/agentsMd), deployed through a `home.file`
   # entry when the feature is on. Not mounted otherwise: the helper
   # materialises an EMPTY DIRECTORY for a subtree nothing deployed into,
   # which would shadow the file name inside the sandbox.

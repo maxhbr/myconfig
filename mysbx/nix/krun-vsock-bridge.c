@@ -1,6 +1,6 @@
 /*
  * mysbx-vsock-bridge — the krun restricted-mode guest relay
- * (bd myconfig-ild7 — n8kv.2 C3, modules/myconfig.ai.dev/mysbx).
+ * (bd myconfig-ild7 — n8kv.2 C3, mysbx).
  *
  * The proxy-only krun guest has NO net device: the only path to
  * the per-run egress broker is the EXPLICIT AF_VSOCK device whose

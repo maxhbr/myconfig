@@ -29,7 +29,7 @@
 #      would be either invisible (podman), read-only (`/model`, `config
 #      set` would fail like bd myconfig-j6i), or shown as the first-run
 #      wizard on every launch.
-#   3. `.hermes` as a `state-dirs` entry (`../../mysbx/docs/design/config.md`
+#   3. `.hermes` as a `state-dirs` entry (`../../../mysbx/docs/design/config.md`
 #      D15): sessions, memories and the seeded config persist per repository
 #      in `<repo>.mysbx/state/.hermes/` instead of dying with the tmpfs home.
 #      Persisting the root also persists whatever `hermes auth`/`hermes model`

@@ -21,10 +21,10 @@
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
-# <root>/modules/myconfig.ai.dev/mysbx/nix/ -> four levels up is the
+# <root>/mysbx/nix/ -> two levels up is the
 # flake root (the getFlake below needs it; the nix files are reached
 # by absolute path, so a dirty checkout is fine).
-repo=$(cd "$here/../../.."/.. && pwd)
+repo=$(cd "$here/../.." && pwd)
 
 fail() {
     printf 'FAIL %s — %s\n' "$1" "$2" >&2
@@ -37,14 +37,14 @@ pass() {
 
 launcher=$(nix build --impure --no-link --print-out-paths --expr '
   (builtins.getFlake "git+file://'"$repo"'").inputs.nixpkgs.legacyPackages.x86_64-linux.callPackage
-    '"$repo"'/modules/myconfig.ai.dev/mysbx/nix/krun-launcher.nix { }')
+    '"$repo"'/mysbx/nix/krun-launcher.nix { }')
 
 rootfs=$(nix build --impure --no-link --print-out-paths --expr '
   let
     np = (builtins.getFlake "git+file://'"$repo"'").inputs.nixpkgs.legacyPackages.x86_64-linux;
   in
   np.callPackage
-    '"$repo"'/modules/myconfig.ai.dev/mysbx/nix/krun-spike-rootfs.nix {
+    '"$repo"'/mysbx/nix/krun-spike-rootfs.nix {
       # The STATIC busybox of the guest entry — pkgsStatic, not the
       # dynamic busybox of the package set.
       busyboxStatic = np.pkgsStatic.busybox;

@@ -13,7 +13,7 @@
 # (krun's TSI, microvm-qemu's SLiRP) proxy outbound connections only and
 # have no inbound port mapping, so a sandboxed `thinkrail` there serves a
 # UI nothing outside the guest can open — the same network-shape
-# limitation `orca` has (../../mysbx/docs/design/config.md D17).
+# limitation `orca` has (../../../mysbx/docs/design/config.md D17).
 {
   config,
   lib,
@@ -25,10 +25,10 @@ let
 
   # The shared mysbx sandbox-config helper (the dereferenced-store-tree
   # machinery, bd myconfig-ooh). One directory less than pi's
-  # `../../mysbx/…` — this module is a FLAT file in programs/, while
+  # `../../../mysbx/…` — this module is a FLAT file in programs/, while
   # pi's and opencode's live one directory deeper
   # (programs/programs.<name>/default.nix).
-  sandboxConfigLib = import ../mysbx/nix/sandbox-config.nix {
+  sandboxConfigLib = import ../../../mysbx/nix/sandbox-config.nix {
     inherit lib;
     runCommand = pkgs.runCommand;
   };
@@ -42,7 +42,7 @@ let
   # (../pi-sandbox-subtrees.nix, also consumed by
   # ./programs.pi-coding-agent/default.nix), never a private copy: both
   # would bind the same in-sandbox dests, and mysbx lets a later bind
-  # win (../../mysbx/mysbx-rs/src/nono.rs), so two lists would silently
+  # win (../../../mysbx/mysbx-rs/src/nono.rs), so two lists would silently
   # hand the payload a mixture of two store trees ordered by module
   # merge order.
   mysbxThinkrailSubtrees = (import ./pi-sandbox-subtrees.nix { inherit config lib pkgs; }).subtrees;

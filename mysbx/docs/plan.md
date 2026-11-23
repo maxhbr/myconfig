@@ -79,7 +79,7 @@ per-domain network policy.
 
 ### The base
 
-Taken from `../../myconfig.ai.dev/fns/bubblewrap-app.nix`, which is a *parameterised* base, so
+Taken from `../../modules/myconfig.ai.dev/fns/bubblewrap-app.nix`, which is a *parameterised* base, so
 every knob is a decision:
 
 | Base element | MVP | Note |

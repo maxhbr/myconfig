@@ -2,7 +2,7 @@
 {
   imports = [
     ./hardware-configuration.nix
-    ../modules
+    ../../modules
     # ../../secrets/common/wifi.home.nix
     ./raspicam.nix
     # NOTE: previously called `setupAsWireguardClient` here via a stale

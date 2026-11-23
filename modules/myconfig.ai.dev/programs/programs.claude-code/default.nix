@@ -52,7 +52,7 @@ let
     CLAUDE_CODE_SANDBOXED = "1";
   };
 
-  # --- mysbx integration (../../mysbx) -------------------------------------
+  # --- mysbx integration (../../../../mysbx) -------------------------------------
   #
   # The same three-piece wiring pi/opencode/rtk use
   # (../../programs/programs.{pi-coding-agent,opencode,rtk}), plus the
@@ -60,11 +60,11 @@ let
   #
   #   1. the CLI on the sandbox PATH -> `myconfig.ai.dev.mysbx.extraTools`
   #      (the podman backends get it via their own `agentPackagesByFlag`
-  #      default in ../../mysbx/podman.nix, keyed on this module's
+  #      default in ../../../../mysbx/podman.nix, keyed on this module's
   #      `enable`).
   #   2. the *configuration* visible inside the sandbox -> read-only mounts
   #      from the shared `mkSandboxConfig` helper
-  #      (../../mysbx/nix/sandbox-config.nix), one per deployed child of
+  #      (../../../../mysbx/nix/sandbox-config.nix), one per deployed child of
   #      `.claude` (`childSubtrees`), so the tmpfs `.claude` stays writable
   #      and the state-dirs below it are not covered. `.claude` holds everything
   #      `programs.claude-code` renders (settings.json, hooks/, agents/,
@@ -85,7 +85,7 @@ let
   # `~/.claude/plugins` (marketplace config managed by Claude Code itself).
   # Credentials come from the environment, never a mounted file.
   #
-  # The state that survives a run (`state-dirs`, ../../mysbx/docs/design/
+  # The state that survives a run (`state-dirs`, ../../../../mysbx/docs/design/
   # config.md D15): `projects/` holds the session transcripts, `todos/` the
   # task lists, `statsig/` the client telemetry cache and `shell-snapshots/`
   # the shell snapshot files — everything under `~/.claude` EXCEPT the
@@ -95,7 +95,7 @@ let
   #
   # Home Manager uses `useGlobalPkgs`, so the shared helper is imported with
   # the NixOS scope's `pkgs`, like in ../../programs/programs.opencode.
-  sandboxConfigLib = import ../../mysbx/nix/sandbox-config.nix {
+  sandboxConfigLib = import ../../../../mysbx/nix/sandbox-config.nix {
     inherit lib;
     runCommand = pkgs.runCommand;
   };

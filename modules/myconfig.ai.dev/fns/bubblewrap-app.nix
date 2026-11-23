@@ -81,7 +81,7 @@
   #
   # `tig` rides along with `git`: the jailed payload is always a git
   # checkout, and reviewing it is the interactive job handed back to the
-  # human (see `../mysbx/nix/mysbx.nix` `toolsEnv`, which ships the same
+  # human (see `../../../mysbx/nix/mysbx.nix` `toolsEnv`, which ships the same
   # pair).
   devTools ? [
     pkgs.bashInteractive

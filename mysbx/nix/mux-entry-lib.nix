@@ -97,7 +97,7 @@
   # a real interactive shell pinned via `SHELL` (which tmux's
   # `default-shell` falls back to). Without it every pane dies
   # immediately with "no server running". Same pin as
-  # ../../myconfig.ai.workmux/jail.nix.
+  # ../../modules/myconfig.ai.dev/myconfig.ai.workmux/jail.nix.
   pinShell = shellExe: ''
     shell=${lib.escapeShellArg shellExe}
     export SHELL="$shell"

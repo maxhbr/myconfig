@@ -6,7 +6,7 @@
 # (providers, jail marker, subagent/handoff examples) and the mysbx
 # tier integration: pi's config is mounted into mysbx sandboxes from a
 # dereferenced store tree built by the shared
-# ../../mysbx/nix/sandbox-config.nix helper (bd myconfig-ooh).
+# ../../../../mysbx/nix/sandbox-config.nix helper (bd myconfig-ooh).
 {
   config,
   lib,
@@ -33,8 +33,8 @@ let
 
   # The shared mysbx sandbox-config helper (the dereferenced-store-tree
   # machinery, bd myconfig-ooh); consumed like the entry scripts consume
-  # ../../mysbx/nix/mux-entry-lib.nix.
-  sandboxConfigLib = import ../../mysbx/nix/sandbox-config.nix {
+  # ../../../../mysbx/nix/mux-entry-lib.nix.
+  sandboxConfigLib = import ../../../../mysbx/nix/sandbox-config.nix {
     inherit lib;
     runCommand = pkgs.runCommand;
   };
@@ -1613,7 +1613,7 @@ let
     map (p: p.outPath) config.myconfig.ai.dev.sandboxTools.extraPackages
   );
 
-  # --- mysbx integration (../mysbx) -------------------------------------
+  # --- mysbx integration (../../../../mysbx) -------------------------------------
   #
   # pi is the first coding agent wired into the `mysbx` sandbox tier. Three
   # things are needed for a usable session inside a mysbx sandbox:
@@ -1631,11 +1631,11 @@ let
   #      run (`…mysbx.config.env`). Without it the red `unjailed` border
   #      would apply to mysbx sessions: mysbx forwards only
   #      TERM/COLORTERM/LANG/LC_ALL/EDITOR/VISUAL
-  #      (../../mysbx/mysbx-rs/src/lib.rs `FORWARDED_ENV_VARS`), so the
+  #      (../../../../mysbx/mysbx-rs/src/lib.rs `FORWARDED_ENV_VARS`), so the
   #      extension would see no marker and misclassify the session.
   #
   #   4. pi's *sessions* survive the sandbox -> a `state-dirs` entry
-  #      (`…mysbx.config.stateDirs`, ../../mysbx/docs/design/config.md D15).
+  #      (`…mysbx.config.stateDirs`, ../../../../mysbx/docs/design/config.md D15).
   #      pi keeps every runtime artefact below `$HOME/.pi/agent` (its
   #      `getAgentDir()`: `sessions/`, `settings.json`, `trust.json`,
   #      `auth.json`, `models.json` — no XDG directories), and `HOME` is
@@ -1665,11 +1665,11 @@ let
   # or `.pi/agent`) is not an option: the read-only config mounts below
   # would land inside a writable state dest, which
   # `check_symlinkable_dests` refuses
-  # (../../mysbx/mysbx-rs/src/bwrap.rs) — payload-writable content must
+  # (../../../../mysbx/mysbx-rs/src/bwrap.rs) — payload-writable content must
   # never sit above a mount point.
 
   # The pi-config mounts for the mysbx sandbox, built by the shared
-  # helper (../../mysbx/nix/sandbox-config.nix — the dereferenced-store-
+  # helper (../../../../mysbx/nix/sandbox-config.nix — the dereferenced-store-
   # tree machinery that landed here with bd myconfig-576, extracted into
   # the mysbx library with bd myconfig-ooh so other tool modules can
   # mount their home-manager-deployed config the same way). The helper
@@ -1874,7 +1874,7 @@ in
       # major to gate the NODE_USE_ENV_PROXY injection. mkDefault: a
       # host that pins `nodeMajor` itself wins over this derivation.
       nodeMajor = lib.mkDefault (lib.toInt (lib.versions.major piNodeJs.version));
-      # The agent registry entry (bd myconfig-fv4h, ../mysbx/docs/
+      # The agent registry entry (bd myconfig-fv4h, ../../../../mysbx/docs/
       # design/config.md D32): `pi` is a SELECTABLE kind — the CLI
       # resolves `default-agent = "pi"` (seeded below) or `--pi`
       # against this command. The bare name resolves from the sandbox

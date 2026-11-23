@@ -41,16 +41,16 @@ in
   config = lib.mkIf config.myconfig.ai.dev.github-copilot-cli.enable {
     myconfig.ai.dev.workmux.agents.copilot = copilotWorktree.agent;
 
-    # mysbx tier integration (../../mysbx). The podman backends get
+    # mysbx tier integration (../../../../mysbx). The podman backends get
     # the binary via their own `agentPackagesByFlag` default
-    # (../../mysbx/podman.nix); the other backends need it on the
+    # (../../../../mysbx/podman.nix); the other backends need it on the
     # sandbox PATH. Unlike claude-code/codex nothing of the host
     # config is mounted: `~/.copilot` mixes credentials (OAuth tokens
     # of `copilot login`) with settings and sessions in ONE root,
-    # like hermes (`../hermes-agent/mysbx.nix`) — a sandboxed session
+    # like hermes (`../../../../modules/myconfig.ai.dev/hermes-agent/mysbx.nix`) — a sandboxed session
     # starts from the CLI's own first-run/login flow instead, and
     # `.copilot` persists per repository as a state-dir
-    # (../../mysbx/docs/design/config.md D15).
+    # (../../../../mysbx/docs/design/config.md D15).
     myconfig.ai.dev.mysbx = lib.mkIf config.myconfig.ai.dev.mysbx.enable {
       extraTools = [ pkgs.github-copilot-cli ];
       agents.copilot.command = "copilot";

@@ -557,8 +557,8 @@
           apps.beads-server = inputs.flake-utils.lib.mkApp { drv = self.packages.${system}.beads-server; };
 
           # `nix fmt` — nixfmt for Nix, rustfmt for the
-          # hand-written Rust crate in `modules/`
-          # (`myconfig.ai.dev/mysbx/mysbx-rs`). `nixfmt-tree`
+          # hand-written Rust crate in `mysbx/mysbx-rs`.
+          # `nixfmt-tree`
           # is a treefmt wrapper that ships the nixfmt entry; the override
           # adds the formatter binary and its treefmt entry.
           #
@@ -641,30 +641,30 @@
                   "modules/myconfig.ai.llmops/bin/litellm-smoke-test.sh"
                   # The direct-libkrun spike runbook (bd myconfig-dak.1): a
                   # plain script executed by a human on a KVM host (f13).
-                  "modules/myconfig.ai.dev/mysbx/nix/krun-direct-spike.sh"
+                  "mysbx/nix/krun-direct-spike.sh"
                   # The krun live-validation suite (podman-krun + the
                   # direct backend, docs/krun-live-validation.md): same
                   # category — a plain script executed by a human on a
                   # KVM host.
-                  "modules/myconfig.ai.dev/mysbx/nix/krun-live-validation.sh"
+                  "mysbx/nix/krun-live-validation.sh"
                   # The microvm-qemu live-validation suite (bd
                   # myconfig-6x9c/26z4, backends.md D9): same category —
                   # a plain script executed by a human on a KVM host.
-                  "modules/myconfig.ai.dev/mysbx/nix/microvm-qemu-live-validation.sh"
+                  "mysbx/nix/microvm-qemu-live-validation.sh"
                   # The microvm-ch spike runbook and live-validation suite
                   # (bd myconfig-9wkp, backends.md D11): same category.
-                  "modules/myconfig.ai.dev/mysbx/nix/cloud-hypervisor-direct-spike.sh"
-                  "modules/myconfig.ai.dev/mysbx/nix/microvm-ch-live-validation.sh"
+                  "mysbx/nix/cloud-hypervisor-direct-spike.sh"
+                  "mysbx/nix/microvm-ch-live-validation.sh"
                   # The phase-B egress broker runbook (bd myconfig-n8kv.1.6,
                   # docs/design/egress.md): same category — a plain script
                   # executed by a human on f13, with the host's LiteLLM up.
-                  "modules/myconfig.ai.dev/mysbx/nix/egress-broker-live-validation.sh"
+                  "mysbx/nix/egress-broker-live-validation.sh"
                   # The wedged-krun-sandbox triage collector (bd
                   # myconfig-dj4 §6.1 of docs/krun-live-validation.md):
                   # same category — a plain read-only /proc inspection
                   # script executed by a human on the host of a wedged
                   # guest.
-                  "modules/myconfig.ai.dev/mysbx/nix/krun-inspect-and-collect.sh"
+                  "mysbx/nix/krun-inspect-and-collect.sh"
                   # Standalone script embedded into a writeShellApplication
                   # wrapper (`niri-run-or-raise`); shfmt is not covered by
                   # writeShellApplication's own shellcheck pass.
@@ -733,8 +733,8 @@
             import ./tests/microvm.nix { inherit self inputs system; }
           )
           // lib.optionalAttrs (system == "x86_64-linux") (
-            # Rust mysbx cargo test suite (modules/myconfig.ai.dev/mysbx).
-            import ./modules/myconfig.ai.dev/mysbx/nix/checks.nix {
+            # Rust mysbx cargo test suite (mysbx).
+            import ./mysbx/nix/checks.nix {
               inherit self inputs system;
             }
           );
@@ -755,8 +755,8 @@
                 age
                 shfmt
                 shellcheck
-                # The formatter of the Rust crates in `modules/`, so
-                # `rustfmt`/`cargo fmt` in the dev shell matches what
+                # The formatter of the Rust crates in `modules/` and
+                # `mysbx/`, so `rustfmt`/`cargo fmt` in the dev shell matches what
                 # `nix fmt` applies (see `formatter` above).
                 rustfmt
               ];

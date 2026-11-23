@@ -66,7 +66,7 @@ generated `agents`. Notable pinned defaults:
   otherwise block non-interactive worktree creation.
 - `agent = "pi"` — only on hosts that enable pi; inside an mysbx sandbox
   the agent surface is **runtime configuration** (bd myconfig-fv4h, see
-  [`../mysbx/README.md`](../mysbx/README.md)): this key is derived from
+  [`../../../mysbx/README.md`](../../../mysbx/README.md)): this key is derived from
   `myconfig.ai.dev.mysbx.defaultAgent` and the in-sandbox agent map
   carries every kind of `myconfig.ai.dev.mysbx.agents` (plain binaries,
   no nested launchers), so a `mysbx --<kind>` run or a layer's

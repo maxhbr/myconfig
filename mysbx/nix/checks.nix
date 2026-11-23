@@ -53,7 +53,7 @@
 #                 completed.
 #
 #   mysbx-hermes-test
-#                 the hermes tier (../../hermes-agent/mysbx.nix) on the
+#                 the hermes tier (../../modules/myconfig.ai.dev/hermes-agent/mysbx.nix) on the
 #                 reference host that enables both halves (`test-p14`):
 #                 the launcher on the sandbox PATH AND in the podman image,
 #                 `.hermes` as a `state-dirs` entry, `CUSTOM_BASE_URL` for
@@ -2282,7 +2282,7 @@ in
   # self-contained store tree of dereferenced copies (built by the
   # shared `mkSandboxConfig` helper, ../../nix/sandbox-config.nix, from
   # `mysbxSandboxConfig` in
-  # ../../programs/programs.pi-coding-agent/default.nix), because the
+  # ../../modules/myconfig.ai.dev/programs/programs.pi-coding-agent/default.nix), because the
   # podman-gvisor backend mounts nothing from the host /nix/store and the
   # raw home-manager symlink tree dangles inside the container. The
   # assertion pin runs at EVAL time (a throw builds no derivation), and
@@ -2301,7 +2301,7 @@ in
   # (`self.nixosConfigurations.test-f13`).
   #
   # The expected dest set is DERIVED from the shared subtree list
-  # (../../programs/pi-sandbox-subtrees.nix) instead of being pinned:
+  # (../../modules/myconfig.ai.dev/programs/pi-sandbox-subtrees.nix) instead of being pinned:
   # a pinned count only notices that the number changed, and reports
   # nothing about which mount is wrong. bd myconfig-2xld hit exactly
   # that: thinkrail mirrored pi's subtrees from its own list, so six
@@ -2309,7 +2309,7 @@ in
   # assertion could not say that the real defect was a DUPLICATE dest.
   # Hence the separate no-duplicate assertion below: two binds on one
   # dest are a real conflict, not a counting artifact — every mysbx
-  # backend keeps the LAST bind (../../mysbx-rs/src/nono.rs), so the
+  # backend keeps the LAST bind (../mysbx-rs/src/nono.rs), so the
   # payload silently receives a mixture of two store trees ordered by
   # module merge order.
   #
@@ -2330,7 +2330,7 @@ in
       expectedDestsOf =
         cfg:
         map (sub: "/mysbx-home/${sub}") (
-          (import ../../programs/pi-sandbox-subtrees.nix {
+          (import ../../modules/myconfig.ai.dev/programs/pi-sandbox-subtrees.nix {
             config = cfg;
             inherit lib pkgs;
           }).subtrees
@@ -2339,7 +2339,7 @@ in
       # pi module mounts through — a rename there cannot leave this check
       # asserting a stale name.
       sandboxOnlyFiles =
-        (import ../../programs/pi-sandbox-subtrees.nix {
+        (import ../../modules/myconfig.ai.dev/programs/pi-sandbox-subtrees.nix {
           config = cfg;
           inherit lib pkgs;
         }).sandboxOnlyFiles;
@@ -2381,7 +2381,7 @@ in
       # them): they must be absent from the host's `home.file` — deploying
       # them would silence the trust prompt for un-jailed pi sessions too.
       # The target paths come from the same shared contract the pi module
-      # mounts through (../../programs/pi-sandbox-subtrees.nix), so a
+      # mounts through (../../modules/myconfig.ai.dev/programs/pi-sandbox-subtrees.nix), so a
       # rename there cannot leave this check asserting a stale name.
       # `home.file` keys are relative or absolute-home spellings; check
       # both (the sandbox-config helper normalizes them the same way).
@@ -2394,9 +2394,9 @@ in
           assertion = duplicateDests == [ ];
           message = ''
             mysbx-pi-mounts-test: two mounts share an in-sandbox dest, but only the last
-            bind wins (../../mysbx-rs/src/nono.rs), so the sandbox would see a mixture of
+            bind wins (../mysbx-rs/src/nono.rs), so the sandbox would see a mixture of
             two source trees: ${lib.concatStringsSep ", " duplicateDests}
-            Mount each dest from exactly one tree (see ../../programs/pi-sandbox-subtrees.nix).'';
+            Mount each dest from exactly one tree (see ../../modules/myconfig.ai.dev/programs/pi-sandbox-subtrees.nix).'';
         }
         {
           assertion = trDuplicateDests == [ ];
@@ -2504,7 +2504,7 @@ in
   # `.pi/agent/mcp.json` must exist EXACTLY when the home-manager MCP
   # registry renders non-empty content, and it must be a real FILE —
   # the drift catcher between the shared subtree list
-  # (../../programs/pi-sandbox-subtrees.nix) and the per-caller
+  # (../../modules/myconfig.ai.dev/programs/pi-sandbox-subtrees.nix) and the per-caller
   # `extraFiles` entries (programs.pi-coding-agent/default.nix,
   # programs.thinkrail.nix). A subtree listed without its extraFiles
   # entry makes `mkSandboxConfig` materialize an EMPTY DIRECTORY named
@@ -2558,7 +2558,7 @@ in
       # non-empty. (The build phase below realises the mounted file
       # itself, via `mountedFile`.)
       piMcp = (
-        import ../../programs/pi-mcp-servers.nix {
+        import ../../modules/myconfig.ai.dev/programs/pi-mcp-servers.nix {
           inherit (self.nixosConfigurations.test-f13) config;
           inherit lib pkgs;
         }
@@ -2616,7 +2616,7 @@ in
           };
         };
       };
-      fixtureMcp = import ../../programs/pi-mcp-servers.nix {
+      fixtureMcp = import ../../modules/myconfig.ai.dev/programs/pi-mcp-servers.nix {
         config = fixtureConfig;
         inherit lib pkgs;
       };
@@ -2787,7 +2787,7 @@ in
         mkdir "$out"
       '';
 
-  # The hermes tier (../../hermes-agent/mysbx.nix), evaluated against the
+  # The hermes tier (../../modules/myconfig.ai.dev/hermes-agent/mysbx.nix), evaluated against the
   # REAL reference host that enables both halves (`test-p14`:
   # `hermes.enable` in hosts/host.p14/hermes-agent.nix, `mysbx.enable` in
   # hosts/host.p14/ai.p14.nix). Two properties are asserted:

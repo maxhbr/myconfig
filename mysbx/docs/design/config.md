@@ -864,7 +864,7 @@ bare shell: mysbx execs the entry pinned by its wrapper
 (`MYSBX_MUX_ENTRY_WORKMUX`), which boots a tmux server, bootstraps the
 workmux sidebar + dashboard and attaches — the same bootstrap the
 bubblewrap-jail tier does in
-`../../myconfig.ai.workmux/jail.nix` (`agent-bubblewrap-workmux-tmux`),
+`../../../modules/myconfig.ai.dev/myconfig.ai.workmux/jail.nix` (`agent-bubblewrap-workmux-tmux`),
 expressed here as *configuration* instead of a Nix call site.
 `mysbx run -- CMD` is unaffected (cli.md D11).
 
@@ -932,7 +932,7 @@ On myconfig hosts `myconfig.ai.dev.mysbx.workmux.enable`
 default when the integration is enabled. The module supplies the
 in-sandbox `~/.config/workmux/config.yaml`, plain agent binaries, and
 `MYSBX_MUX_ENTRY_WORKMUX`. The integration lives in
-`../../myconfig.ai.workmux/mysbx.nix`. The obsolete `workmux = true`
+`../../../modules/myconfig.ai.dev/myconfig.ai.workmux/mysbx.nix`. The obsolete `workmux = true`
 key is not generated or accepted.
 
 ### D17: `multiplexer` — which terminal multiplexer the interactive payload is
@@ -950,9 +950,9 @@ agent-oriented multiplexers side by side.
 | --- | --- |
 | `"tmux"` | plain tmux, one session per repo, on the in-sandbox socket |
 | `"workmux"` | the workmux session of D16 (sidebar + dashboard) |
-| `"herdr"` | [herdr](https://herdr.dev), the agent multiplexer (`../../../../programs/programs.herdr.nix`) |
-| `"aoe"` | Agent of Empires (`../../../../programs/programs.agent-of-empires/`), a tmux-based agent session manager |
-| `"orca"` | [Orca](https://onorca.dev) (`../../../../services.orca.nix`), the agent orchestrator — its payload is the Orca **runtime server** (`orca serve`) started inside the sandbox, reached from the Orca desktop/mobile client over the pairing endpoint (the headless-server form of the upstream guide); see the entry script `../../../../nix/orca-entry.nix` for the display/network/state decisions — **bubblewrap only**, refused on every other backend (bd myconfig-2m8) |
+| `"herdr"` | [herdr](https://herdr.dev), the agent multiplexer (`../../../modules/myconfig.ai.dev/programs/programs.herdr.nix`) |
+| `"aoe"` | Agent of Empires (`../../../modules/myconfig.ai.dev/programs/programs.agent-of-empires/`), a tmux-based agent session manager |
+| `"orca"` | [Orca](https://onorca.dev) (`../../../modules/myconfig.ai.dev/services.orca.nix`), the agent orchestrator — its payload is the Orca **runtime server** (`orca serve`) started inside the sandbox, reached from the Orca desktop/mobile client over the pairing endpoint (the headless-server form of the upstream guide); see the entry script `../../nix/orca-entry.nix` for the display/network/state decisions — **bubblewrap only**, refused on every other backend (bd myconfig-2m8) |
 | `"none"` | a plain interactive shell — the pre-D16 behaviour |
 
 **A string enum, not a table, and not a command.** A `[multiplexer]`
@@ -1086,7 +1086,7 @@ On myconfig hosts the value is generated:
 `myconfig.ai.dev.mysbx.config.multiplexer` (`../../default.nix`) writes it
 into the user layer and defaults to `"workmux"` where the workmux integration is
 wired (`myconfig.ai.dev.mysbx.workmux.enable`, set by
-`../../myconfig.ai.workmux/mysbx.nix`) and to `"none"` otherwise —
+`../../../modules/myconfig.ai.dev/myconfig.ai.workmux/mysbx.nix`) and to `"none"` otherwise —
 the behaviour-preserving default. The module also pins the entries of
 the multiplexers whose package the host has
 (`myconfig.ai.dev.mysbx.{workmux,herdr,aoe,orca}.package`; tmux always) and adds
@@ -1116,7 +1116,7 @@ an operator must know:
   A loopback-advertised pairing works wherever the client runs on the
   same host; a remote client needs the host's routing and an
   advertised address it can reach, exactly like the host-side
-  `orca-serve` service of `../../../../services.orca.nix`.
+  `orca-serve` service of `../../../modules/myconfig.ai.dev/services.orca.nix`.
 * **The display is sandbox-internal**: mysbx forwards nothing display
   related, so `$DISPLAY` is never set and Orca's bundled Xvfb
   auto-start (display `:99`) always applies — no host display is

@@ -18,7 +18,7 @@
 # with the CLI version instead of being a stale vendored copy. It ships
 # upstream alongside an `agents/openai.yaml` interface manifest, which is
 # preserved. Registered in `myconfig.ai.dev.skills.handcrafted`, which
-# ../skills/default.nix deploys to every enabled agent harness (opencode,
+# ../../../../modules/myconfig.ai.dev/skills/default.nix deploys to every enabled agent harness (opencode,
 # claude-code, codex, pi via the shared `~/.agents/skills/`); implicitly
 # enabled by this module — there is no separate enable flag.
 #
