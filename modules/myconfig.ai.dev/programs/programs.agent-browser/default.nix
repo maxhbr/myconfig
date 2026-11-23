@@ -118,7 +118,7 @@ in
     #
     # `myconfig.ai.dev.sandboxTools.extraPackages` reaches every tier that
     # consumes the shared list (the `agent-bubblewrap-*`/nono jails, the
-    # `myconfig.ai.dev.microvm` guests, the `sandboxed-*` qemu runners,
+    # `sandboxed-*` qemu runners,
     # the gVisor image and mysbx).
     #
     # NOTE: agent-browser requires a browser at runtime. Hosts that want

@@ -152,7 +152,7 @@ in
         default-route interface). It does NOT need to be assigned to any host
         interface — it is a pure translation target — but it must be stable,
         non-loopback, and not collide with a network the sandbox routes for
-        real: not `myconfig.ai.dev.microvm.subnet`, nor the host LAN or
+        real: not the host LAN or
         WireGuard ranges.
       '';
     };

@@ -100,16 +100,15 @@ The guest home is an ephemeral tmpfs, so without seeding every agent `herdr`
 can launch would start with empty/default configuration. To avoid that,
 `agent-qemu-herdr` copies the relevant, allowlisted host configuration for
 **every** registered agent into the guest `/home/agent` over the SSH channel
-**at launch**, after the VM boots and before `herdr` is exec'd. This mirrors
-the heavyweight `myconfig.ai.microvm` config-seed mechanism
-(`modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/config-seed.nix`), adapted for the
-user-space qemu tier (no privileged host daemon: staging + transfer happen
+**at launch**, after the VM boots and before `herdr` is exec'd. This is the
+user-space qemu adaptation of that heavyweight config-seed pattern
+(no privileged host daemon: staging + transfer happen
 entirely in the launcher, over the already-established SSH channel).
 
 The seeded agent set is the union of the per-agent `configPaths` for every
-registered agent (from `modules/myconfig.ai.dev/fns/seed-agent-config.nix`, whose
-path lists **mirror** the tier-4 registry `myconfig.ai.microvm/agents.nix` for
-every agent that registry knows — including `herdr` itself):
+registered agent (from `modules/myconfig.ai.dev/fns/seed-agent-config.nix`,
+whose path lists are the authoritative per-agent registry —
+including `herdr` itself):
 
 - `pi` — `~/.pi/agent/{AGENTS.md,agents,extensions,keybindings.json,prompts,themes}`.
 - `opencode` — `~/.config/opencode/{AGENTS.md,agents,commands,opencode.json,cli.json,skills}`.

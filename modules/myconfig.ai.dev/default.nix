@@ -50,7 +50,6 @@ in
     ./sandboxes/myconfig.ai.nono-agent-sandbox.nix
     ./sandboxes/myconfig.ai.sandboxTools.nix
     ./sandboxes/myconfig.ai.qemu-agent-sandbox
-    ./sandboxes/myconfig.ai.microvm
     ./services.orca.nix
     inputs.mysbx.nixosModules.mysbx
     ./hermes-agent

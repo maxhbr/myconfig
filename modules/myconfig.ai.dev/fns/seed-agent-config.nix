@@ -4,9 +4,8 @@
 # Shared host→guest agent-configuration SEEDER for the user-space qemu
 # microVM sandbox tiers (`agent-qemu-pi`, `agent-qemu-herdr`).
 #
-# This is the `sandboxed-*` counterpart of the heavyweight
-# `myconfig.ai.microvm` config-seed mechanism
-# (../sandboxes/myconfig.ai.microvm/config-seed.nix): instead of a root-owned,
+# This is the `sandboxed-*` counterpart of a heavyweight config-seed
+# mechanism: instead of a root-owned,
 # read-only virtiofs share staged by a privileged host daemon and copied by a
 # guest-root oneshot, the sandboxed-* wrappers run entirely in user space (no
 # host rebuild, no root, no systemd unit). So the staging + transfer happens
@@ -22,7 +21,7 @@
 # tracked file or a store path — exactly the same posture as the credential
 # env forwarding (`SetEnv` over SSH).
 #
-# ── Security properties (mirrors config-seed.nix invariants 4, 7, 8) ────────
+# ── Security properties ────────────────────────────────────────────────────
 #   * ALLOWLIST ONLY — exact files and exact directories per agent, never
 #     `$HOME` or a whole agent config root. `.pi/agent/extensions` is staged;
 #     `.pi` as a whole is NOT (it carries `agent/auth.json`, `sessions/`, …).
@@ -53,17 +52,10 @@
 # environment (`SetEnv`), exactly as before.
 #
 # ── The allowlist source of truth ──────────────────────────────────────────
-# The per-agent `configPaths` below MIRROR
-# `../sandboxes/myconfig.ai.microvm/agents.nix`
-# (the authoritative registry for the heavyweight tier): for every agent that
-# tier-4 registry knows (claude, codex, opencode, pi, herdr, hermes) the path
-# list here is identical. Two agents only this tier registers (`qwen-code`,
-# `github-copilot-cli`) contribute just the shared skills tree. The lists are
-# duplicated here only because `agents.nix` is instantiated inside the microvm
-# module tree with coupling arguments (litellmPort, hermesModel, enabledNames)
-# that make importing it standalone impractical. Keep the two in sync and
-# preserve the SAME credential-exclusion rationale. A future cleanup should
-# lift the path lists into a dependency-free data module both tiers import.
+# The per-agent `configPaths` below are THE registry: claude, codex, opencode,
+# pi, herdr and hermes each get their exact config trees; the two agents
+# registered only here (`qwen-code`, `github-copilot-cli`) contribute just the
+# shared skills tree. Preserve the SAME credential-exclusion rationale.
 {
   lib,
   pkgs,
@@ -71,8 +63,7 @@
 
 let
   # ── the credential DENYLIST (defence in depth) ─────────────────────────
-  # Mirrors ../sandboxes/myconfig.ai.microvm/config-seed.nix `denyNames/Suffixes/Infixes`
-  # verbatim. Matched case-insensitively against every path component and
+  # Matched case-insensitively against every path component and
   # against the resolved target's components below the host home / store root.
   denyNames = [
     ".aws"
@@ -134,7 +125,6 @@ let
   ];
 
   # ── the per-agent configuration ALLOWLIST ─────────────────────────────
-  # MIRRORS ../sandboxes/myconfig.ai.microvm/agents.nix `specs.<name>.configPaths`.
   # Exact files and exact directories, relative to `$HOME`. A credential-shaped
   # entry is rejected at eval time by `mkSeeder`'s assertions (below) and at
   # runtime by the denylist. Missing paths are simply absent in the guest, so
@@ -199,8 +189,7 @@ let
     github-copilot-cli = [ ".agents/skills" ];
   };
 
-  # Module-wide additions, mirroring
-  # `myconfig.ai.microvm.configSeed.extraPaths`: agent-independent, known-safe
+  # Module-wide additions: agent-independent, known-safe
   # paths every sandboxed guest benefits from.
   extraPaths = [
     ".config/git/attributes"
@@ -550,7 +539,7 @@ in
     denyOverrides
     ;
 
-  # The per-agent allowlist, mirroring ../sandboxes/myconfig.ai.microvm/agents.nix.
+  # The per-agent allowlist.
   inherit agentConfigPaths extraPaths;
 
   # The union allowlist for a set of agent names.

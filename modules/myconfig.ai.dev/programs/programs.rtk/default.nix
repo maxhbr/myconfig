@@ -128,7 +128,7 @@ in
     # to be on the PATH wherever the agent runs.
     # `myconfig.ai.dev.sandboxTools.extraPackages` reaches every tier that
     # consumes the shared list (the `agent-bubblewrap-*`/nono jails, the
-    # `myconfig.ai.dev.microvm` guests, the `sandboxed-*` qemu runners, the
+    # `sandboxed-*` qemu runners, the
     # podman image and mysbx).
     myconfig.ai.dev.sandboxTools.extraPackages = [ cfg.package ];
 

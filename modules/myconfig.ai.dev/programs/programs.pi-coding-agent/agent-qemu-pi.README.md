@@ -59,14 +59,12 @@ The guest home is an ephemeral tmpfs, so without seeding `pi` would start
 with empty/default configuration. To avoid that, `agent-qemu-pi` copies the
 relevant, allowlisted host `~/.pi` configuration into the guest `/home/agent`
 over the SSH channel **at launch**, after the VM boots and before `pi` is
-exec'd. This mirrors the heavyweight `myconfig.ai.microvm` config-seed
-mechanism (`modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/config-seed.nix`), adapted
-for the user-space qemu tier (no privileged host daemon: staging + transfer
+exec'd. This is the user-space qemu adaptation of that heavyweight
+config-seed pattern (no privileged host daemon: staging + transfer
 happen entirely in the launcher, over the already-established SSH channel).
 
 What is seeded (the `pi` allowlist, from
-`modules/myconfig.ai.dev/fns/seed-agent-config.nix`, mirroring
-`myconfig.ai.microvm/agents.nix`):
+`modules/myconfig.ai.dev/fns/seed-agent-config.nix`):
 
 - `.pi/agent/agents` — sample subagent definitions.
 - `.pi/agent/extensions` — the auto-generated provider extension, the

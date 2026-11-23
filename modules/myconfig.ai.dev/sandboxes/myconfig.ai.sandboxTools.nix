@@ -13,9 +13,6 @@
 #     packages to its `add-pkg-deps` permission (and sets the env via
 #     `set-env`) for every `agent-bubblewrap-*` wrapper (`agent-bubblewrap-pi`, `agent-bubblewrap-claude`,
 #     `agent-bubblewrap-opencode`, ...).
-#   * `myconfig.ai.dev.microvm` guests — `myconfig.ai.microvm/guest.nix` appends
-#     the packages to the guest's `environment.systemPackages` (§7) and the
-#     env to `environment.variables`.
 #   * `agent-qemu-pi` / `agent-qemu-workmux-tmux` / `agent-qemu-herdr` impure
 #     runners — the host-side wrappers bake the package store paths into a
 #     `SANDBOXED_*_EXTRA_PACKAGES` JSON env var (same pattern as
@@ -56,7 +53,7 @@
       default = [ ];
       description = ''
         Extra packages added to EVERY agent sandbox tier (bubblewrap `agent-bubblewrap-*`
-        wrappers, `myconfig.ai.dev.microvm` guests, the `sandboxed-*` microVM
+        wrappers, the `sandboxed-*` microVM
         runners, the gVisor sandbox image and the `mysbx` dev-tool closure), in
         addition to each tier's own default toolset. Default: none from the
         host — the sandboxes stay minimal; enabled feature modules (e.g.

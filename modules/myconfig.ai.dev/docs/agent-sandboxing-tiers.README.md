@@ -14,7 +14,7 @@ forming a ladder from cheap-and-convenient to strong-and-heavy:
 | 1 | [`agent-tmux`](#1-agent-tmux--dedicated-unix-user) | Unix user + file permissions | `agent-tmux` | ~none |
 | 2 | [`agent-bubblewrap-pi`](#2-agent-bubblewrap-pi--bubblewrap-process-jail) | Linux namespaces (bubblewrap) | `agent-bubblewrap-pi` | ~none |
 | 3 | [`agent-qemu-pi`](#3-agent-qemu-pi--qemuslirp-microvm) | own kernel (QEMU microVM, SLiRP NAT) | `agent-qemu-pi` | seconds to boot |
-| 4 | [`agent-microvm`](#4-agent-microvm--cloud-hypervisor-microvm-fleet) | own kernel + own store + private bridge | `agent-microvm run\|submit` | host config + prebuilt slots |
+| 4 | [`agent-microvm`](#4-agent-microvm--cloud-hypervisor-microvm-fleet) | own kernel + own store + private bridge | `agent-microvm run\|submit` | host config + prebuilt slots — **removed** |
 
 Tiers 2–4 share one design rule: **the working directory is the only thing the
 agent can write**, and secrets are forwarded at launch rather than baked into
@@ -215,6 +215,11 @@ in its README regarding live-boot validation.
 ---
 
 ## 4. `agent-microvm` — Cloud Hypervisor microVM fleet
+
+> **Status: removed.** The tier's module tree, checks and harnesses are no
+> longer in the repo — it was superseded by `mysbx`'s `microvm-qemu` /
+> `microvm-ch` backends. This section and its links are historical; recover
+> the sources and docs from git history.
 
 The strongest tier, and the only one designed for **unattended, autonomous**
 agent runs. Each session gets a **Cloud Hypervisor** microVM from a pool of

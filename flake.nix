@@ -618,22 +618,6 @@
                   # agent-skills integration check driven by it.
                   "tests/test_home-manager_activation.sh"
                   "tests/agent-skills-activation.sh"
-                  # The EXECUTED myconfig.ai.dev.microvm batch-job harnesses and the
-                  # real-KVM validation suite. They are plain scripts (not
-                  # writeShellApplication), so nothing else gates them.
-                  "tests/microvm-batch-result-integrity.sh"
-                  "tests/microvm-batch-controller-smoke.sh"
-                  "tests/microvm-batch-launcher-submit.sh"
-                  "tests/microvm-launcher-recover.sh"
-                  "tests/microvm-hostkeys-provisioning.sh"
-                  "tests/microvm-doctor.sh"
-                  "tests/microvm-rtv-transport.sh"
-                  "tests/microvm-rtv-dispatch.sh"
-                  # The out-of-CI measurement harness (lightweight plan phase 0
-                  # + the phase-6 acceptance measurements): also a plain script,
-                  # also executed by a human on a KVM host.
-                  "tests/measure-boot.sh"
-                  "modules/myconfig.ai.dev/sandboxes/myconfig.ai.microvm/runtime-validation.sh"
                   # Qwen3.8-27B gfx1151 benchmark + tool-call fixtures (run by a
                   # human on the gfx1151 hardware).
                   "tests/qwen38-toolcall-fixture.sh"
@@ -730,15 +714,6 @@
                 '';
               };
           }
-          # Automated EVAL / BUILD test suite for the myconfig.ai.dev.microvm
-          # Cloud Hypervisor agent-sandbox tier (plan §38, wired per §39).
-          # Kept in a dedicated file to avoid bloating flake.nix. Only wired
-          # in for x86_64-linux, the system the enabled reference host
-          # `test-f13` is built for. These are eval/build checks ONLY — NOT
-          # KVM/network runtime proof (see tests/microvm.nix header).
-          // lib.optionalAttrs (system == "x86_64-linux") (
-            import ./tests/microvm.nix { inherit self inputs system; }
-          )
           // lib.optionalAttrs (system == "x86_64-linux") (
             # Rust mysbx cargo test suite — the checks file lives in the
             # mysbx tree, reached through the mysbx flake input (no
