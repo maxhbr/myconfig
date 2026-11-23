@@ -938,7 +938,7 @@ key is not generated or accepted.
 ### D17: `multiplexer` — which terminal multiplexer the interactive payload is
 
 ```toml
-multiplexer = "workmux"   # tmux | workmux | herdr | aoe | orca | none
+multiplexer = "workmux"   # tmux | workmux | herdr | aoe | orca | thinkrail | none
 ```
 
 One top-level string key names the **interactive** payload of a
@@ -953,6 +953,7 @@ agent-oriented multiplexers side by side.
 | `"herdr"` | [herdr](https://herdr.dev), the agent multiplexer (`../../../modules/myconfig.ai.dev/programs/programs.herdr.nix`) |
 | `"aoe"` | Agent of Empires (`../../../modules/myconfig.ai.dev/programs/programs.agent-of-empires/`), a tmux-based agent session manager |
 | `"orca"` | [Orca](https://onorca.dev) (`../../../modules/myconfig.ai.dev/services.orca.nix`), the agent orchestrator — its payload is the Orca **runtime server** (`orca serve`) started inside the sandbox, reached from the Orca desktop/mobile client over the pairing endpoint (the headless-server form of the upstream guide); see the entry script `../../nix/orca-entry.nix` for the display/network/state decisions — **bubblewrap only**, refused on every other backend (bd myconfig-2m8) |
+| `"thinkrail"` | [ThinkRail](https://github.com/JetBrains/thinkrail) (`../../../modules/myconfig.ai.dev/programs/programs.thinkrail.nix`), the engine host — its payload is the server form (`thinkrail --no-open <repo>`), the browser IDE opened from the host over the shared loopback; see the entry script `../../nix/thinkrail-entry.nix` for the network/state decisions — **bubblewrap or nono**, refused on every other backend: the UI is reached inbound, and only shared-netns backends carry that path |
 | `"none"` | a plain interactive shell — the pre-D16 behaviour |
 
 **A string enum, not a table, and not a command.** A `[multiplexer]`
@@ -960,7 +961,7 @@ table would invite a `command = …` key, and configuration that names a
 command is configuration that executes (D4). What a layer may say is
 *which of the multiplexers this build carries* runs — the argument
 vector belongs to the entry scripts in mysbx's own closure. The value
-is validated strictly: anything outside the six names is a schema
+is validated strictly: anything outside the seven names is a schema
 error naming the file, the key and the accepted values (like `mode`,
 D9/D11).
 
@@ -983,8 +984,8 @@ sidecar the *decision* ("this repo wants herdr"), including
 
 **Availability is checked, never fallen back on.** Each choice needs an
 entry from mysbx's own closure, pinned by the wrapper as
-`MYSBX_MUX_ENTRY_TMUX`, `…_WORKMUX`, `…_HERDR`, `…_AOE`, `…_ORCA`
-(`../../nix/mysbx.nix`). A selection whose entry is not pinned — an
+`MYSBX_MUX_ENTRY_TMUX`, `…_WORKMUX`, `…_HERDR`, `…_AOE`, `…_ORCA`,
+`…_THINKRAIL` (`../../nix/mysbx.nix`). A selection whose entry is not pinned — an
 unwrapped build, a host that does not install that multiplexer — is a
 **refused run** (exit `70`, the message naming the value and the missing
 variable), never a silent plain shell: the operator asked for a
@@ -1007,6 +1008,20 @@ is a **refused run** (exit `70`, before the session clone and audited
 by `--dry-run`), the same accepted-never-ignored rule the D21
 allowlist follows — never a broken half-run discovered after the fact.
 
+**`thinkrail` has the mirror-image backend requirement**: its payload
+is the engine host, an HTTP+WS server listening on a TCP port with
+a browser IDE reached **inbound** from the host's browser over the
+shared loopback (`thinkrail --no-open <repo>`, the headless form that
+prints `thinkrail → http://<host>:<port>` instead of execing
+`xdg-open`). Only the shared-netns backends carry that path:
+`bubblewrap` plainly, and `nono` — its mediation covers the loopback
+socket fine, it is pathname AF_UNIX that trips it. The guest-network
+backends (both podman tiers, krun, the microVMs) have no inbound
+route from the host browser at all, so
+`multiplexer = "thinkrail"` on any backend other than
+`"bubblewrap"`/`"nono"` is the same **refused run** (exit `70`,
+before the session clone and audited by `--dry-run`).
+
 **The tmux socket guards do not protect every multiplexer API directory.**
 `/mysbx-home/.mysbx-tmux` (`bwrap.rs::MUX_SOCKET_DIR`) is exported as
 `TMUX_TMPDIR` for every non-`none` choice, except for the Podman-krun
@@ -1025,7 +1040,11 @@ untrusted-repository escape. Cross-VM host-socket usability is a separate
 question.
 
 Orca needs no terminal socket and can persist its profile in
-`$HOME/.config/{orca,Orca}` with state entries. `TMUX_TMPDIR` is set for
+`$HOME/.config/{orca,Orca}` with state entries. ThinkRail likewise
+keeps no terminal socket — its state is `$HOME/.thinkrail` (logs
+under `$HOME/.thinkrail/logs`), persistable the same way, and its
+port is pinned via `THINKRAIL_PORT` when the host itself runs an
+engine. `TMUX_TMPDIR` is set for
 herdr and Orca too, so plain tmux in their panes uses the guarded socket
 directory.
 
@@ -1089,12 +1108,12 @@ wired (`myconfig.ai.dev.mysbx.workmux.enable`, set by
 `../../../modules/myconfig.ai.dev/myconfig.ai.workmux/mysbx.nix`) and to `"none"` otherwise —
 the behaviour-preserving default. The module also pins the entries of
 the multiplexers whose package the host has
-(`myconfig.ai.dev.mysbx.{workmux,herdr,aoe,orca}.package`; tmux always) and adds
+(`myconfig.ai.dev.mysbx.{workmux,herdr,aoe,orca,thinkrail}.package`; tmux always) and adds
 the selected one's binaries to the sandbox `PATH` via `extraTools`, so
 the panes find the tool they are running in.
 
-**`orca` is the one value whose payload is not a terminal.** The
-entry (`../../nix/orca-entry.nix`) starts the Orca runtime server
+**`orca` and `thinkrail` are the two values whose payload is not a
+terminal.** The orca entry (`../../nix/orca-entry.nix`) starts the Orca runtime server
 (`orca serve`) inside the sandbox — not the desktop window (`orca
 open`): both run headless, but a window inside a mysbx sandbox is
 invisible (no display is attached) while the `serve` pairing endpoint
@@ -1124,9 +1143,32 @@ an operator must know:
 * **The endpoint is configurable through `[env]`, not pinned**: the
   entry passes `ORCA_PORT`/`ORCA_PAIRING_ADDRESS` to `serve`'s
   `--port`/`--pairing-address` (see the entry script for when to set
-  them — pin the port when the host itself runs `orca-serve`, since
-  the sandbox shares the host loopback). Unset, the upstream server
+  them — pin the port when the host itself runs `orca-serve`, since the
+  sandbox shares the host loopback). Unset, the upstream server
   binds 6768 or a fallback, and the readiness block on the sandbox's
+  stdout is the source of truth for the bound endpoint.
+
+ThinkRail is the second: the entry (`../../nix/thinkrail-entry.nix`)
+starts the engine host in its headless form (`thinkrail --no-open
+"$repo"` — the sandbox shares the host loopback, so opening a browser
+from inside it would target the wrong side). The operator opens the
+IDE from the host's browser instead. Three consequences of the same
+shape:
+
+* **It needs the shared network**: the browser reaches the UI inbound
+  over the loopback, so `network = "none"` (and the `false` alias)
+  leaves the UI unreachable, and `proxy-only` reaches only the
+  LiteLLM endpoint — the engine host still runs, but no browser
+  outside the sandbox can open it. tmux, workmux, herdr and aoe
+  attach a terminal mysbx already provides and do not care.
+* **No display at all**: nothing X or Wayland is forwarded, and none
+  is needed — the payload is an HTTP+WS server, the UI lives in the
+  operator's browser.
+* **The endpoint is configurable through `[env]`, not pinned**: the
+  entry passes `THINKRAIL_PORT`/`THINKRAIL_HOST` when set (pin the
+  port when the host itself runs an engine, since the sandbox shares
+  the host loopback). Unset, the engine binds 24242 or a fallback,
+  and the `thinkrail → http://<host>:<port>` mark on the sandbox's
   stdout is the source of truth for the bound endpoint.
 
 ### D18: `display` — how a Wayland compositor reaches the sandbox
@@ -1373,7 +1415,10 @@ myconfig-n8kv.1).
 
 **Orca's shared-network requirement** stays unsatisfied under this
 profile: `multiplexer = "orca"` needs the shared network and is
-refused with `proxy-only` (D17).
+refused with `proxy-only` (D17). The thinkrail engine host runs under
+`proxy-only` like any other payload, but its inbound browser UI has
+no path there either — only the LiteLLM endpoint is reachable, so
+the session serves an IDE nothing outside can open (D17).
 
 ### D21: the network allowlist keys are backend-agnostic; enforcement is per backend
 
@@ -1879,7 +1924,11 @@ the socket (`display`) or none of the tools the payload needs
 (`orca`), so the run would start and die mid-session with the cause
 far from the effect. Both are first-cut refusals with live work
 outstanding (bd myconfig-6di.5.4/6di.5.7, bd myconfig-2m8); they go
-away with the implementation, not with a warning.
+away with the implementation, not with a warning. `multiplexer =
+"thinkrail"` joins the same family on the non-shared-netns backends:
+the engine host runs, but its inbound browser UI has no path to the
+host — a practically dead session, refused up front for the same
+cause-far-from-effect reason (D17).
 
 The warning is printed BEFORE the session clone and shows on
 `--dry-run` too, and the pipeline clears the merged key so the host

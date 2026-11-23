@@ -34,7 +34,7 @@ Commands:
                 first — a run creates nothing;
                 for `mysbx-once` the bare form is the session picker
                 instead (see `tui`);
-                with `multiplexer = "tmux"|"workmux"|"herdr"|"aoe"|"orca"` in
+                with `multiplexer = "tmux"|"workmux"|"herdr"|"aoe"|"orca"|"thinkrail"` in
                 a config layer this is a session of that multiplexer
                 instead of a bare shell, on a socket inside the sandbox
   run -- CMD... run one command in the sandbox; everything after `--` is
@@ -316,21 +316,25 @@ Options:
                 the multiplexer of THIS interactive run, overriding the
                 `multiplexer` of the config layers for one invocation —
                 the next run uses the configuration again. <mux> is one
-                of: tmux, workmux, herdr, aoe, orca, none (the same closed set
-                as the config key); `none` forces the plain shell. Bare
-                form only: a `run -- CMD` never starts a session, and
-                every other verb rejects the flag. A value this build
-                pinned no entry for is a refused run, like a config
-                layer's; `orca` additionally requires the `bubblewrap`
-                backend — its Electron/AppImage payload cannot run
-                under `nono` (bd myconfig-2m8) or `podman-gvisor`, and
-                the selection is refused there, never a broken
-                half-run.
+                of: tmux, workmux, herdr, aoe, orca, thinkrail, none
+                (the same closed set as the config key); `none` forces
+                the plain shell. Bare form only: a `run -- CMD` never
+                starts a session, and every other verb rejects the
+                flag. A value this build pinned no entry for is a
+                refused run, like a config layer's; `orca`
+                additionally requires the `bubblewrap` backend — its
+                Electron/AppImage payload cannot run under `nono`
+                (bd myconfig-2m8) or `podman-gvisor`, and the
+                selection is refused there, never a broken half-run;
+                `thinkrail` additionally requires the `bubblewrap` or
+                `nono` backend — its web UI is reached INBOUND, and
+                every other backend has no port mapping to the
+                sandbox, so the selection is refused there too.
                 layer selecting it
                 Shorthands (bd myconfig-6tt): every value is also its
                 own flag — `--tmux`, `--workmux`, `--herdr`, `--aoe`,
-                `--orca`, `--none` == `--multiplexer <mux>`. Pure
-                aliases with the same position rules and refusals;
+                `--orca`, `--thinkrail`, `--none` ==
+                `--multiplexer <mux>`. Pure aliases with the same position rules and refusals;
                 a shorthand together with the long form (or another
                 shorthand) in one invocation is a usage error naming
                 both

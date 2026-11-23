@@ -464,7 +464,7 @@ bubblewrap.)
 
 ### The multiplexer session (`multiplexer`)
 
-`multiplexer = "tmux" | "workmux" | "herdr" | "aoe" | "orca" | "none"` in a
+`multiplexer = "tmux" | "workmux" | "herdr" | "aoe" | "orca" | "thinkrail" | "none"` in a
 configuration layer selects what the **interactive** form
 (`cd <repo> && mysbx`) starts instead of a bare shell:
 
@@ -475,6 +475,7 @@ configuration layer selects what the **interactive** form
 | `"herdr"` | [herdr](https://herdr.dev), the agent multiplexer ([`modules/myconfig.ai.dev/programs/programs.herdr.nix`](../modules/myconfig.ai.dev/programs/programs.herdr.nix)) |
 | `"aoe"` | Agent of Empires ([`../modules/myconfig.ai.dev/programs/programs.agent-of-empires/`](../modules/myconfig.ai.dev/programs/programs.agent-of-empires)) |
 | `"orca"` | [Orca](https://onorca.dev) ([`modules/myconfig.ai.dev/services.orca.nix`](../modules/myconfig.ai.dev/services.orca.nix)) — the runtime server (`orca serve`) inside the sandbox, reached from the Orca desktop/mobile client over the pairing endpoint; needs the shared network **and the `bubblewrap` backend** (bd myconfig-2m8) |
+| `"thinkrail"` | [ThinkRail](https://github.com/JetBrains/thinkrail) ([`modules/myconfig.ai.dev/programs/programs.thinkrail.nix`](../modules/myconfig.ai.dev/programs/programs.thinkrail.nix)) — the engine host (`thinkrail --no-open <repo>`) inside the sandbox, its browser IDE opened from the host over the shared loopback; needs **`bubblewrap` or `nono`** — the UI is reached inbound, and only shared-netns backends give that path |
 | `"none"` | a plain interactive shell (the default) |
 
 mysbx execs the entry its wrapper pinned for that value
@@ -482,7 +483,10 @@ mysbx execs the entry its wrapper pinned for that value
 run naming the variable, never a silent bare shell. `orca` is
 additionally refused on the `nono` and `podman-gvisor` backends — its
 Electron/AppImage payload needs the device set and unmediated syscall
-stream only bubblewrap provides (bd myconfig-2m8). `mysbx run -- CMD`
+stream only bubblewrap provides (bd myconfig-2m8). `thinkrail` is the
+mirror image: refused on every backend **except `bubblewrap` and
+`nono`**, because its browser UI is reached inbound over the loopback
+and only a shared-netns backend carries that. `mysbx run -- CMD`
 starts no session and is byte-identical to a `"none"` run
 (`docs/design/cli.md` D11). Either layer may decide, and the sidecar
 wins — the user config is the host-wide default, the sidecar is the
@@ -518,8 +522,8 @@ per repository by the sidecar layer and per invocation by
 agent-agnostic: the resolved kind, command and arguments reach them
 as `MYSBX_AGENT_*` env, and `herdr` starts that agent in the
 relocated workspace's root pane, `workmux` in a vertical split below
-the dashboard. The default `null` starts none, and `tmux`, `aoe` and
-`orca` ignore the env either way.
+the dashboard. The default `null` starts none, and `tmux`, `aoe`,
+`orca` and `thinkrail` ignore the env either way.
 
 In a detached run (`mysbx --detach`/`--detachable`,
 [`docs/design/detach.md`](docs/design/detach.md)) the entry does not
@@ -534,7 +538,7 @@ client and its exit code is the run's (detach.md B7).
 On myconfig hosts the host-wide default is
 `myconfig.ai.mysbx.config.multiplexer`; which multiplexers are
 *available* follows from the packages the host carries
-(`myconfig.ai.mysbx.{tmux,workmux,herdr,aoe,orca}.package`). The workmux
+(`myconfig.ai.mysbx.{tmux,workmux,herdr,aoe,orca,thinkrail}.package`). The workmux
 value is wired by
 [`modules/myconfig.ai.dev/myconfig.ai.workmux/mysbx.nix`](../modules/myconfig.ai.dev/myconfig.ai.workmux/mysbx.nix) —
 the mysbx sibling of the bubblewrap-jail (`jail.nix`) and microVM
@@ -567,7 +571,7 @@ and which physical machine am I running on?":
   (`bubblewrap`, `podman-gvisor`, `podman-krun`, `nono`, `krun`), the
   merged value of `backend` (a `--backend` flag writes the same slot).
 - `MYSBX_MULTIPLEXER` — the multiplexer the configuration selected
-  (`tmux`, `workmux`, `herdr`, `aoe`, `orca`, `none`), the merged value
+  (`tmux`, `workmux`, `herdr`, `aoe`, `orca`, `thinkrail`, `none`), the merged value
   of `multiplexer` — the CONFIG's choice, so a one-shot
   `mysbx run -- CMD` reports it even though it starts no session.
 - `MYSBX_HOST` — the OUTER host's hostname (bd myconfig-5wf), read

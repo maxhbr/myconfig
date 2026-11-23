@@ -1384,6 +1384,10 @@ fn mux_case(mux: Multiplexer) -> (&'static str, &'static str) {
         Multiplexer::Herdr => ("/synth/bin/mysbx-herdr-entry", "mux-herdr-shell.txt"),
         Multiplexer::Aoe => ("/synth/bin/mysbx-aoe-entry", "mux-aoe-shell.txt"),
         Multiplexer::Orca => ("/synth/bin/mysbx-orca-entry", "mux-orca-shell.txt"),
+        Multiplexer::Thinkrail => (
+            "/synth/bin/mysbx-thinkrail-entry",
+            "mux-thinkrail-shell.txt",
+        ),
         Multiplexer::None => panic!("`none` starts no session and has no entry"),
     }
 }
@@ -1395,13 +1399,14 @@ fn golden_multiplexer_interactive_sessions() {
     // exports `TMUX_TMPDIR` after HOME/PATH — the argv is the
     // auditable form of "the socket lives inside the sandbox". The
     // isolation is identical for every variant, which is the point of
-    // running the same assertions over all five.
+    // running the same assertions over all six.
     for mux in [
         Multiplexer::Tmux,
         Multiplexer::Workmux,
         Multiplexer::Herdr,
         Multiplexer::Aoe,
         Multiplexer::Orca,
+        Multiplexer::Thinkrail,
     ] {
         let (entry, golden) = mux_case(mux);
         let mut cfg = base(true);
@@ -1473,7 +1478,14 @@ fn the_run_form_is_byte_identical_for_every_multiplexer() {
             .filter(|a| {
                 !matches!(
                     a.as_str(),
-                    "MYSBX_MULTIPLEXER" | "none" | "tmux" | "workmux" | "herdr" | "aoe" | "orca"
+                    "MYSBX_MULTIPLEXER"
+                        | "none"
+                        | "tmux"
+                        | "workmux"
+                        | "herdr"
+                        | "aoe"
+                        | "orca"
+                        | "thinkrail"
                 )
             })
             .map(|a| a.as_str())
@@ -1487,6 +1499,7 @@ fn the_run_form_is_byte_identical_for_every_multiplexer() {
         Multiplexer::Herdr,
         Multiplexer::Aoe,
         Multiplexer::Orca,
+        Multiplexer::Thinkrail,
     ] {
         let (entry, _) = mux_case(mux);
         let mut p = params();
@@ -4197,6 +4210,7 @@ fn session_name_env_works_for_all_multiplexers() {
         Multiplexer::Herdr,
         Multiplexer::Aoe,
         Multiplexer::Orca,
+        Multiplexer::Thinkrail,
     ] {
         let (entry, _) = mux_case(mux);
         let mut cfg = base(true);
@@ -7307,6 +7321,7 @@ fn nono_golden_multiplexer_session() {
         (Multiplexer::Aoe, "/synth/bin/mysbx-aoe-entry"),
         (Multiplexer::Orca, "/synth/bin/mysbx-orca-entry"),
         (Multiplexer::Herdr, "/synth/bin/mysbx-herdr-entry"),
+        (Multiplexer::Thinkrail, "/synth/bin/mysbx-thinkrail-entry"),
     ] {
         let mut cfg = nono_base(false);
         cfg.multiplexer = mux;

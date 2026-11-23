@@ -2363,6 +2363,7 @@ fn init_records_the_user_layers_multiplexer_in_the_sidecar() {
         Multiplexer::Herdr,
         Multiplexer::Aoe,
         Multiplexer::Orca,
+        Multiplexer::Thinkrail,
     ] {
         let (inv, _, sidecar) = fixture_uninited(&format!("init-mux-{mux}"), &["init"]);
         std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
@@ -2467,12 +2468,13 @@ fn fixture_mux(
 /// Every multiplexer that starts a session — the set these tests run
 /// over, taken from the CLI's own enum so a new variant cannot be
 /// added without deciding what these tests say about it.
-const SESSION_MUXES: [Multiplexer; 5] = [
+const SESSION_MUXES: [Multiplexer; 6] = [
     Multiplexer::Tmux,
     Multiplexer::Workmux,
     Multiplexer::Herdr,
     Multiplexer::Aoe,
     Multiplexer::Orca,
+    Multiplexer::Thinkrail,
 ];
 
 /// The wrapper pin of `mux` and a synthetic entry path for it. The pin
@@ -2590,6 +2592,7 @@ fn dry_run_run_form_is_never_a_multiplexer_session() {
                             | "herdr"
                             | "aoe"
                             | "orca"
+                            | "thinkrail"
                     )
                 })
                 .collect::<Vec<_>>()
@@ -14705,6 +14708,122 @@ fn orca_multiplexer_is_refused_on_nono_and_podman_gvisor() {
     assert!(
         !stdout.contains("aaaa-orca-entry"),
         "no orca entry payload in a run argv: {stdout}"
+    );
+    assert!(
+        stdout.ends_with("true\n"),
+        "the one-shot payload is the command: {stdout}"
+    );
+}
+
+#[test]
+fn thinkrail_multiplexer_is_refused_on_every_non_shared_netns_backend() {
+    // D17's second server payload (after orca, 4c), with the OPPOSITE
+    // network shape: the thinkrail payload needs no display, but its
+    // interactive surface is INBOUND — the operator opens the web UI
+    // at the `http://localhost:24242` the startup mark prints, from
+    // OUTSIDE the sandbox. Only `bubblewrap` and `nono` share the
+    // host network namespace; the other backends proxy outbound
+    // connections only (gvisor's runsc, krun's TSI, qemu's SLiRP,
+    // pasta), so a sandboxed engine host there serves a UI nothing
+    // outside the guest can open. A selection a backend cannot
+    // deliver is refused — exit 70, before the session clone and
+    // before the dry-run early return, so `--dry-run` audits the
+    // refusal too. The entry is PINNED in these tests: the refusal
+    // is the backend's, not the entry-pin one that would fire first
+    // otherwise.
+    for backend in ["podman-gvisor", "krun"] {
+        let (inv, _, sidecar) = fixture(&format!("thinkrail-refused-{backend}"), &[]);
+        std::fs::write(
+            sidecar.join("config.toml"),
+            format!("backend = \"{backend}\"\nmultiplexer = \"thinkrail\"\n"),
+        )
+        .unwrap();
+        let mut cmd = spawn_with_args(&inv, &["--verbose", "--dry-run"]);
+        cmd.env(
+            "MYSBX_MUX_ENTRY_THINKRAIL",
+            "/nix/store/aaaa-thinkrail-entry",
+        );
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(
+            out.status.code(),
+            Some(mysbx::EXIT_INFRASTRUCTURE),
+            "{backend}: {stderr}"
+        );
+        assert!(
+            stderr.contains(&format!(
+                "multiplexer = \"thinkrail\" is not supported on the `{backend}` backend"
+            )),
+            "{backend}: the refusal names the value and the backend: {stderr}"
+        );
+        assert!(
+            stderr.contains("switch the backend to `bubblewrap` or `nono`"),
+            "{backend}: the remedy is named: {stderr}"
+        );
+        assert!(
+            !stdout.contains("aaaa-thinkrail-entry"),
+            "no argv: {stdout}"
+        );
+    }
+
+    // BOTH shared-netns backends ACCEPT thinkrail: bubblewrap and nono
+    // share the host netns, so the inbound web UI has its path — the
+    // divergence from orca, which nono refuses (4c).
+    for backend in ["bubblewrap", "nono"] {
+        let (inv, _, sidecar) = fixture(&format!("thinkrail-accepted-{backend}"), &[]);
+        std::fs::write(
+            sidecar.join("config.toml"),
+            format!("backend = \"{backend}\"\nmultiplexer = \"thinkrail\"\n"),
+        )
+        .unwrap();
+        let mut cmd = spawn_with_args(&inv, &["--dry-run"]);
+        cmd.env(
+            "MYSBX_MUX_ENTRY_THINKRAIL",
+            "/nix/store/aaaa-thinkrail-entry",
+        );
+        let out = cmd.output().expect("failed to spawn the mysbx binary");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(out.status.code(), Some(0), "{backend}: stderr: {stderr}");
+        assert!(
+            stdout.ends_with("/nix/store/aaaa-thinkrail-entry\n"),
+            "{backend}: the thinkrail entry is the payload: {stdout}"
+        );
+    }
+
+    // The `--multiplexer thinkrail` FLAG path (cli.md D14) hits the
+    // same refusal — the flag is merged (3a) before the backend
+    // check, so it grants no exception a configuration would not
+    // have.
+    let (inv, _, sidecar) = fixture("thinkrail-flag-refused", &[]);
+    std::fs::write(sidecar.join("config.toml"), "backend = \"krun\"\n").unwrap();
+    let (code, _stdout, stderr) =
+        run_binary_with(&inv, &["--multiplexer", "thinkrail", "--dry-run"]);
+    assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "stderr: {stderr}");
+    assert!(
+        stderr.contains("is not supported on the `krun` backend"),
+        "the flag selection is refused like a config one: {stderr}"
+    );
+
+    // `run -- CMD` never starts a session (cli.md D11): the refusal
+    // guards the INTERACTIVE payload's choice only, so a one-shot on
+    // a refused backend is untouched by a thinkrail multiplexer key.
+    let (inv, _, sidecar) = fixture("thinkrail-run-unaffected", &["run", "--"]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"podman-gvisor\"\nmultiplexer = \"thinkrail\"\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary_with(&inv, &["run", "--dry-run", "--", "true"]);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(
+        stdout.starts_with("bwrap\n"),
+        "the one-shot argv is built: {stdout}"
+    );
+    assert!(
+        !stdout.contains("aaaa-thinkrail-entry"),
+        "no thinkrail entry payload in a run argv: {stdout}"
     );
     assert!(
         stdout.ends_with("true\n"),

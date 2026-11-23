@@ -3044,7 +3044,7 @@ in
         done
 
         # the multiplexer values are the closed set of config.rs NAMES
-        grep -q -- "-a 'tmux workmux herdr aoe orca none'" "$installed" \
+        grep -q -- "-a 'tmux workmux herdr aoe orca thinkrail none'" "$installed" \
           || fail "the multiplexer completions are not the closed set of NAMES"
 
         # session names come from the clones/ registry (workspace.md D2)

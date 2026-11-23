@@ -330,6 +330,7 @@ non-goal of cli.md still holds.
 | `aoe` | `aoe "$@"` | every tmux socket under `$TMUX_TMPDIR/tmux-<uid>/` — including dot-prefixed names, a bare `[tmux] socket_name` may start with a dot — answers `ls` (aoe's `[tmux] socket_name` can move its server off the default socket) |
 | `herdr` | `herdr "$@"` | the pre-started `herdr server` answers |
 | `orca` | not applicable: the payload is the server itself, it has no client detach | — |
+| `thinkrail` | not applicable: the payload is the engine host in the foreground — the IDE is a browser page, `^C` ends the run | — |
 | `none` | not applicable: the shell's exit is the end of the run | — |
 
 ### B8: The sandbox never sees the runtime root

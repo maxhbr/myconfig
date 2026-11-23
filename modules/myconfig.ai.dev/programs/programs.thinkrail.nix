@@ -112,12 +112,13 @@ in
   options.myconfig = with lib; {
     ai.dev.thinkrail = {
       enable = mkEnableOption "myconfig.ai.dev.thinkrail";
+      package = mkPackageOption pkgs "thinkrail" { };
     };
   };
   config = lib.mkIf config.myconfig.ai.dev.thinkrail.enable {
     home-manager.sharedModules = [
       {
-        home.packages = with pkgs; [ thinkrail ];
+        home.packages = [ osconfig.myconfig.ai.dev.thinkrail.package ];
         # Host-side app state (sessions, workspace registry). The mysbx
         # integration persists `.thinkrail` only inside the sandbox sidecar
         # (`stateDirs` above); this entry covers thinkrail runs on the host
@@ -135,7 +136,7 @@ in
       # The `thinkrail` binary on the sandbox PATH. The 24242 web UI is
       # host-reachable on the shared-netns backends only — see the
       # module header.
-      extraTools = [ pkgs.thinkrail ];
+      extraTools = [ osconfig.myconfig.ai.dev.thinkrail.package ];
       # ThinkRail reads pi's mounted configuration (see
       # `mysbxThinkrailMounts` and `piOwnsPiMounts` above) but writes its
       # own state nowhere else: `~/.thinkrail` (persisted via the

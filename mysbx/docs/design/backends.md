@@ -341,6 +341,7 @@ configuration, not an untrusted-repository escape.
 | an allowlist on `bubblewrap` or `podman-gvisor` | unchanged (config.md D21) |
 | `network = false` with an allowlist | unchanged (config.md D21) |
 | `multiplexer = "orca"` on `nono` or `podman-gvisor` | refused (bd myconfig-2m8): the payload is an Electron AppImage via appimage-run with its own Xvfb — the nono grants cover the mux socket dirs, not the Electron/X11 socket and syscall surface (the 6di.4.6 audit covered waypipe only), and the gvisor image ships no AppImage/Xvfb runtime at all; bubblewrap alone accepts it |
+| `multiplexer = "thinkrail"` on `nono` | available, the mirror image of orca: the payload is an HTTP+WS engine host whose browser UI is reached inbound over the shared loopback — no Electron, no X11, no terminal socket, and the nono mediation covers the loopback TCP listener fine; every non-shared-netns backend (both podman tiers, krun, the microVMs) refuses it instead |
 
 #### Rationale
 
@@ -1417,7 +1418,7 @@ lifecycle case has no recorded acceptance.
 Shipped refusals include the shared krun builder's checks plus
 QEMU-specific kernel/display checks:
 
-- `pids-limit`, the allowlist keys, `orca`, a multiplexer
+- `pids-limit`, the allowlist keys, `orca`, `thinkrail`, a multiplexer
   without a baked entry — the krun refusals verbatim.
 - `display = "waypipe"` — REFUSED in the first cut, for the same
   reason `podman-krun`'s D2 row refuses it: AF_UNIX socket objects

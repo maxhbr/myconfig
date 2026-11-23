@@ -36,13 +36,14 @@
 #                     get no `/bin/sh`, like they get no pinned nix.conf.
 #   MYSBX_TOOLS_PATH  the dev-tool closure on PATH (plan.md: "The base",
 #                     row "dev-tool closure on PATH")
-#   MYSBX_MUX_ENTRY_TMUX / _WORKMUX / _HERDR / _AOE / _ORCA
+#   MYSBX_MUX_ENTRY_TMUX / _WORKMUX / _HERDR / _AOE / _ORCA /
+#                     _THINKRAIL
 #                     the INTERACTIVE payload of a sandbox that selects
 #                     that multiplexer (`multiplexer = "…"`,
 #                     ../docs/design/config.md D17): the entry scripts of
 #                     ./tmux-entry.nix, ./workmux-entry.nix,
-#                     ./herdr-entry.nix, ./aoe-entry.nix and
-#                     ./orca-entry.nix, each of
+#                     ./herdr-entry.nix, ./aoe-entry.nix,
+#                     ./orca-entry.nix and ./thinkrail-entry.nix, each of
 #                     which starts its multiplexer on the
 #                     sandbox-internal socket. One pin per multiplexer,
 #                     absent for the ones a host does not carry — a
@@ -65,11 +66,14 @@
 #                     the waypipe binary INSIDE the podman-gvisor
 #                     image, the server end of the same channel on
 #                     the container backend. Absent = refused.
-#   MYSBX_PODMAN_MUX_ENTRY_TMUX / _WORKMUX / _HERDR / _AOE / _ORCA
+#   MYSBX_PODMAN_MUX_ENTRY_TMUX / _WORKMUX / _HERDR / _AOE
 #                     the entry scripts INSIDE the podman image, the
 #                     multiplexer payload of both podman backends
 #                     (same scripts as MYSBX_MUX_ENTRY_*, baked into
-#                     the image). Absent = refused.
+#                     the image). Absent = refused. `orca` and
+#                     `thinkrail` have no podman pin: their server
+#                     payloads need inbound reachability the container
+#                     network does not give them.
 #   MYSBX_KRUN_RUNTIME
 #                     the podman-krun backend's OCI runtime (docs/
 #                     design/backends.md D2): crun built against

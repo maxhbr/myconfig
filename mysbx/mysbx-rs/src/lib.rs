@@ -1110,8 +1110,8 @@ fn split_global_flags_traced(args: &[String]) -> Result<(Flags, Selections, &[St
             {
                 // bd myconfig-6tt: the `--<mux>` shorthands of the
                 // D14 flag — `--tmux`, `--workmux`, `--herdr`,
-                // `--aoe`, `--orca`, `--none` == `--multiplexer
-                // <mux>`. Pure aliases: they parse into the SAME
+                // `--aoe`, `--orca`, `--thinkrail`, `--none` ==
+                // `--multiplexer <mux>`. Pure aliases: they parse into the SAME
                 // `Flags::multiplexer` field with the same closed
                 // set (`config::Multiplexer::NAMES` — iterated, never
                 // re-listed), so every later rule — the bare-form
@@ -3927,6 +3927,47 @@ fn sandbox_pipeline(
         eprintln!(
             "  switch the backend to `bubblewrap` for an orca session, or select \
              another multiplexer"
+        );
+        return EXIT_INFRASTRUCTURE;
+    }
+
+    // 4e. the thinkrail multiplexer's backend support — the second
+    // payload that is not a terminal (after orca, 4c), with the
+    // OPPOSITE shape: nothing about it needs a display (the engine
+    // host is a plain Bun HTTP+WS server, no Electron, no Xvfb), but
+    // its interactive surface is INBOUND — the operator opens the
+    // web UI at the `http://localhost:24242` the startup mark prints,
+    // from OUTSIDE the sandbox. Only the shared-netns backends give
+    // that connection a path: `bubblewrap` and `nono` share the host
+    // network namespace (programs.thinkrail.nix pins the same reach-
+    // ability story), while every other backend proxies OUTBOUND
+    // connections only — krun's TSI, microvm-qemu's SLiRP, passt,
+    // and the podman backends' pasta have no inbound port mapping —
+    // so a sandboxed engine host there serves a UI nothing outside
+    // the guest can open: a practically dead session, discovered
+    // only after the sandbox came up. A selection a backend cannot
+    // deliver is refused here — exit 70, before the session clone (a
+    // broken configuration creates nothing) and before the
+    // `--dry-run` early return (a dry run audits the refusal too),
+    // the same accepted-never-ignored rule 4c follows. `run -- CMD`
+    // never starts a session (cli.md D11), so the refusal sees only
+    // the interactive payload's choice.
+    if matches!(payload, bwrap::Payload::Shell)
+        && merged.multiplexer == config::Multiplexer::Thinkrail
+        && backend != "bubblewrap"
+        && backend != "nono"
+    {
+        eprintln!("mysbx: multiplexer = \"thinkrail\" is not supported on the `{backend}` backend");
+        eprintln!(
+            "  the thinkrail payload is the ThinkRail engine host — an HTTP+WS server \\
+             whose web UI the operator opens from OUTSIDE the sandbox; only the \
+             `bubblewrap` and `nono` backends share the host network namespace, \
+             and the other backends proxy outbound connections only, so the UI \
+             would be unreachable — a practically dead session, refused up front"
+        );
+        eprintln!(
+            "  switch the backend to `bubblewrap` or `nono` for a thinkrail \
+             session, or select another multiplexer"
         );
         return EXIT_INFRASTRUCTURE;
     }
@@ -10434,6 +10475,7 @@ mod tests {
             ("--herdr", config::Multiplexer::Herdr),
             ("--aoe", config::Multiplexer::Aoe),
             ("--orca", config::Multiplexer::Orca),
+            ("--thinkrail", config::Multiplexer::Thinkrail),
             ("--none", config::Multiplexer::None),
         ] {
             let args = s(&[text, "--dry-run"]);

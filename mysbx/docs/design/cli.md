@@ -239,7 +239,7 @@ secrets, so nobody pastes a verbose report into a bug tracker unaware.
 
 ### D11: the multiplexer session replaces the interactive payload only
 
-With `multiplexer = "tmux" | "workmux" | "herdr" | "aoe" | "orca"` in a
+With `multiplexer = "tmux" | "workmux" | "herdr" | "aoe" | "orca" | "thinkrail"` in a
 configuration layer (config.md D17 — the generalization of the boolean
 `workmux` of D16), the **bare form** does not start a shell: its
 payload is the entry pinned for that value
@@ -396,13 +396,13 @@ The bare form accepts `--multiplexer <mux>` with the same position rule
 as the other global flags (D10: before the verb; here there is no verb —
 the flag belongs to the bare form alone). The value is the same closed
 enum as the config key (D17): `tmux` | `workmux` | `herdr` | `aoe` |
-`orca` | `none`. It wins over the merged `multiplexer` of both layers for THIS
+`orca` | `thinkrail` | `none`. It wins over the merged `multiplexer` of both layers for THIS
 invocation only, per the precedence of D6 (flags > sidecar > user >
 defaults) — nothing is written, and the next `mysbx` runs whatever the
 configuration says again.
 
 Every value is also accepted as its own flag (bd myconfig-6tt):
-`--tmux`, `--workmux`, `--herdr`, `--aoe`, `--orca` and `--none` are
+`--tmux`, `--workmux`, `--herdr`, `--aoe`, `--orca`, `--thinkrail` and `--none` are
 PURE ALIASES of `--multiplexer <that value>` — parsed into the same
 field, accepted nowhere the long form is not, refused with the same
 usage errors. One invocation selects at most one value: two shorthands,
@@ -427,7 +427,10 @@ entry for is refused exactly like a config layer selecting it (D11/D17):
 exit `70` with the `mysbx: ` message naming the value and the missing
 variable — never a silent plain shell. `orca` on a non-`bubblewrap`
 backend is refused the same way (D17's backend rule, bd myconfig-2m8):
-the flag grants no exception a configuration would not have. The flag
+the flag grants no exception a configuration would not have.
+`thinkrail` on any backend other than `bubblewrap`/`nono` is refused
+with the mirror-image rule (D17): same exit `70`, same audit by
+`--dry-run`. The flag
 grants no access a
 configuration would not have: it selects a payload from mysbx's own
 closure either way.
