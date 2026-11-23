@@ -1200,8 +1200,10 @@ fn host_service_name(name: &str, at: &str) -> Result<(), Error> {
 
 /// Parse `memory`: a string in podman's `--memory` grammar — a whole
 /// number of bytes, optionally with a `b`, `k`, `m` or `g` suffix
-/// (any case), e.g. `"8g"`, `"512m"`.
-fn memory(value: &Value) -> Result<String, Error> {
+/// (any case), e.g. `"8g"`, `"512m"`. `pub(crate)`: the session
+/// picker's typed row parses its draft through the SAME grammar
+/// at Enter (docs/design/tui.md T10).
+pub(crate) fn memory(value: &Value) -> Result<String, Error> {
     let raw = string(value, "memory")?;
     let lower = raw.to_ascii_lowercase();
     let digits = lower.strip_suffix(['b', 'k', 'm', 'g']).unwrap_or(&lower);
@@ -1244,8 +1246,10 @@ fn scratch_size(value: &Value) -> Result<String, Error> {
 }
 
 /// Parse `cpus`: a positive integer or float, kept as the string
-/// podman's `--cpus` takes.
-fn cpus(value: &Value) -> Result<String, Error> {
+/// podman's `--cpus` takes. `pub(crate)`: the session picker's typed
+/// row parses its draft through the SAME grammar at Enter
+/// (docs/design/tui.md T10).
+pub(crate) fn cpus(value: &Value) -> Result<String, Error> {
     let n = match value {
         Value::Integer(i) => *i as f64,
         Value::Float(f) => *f,
@@ -1267,8 +1271,10 @@ fn cpus(value: &Value) -> Result<String, Error> {
     })
 }
 
-/// Parse `pids-limit`: a positive integer.
-fn pids_limit(value: &Value) -> Result<u32, Error> {
+/// Parse `pids-limit`: a positive integer. `pub(crate)`: the session
+/// picker's typed row parses its draft through the SAME grammar at
+/// Enter (docs/design/tui.md T10).
+pub(crate) fn pids_limit(value: &Value) -> Result<u32, Error> {
     let n = value.as_integer().ok_or_else(|| {
         Error::Schema(format!(
             "pids-limit: expected an integer, found {}",

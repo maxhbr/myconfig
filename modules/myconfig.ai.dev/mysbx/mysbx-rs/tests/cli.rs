@@ -19729,6 +19729,837 @@ fn sigterm_under_the_picker_restores_the_terminal() {
     );
 }
 
+#[test]
+fn the_picker_network_row_is_read_only() {
+    // T9, live: the network row renders the RESOLVED merged value
+    // (the merge's default `shared` here — no layer set one) with
+    // its read-only hint, and Left/Right on it are NO-OPS: the
+    // render never changes (the row's text is stable across the
+    // cycles) and Enter afterwards composes no network anything —
+    // the run proceeds the way an untouched picker's does, straight
+    // into the layers' backend refusal.
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture_uninited("once-picker-network", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let mut cmd = once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &[]);
+    let mut child = cmd.spawn().expect("failed to spawn the picker under a pty");
+    let mut master = master;
+    use std::io::Write;
+    // The full render: the network row's label and the read-only
+    // hint are the readiness signal.
+    let mut seen = pty_wait_for(
+        &mut master,
+        &mut child,
+        "network",
+        "the picker never rendered the network row",
+    );
+    assert!(
+        seen.contains("read-only"),
+        "the read-only-ness is visible (T2's disabled-row precedent): {seen}"
+    );
+    // Move the focus down three times: backend → multiplexer →
+    // agent → network (row 3 of 9). The FOCUS marker is the
+    // proof: the render inverts the focused row's label, so the
+    // `\x1b[7m>network` sequence pins that the focus is ON the
+    // read-only row before the no-op keys go in — not merely that
+    // some render somewhere contained the hint.
+    master.write_all(b"\x1b[B\x1b[B\x1b[B").unwrap();
+    seen.push_str(&pty_wait_for(
+        &mut master,
+        &mut child,
+        "\x1b[7m>network",
+        "the focus never reached the network row",
+    ));
+    // Left/Right on the read-only row: no-ops. The render redraws
+    // identically — the proof is the NEXT key: Enter still
+    // dispatches (never swallowed by a stuck cycle), and the run is
+    // exactly the untouched picker's (the layers' backend refusal).
+    master.write_all(b"\x1b[D\x1b[C").unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(150));
+    master.write_all(b"\r").unwrap();
+    let (tail, out) =
+        pty_drain_until_exit(&mut master, &mut child, "the Enter after the no-op cycles");
+    seen.push_str(&tail);
+    assert_eq!(
+        out.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "the run is the layers' decision (bubblewrap's binary is missing); pty said: {seen}"
+    );
+    assert!(
+        seen.contains("cannot exec the backend"),
+        "Enter composed no network decision — the pipeline's own refusal ran: {seen}"
+    );
+}
+
+#[test]
+fn a_picker_nested_virt_on_over_a_user_deny_is_refused() {
+    // M1's live pin: the merge's own D27 guard cannot see the
+    // picker's one-run override (it runs before the override
+    // exists), so the override site re-checks the one widening
+    // shape — `on` over a USER layer `nested-virt = false` is a
+    // refusal with the merge's own message shape, exit 70, NOTHING
+    // dispatched (no backend spawn, no session, the temp root
+    // never created). The row seeds `off` (the user deny), so the
+    // cycle is off → inherit → on: two Rights.
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture_uninited("once-picker-nv-deny", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\nnested-virt = false\n",
+    )
+    .unwrap();
+    let mut cmd = once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &[]);
+    let mut child = cmd.spawn().expect("failed to spawn the picker under a pty");
+    let mut master = master;
+    use std::io::Write;
+    let mut seen = pty_wait_for(
+        &mut master,
+        &mut child,
+        "nested-virt",
+        "the picker never rendered the nested-virt row",
+    );
+    // The deny seeds the row at `off` — the honest resolution.
+    assert!(
+        seen.contains("[off]"),
+        "the user layer's deny seeds the row at off: {seen}"
+    );
+    // Focus the row (7 Downs) and cycle twice: off → inherit → on.
+    master
+        .write_all(b"\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B")
+        .unwrap();
+    master.write_all(b"\x1b[C\x1b[C").unwrap();
+    seen.push_str(&pty_wait_for(
+        &mut master,
+        &mut child,
+        "[on]",
+        "the cycle never reached on",
+    ));
+    // Enter: the deny re-check fires — the refusal, not a session.
+    master.write_all(b"\r").unwrap();
+    let (tail, out) = pty_drain_until_exit(&mut master, &mut child, "the Enter over the user deny");
+    seen.push_str(&tail);
+    assert_eq!(
+        out.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "the D27 re-check refuses the widening with exit 70; pty said: {seen}"
+    );
+    assert!(
+        tail.contains("re-enables the nested virtualization"),
+        "the refusal carries the merge's own message shape: {tail}"
+    );
+    assert!(
+        tail.contains("denied with `nested-virt = false`"),
+        "the refusal names the user layer's deny: {tail}"
+    );
+    assert!(
+        !tail.contains("cannot exec the backend"),
+        "nothing dispatched — the refusal fired before any backend spawn: {tail}"
+    );
+    // And no temp root: the picker filled `Flags`, the refusal is
+    // the pipeline's own early return, before `sandbox()`'s Once
+    // arm creates anything.
+    let base = inv.home.join("runtime/mysbx-once");
+    assert!(
+        !base.exists()
+            || std::fs::read_dir(&base)
+                .map(|d| d.count() == 0)
+                .unwrap_or(false),
+        "the refusal left no temp root behind; pty said: {seen}"
+    );
+}
+
+#[test]
+fn a_typed_memory_override_reaches_the_pipeline() {
+    // T10, live: typing `2` then `g` into the memory row (focus 5)
+    // and Enter composes `Flags::memory = Some("2g")`, which the
+    // pipeline applies over the merge — observable through the
+    // bubblewrap arm's unenforced-limits warning, which names
+    // `memory` ONLY because the override reached `merged.memory`
+    // (no layer set the key, so an untouched picker's run prints no
+    // such warning).
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture_uninited("once-picker-memory", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let mut cmd = once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &[]);
+    let mut child = cmd.spawn().expect("failed to spawn the picker under a pty");
+    let mut master = master;
+    use std::io::Write;
+    let _ = pty_wait_for(
+        &mut master,
+        &mut child,
+        "memory",
+        "the picker never rendered the memory row",
+    );
+    // Focus the memory row: five Downs (backend=0 … memory=5), type
+    // the draft, then Enter.
+    master.write_all(b"\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B").unwrap();
+    let _ = pty_wait_for(
+        &mut master,
+        &mut child,
+        "[—]",
+        "the memory row's seed never rendered",
+    );
+    master.write_all(b"2g").unwrap();
+    let _ = pty_wait_for(&mut master, &mut child, "2g", "the draft never rendered");
+    master.write_all(b"\r").unwrap();
+    let (seen, out) = pty_drain_until_exit(&mut master, &mut child, "the typed-override run");
+    assert_eq!(
+        out.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "the run refused on the missing backend binary, after the warning; pty said: {seen}"
+    );
+    assert!(
+        seen.contains("does not enforce `memory`"),
+        "the typed override reached merged.memory — the bubblewrap warning names it: {seen}"
+    );
+}
+
+#[test]
+fn a_typed_invalid_draft_shows_a_picker_error_and_never_dispatches() {
+    // T10, live: a draft the config parser refuses (`0` for memory —
+    // a positive size is required) is a PICKER error: the error line
+    // renders inside the picker, Enter dispatches NOTHING (the child
+    // is still alive, no pipeline output), and Backspace clears the
+    // draft back to untouched so a second Enter runs the layers'
+    // decision with no memory flag composed.
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture_uninited("once-picker-invalid", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let mut cmd = once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &[]);
+    let mut child = cmd.spawn().expect("failed to spawn the picker under a pty");
+    let mut master = master;
+    use std::io::Write;
+    let _ = pty_wait_for(
+        &mut master,
+        &mut child,
+        "memory",
+        "the picker never rendered the memory row",
+    );
+    // Focus memory (5), type `0`, Enter — the picker error.
+    master.write_all(b"\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B").unwrap();
+    let _ = pty_wait_for(&mut master, &mut child, "[—]", "the seed never rendered");
+    master.write_all(b"0").unwrap();
+    let _ = pty_wait_for(&mut master, &mut child, "0", "the draft never rendered");
+    master.write_all(b"\r").unwrap();
+    let seen = pty_wait_for(
+        &mut master,
+        &mut child,
+        "error:",
+        "the invalid draft never showed the picker error line",
+    );
+    assert!(
+        seen.contains("memory"),
+        "the error line names the row: {seen}"
+    );
+    // Nothing dispatched: no pipeline bytes, the child still alive.
+    assert!(
+        !seen.contains("cannot exec the backend"),
+        "Enter dispatched nothing on the invalid draft: {seen}"
+    );
+    match child.try_wait().expect("the child probe itself failed") {
+        Some(status) => panic!("the picker must stay up after a draft error: {status}"),
+        None => {}
+    }
+    // Backspace empties the draft (untouched again), and Enter runs
+    // the layers' decision — no memory warning this time.
+    master.write_all(b"\x7f").unwrap();
+    let _ = pty_wait_for(
+        &mut master,
+        &mut child,
+        "[—]",
+        "the emptied draft never re-rendered",
+    );
+    master.write_all(b"\r").unwrap();
+    let (tail, out) = pty_drain_until_exit(&mut master, &mut child, "the post-error Enter");
+    let seen2 = format!("{seen}{tail}");
+    assert_eq!(
+        out.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "the second Enter ran the layers' backend: {seen2}"
+    );
+    assert!(
+        tail.contains("cannot exec the backend"),
+        "the dispatch happened after the draft was cleared: {tail}"
+    );
+    assert!(
+        !tail.contains("does not enforce `memory`"),
+        "no memory override survived the backspace: {tail}"
+    );
+}
+
+#[test]
+fn the_nested_virt_and_store_cycles_reach_the_pipeline() {
+    // T11/T12, live: cycling the nested-virt row (focus 7) to `on`
+    // and the store row (focus 8) to `baked` composes the two
+    // overrides, observable through the bubblewrap arm's own
+    // messages — the nested-virt warn-and-drop and the store
+    // warn-and-fall-back — which fire ONLY because the flags
+    // reached the merge (no layer set either key).
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture_uninited("once-picker-cycles", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let mut cmd = once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &[]);
+    let mut child = cmd.spawn().expect("failed to spawn the picker under a pty");
+    let mut master = master;
+    use std::io::Write;
+    let mut seen = pty_wait_for(
+        &mut master,
+        &mut child,
+        "nested-virt",
+        "the picker never rendered the nested-virt row",
+    );
+    // The seeds: `inherit` bracketed on both tri-state rows (no
+    // layer decided either key).
+    assert!(
+        seen.contains("[inherit]"),
+        "the undecided tri-state rows seed inherit: {seen}"
+    );
+    // Focus nested-virt (7), then one Right: inherit → on. The
+    // seven Downs go in ONE write — the coalesced-burst decode the
+    // persistent reader owns — and the Right follows in its own
+    // write so the wait's needle (`[on]`) cannot race the focus
+    // move's re-render.
+    master
+        .write_all(b"\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B")
+        .unwrap();
+    master.write_all(b"\x1b[C").unwrap();
+    seen.push_str(&pty_wait_for(
+        &mut master,
+        &mut child,
+        "[on]",
+        "the nested-virt cycle never rendered",
+    ));
+    // Focus store (8), one Right: inherit → host, then one more:
+    // host → baked.
+    master.write_all(b"\x1b[B").unwrap();
+    master.write_all(b"\x1b[C").unwrap();
+    seen.push_str(&pty_wait_for(
+        &mut master,
+        &mut child,
+        "[host]",
+        "the store cycle never rendered",
+    ));
+    master.write_all(b"\x1b[C").unwrap();
+    seen.push_str(&pty_wait_for(
+        &mut master,
+        &mut child,
+        "[baked]",
+        "the store cycle never reached baked",
+    ));
+    // Enter: both overrides compose and the bubblewrap arm reports
+    // both — the nested-virt drop and the store fall-back, plus the
+    // final exec refusal.
+    master.write_all(b"\r").unwrap();
+    let (tail, out) = pty_drain_until_exit(&mut master, &mut child, "the cycled-override run");
+    seen.push_str(&tail);
+    assert_eq!(
+        out.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "the run refused on the missing backend binary, after the warnings; pty said: {seen}"
+    );
+    assert!(
+        tail.contains("nested-virt = true is dropped"),
+        "the cycled nested-virt override reached merged.nested_virt: {tail}"
+    );
+    assert!(
+        tail.contains("needs a store disk the sandbox owns"),
+        "the cycled store override reached the store gate: {tail}"
+    );
+    assert!(
+        tail.contains("cannot exec the backend"),
+        "the pipeline ran to its own refusal: {tail}"
+    );
+}
+
+#[test]
+fn the_dry_run_cycle_composes_a_dry_run_and_starts_nothing() {
+    // T13, live: cycling the dry-run row (focus 9) to `on` and
+    // Enter composes `Flags::dry_run = true` — the observable is
+    // the dry run's OWN contract (D9): the argv prints (the
+    // once-shaped `mysbx-once/dry-run` paths pin that the pipeline
+    // ran to its argv-building end), the exit is `0`, NOTHING was
+    // started (no temp root exists) and no backend was exec'd (no
+    // `cannot exec` refusal — the dry run returns before the
+    // spawn).
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture_uninited("once-picker-dry-run", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let mut cmd = once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &[]);
+    let mut child = cmd
+        .spawn()
+        .expect("failed to spawn the bare mysbx-once under a pty");
+    let mut master = master;
+    use std::io::Write;
+    // ONE wait, on the LAST row's own needle: `pty_wait_for`
+    // returns the moment its needle arrives and anything later in
+    // the same read is kept in ITS seen — a second wait would start
+    // with an empty buffer and an idle child. The dry-run row's
+    // line is late enough in the render that the whole screen is
+    // in `seen` when it matches.
+    let mut seen = pty_wait_for(
+        &mut master,
+        &mut child,
+        "dry-run       [off] on",
+        "the dry-run row never rendered — the trio is missing from the render",
+    );
+    assert!(
+        seen.contains("mysbx-once — pick this session's sandbox"),
+        "the header rendered: {seen}"
+    );
+    // Focus the dry-run row (9 Downs, one write — the coalesced
+    // burst the persistent reader decodes), one Right: off → on,
+    // then Enter.
+    master
+        .write_all(b"\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B")
+        .unwrap();
+    master.write_all(b"\x1b[C").unwrap();
+    seen.push_str(&pty_wait_for(
+        &mut master,
+        &mut child,
+        // The focused row renders INVERTED (`\x1b[7m>label...\x1b[0m
+        // values`), so the reset escape sits between the padded
+        // label and the values — the needle spans it.
+        "dry-run       \x1b[0moff [on]",
+        "the dry-run cycle never rendered `on`",
+    ));
+    master.write_all(b"\r").unwrap();
+    let (tail, out) = pty_drain_until_exit(&mut master, &mut child, "the dry-run Enter run");
+    seen.push_str(&tail);
+    assert_eq!(
+        out.code(),
+        Some(0),
+        "a dry run exits 0 — nothing was started; pty said: {seen}"
+    );
+    assert!(
+        seen.contains("mysbx-once/dry-run/worktrees"),
+        "the ONCE dry-run argv printed (the pipeline ran to the argv): {seen}"
+    );
+    assert!(
+        !tail.contains("## creating:") && !tail.contains("## created:"),
+        "the dry run created nothing: {tail}"
+    );
+    // And the temp root was never created — `sandbox()`'s Once arm
+    // takes the placeholder path a composed dry_run selects.
+    assert!(
+        !inv.home.join("runtime/mysbx-once").exists(),
+        "no temp root was created: {seen}"
+    );
+}
+
+#[test]
+fn the_session_freetext_composes_the_clone_mode_plan() {
+    // T15, live: the persistent picker (the once form's session row
+    // is disabled, the sibling test below), typing `fix` into the
+    // session row (focus 11) and Enter composes
+    // `Flags::session = Some("fix")` — pinned through the
+    // clone-mode path's OWN observable: a non-git host repo meets
+    // the clone-plan refusal (exit 70, `has no commits — there is
+    // nothing to clone`), the pipeline's own message for the name
+    // a `--session fix` argv spelling would reach — no git binary
+    // needed, the refusal still proves the flag crossed the Enter
+    // boundary (an untouched Enter runs the backend refusal
+    // instead, the contrast the sibling tests carry).
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture("tui-picker-session", &["tui"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let mut cmd =
+        once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &["tui"]);
+    cmd.env_remove("MYSBX_ONCE");
+    let mut child = cmd.spawn().expect("failed to spawn mysbx tui under a pty");
+    let mut master = master;
+    use std::io::Write;
+    // ONE wait, on the LAST row's own needle — a header match
+    // returns while the rest of the render is still streaming,
+    // and the trailing bytes land in THIS wait's `seen` only.
+    let mut seen = pty_wait_for(
+        &mut master,
+        &mut child,
+        "[live]",
+        "the session row never rendered — its `live` seed is missing",
+    );
+    // The session row's display seed is `live`, the mode a bare run
+    // uses (T15) — the honest spelling, never a composed value.
+    assert!(
+        seen.contains("mysbx tui — pick this session's sandbox"),
+        "the header rendered: {seen}"
+    );
+    // Focus the session row (11 Downs, one write), type the draft.
+    // The FIRST byte is not `q` (the record's named cost: a
+    // q-initial name is an argv spelling), so the typing exercises
+    // the plain grammar path; the `q`-inside-draft routing is the
+    // sibling test below.
+    master
+        .write_all(b"\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B")
+        .unwrap();
+    master.write_all(b"fix").unwrap();
+    let _ = pty_wait_for(
+        &mut master,
+        &mut child,
+        "[live] fix",
+        "the session draft never rendered",
+    );
+    master.write_all(b"\r").unwrap();
+    let (tail, out) = pty_drain_until_exit(&mut master, &mut child, "the session Enter run");
+    seen.push_str(&tail);
+    assert_eq!(
+        out.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "the clone-plan refusal is the pipeline's exit 70; pty said: {seen}"
+    );
+    assert!(
+        tail.contains("has no commits — there is nothing to clone"),
+        "the refusal is the clone-mode path's own — `Flags::session` crossed Enter: {tail}"
+    );
+    assert!(
+        tail.contains("cannot create the session clone"),
+        "the refusal names the session clone: {tail}"
+    );
+}
+
+#[test]
+fn the_session_draft_q_is_routed_by_the_loop_not_shadowed() {
+    // T15's q-conflict, live at the WIRED level: `q` typed at the
+    // session row with a NON-EMPTY draft is a draft byte (the
+    // grammar's own letter), and at an EMPTY draft it is the abort
+    // — the loop's routing, never a shadowing. The first `q` at
+    // the empty row aborts with exit 0, nothing started; the
+    // second run types `fi` first and the `q` drafts (`fiq`),
+    // pinned by the draft rendering and by the eventual Enter run
+    // reaching the pipeline (the picker never aborted on the `q`).
+    //
+    // First: the EMPTY-draft `q` is the abort.
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    {
+        let (inv, _repo, _sidecar) = fixture("tui-picker-q-empty", &["tui"]);
+        std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+        std::fs::write(
+            inv.xdg.join("mysbx").join("config.toml"),
+            "backend = \"bubblewrap\"\n",
+        )
+        .unwrap();
+        let mut cmd =
+            once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &["tui"]);
+        cmd.env_remove("MYSBX_ONCE");
+        let mut child = cmd.spawn().expect("failed to spawn mysbx tui under a pty");
+        let mut master = master;
+        use std::io::Write;
+        let _ = pty_wait_for(
+            &mut master,
+            &mut child,
+            "[live]",
+            "the session row never rendered — its `live` seed is missing",
+        );
+        // 11 Downs to the session row (its draft is empty), then `q`.
+        master
+            .write_all(b"\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B")
+            .unwrap();
+        master.write_all(b"q").unwrap();
+        let (seen, out) = pty_drain_until_exit(&mut master, &mut child, "the empty-draft q abort");
+        assert_eq!(
+            out.code(),
+            Some(0),
+            "the empty-draft q is the abort (exit 0, nothing started); pty said: {seen}"
+        );
+    }
+    // Second: `q` inside a non-empty draft DRAFTS — the run does
+    // not abort on it.
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty for the second half");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture("tui-picker-q-inside", &["tui"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let mut cmd =
+        once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &["tui"]);
+    cmd.env_remove("MYSBX_ONCE");
+    let mut child = cmd.spawn().expect("failed to spawn mysbx tui under a pty");
+    let mut master = master;
+    use std::io::Write;
+    let _ = pty_wait_for(
+        &mut master,
+        &mut child,
+        "[live]",
+        "the session row never rendered — its `live` seed is missing",
+    );
+    master
+        .write_all(b"\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B")
+        .unwrap();
+    master.write_all(b"fi").unwrap();
+    let _ = pty_wait_for(
+        &mut master,
+        &mut child,
+        "[live] fi",
+        "the pre-q draft never rendered",
+    );
+    master.write_all(b"q").unwrap();
+    let seen = pty_wait_for(
+        &mut master,
+        &mut child,
+        "[live] fiq",
+        "the q inside the draft never drafted — the abort shadowed the grammar",
+    );
+    let _ = seen;
+    // The picker is still up (the q drafted, no abort) — Enter runs
+    // the pipeline, whose refusal is the proof nothing aborted.
+    master.write_all(b"\r").unwrap();
+    let (tail, out) = pty_drain_until_exit(&mut master, &mut child, "the post-draft Enter");
+    assert_eq!(
+        out.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "the Enter ran the pipeline — the q never aborted: {tail}"
+    );
+    assert!(
+        tail.contains("has no commits — there is nothing to clone"),
+        "the drafted session name (fiq) composed and the clone-plan refusal ran — the q never aborted: {tail}"
+    );
+}
+
+#[test]
+fn the_once_mode_renders_the_session_and_detachable_rows_disabled() {
+    // T13.1/T14.1/T15.1, live: the once picker renders the session
+    // and detachable rows DISABLED — visible, annotated with the
+    // once hint, and no key enables them: the coalesced focus walk
+    // reaches the detachable row, Left/Right are no-ops (the render
+    // never shows an `[on]`), typing at the session row drafts
+    // nothing, and Enter runs the layers' decision (the missing
+    // backend binary) — the disabled rows composed nothing. The
+    // dry-run row stays offerable (D22 allows it) and still
+    // renders `[off]` — the trio is not disabled as a block.
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture_uninited("once-picker-disabled-rows", &[]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let mut cmd = once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &[]);
+    let mut child = cmd
+        .spawn()
+        .expect("failed to spawn the bare mysbx-once under a pty");
+    let mut master = master;
+    use std::io::Write;
+    let mut seen = pty_wait_for(
+        &mut master,
+        &mut child,
+        "session       (refused in once-mode",
+        "the once picker never rendered its disabled rows",
+    );
+    // The disabled rows are VISIBLE with the once hint (the T2
+    // disabled-row precedent), and the dry-run row stays a cycle.
+    assert!(
+        seen.contains("mysbx-once — pick this session's sandbox"),
+        "the header rendered: {seen}"
+    );
+    assert!(
+        seen.contains("detachable    (refused in once-mode"),
+        "the detachable row renders disabled with the once hint: {seen}"
+    );
+    assert!(
+        seen.contains("session       (refused in once-mode"),
+        "the session row renders disabled with the once hint: {seen}"
+    );
+    assert!(
+        seen.contains("dry-run       [off] on"),
+        "the dry-run row stays offerable in once-mode: {seen}"
+    );
+    // Focus the detachable row (10 Downs, one write): cycles are
+    // no-ops there. The focus marker is the proof the keys went to
+    // the disabled row; the next render must still show the hint
+    // (never `[on]`).
+    master
+        .write_all(b"\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B")
+        .unwrap();
+    seen.push_str(&pty_wait_for(
+        &mut master,
+        &mut child,
+        "\x1b[7m>detachable",
+        "the focus never reached the disabled detachable row",
+    ));
+    master.write_all(b"\x1b[D\x1b[C").unwrap();
+    // Focus the session row (one more Down), try to type into it.
+    // (No sleep after the no-op cycles: the pty queue preserves
+    // key order, and the following `\x1b[7m>session` needle
+    // re-syncs on the Down's re-render — the queue order is the
+    // pty's own guarantee, same as the coalesced bursts.)
+    master.write_all(b"\x1b[B").unwrap();
+    let _ = pty_wait_for(
+        &mut master,
+        &mut child,
+        "\x1b[7m>session",
+        "the focus never reached the disabled session row",
+    );
+    master.write_all(b"xyz").unwrap();
+    // (No sleep here either — every key redraws, and Enter's
+    // drain re-syncs; the queue keeps the order.)
+    // Enter: the run is exactly the untouched picker's — the layers'
+    // backend refusal, no clone-plan message, no detachable
+    // composition (the missing dtach pin would refuse a real
+    // detachable start with its OWN message — absent here).
+    master.write_all(b"\r").unwrap();
+    let (tail, out) = pty_drain_until_exit(&mut master, &mut child, "the once Enter run");
+    seen.push_str(&tail);
+    assert_eq!(
+        out.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "the run is the layers' decision; pty said: {seen}"
+    );
+    assert!(
+        tail.contains("cannot exec the backend"),
+        "Enter ran the plain once pipeline: {tail}"
+    );
+    assert!(
+        !tail.contains("cannot create the session clone"),
+        "the disabled session row composed nothing: {tail}"
+    );
+    assert!(
+        !tail.contains("MYSBX_DTACH"),
+        "the disabled detachable row composed nothing (no detach refusal fired): {tail}"
+    );
+}
+
+#[test]
+fn the_detachable_cycle_maps_to_run_mode_detachable_at_enter() {
+    // T14, live — the row's `on` is NOT inert: the Enter arm maps
+    // a composed `detachable` to `RunMode::Detachable` (mirroring
+    // the dispatcher's own bare-form arm), so the pipeline reaches
+    // `detach::launch_outer` and its guards. The observable is the
+    // B10 dtach-pin refusal — the test env pins no dtach — exit 70,
+    // naming `MYSBX_DTACH`, with NO backend spawn (no `cannot exec
+    // the backend`: a foreground run would have tried the missing
+    // bubblewrap binary instead). This is the positive counterpart
+    // the once-mode test's `!MYSBX_DTACH` assertion guards against:
+    // while the flag was inert that assert was vacuous — the
+    // mapping is what makes a detached refusal reachable at all.
+    let Some((master, _slave_kept_open)) = open_test_pty() else {
+        eprintln!("skipping: no pty in this environment");
+        return;
+    };
+    let (inv, _repo, _sidecar) = fixture("tui-picker-detachable", &["tui"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx").join("config.toml"),
+        "backend = \"bubblewrap\"\n",
+    )
+    .unwrap();
+    let mut cmd =
+        once_picker_under_pty(&inv.home, &inv.xdg, &inv.cwd, master.as_raw_fd(), &["tui"]);
+    cmd.env_remove("MYSBX_ONCE");
+    // No dtach pin — B10's refusal shape (the spawn helpers' default;
+    // spelled here so the test's meaning does not depend on it).
+    cmd.env_remove("MYSBX_DTACH");
+    let mut child = cmd.spawn().expect("failed to spawn mysbx tui under a pty");
+    let mut master = master;
+    use std::io::Write;
+    // ONE wait, on the detachable row's own line — the last rows of
+    // the render stream (a header match would return before the
+    // row's bytes arrived).
+    let _ = pty_wait_for(
+        &mut master,
+        &mut child,
+        "detachable    [off] on",
+        "the detachable row never rendered",
+    );
+    // Focus the detachable row (10 Downs, one write — the coalesced
+    // burst the persistent reader decodes), one Right: off → on.
+    master
+        .write_all(b"\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B")
+        .unwrap();
+    master.write_all(b"\x1b[C").unwrap();
+    let _ = pty_wait_for(
+        &mut master,
+        &mut child,
+        // The focused row renders inverted, the reset escape between
+        // the padded label and the values.
+        "detachable    \x1b[0moff [on]",
+        "the detachable cycle never rendered `on`",
+    );
+    // Enter: the mapping routes the run into the detached pipeline,
+    // whose dtach-pin guard (B10) refuses — the observable.
+    master.write_all(b"\r").unwrap();
+    let (tail, out) = pty_drain_until_exit(&mut master, &mut child, "the detachable Enter run");
+    assert_eq!(
+        out.code(),
+        Some(mysbx::EXIT_INFRASTRUCTURE),
+        "the B10 dtach-pin refusal is exit 70; pty said: {tail}"
+    );
+    assert!(
+        tail.contains("--detach, --detachable and attach require a usable dtach"),
+        "the refusal is the B10 dtach-pin one — the row's `on` reached the detached pipeline: {tail}"
+    );
+    assert!(
+        tail.contains("MYSBX_DTACH"),
+        "the refusal names the pin: {tail}"
+    );
+    assert!(
+        !tail.contains("cannot exec the backend"),
+        "no foreground backend spawn — the run is the detached pre-flight's, never a plain Exec: {tail}"
+    );
+}
+
 /// Whether one of `fds` is readable within `millis` — `select(2)`
 /// through the raw libc symbol, the pty test's read budget. The
 /// fd_set word indexing is `fd / 64` (the bit is `fd % 64`): a
