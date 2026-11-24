@@ -15,7 +15,7 @@
 # (rtx INI router on port 33656 included).
 #
 # Sampling follows the Unsloth guide (temp 1.0 / top-p 1.0 / top-k 0 /
-# min-p 0.0, --jinja with the embedded chat template, 32K context). Vision
+# min-p 0.0, --jinja with the embedded chat template, 1M context). Vision
 # via the Q8_0 mmproj projector on the :mmproj variants (validated against
 # the pinned build: `inkling2v` projector loads and ingests images).
 #
@@ -77,7 +77,7 @@ let
         ]
         ++ lib.optionals dspark [ "unsloth/Inkling-2-Mini-GGUF/dspark-Inkling-2-Mini-Q8_0.gguf" ];
       };
-      ctxSize = 32768;
+      ctxSize = 1048576;
       parallel = 1;
       ttl = 1800;
       params = [
@@ -99,8 +99,9 @@ let
         # thinking block, the sampler injects the wrap-up message and the
         # end tag, so the model must produce its final answer (it keeps
         # generating within the remaining response budget). LiteLLM caps
-        # total output at contextWindow/4 = 8192, so thinking + answer
-        # still fit.
+        # total output at contextWindow/4 = 262144, well above the
+        # 16384 --n-predict cap and 6144 thinking budget; thinking + answer
+        # still easily fit.
         "--reasoning-budget"
         "6144"
         "--reasoning-budget-message"

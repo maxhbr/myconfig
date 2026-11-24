@@ -12,6 +12,7 @@ let
   gemma4 = import ./gemma4.nix { inherit modelsPullDir; };
   minimaxM2_7 = import ./MiniMax-M2.7-GGUF.nix { inherit modelsPullDir; };
   nemotron3Super = import ./Nemotron-3-Super.nix { inherit modelsPullDir; };
+  kolibri1_1 = import ./Kolibri-1.1.nix { inherit modelsPullDir; };
   # Disabled (too large to serve): amdModels is empty, see
   # ./MiMo-V2.6-Flash.nix. Keep the import so the definitions do not
   # bit-rot; re-add `++ withGroup "MoE" mimoV2_6_flash.amdModels` to
@@ -101,6 +102,7 @@ let
     ++ agentsA1.amdModels
     ++ qwen3_235B.amdModels
     ++ qwen3_8_27B.amdModels
+    ++ kolibri1_1.amdModels
     ++ qwen38_flash_next.amdModels
     ++ nex_n25_mini.amdModels
     ++ hy3.amdModels
