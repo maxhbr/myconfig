@@ -15,6 +15,15 @@ let
   osconfig = config;
 
   callLib = file: import file { inherit lib pkgs; };
+  mkWorkmuxWorktree = callLib ../../fns/workmux-worktree.nix;
+
+  # The shared mysbx sandbox-config helper (the dereferenced-store-tree
+  # machinery, bd myconfig-ooh); consumed like the entry scripts consume
+  # ../../../../mysbx/nix/mux-entry-lib.nix.
+  sandboxConfigLib = inputs.mysbx.lib.sandboxConfigLib {
+    inherit lib;
+    runCommand = pkgs.runCommand;
+  };
   opencodeWorktree = mkWorkmuxWorktree {
     name = "opencode-worktree";
     agentName = "opencode";
