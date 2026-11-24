@@ -417,9 +417,21 @@ in
         { pkgs, ... }:
         {
           imports = [
+            # The container is a separate nixpkgs eval: host-level
+            # overlays (hosts/host.thing/default.nix) and its
+            # nixpkgs.config do not reach it. Without this import the
+            # device-default wrappers pin back to stock llama-cpp 1.0.0,
+            # which cannot load inkling2_loop GGUFs; and the overlay's
+            # cuda_nvml_dev build input needs allowUnfree here (the host
+            # gets it from modules/nixos.nix.nix via nixosModules.core).
+            ../nixpkgs.overlays.llama-cpp-inkling.nix
             ../../../modules/myconfig.ai.llmops/myconfig.ai.llmops.llama-cpp
             ../../../modules/myconfig.ai.llmops/myconfig.ai.llmops.localModels.nix
           ];
+          nixpkgs.config = {
+            allowUnfree = true;
+            allowUnfreePredicate = (_: true);
+          };
           environment.systemPackages = with pkgs; [
             nvtopPackages.amd
             rocmPackages.rocm-smi
