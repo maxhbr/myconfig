@@ -1,5 +1,16 @@
 # Re-enable Kolibri-1.1 once llama.cpp PR #32891 lands
 
+## Status
+
+**Re-enabled on 2026-11-24** via the ROCm route: fork pin
+(`nixpkgs.overlays.llama-cpp-kolibri.nix`, PR head `5f4d2228`) +
+`serverPackage`, ROCm0 only. Vulkan stays excluded (no round-nvfp4
+SPIR-V kernel); the eventual mainline-merge cleanup lives in
+`doc/TODOs/drop-llama-cpp-kolibri-fork-pin.md`, the fork's upstream
+test-fixture bug in
+`doc/TODOs/fix-llama-cpp-kolibri-test-fixtures.md`. Remaining open
+item: the on-GPU load of the real 74.4 GiB Q8_0 file.
+
 ## What to do
 
 Re-enable the Kolibri-1.1 model entries disabled in
@@ -14,14 +25,18 @@ Re-enable the Kolibri-1.1 model entries disabled in
    whether it can be dropped back to the stock nixpkgs package at the
    same time (its other reason, Inkling-2-Mini, is merged since
    #32694/#32704).
-2. Uncomment the entry in `Kolibri-1.1.nix` and re-add
-   `++ kolibri1_1.amdModels` to `amdModels` in
-   `hosts/host.thing/myconfig.ai.llmops.llama-cpp/default.nix`.
+2. ~~Uncomment the entry in `Kolibri-1.1.nix`~~ Done: live with
+   `devices = [ "ROCm0" ]` and
+   `serverPackage = llama-cpp-kolibri`; the two Vulkan device-forcing
+   maps in `default.nix` exclude it by name.
 3. Validate the load, not just the arch name:
-   `llama-server_Vulkan0_Kolibri-1.1-Q8_0` must reach
+   `llama-server_ROCm0_Kolibri-1.1-Q8_0` must reach
    "model loaded" (the original deploy validated only that the
    `kolibri1` arch is known — Kolibri-**1** — and shipped a model
-   whose tensors no mainline build loads).
+   whose tensors no mainline build loads). The fork's loader reaches
+   the tensor stage on a converter-produced GGUF (verified 2026-11-24
+   with a tiny converted model); the on-GPU validation on the real
+   file is still pending.
 
 ## Preconditions
 
