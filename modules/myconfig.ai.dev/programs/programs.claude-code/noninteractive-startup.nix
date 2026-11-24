@@ -14,12 +14,11 @@
 # it cannot be a read-only store symlink deployed via `home.file`.
 #
 # A home-manager ACTIVATION script would work for the plain host `claude`, but
-# not for the sandboxed wrappers built in `./default.nix`: the bubblewrap
-# wrapper (`fns/bubblewrap-simple-app.nix`) gives the agent a `tmpfs` `$HOME`,
-# so a host-side `~/.claude.json` is invisible inside and the wizard would come
-# back on every launch. Seeding from the launcher itself therefore fixes ALL
-# tiers at once (plain, `*-bwrap`, `agent-bubblewrap-*`, `*-worktree`), because
-# it runs with whatever `$HOME` / `$CLAUDE_CONFIG_DIR` the sandbox set up.
+# not inside a mysbx sandbox: the sandbox home is a `tmpfs`, so a host-side
+# `~/.claude.json` is invisible inside and the wizard would come back on every
+# launch. Seeding from the launcher itself therefore fixes every deployment
+# at once, because it runs with whatever `$HOME` / `$CLAUDE_CONFIG_DIR` the
+# sandbox set up.
 #
 # ── What is seeded (and what is NOT) ───────────────────────────────────────
 # Verified against the packaged `claude-code` 2.1.260 binary:
@@ -88,9 +87,9 @@ let
           exit 0
       fi
 
-      # The scratch file must NOT live next to the config: in the jailed
-      # wrappers only `~/.claude.json` itself is bind-mounted writable, the
-      # home directory around it is not.
+      # The scratch file must NOT live next to the config: inside a mysbx
+      # sandbox the home is a tmpfs where only parts of `~/.claude` are
+      # mounted, and `mktemp` resolves to a writable location regardless.
       tmp="$(mktemp)"
       trap 'rm -f -- "$tmp"' EXIT
 

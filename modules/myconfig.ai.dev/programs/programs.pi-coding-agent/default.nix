@@ -1,18 +1,15 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# pi coding agent, its wrappers (pi/piBwrap, agent-bubblewrap-pi,
-# agent-qemu-pi, worktree variants), the generated pi extensions
-# (providers, jail marker, subagent/handoff examples) and the mysbx
-# tier integration: pi's config is mounted into mysbx sandboxes from a
-# dereferenced store tree built by the shared
-# ../../../mysbx flake lib (nix/sandbox-config.nix) helper (bd myconfig-ooh).
+# pi coding agent, the generated pi extensions (providers, jail marker,
+# subagent/handoff examples) and the mysbx tier integration: pi's config is
+# mounted into mysbx sandboxes from a dereferenced store tree built by the
+# shared ../../../mysbx flake lib (nix/sandbox-config.nix) helper (bd myconfig-ooh).
 {
   config,
   lib,
   pkgs,
   inputs,
-  jail,
   ...
 }:
 let
@@ -20,17 +17,6 @@ let
   system = pkgs.stdenv.hostPlatform.system;
   cfg = config.myconfig.ai.dev.pi-coding-agent;
   callLib = file: import file { inherit lib pkgs; };
-  callJailLib =
-    file:
-    import file {
-      inherit
-        lib
-        pkgs
-        jail
-        osconfig
-        ;
-    };
-  jail-app = callJailLib ../../fns/bubblewrap-app.nix;
 
   # The shared mysbx sandbox-config helper (the dereferenced-store-tree
   # machinery, bd myconfig-ooh); consumed like the entry scripts consume
@@ -52,117 +38,6 @@ let
   # among them) — the shared contract the check asserts against.
   mysbxPiSandboxOnlyFiles =
     (import ../pi-sandbox-subtrees.nix { inherit config lib pkgs; }).sandboxOnlyFiles;
-
-  # Jail library handle + the jail-to-host channel combinator. The combinator
-  # exposes a program *inside* the jail that forwards its single argument over
-  # a FIFO to a handler running *outside* the jail. We use it so the jailed pi
-  # can report its workmux status to the tmux server (which lives in the
-  # worktree pane's un-jailed environment where $TMUX/$TMUX_PANE and the tmux
-  # socket are valid) without exposing any tmux socket or $TMUX to the jail.
-  jailLib = jail.init pkgs;
-  inherit (jailLib.combinators) jail-to-host-channel add-runtime;
-
-  # Runtime permission for plain `agent-bubblewrap-pi`: when the working directory is a
-  # git repository that has a sibling `../<basename>__worktrees` directory
-  # (the convention used by the worktree tooling), bind that directory
-  # read-write into the jail so the agent can read/edit sibling worktrees.
-  # The check is done at runtime (in the wrapper, before `bwrap` starts) so
-  # the bind only happens when the `.git` marker exists on the host.
-  # `mount-cwd` already binds `$PWD` itself; this adds the out-of-tree
-  # worktrees directory next to it. Creation is ATTEMPTED when the directory
-  # is missing (bubblewrap can only bind an existing path, so otherwise the
-  # agent could not create the first worktree of a repository), but the mount
-  # stays OPTIONAL: when the repository's parent is not writable - e.g. a
-  # user-owned checkout below a root-owned directory - the jail must still
-  # start, since most sessions never touch a worktree at all. The
-  # herdr-specific launcher in ../programs.herdr.nix hard-fails instead,
-  # because worktree creation is its whole point.
-  worktreesSiblingPerm = add-runtime ''
-    if [ -e "$PWD/.git" ]; then
-      _jp_worktrees="$(dirname "$PWD")/$(basename "$PWD")__worktrees"
-      mkdir -p "$_jp_worktrees" 2>/dev/null || true
-      if [ -d "$_jp_worktrees" ]; then
-        RUNTIME_ARGS+=(--bind "$_jp_worktrees" "$_jp_worktrees")
-      fi
-    fi
-  '';
-
-  # Make the `workmux` binary available *inside* the agent sandboxes (jail and
-  # bubblewrap) whenever workmux is enabled. The status-tracking hooks/
-  # extensions installed by `myconfig.ai.dev.workmux` all shell out to
-  # `workmux set-window-status`, and un-jailed/plain worktree agents may run
-  # `workmux merge` / `workmux remove --keep-branch` from their pane, so the
-  # binary must resolve on PATH inside the sandbox (empty list on hosts without
-  # workmux). NOTE: the *jailed* worktree variant
-  # (`agent-bubblewrap-pi-worktree-inner`) does NOT carry the real binary; it installs
-  # `workmuxStatusShim` instead, which can only route `set-window-status` (see
-  # the shim below). `workmux merge`/`remove` from inside that jail cannot
-  # reach the tmux socket and will fail.
-  workmuxDevTools = lib.optional osconfig.myconfig.ai.dev.workmux.enable osconfig.myconfig.ai.dev.workmux.package;
-
-  # A jail-to-host channel exposing `workmux_status_channel` *inside* the jail.
-  # Calling `workmux_status_channel <status>` sends `<status>` over a FIFO to
-  # the handler below, which runs *outside* the jail in the worktree tmux
-  # pane's environment. There, $TMUX/$TMUX_PANE and the tmux socket are valid,
-  # so `workmux set-window-status` can update the pane's tmux window name.
-  #
-  # LOAD-BEARING: the handler runs *outside* the jail as a background process
-  # forked by the launcher pane, and relies on inheriting the launcher pane's
-  # $TMUX / $TMUX_PANE (and thus the tmux socket). This inheritance is correct
-  # because the launcher execs the inner jail wrapper in-pane and the jail's
-  # non-empty `cleanup` means the wrapper does not `exec bwrap` (so the
-  # background handler survives). $TMUX is never leaked *into* the jail
-  # (bwrap --clearenv).
-  #
-  # The channel name must be a valid POSIX identifier (the combinator asserts
-  # `isValidPosixName`), hence underscores rather than hyphens. The handler is
-  # wrapped in a `writeShellApplication` with no runtimeInputs, so it sets its
-  # own PATH to make `workmux` and `tmux` resolvable. Gated on workmux being
-  # enabled (empty list otherwise).
-  #
-  # Errors are logged (rather than fully swallowed) to $TMPDIR/-/tmp so that a
-  # misconfigured channel leaves a diagnosable trail instead of failing
-  # silently (the pi extension also `.catch()`es the in-jail call).
-  workmuxStatusChannelPerms = lib.optional osconfig.myconfig.ai.dev.workmux.enable (
-    jail-to-host-channel "workmux_status_channel" ''
-      export PATH=${
-        lib.makeBinPath [
-          osconfig.myconfig.ai.dev.workmux.package
-          pkgs.tmux
-        ]
-      }:$PATH
-      workmux set-window-status "$1" >>"''${TMPDIR:-/tmp}/workmux_status_channel.log" 2>&1 || true
-    ''
-  );
-
-  # A `workmux` PATH-shim installed *inside* the worktree jail in place of the
-  # real workmux binary. It intercepts `set-window-status` and routes it
-  # through the `workmux_status_channel` program (exposed by the channel
-  # above), so status updates reach the host tmux server without the jail
-  # needing a tmux socket. Any other subcommand is forwarded to the real
-  # workmux binary by absolute store path. Installing the shim instead of the
-  # real `workmux` avoids a PATH name collision on `workmux`.
-  #
-  # NOTE: only `set-window-status` is rescued. Other subcommands (`workmux
-  # merge`, `workmux remove`, ...) exec the real binary, which still needs the
-  # tmux socket that is not present inside the jail, so they fail. This matches
-  # the pre-change behaviour (the inner jail previously carried the real binary,
-  # equally unable to reach tmux from inside the sandbox).
-  #
-  # The real-binary forward uses `lib.getExe'` (not `lib.getExe`) because the
-  # upstream workmux flake package sets no `meta.mainProgram`; `getExe'` with
-  # the explicit `"workmux"` binary name silences the getExe deprecation
-  # warning while producing the identical `${pkg}/bin/workmux` path.
-  workmuxStatusShim = pkgs.writeShellApplication {
-    name = "workmux";
-    text = ''
-      if [ "''${1-}" = "set-window-status" ]; then
-        shift
-        exec workmux_status_channel "''${1-}"
-      fi
-      exec ${lib.getExe' osconfig.myconfig.ai.dev.workmux.package "workmux"} "$@"
-    '';
-  };
 
   # Build a lookup: model name (raw or provider-prefixed) -> contextWindow.
   # Covers both direct local-provider lookups (raw name) and
@@ -899,12 +774,12 @@ let
         }
       '';
 
-  # Custom theme to flag *non-jailed* pi sessions. Both `pi`/`piBwrap` and
-  # `agent-bubblewrap-pi` wrap the same `pi-coding-agent` binary and share the same
-  # `~/.pi/agent/settings.json` (hence the same theme), so the two are
-  # otherwise indistinguishable in the TUI. The jailed (sandboxed) session is the safe
-  # default and keeps the user's normal theme untouched; only the *un-jailed*
-  # session is recolored, giving its editor box border a red warning color.
+  # Custom theme to flag *un-sandboxed* pi sessions. The plain `pi` wrapper
+  # and a mysbx session share the same `~/.pi/agent/settings.json` (hence the
+  # same theme), so the two are otherwise indistinguishable in the TUI. The
+  # sandboxed session (mysbx sets `PI_JAIL_MARKER=1`) is the safe default and
+  # keeps the user's normal theme untouched; only the *un-sandboxed* session
+  # is recolored, giving its editor box border a red warning color.
   #
   # The editor border color is not the static `border` token; it is driven by
   # the current *thinking level* via `theme.getThinkingBorderColor(level)`,
@@ -915,7 +790,7 @@ let
   # normal border color.
   #
   # The `myconfig-jail-marker.ts` extension (below) reads `PI_JAIL_MARKER`
-  # (set to "1" inside the `agent-bubblewrap-pi` jail) and, only when it is *not* set,
+  # (set to "1" by the mysbx user config layer) and, only when it is *not* set,
   # switches to this theme on session start. Crucially it switches via the
   # Theme *object* overload of `ctx.ui.setTheme()`, which is in-memory only
   # and does NOT persist: the string overload writes the theme into the
@@ -972,13 +847,11 @@ let
   jailMarkerExtension = pkgs.writeText "pi-jail-marker.ts" ''
     // Auto-generated by myconfig.ai.dev.pi-coding-agent. Do not edit by hand.
     //
-    // Visually distinguishes the sandboxed sessions (`agent-bubblewrap-pi`
-    // and the mysbx tier, which set PI_JAIL_MARKER=1) from the un-sandboxed
-    // `pi`/`piBwrap` wrappers (which do not). The un-sandboxed session is the
-    // dangerous one (full home access), so it gets a red editor border via
-    // the `unjailed` theme; every sandboxed session — the agent-bubblewrap
-    // jail (marker set in the wrapper's runtime env) and mysbx (marker set
-    // via the generated mysbx user config layer `env`) — keeps the user's
+    // Visually distinguishes the sandboxed sessions (mysbx, which sets
+    // PI_JAIL_MARKER=1 via the generated user config layer `env`) from the
+    // un-sandboxed `pi` wrapper (which does not). The un-sandboxed session
+    // is the dangerous one (full home access), so it gets a red editor
+    // border via the `unjailed` theme; every mysbx session keeps the user's
     // normal theme.
     //
     // Both wrappers share ~/.pi (and thus ~/.pi/agent/settings.json), so the
@@ -1094,9 +967,8 @@ let
   # The line (e.g. "mysbx: bubblewrap via aoe") is set once at
   # `session_start` via `ctx.ui.setStatus()`, the same status-bar
   # mechanism the gondolin/plan-mode examples use. Outside a mysbx
-  # sandbox (`MYSBX_BACKEND` unset — the plain `pi`/`piBwrap` and
-  # `agent-bubblewrap-pi` wrappers) the extension renders nothing at
-  # all, so it is deployable unconditionally.
+  # sandbox (`MYSBX_BACKEND` unset — a plain `pi` session) the extension
+  # renders nothing at all, so it is deployable unconditionally.
   #
   # The sandbox's fish right prompt renders the same line from the same
   # variables (mysbx/nix/shell-config.nix `sandboxIdentity`); keep the
@@ -1293,23 +1165,6 @@ let
     printf 'export { default } from "./src/index.ts";\n' > $out/index.ts
   '';
 
-  piBwrap = callLib ../../fns/bubblewrap-simple-app.nix {
-    name = "pi";
-    pkg = pkgs.nixos-unstable.pi-coding-agent;
-    extraRuntimeInputs = [
-      pkgs.wget
-      pkgs.curl
-      pkgs.jq
-    ]
-    ++ workmuxDevTools;
-    writableDirs = [
-      ".pi"
-    ];
-    # Read-only bind of `~/.agents/skills/`, where `myconfig.ai.dev.skills`
-    # deploys handcrafted skills for pi (which has no `programs.pi.skills`
-    # option). See `modules/myconfig.ai.dev/skills/default.nix`.
-    readOnlyConfigDirs = [ ".agents" ];
-  };
 
   # The `/mysbx-inform` skill (bd myconfig-a2nj): a GENERATED skill,
   # not a static one — its whole point is that the sandbox's per-run
@@ -1332,8 +1187,7 @@ let
   #
   # Deployed unconditionally like the status extension: outside a
   # mysbx sandbox MYSBX_BACKEND is unset and the handler contributes
-  # nothing, so plain pi/piBwrap/agent-bubblewrap-pi sessions are
-  # unaffected.
+  # nothing, so plain pi sessions are unaffected.
   mysbxInformExtension =
     let
       # The template as a JSON string literal: JSON escaping keeps
@@ -1351,268 +1205,20 @@ let
     in
     pkgs.writeText "pi-mysbx-inform.ts" body;
 
-  # `agent-bubblewrap-pi` is an alternative to `piBwrap` that uses the jail.nix library
-  # (vendored at ./vendor/alexdavid-jail.nix) instead of a hand-rolled
-  # bubblewrap wrapper. See `../../fns/bubblewrap-app.nix` for the shared defaults.
-  #
-  # `~/.pi` is rw-bound because the agent picks up the auto-generated
-  # provider extension installed by home-manager
-  # (`~/.pi/agent/extensions/myconfig-providers.ts`) and so session and
-  # credential state persists across invocations.
-  agent-bubblewrap-pi = jail-app {
-    name = "agent-bubblewrap-pi";
-    pkg = pkgs.nixos-unstable.pi-coding-agent;
-    userDataDirs = [ ".pi" ];
-    # Read-only bind of `~/.agents/skills/` so pi discovers the handcrafted
-    # skills deployed there by `myconfig.ai.dev.skills`. Bound via
-    # `extraConfigDirs` (try-ro-bind inside `bubblewrap-app.nix`), so the jail still
-    # starts on a host where `.agents` has not been deployed.
-    extraConfigDirs = [ ".agents" ];
-    # Marker so `agent-bubblewrap-pi` sessions are visually distinguishable from the
-    # plain `pi`/`piBwrap` wrappers (which share the same `~/.pi/agent/settings.json`,
-    # hence the same theme). The `myconfig-jail-marker.ts` extension (deployed
-    # below) reads this variable: when set (jailed) it leaves the user's theme
-    # untouched (after self-healing any legacy marker corruption); when unset
-    # (un-jailed) it applies the red-border `unjailed` theme in-memory only.
-    extraRuntimeEnv.PI_JAIL_MARKER = "1";
-    # `pi` itself on the jail `PATH`: the jailed process only gets the binary
-    # exec'd by the jail wrapper, so anything that shells out to `pi` by name
-    # (subagents, `/handoff`, scripts and skills in the workspace) fails with
-    # "command not found" unless the package is also added to `PATH`.
-    extraDevTools = [ pi-coding-agent-pkg ] ++ workmuxDevTools;
-    # Bind the host path named by `PI_WORKTREE_MAIN_REPO` read-only into the
-    # jail. The `*-worktree` wrapper scripts set this to the *original* git
-    # repository (the worktree's linked main repo) before exec'ing `agent-bubblewrap-pi`,
-    # so git operations against the worktree can resolve the shared `.git`
-    # object store, refs and config that live in the main repo. Without this
-    # bind, `mount-cwd` only exposes the worktree directory itself and git
-    # fails with `fatal: not a git repository` because the worktree's `.git`
-    # file points into the main repo's `.git/worktrees/<name>/`. Unset for
-    # the plain (`agent-bubblewrap-pi`, `agent-bubblewrap-pi-tmp`) variants, where the
-    # conditional `--ro-bind-try` skips the bind silently.
-    extraReadOnlyEnvPaths = [ "PI_WORKTREE_MAIN_REPO" ];
-    # Also expose a sibling `../<basename>__worktrees` directory read-write
-    # when running from a git repo that has one (see `worktreesSiblingPerm`).
-    extraPermissions = [ worktreesSiblingPerm ];
-  };
-
-  # Worktree-only variant: expose the linked main checkout read-only, then
-  # remount its shared Git directory (`.git`) read-write. Git needs this for
-  # objects, refs, index locks, and worktree administration when committing
-  # from a linked worktree.
-  # This is separate from `agent-bubblewrap-pi` so a normal invocation cannot request a
-  # writable bind to another repository merely by setting an environment var.
-  agent-bubblewrap-pi-worktree-inner = jail-app {
-    name = "agent-bubblewrap-pi-worktree-inner";
-    pkg = pkgs.nixos-unstable.pi-coding-agent;
-    userDataDirs = [ ".pi" ];
-    extraConfigDirs = [ ".agents" ];
-    # Install the `workmux` PATH-shim (not the real binary) so
-    # `workmux set-window-status` — invoked by the jailed pi's
-    # `workmux-status.ts` extension — is routed through the jail-to-host
-    # channel below instead of shelling out to tmux (which is unreachable
-    # inside the jail). Gated on workmux being enabled.
-    # Same rationale as `agent-bubblewrap-pi` above: keep `pi` reachable by
-    # name inside the jail.
-    extraDevTools = [
-      pi-coding-agent-pkg
-    ]
-    ++ lib.optional osconfig.myconfig.ai.dev.workmux.enable workmuxStatusShim;
-    extraRuntimeEnv.PI_JAIL_MARKER = "1";
-    extraReadOnlyEnvPaths = [ "PI_WORKTREE_MAIN_REPO" ];
-    # This bind is emitted after the read-only main-repo bind by jail-app.
-    extraReadWriteEnvPaths = [ "PI_WORKTREE_GIT_DIR" ];
-    # Expose the `workmux_status_channel` program inside the jail and run its
-    # host-side handler in the worktree tmux pane's environment.
-    extraPermissions = workmuxStatusChannelPerms;
-  };
-
-  # Thin workmux-driven replacement for the previous bespoke worktree script.
-  # `mkWorkmuxWorktree` builds the launcher run inside the worktree pane (which
-  # resolves the shared git dir, exports PI_WORKTREE_* and execs
-  # `agent-bubblewrap-pi-worktree-inner`) and the user-facing `agent-bubblewrap-pi-worktree`
-  # wrapper (which requires tmux and calls `workmux add --agent agent-bubblewrap-pi`).
+  # Thin workmux-driven worktree launcher. `mkWorkmuxWorktree` builds the
+  # user-facing `pi-worktree` wrapper (which requires tmux and calls
+  # `workmux add --agent pi`).
   mkWorkmuxWorktree = callLib ../../fns/workmux-worktree.nix;
-  agentBubblewrapPiWorktree = mkWorkmuxWorktree {
-    name = "agent-bubblewrap-pi-worktree";
-    agentName = "agent-bubblewrap-pi";
-    agentType = "pi";
-    innerPkg = agent-bubblewrap-pi-worktree-inner;
-    workmuxPkg = osconfig.myconfig.ai.dev.workmux.package;
-  };
-  # Non-jailed variant driving the bubblewrap `piBwrap` wrapper. It exposes
-  # the worktree's shared git dir via the sandboxed-app `WORKTREE_*` env vars.
   piWorktree = mkWorkmuxWorktree {
     name = "pi-worktree";
     agentName = "pi";
     agentType = "pi";
-    innerPkg = piBwrap;
+    innerPkg = pkgs.nixos-unstable.pi-coding-agent;
     workmuxPkg = osconfig.myconfig.ai.dev.workmux.package;
     mainRepoEnv = "WORKTREE_MAIN_REPO";
     gitDirEnv = "WORKTREE_GIT_DIR";
   };
 
-  # `agent-qemu-pi` — the microVM analogue of `agent-bubblewrap-pi`. Same ergonomics
-  # (run it from a project subdirectory; the working directory is the only
-  # writable thing the agent sees), but instead of a bubblewrap jail the
-  # agent runs inside a real microvm.nix VM with its own kernel, an ephemeral
-  # root filesystem and an unprivileged `agent` user. See
-  # ../../myconfig.ai.dev.qemu-agent-sandbox for the guest/runner and the rationale for
-  # qemu + user-mode networking over cloud-hypervisor.
-  #
-  # The current working directory is shared read-write at /workspace via
-  # virtiofs; the agent is reached over SSH on a host-localhost forwarded port
-  # using a throwaway keypair generated per invocation. LLM credentials
-  # (OPENAI_API_KEY etc.) are forwarded over the SSH environment at launch —
-  # never baked into the Nix store, never in process argv. The VM is torn down
-  # and all guest state discarded on exit; only the workspace persists.
-  agent-qemu-pi = pkgs.writeShellApplication {
-    name = "agent-qemu-pi";
-    runtimeInputs = with pkgs; [
-      nix
-      openssh
-      coreutils
-      gnugrep
-    ];
-    text = ''
-      # Refuse to run in $HOME: like agent-bubblewrap-pi, the working directory is
-      # shared writable into the sandbox, and sharing the whole home
-      # directory would defeat the isolation. Run from a project subdirectory.
-      if [ "$PWD" = "$HOME" ]; then
-        echo "agent-qemu-pi: refusing to run in home directory ($HOME):" >&2
-        echo "agent-qemu-pi: the working directory is shared writable into the VM." >&2
-        echo "agent-qemu-pi: run from a project subdirectory instead." >&2
-        exit 1
-      fi
-
-      workspace="$(realpath "$PWD")"
-      if [ ! -d "$workspace" ]; then
-        echo "agent-qemu-pi: workspace is not a directory: $workspace" >&2
-        exit 1
-      fi
-
-      # Per-invocation runtime state (throwaway SSH key, VM control socket).
-      runtime_dir="$(mktemp -d "''${XDG_RUNTIME_DIR:-/tmp}/agent-qemu-pi.XXXXXX")"
-      # Pick a pseudo-random host-localhost port for the forwarded guest SSH.
-      ssh_port=$(( (RANDOM % 20000) + 20000 ))
-
-      vm_pid=""
-      cleanup() {
-        # Killing the launcher triggers its own trap, which tears down the
-        # qemu VM and the virtiofsd daemon(s) it started.
-        if [ -n "$vm_pid" ] && kill -0 "$vm_pid" 2>/dev/null; then
-          kill "$vm_pid" 2>/dev/null || true
-          wait "$vm_pid" 2>/dev/null || true
-        fi
-        rm -rf "$runtime_dir"
-      }
-      trap cleanup EXIT INT TERM
-
-      # Throwaway SSH keypair authorizing the launcher into the guest.
-      ssh-keygen -q -t ed25519 -N "" -f "$runtime_dir/id" -C agent-qemu-pi
-
-      export QEMU_AGENT_SANDBOX_KIND=pi
-      export AGENT_QEMU_PI_WORKSPACE="$workspace"
-      export AGENT_QEMU_PI_SSH_PORT="$ssh_port"
-      export AGENT_QEMU_PI_AUTHORIZED_KEYS="$runtime_dir/id.pub"
-      export AGENT_QEMU_PI_NETWORK=1
-      # Shared sandbox tools (myconfig.ai.sandboxTools), baked in at build
-      # time as a JSON array of store paths; read by the impure
-      # standalone qemu-agent-sandbox runner expression.
-      export AGENT_QEMU_PI_EXTRA_PACKAGES='${sandboxToolsJson}'
-
-      echo "agent-qemu-pi: building microvm runner for workspace: $workspace" >&2
-      # Evaluate the module-owned expression directly. The runner must be
-      # built impurely because it embeds the per-launch workspace path,
-      # forwarded SSH port, and throwaway authorized-keys file.
-      runner=$(nix build --impure --no-link --print-out-paths \
-        --file ${config.myconfig.ai.dev.qemu-agent-sandbox.runnerExpression})
-
-      # microvm.nix's qemu runner connects to the virtiofs daemons over
-      # RELATIVE unix socket paths (e.g. `agent-qemu-pi-virtiofs-nix-store.sock`),
-      # and virtiofsd creates those sockets in its own working directory.
-      # The runner's `bin/sandboxed-launch` starts the (rootless) virtiofsd
-      # daemon(s), waits for their sockets, then runs qemu — all from the
-      # current directory. Run it from $runtime_dir so the relative socket
-      # paths resolve to a stable, per-invocation location and are cleaned up
-      # on exit.
-      cd "$runtime_dir"
-
-      echo "agent-qemu-pi: starting microvm (guest SSH forwarded to 127.0.0.1:$ssh_port)" >&2
-      "$runner/bin/sandboxed-launch" >"$runtime_dir/console.log" 2>&1 &
-      vm_pid=$!
-
-      # Wait for the guest SSH server to accept our key (or the VM to die).
-      ssh_opts=(
-        -p "$ssh_port"
-        -i "$runtime_dir/id"
-        -o StrictHostKeyChecking=no
-        -o UserKnownHostsFile=/dev/null
-        -o ConnectTimeout=3
-        -o LogLevel=ERROR
-      )
-      ready=0
-      for _ in $(seq 1 120); do
-        if ! kill -0 "$vm_pid" 2>/dev/null; then
-          echo "agent-qemu-pi: microvm exited before SSH became ready; console log:" >&2
-          tail -n 40 "$runtime_dir/console.log" >&2 || true
-          exit 1
-        fi
-        if ssh "''${ssh_opts[@]}" agent@127.0.0.1 true 2>/dev/null; then
-          ready=1
-          break
-        fi
-        sleep 1
-      done
-      if [ "$ready" -ne 1 ]; then
-        echo "agent-qemu-pi: timed out waiting for guest SSH; console log:" >&2
-        tail -n 40 "$runtime_dir/console.log" >&2 || true
-        exit 1
-      fi
-
-      # Forward LLM credentials over the SSH environment (never in argv or the
-      # store). Only forward variables that are actually set on the host.
-      for var in OPENAI_API_KEY OPENAI_BASE_URL OPENROUTER_BASE_URL ANTHROPIC_API_KEY; do
-        if [ -n "''${!var:-}" ]; then
-          ssh_opts+=(-o "SetEnv=$var=''${!var}")
-        fi
-      done
-
-      # Seed the in-guest `pi` configuration from the host `~/.pi` (and the
-      # shared skills/git config). The runner carries a `seed-agent-config`
-      # script that copies the ALLOWLISTED, denylist-filtered host
-      # configuration into the guest `/home/agent` over SSH — never baking
-      # anything into the store and never copying credential files (keys keep
-      # flowing over the SSH environment above). See
-      # ../../myconfig.ai.qemu-agent-sandbox/builders.nix (`mkSeedScript`) and
-      # ../../fns/seed-agent-config.nix. Run it BEFORE the interactive session
-      # so the agent starts already configured.
-      if [ -x "$runner/bin/seed-agent-config" ]; then
-        echo "agent-qemu-pi: seeding guest agent config from host" >&2
-        "$runner/bin/seed-agent-config" "$ssh_port" "$runtime_dir/id" 127.0.0.1 agent \
-          || echo "agent-qemu-pi: warning: config seeding reported errors (continuing)" >&2
-      fi
-
-      # Build a safely-quoted remote command: cd into the workspace and exec
-      # pi with the caller's argument vector preserved via printf %q.
-      remote_cmd='cd /workspace && exec pi'
-      for a in "$@"; do
-        remote_cmd+=" $(printf '%q' "$a")"
-      done
-
-      # Interactive session (-t for a TTY so the pi TUI works).
-      ssh -tt "''${ssh_opts[@]}" agent@127.0.0.1 "$remote_cmd"
-    '';
-  };
-
-  # Shared sandbox tools (myconfig.ai.dev.sandboxTools) as a JSON array of store
-  # paths, baked into the `agent-qemu-pi` wrapper and read (via the
-  # AGENT_QEMU_PI_EXTRA_PACKAGES env var) by the impure runner expression that
-  # builds the per-invocation VM runner. Same pattern as
-  # AGENT_QEMU_HERDR_AGENT_PACKAGES in ../programs.herdr.nix.
-  sandboxToolsJson = builtins.toJSON (
-    map (p: p.outPath) config.myconfig.ai.dev.sandboxTools.extraPackages
-  );
 
   # --- mysbx integration (../../../../mysbx) -------------------------------------
   #
@@ -1627,9 +1233,9 @@ let
   #      binds real files because the podman-gvisor container mounts nothing
   #      from the host /nix/store — see the helper for the full rationale)
   #   3. the jail-marker extension must NOT flag the session as un-jailed:
-  #      a mysbx sandbox is a jail just like `agent-bubblewrap-pi`, so the
-  #      generated user layer also sets `PI_JAIL_MARKER=1` for every mysbx
-  #      run (`…mysbx.config.env`). Without it the red `unjailed` border
+  #      a mysbx sandbox is a jail, so the generated user layer also sets
+  #      `PI_JAIL_MARKER=1` for every mysbx run (`…mysbx.config.env`).
+  #      Without it the red `unjailed` border
   #      would apply to mysbx sessions: mysbx forwards only
   #      TERM/COLORTERM/LANG/LC_ALL/EDITOR/VISUAL
   #      (../../../../mysbx/mysbx-rs/src/lib.rs `FORWARDED_ENV_VARS`), so the
@@ -1731,9 +1337,9 @@ in
         type = types.bool;
         default = false;
         description = ''
-          pi coding agent, its wrappers (pi/piBwrap, agent-bubblewrap-pi,
-          agent-qemu-pi, worktree variants) and the generated pi
-          extensions (providers, jail marker, subagent/handoff examples).
+          pi coding agent, the `pi-worktree` workmux wrapper and the
+          generated pi extensions (providers, jail marker, subagent/handoff
+          examples).
 
           When a litellm proxy is configured
           (`services.litellm.enable`), the litellm provider's model list is
@@ -1856,9 +1462,8 @@ in
     };
   };
   config = lib.mkIf config.myconfig.ai.dev.pi-coding-agent.enable {
-    # Register the jailed worktree launcher as a workmux "named agent" so
-    # `agent-bubblewrap-pi-worktree` (below) can `workmux add --agent agent-bubblewrap-pi`.
-    myconfig.ai.dev.workmux.agents.agent-bubblewrap-pi = agentBubblewrapPiWorktree.agent;
+    # Register the worktree launcher as a workmux "named agent" so
+    # `pi-worktree` (below) can `workmux add --agent pi`.
     myconfig.ai.dev.workmux.agents.pi = piWorktree.agent;
 
     # mysbx tier integration (see `mysbxPiMounts` above). Gated on mysbx
@@ -1866,7 +1471,7 @@ in
     # would otherwise be generated for a host that has no mysbx config.
     # `config.env.PI_JAIL_MARKER` marks every mysbx sandbox as jailed for the
     # jail-marker extension, so the red `unjailed` border stays reserved for
-    # genuinely un-sandboxed sessions (plain `pi`/`piBwrap`).
+    # genuinely un-sandboxed sessions (plain `pi`).
     myconfig.ai.dev.mysbx = lib.mkIf config.myconfig.ai.dev.mysbx.enable {
       extraTools = [ pi-coding-agent-pkg ];
       # C7b (bd myconfig-f23e): pi's own nodejs, by major — pi execs
@@ -1913,8 +1518,8 @@ in
       config.stateDirs = [ ".pi/agent/sessions" ];
     };
 
-    # fd in every sandbox tier (shared hook, see
-    # ../../sandboxes/myconfig.ai.sandboxTools.nix) for pi's `@`
+    # fd in the sandbox (shared hook, see
+    # ../myconfig.ai.dev.sandboxTools.nix) for pi's `@`
     # file-path completion, which shells out to `fd`.
     myconfig.ai.dev.sandboxTools.extraPackages = [ pkgs.fd ];
 
@@ -1970,25 +1575,7 @@ in
           home.packages = [
             pkgs.nixos-unstable.pi-coding-agent
             pkgs.fd
-            piBwrap
-            agent-bubblewrap-pi
-            agent-qemu-pi
-            (pkgs.writeShellApplication {
-              name = "pi-tmp";
-              runtimeInputs = with pkgs; [ coreutils ];
-              text = ''
-                cd "$(mktemp -d)" && exec ${lib.getExe piBwrap} "$@"
-              '';
-            })
-            (pkgs.writeShellApplication {
-              name = "agent-bubblewrap-pi-tmp";
-              runtimeInputs = with pkgs; [ coreutils ];
-              text = ''
-                cd "$(mktemp -d)" && exec ${lib.getExe agent-bubblewrap-pi} "$@"
-              '';
-            })
             piWorktree.wrapper
-            agentBubblewrapPiWorktree.wrapper
           ];
         }
       )

@@ -124,12 +124,10 @@ in
       };
     };
 
-    # Sandbox tiers: the agents' rewritten commands call `rtk`, so it has
+    # Sandboxes: the agents' rewritten commands call `rtk`, so it has
     # to be on the PATH wherever the agent runs.
-    # `myconfig.ai.dev.sandboxTools.extraPackages` reaches every tier that
-    # consumes the shared list (the `agent-bubblewrap-*`/nono jails, the
-    # `sandboxed-*` qemu runners, the
-    # podman image and mysbx).
+    # `myconfig.ai.dev.sandboxTools.extraPackages` reaches the mysbx
+    # dev-tool closure (the sandbox `PATH`).
     myconfig.ai.dev.sandboxTools.extraPackages = [ cfg.package ];
 
     # mysbx tier integration (../../../../mysbx), following the pattern of

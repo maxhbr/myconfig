@@ -15,10 +15,9 @@ the upstream flake input `inputs.workmux.packages.${system}.default`.
 | File          | Option namespace              | Purpose                                                                 |
 | ------------- | ----------------------------- | ----------------------------------------------------------------------- |
 | `default.nix` | `myconfig.ai.workmux`         | Install workmux, generate `~/.config/workmux/config.yaml`, status hooks |
-| `jail.nix`    | `myconfig.ai.workmux.jail`    | Run the whole workmux/tmux session inside a single bubblewrap jail      |
-| `sandbox.nix` | `myconfig.ai.workmux.sandbox` | Run the whole workmux/tmux session inside a single microvm.nix VM       |
+| `mysbx.nix`   | `myconfig.ai.workmux.mysbx`   | Make the workmux session the interactive payload of every `mysbx` sandbox |
 
-The reusable helper that turns a jailed agent wrapper into a workmux
+The reusable helper that turns an agent launcher into a workmux
 "named agent" lives one level up in
 [`../fns/workmux-worktree.nix`](../fns/workmux-worktree.nix); the coding-agent
 modules (`programs.pi-coding-agent`, `programs.claude-code`, `programs.codex`,
@@ -29,8 +28,8 @@ themselves under `myconfig.ai.workmux.agents.<name>`.
 
 ### Named agents (`myconfig.ai.workmux.agents.<name>`)
 
-Coding-agent modules register a workmux *named agent* — usually a
-jailed/sandboxed launcher produced by `fns/workmux-worktree.nix`. Each entry
+Coding-agent modules register a workmux *named agent* — a launcher produced by
+`fns/workmux-worktree.nix`. Each entry
 renders under `agents:` in the generated global config as
 `{ type; command; args?; env?; }`:
 
@@ -40,6 +39,10 @@ renders under `agents:` in the generated global config as
 
 You select one with `workmux add --agent <name>`. On hosts that enable pi, the
 top-level `agent` key defaults to `pi`.
+
+Sandboxing is not part of the per-agent entry anymore: `mysbx` is the sandbox,
+and a workmux session runs either on the host (unsandboxed) or as the
+interactive payload of a `mysbx` sandbox (see `mysbx.nix` above).
 
 ### Declarative `workmux setup` (`statusTracking.enable`, default `true`)
 
@@ -91,77 +94,34 @@ there is no runtime `workmux setup` step.
 
 ### `<agent>-worktree` wrappers (from `../fns/workmux-worktree.nix`)
 
-Thin per-agent commands (e.g. `agent-bubblewrap-pi-worktree`) registered by the
+Thin per-agent commands (e.g. `pi-worktree`) registered by the
 coding-agent modules. Each:
 
 - **Resumes in place** when invoked with no arguments from inside an existing
   linked worktree (re-execs the inner launcher with `--continue`).
 - **Refuses to run outside tmux** (workmux requires a running tmux server).
 - **Slugifies** a free-form first positional into a valid git branch name, so
-  `agent-bubblewrap-pi-worktree "Fix the parser"` still works.
+  `pi-worktree "Fix the parser"` still works.
 - Otherwise execs `workmux add --agent <name> "$@"`, forwarding branch name,
   `--prompt`, `--base`, etc. straight through.
 
 `workmux merge` / `workmux remove` then handle cleanup — no bespoke
 resume/cleanup scripts are needed.
 
-### `agent-bubblewrap-alacritty-workmux-tmux` / `agent-bubblewrap-workmux-tmux` (from `jail.nix`)
+### The mysbx sandbox as the workmux session (`mysbx.nix`)
 
-An alternative, "sandbox-the-whole-session" approach. Instead of sandboxing one
-agent binary per pane, it runs *one* bubblewrap jail containing the tmux server,
-workmux, the main git repo (the CWD) and its sibling `<basename>__worktrees`
-directory:
-
-- `agent-bubblewrap-workmux-tmux` — the jail. Its entrypoint boots a `workmux` tmux
-  session on a **private, repo-local socket**
-  (`<basename>__worktrees/.agent-bubblewrap/socket`, mode 0700), wires up the
-  sidebar + dashboard, and attaches. The worktrees directory is bound
-  read-write at the same path inside the jail, so the socket resolves
-  identically in and out of the sandbox while two different projects never
-  share a tmux server.
-- `agent-bubblewrap-alacritty-workmux-tmux` — the user-facing launcher. Run it from your **main**
-  git checkout (it refuses to run from a linked worktree): it resolves the
-  `<basename>__worktrees` sibling, binds it read-write into the jail, and opens
-  Alacritty running the jail.
-
-Agents launched in panes run *inside* this shared sandbox (no nested bwrap), so
-the in-jail workmux config maps `pi` to the **plain** pi binary rather than the
-host's `pi`→`pi-bwrap` agent (a nested sandbox would lose pi's real
-config/credentials). Everything else (nerdfont, `<agent>` pane layout, default
-`agent`) is inherited verbatim from `myconfig.ai.workmux.settings`.
-
-Enabled by default (`myconfig.ai.workmux.jail.enable`) wherever
-`myconfig.ai.workmux` is enabled.
-
-### `agent-qemu-workmux-tmux` / `agent-qemu-alacritty-workmux-tmux` (from `sandbox.nix`)
-
-The microVM counterpart of the bubblewrap `jail.nix` above, gated behind
-`myconfig.ai.workmux.sandbox.enable` (off by default; requires `/dev/kvm`):
-
-- `agent-qemu-workmux-tmux` — the in-terminal entry point (like `agent-bubblewrap-workmux-tmux`).
-  Run it from the main git checkout: it resolves the `<basename>__worktrees`
-  sibling, builds the per-invocation microVM runner, boots the VM, waits for
-  guest SSH, forwards LLM credentials over the SSH environment and execs the
-  in-guest `workmux-sandbox-entry` (which boots the workmux tmux session on a
-  private socket and attaches) in the current terminal.
-- `agent-qemu-alacritty-workmux-tmux` — a thin popup that opens
-  `agent-qemu-workmux-tmux` in a dedicated Alacritty window (like
-  `agent-bubblewrap-alacritty-workmux-tmux` opens `agent-bubblewrap-workmux-tmux`).
-
-Both `agent-*-alacritty-*` launchers detach from the calling shell — see
-[Detached GUI launchers](#detached-gui-launchers) below.
-
-Both reuse the same `mkSandboxedWorkmuxRunner` guest/runner (see
-[`../../../modules/myconfig.ai.dev/sandboxes/myconfig.ai.qemu-agent-sandbox/builders.nix`](../../../modules/myconfig.ai.dev/sandboxes/myconfig.ai.qemu-agent-sandbox/builders.nix)). The
-in-terminal sandbox is the reusable entry point; the Alacritty variant is a
-thin popup around it so the two wrappers stay byte-identical in everything but
-the window.
+One `mysbx` sandbox can own the whole tmux/workmux session: the agents workmux
+launches run *inside* it, un-jailed (plain binaries — mysbx is already the
+sandbox). `cd <repo> && mysbx` is the entry point; on hosts that enable both
+`myconfig.ai.dev.workmux` and `myconfig.ai.dev.mysbx` this is the default
+interactive payload (mysbx/docs/design/config.md D16). The tmux socket lives
+inside the sandbox home; `workmux add` gets the `<repo>__worktrees` sibling
+bound read-write automatically.
 
 ## Detached GUI launchers
 
-Every wrapper that pops up an Alacritty window
-(`agent-bubblewrap-alacritty-workmux-tmux`, `agent-qemu-alacritty-workmux-tmux`,
-`<name>-alacritty-tmux` from `myconfig.agentUsers`) shares the shell prelude in
+The `<name>-alacritty-tmux` wrappers from `myconfig.agentUsers` share the
+shell prelude in
 [`../../../lib/detached-gui-launcher.nix`](../../../lib/detached-gui-launcher.nix).
 Instead of `exec alacritty …` it calls `gui_launcher_exec alacritty …`, which:
 
@@ -184,11 +144,3 @@ All validation the wrapper performs *before* spawning (git checkout checks,
 worktree checks, …) still runs in the foreground, so its error messages and
 non-zero exit statuses reach the user unchanged. Once detached, the wrapper
 prints the log path and exits `0`; the GUI's own output goes to the log file.
-
-## Two sandboxing approaches at a glance
-
-| Approach                    | Sandbox unit           | tmux server | Agent in pane          |
-| --------------------------- | ---------------------- | ----------- | ---------------------- |
-| Per-agent worktree wrappers | one jail per agent     | host tmux   | nested `agent-bubblewrap-*` agent |
-| `agent-bubblewrap-alacritty-workmux-tmux`    | one jail per session   | in-jail tmux (private socket) | plain agent (jail is the sandbox) |
-| `agent-qemu-workmux-tmux`         | one microVM per session | in-VM tmux (private socket) | plain agent (VM is the sandbox)   |

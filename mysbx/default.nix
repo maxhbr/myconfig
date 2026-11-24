@@ -3,9 +3,9 @@
 #
 # myconfig.ai.dev.mysbx — the `mysbx` sandboxing CLI (see ./README.md).
 #
-# `mysbx` is the successor experiment to the other sandboxing tiers in this
-# repo (`myconfig.ai.dev.jail`, `myconfig.ai.dev.nono-agent-sandbox`,
-# `myconfig.ai.dev.microvm`): a single CLI
+# `mysbx` is the successor of the former sandboxing tiers of this repo
+# (`myconfig.ai.dev.jail`, `myconfig.ai.dev.nono-agent-sandbox`,
+# `myconfig.ai.dev.microvm` — all removed): a single CLI
 # that owns the sidecar directory next to a repository and drives the
 # underlying backend (bubblewrap by default, podman-gvisor and nono
 # alongside; qemu/microvm later).
@@ -786,7 +786,7 @@ in
         Shared tooling that EVERY sandbox tier should carry does NOT
         belong here: it goes through
         `myconfig.ai.dev.sandboxTools.extraPackages`
-        (modules/myconfig.ai.dev/sandboxes/myconfig.ai.sandboxTools.nix), which this
+        (modules/myconfig.ai.dev/myconfig.ai.dev.sandboxTools.nix), which this
         module consumes as well — the two lists concatenate in the
         dev-tool closure.
 
@@ -933,7 +933,7 @@ in
         which assigns them here. Keep it that way — which endpoints a
         deployment talks to is not public configuration.
 
-        ADDITIVE by design, like `myconfig.ai.dev.jail.fwdEnvs`: a
+        ADDITIVE by design: a
         deployment appends its variables with a plain assignment
         `forwardedEnvVars = [ "SOME_TOKEN" ];` — no `mkForce`, no
         self-reference — and the built-in block stays.
@@ -1965,9 +1965,7 @@ in
 
     nono = {
       # The nono backend (mysbx-rs/src/nono.rs): `nono run` under
-      # Landlock + seccomp — the same sandbox the tier-2 standalone
-      # wrappers of
-      # modules/myconfig.ai.dev/sandboxes/myconfig.ai.nono-agent-sandbox.nix use. The
+      # Landlock + seccomp. The
       # package below is what the wrapper pins as `MYSBX_NONO`
       # (./nix/mysbx.nix); `MYSBX_NONO_PROFILE` keeps its `"default"`
       # inside the package file.
@@ -1980,9 +1978,7 @@ in
         defaultText = literalExpression "pkgs.nono";
         description = ''
           The nono sandbox binary of the nono backend (Landlock +
-          seccomp; upstream nolabs-ai/nono, `pkgs.nono` — the same
-          tool the tier-2 wrappers of
-          modules/myconfig.ai.dev/sandboxes/myconfig.ai.nono-agent-sandbox.nix use),
+          seccomp; upstream nolabs-ai/nono, `pkgs.nono`),
           pinned into the wrapper as `MYSBX_NONO`.
 
           `null` pins nothing: `backend = "nono"` is a refused run,
@@ -2814,9 +2810,8 @@ in
     # the config but not the binaries prints `You need to install grc!`
     # on every prompt.
     #
-    # Shared sandbox tooling (modules/myconfig.ai.dev/sandboxes/myconfig.ai.sandboxTools.nix),
-    # phase 2d: mysbx honours the cross-tier hook like the other
-    # tiers. The hook's packages land on the sandbox PATH here, via
+    # Shared sandbox tooling (modules/myconfig.ai.dev/myconfig.ai.dev.sandboxTools.nix):
+    # the hook's packages land on the sandbox PATH here, via
     # the same `extraTools` the agent modules append to — one `listOf`
     # definition, so all of them simply concatenate in `toolsEnv`.
     #

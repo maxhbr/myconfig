@@ -113,13 +113,11 @@ in
       }
     ];
 
-    # Sandbox tiers: agent-browser needs to exist where agents run — inside
-    # the sandboxes, not only on the host.
+    # Sandboxes: agent-browser needs to exist where agents run — inside
+    # the sandbox, not only on the host.
     #
-    # `myconfig.ai.dev.sandboxTools.extraPackages` reaches every tier that
-    # consumes the shared list (the `agent-bubblewrap-*`/nono jails, the
-    # `sandboxed-*` qemu runners,
-    # the gVisor image and mysbx).
+    # `myconfig.ai.dev.sandboxTools.extraPackages` reaches the mysbx
+    # dev-tool closure (the sandbox `PATH`).
     #
     # NOTE: agent-browser requires a browser at runtime. Hosts that want
     # browser automation in sandboxes must also add chromium to the sandbox

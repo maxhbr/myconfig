@@ -56,10 +56,8 @@ in
     # gate, the same way the agent CLIs are gated: a host without ccusage
     # keeps its sandbox closures unchanged.
     #
-    # `myconfig.ai.dev.sandboxTools.extraPackages` reaches every tier that
-    # consumes the shared list (the `agent-bubblewrap-*`/nono jails, the
-    # `sandboxed-*` qemu runners,
-    # the gVisor image and mysbx).
+    # `myconfig.ai.dev.sandboxTools.extraPackages` reaches the mysbx
+    # dev-tool closure (the sandbox `PATH`).
     myconfig.ai.dev.sandboxTools.extraPackages = [ cfg.package ];
 
     home-manager.sharedModules = [

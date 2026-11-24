@@ -12,8 +12,8 @@
 # In addition to installing the binary, this module owns the *global* workmux
 # configuration (`~/.config/workmux/config.yaml`). Coding-agent modules (pi,
 # claude-code, opencode, ...) register "named agents" here via
-# `myconfig.ai.dev.workmux.agents.<name>` — typically a jailed/sandboxed launcher
-# produced by `fns/workmux-worktree.nix`. A thin `<agent>-worktree` wrapper
+# `myconfig.ai.dev.workmux.agents.<name>` — a launcher produced by
+# `fns/workmux-worktree.nix`. A thin `<agent>-worktree` wrapper
 # then runs `workmux add --agent <name>`, and workmux launches the launcher in
 # the worktree pane. `workmux merge` / `workmux remove` handle cleanup, so no
 # bespoke resume/cleanup scripts are needed anymore.
@@ -174,11 +174,7 @@ let
   };
 in
 {
-  imports = [
-    ./jail.nix
-    ./mysbx.nix
-    ./sandbox.nix
-  ];
+  imports = [ ./mysbx.nix ];
 
   options.myconfig.ai.dev.workmux = {
     enable = lib.mkEnableOption "workmux, parallel development in tmux with git worktrees";
@@ -234,7 +230,7 @@ in
       default = { };
       description = ''
         workmux "named agents" rendered under `agents:` in the generated
-        global config. Coding-agent modules register their jailed worktree
+        global config. Coding-agent modules register their worktree
         launchers here; select one with `workmux add --agent <name>`.
       '';
     };

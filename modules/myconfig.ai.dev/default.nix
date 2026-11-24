@@ -5,8 +5,7 @@
 # myconfig.ai (beads bd: myconfig-e4j, option rename bd: myconfig-4so). This
 # module re-homes the dev tooling part of the former
 # modules/myconfig.ai.llmops/default.nix umbrella: the agent CLI programs
-# (./programs/programs.*), the sandbox tiers, mysbx, workmux, skills and
-# hermes-agent. All options defined by this tree live under
+# (./programs/programs.*), mysbx, workmux, skills and hermes-agent. All options defined by this tree live under
 # `myconfig.ai.dev.*` and are gated behind `myconfig.ai.dev.enable`. The
 # `myconfig.ai.*` tree is now `myconfig.ai.llmops` (inference/services
 # tooling) and is completely orthogonal to this tree — no implied
@@ -20,13 +19,11 @@
   ...
 }:
 let
-  callLib = file: import file { inherit lib pkgs; };
-
   cfg = config.myconfig.ai.dev;
 in
 {
   options.myconfig.ai.dev = {
-    enable = lib.mkEnableOption "myconfig.ai.dev (AI developer tooling: agent CLIs, sandbox tiers, mysbx, workmux, skills, hermes-agent)";
+    enable = lib.mkEnableOption "myconfig.ai.dev (AI developer tooling: agent CLIs, mysbx, workmux, skills, hermes-agent)";
 
     defaultHugeModel = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
@@ -45,11 +42,7 @@ in
     ./agentsMd
     ./myconfig.ai.dev.litellm-forwarder.nix
 
-    ./sandboxes/myconfig.ai.jail.nix
-    ./sandboxes/myconfig.ai.nono.nix
-    ./sandboxes/myconfig.ai.nono-agent-sandbox.nix
-    ./sandboxes/myconfig.ai.sandboxTools.nix
-    ./sandboxes/myconfig.ai.qemu-agent-sandbox
+    ./myconfig.ai.dev.sandboxTools.nix
     ./services.orca.nix
     inputs.mysbx.nixosModules.mysbx
     ./hermes-agent
@@ -109,7 +102,6 @@ in
           browser.enable = true;
         };
         workmux.enable = lib.mkDefault (config.myconfig.dev.enable && config.programs.tmux.enable);
-        nono-agent-sandbox.enable = lib.mkDefault true;
         rtk.enable = lib.mkDefault true;
         hunk.enable = lib.mkDefault true;
         beads.enable = lib.mkDefault true;
@@ -124,34 +116,14 @@ in
       };
       home-manager.sharedModules = [
         {
-          home.packages =
-            with pkgs;
-            [
-              (callLib ./fns/bubblewrap-simple-app.nix {
-                name = "fish";
-                pkg = fish;
-              })
-              (callLib ./fns/bubblewrap-simple-app.nix {
-                name = "bash";
-                pkg = bash;
-              })
-            ]
-            ++ (with pkgs.python3Packages; [
-              huggingface-hub
-            ]);
+          home.packages = with pkgs.python3Packages; [
+            huggingface-hub
+          ];
           myconfig.persistence.cache-directories = [ ".cache/huggingface/" ];
         }
         {
           home.packages = with pkgs; [
             llmfit
-          ];
-        }
-        {
-          home.packages = with pkgs; [
-            # sandboxing
-            nono
-            fence
-            bubblewrap
           ];
         }
       ];

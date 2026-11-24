@@ -1,19 +1,16 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# myconfig.ai.dev.workmux.mysbx — the `mysbx` counterpart of
-# `myconfig.ai.dev.workmux.jail` (bubblewrap, `agent-bubblewrap-workmux-tmux`)
-# and `myconfig.ai.dev.workmux.sandbox` (microVM, `agent-qemu-workmux-tmux`).
-#
-# Same model as those two — one sandbox owns the whole tmux/workmux
-# session, and the agents workmux launches run *inside* it, un-jailed —
-# but expressed as `mysbx` CONFIGURATION instead of a Nix call site: no
-# new wrapper binary is added here. `cd <repo> && mysbx` is the entry
+# myconfig.ai.dev.workmux.mysbx — make the workmux session the
+# interactive payload of the `mysbx` sandbox: one sandbox owns the whole
+# tmux/workmux session, and the agents workmux launches run *inside* it,
+# un-jailed. Expressed as `mysbx` CONFIGURATION instead of a Nix call
+# site: no new wrapper binary is added here. `cd <repo> && mysbx` is the entry
 # point, and with this module the interactive payload of that sandbox is
 # the workmux session (../../../mysbx/docs/design/config.md D16,
 # ../../../mysbx/docs/design/cli.md D11).
 #
-# What differs from the jail tier, deliberately:
+# What differs from a host-side jail, deliberately:
 #
 #   * the tmux socket lives INSIDE the sandbox (`/mysbx-home/.mysbx-tmux/
 #     socket`, in the home tmpfs), not in the repository's worktrees
@@ -37,10 +34,9 @@ let
   wmCfg = config.myconfig.ai.dev.workmux;
   aiCfg = config.myconfig.ai.dev;
 
-  # The workmux configuration used *inside* the mysbx sandbox. Like the
-  # jail tier's `jailWorkmuxConfig` (./jail.nix), a named agent
-  # entry must name the PLAIN binary: mysbx is already the sandbox,
-  # and the host config's jailed launcher would start a nested one
+  # The workmux configuration used *inside* the mysbx sandbox. A named
+  # agent entry must name the PLAIN binary: mysbx is already the sandbox,
+  # and a host-side jailed launcher would start a nested one
   # with a fresh tmpfs home, losing the agent's configuration and
   # credentials.
   #
@@ -87,8 +83,7 @@ in
       enable = true;
       inherit (wmCfg) package;
       # Everything but the agents is inherited verbatim from the host
-      # settings (nerdfont, the `<agent>` pane layout), exactly as
-      # ./jail.nix and ./sandbox.nix do. The derived `agent` key comes
+      # settings (nerdfont, the `<agent>` pane layout). The derived `agent` key comes
       # LAST, so the mysbx tier wins over
       # `myconfig.ai.dev.workmux.settings.agent` for the in-sandbox
       # config — intended: the sandbox agent map carries only the

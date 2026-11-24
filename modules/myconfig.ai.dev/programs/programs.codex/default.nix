@@ -13,10 +13,6 @@ let
   # `pkgs.codex` is the same package `programs.codex.package` defaults to) so
   # the workmux launcher and its named-agent registration can be assembled
   # here and merged into `myconfig.ai.dev.workmux.agents`.
-  # Make the `workmux` binary available inside the sandbox (for the
-  # `workmux set-window-status` status hooks and `workmux merge`/`remove` from
-  # a worktree pane) whenever workmux is enabled.
-  workmuxDevTools = lib.optional osconfig.myconfig.ai.dev.workmux.enable osconfig.myconfig.ai.dev.workmux.package;
 
   # --- mysbx integration (../../../../mysbx) -------------------------------------
   #
@@ -124,22 +120,15 @@ let
       extraFiles = mysbxCodexSkillsBundle;
     }).mounts;
 
-  codexBwrap = callLib ../../fns/bubblewrap-simple-app.nix {
-    name = "codex";
-    pkg = pkgs.codex;
-    writableDirs = [ ".config/codex" ];
-    extraRuntimeInputs = workmuxDevTools;
-  };
   mkWorkmuxWorktree = callLib ../../fns/workmux-worktree.nix;
-  # `codex-worktree` is now a thin workmux wrapper: it requires tmux and runs
-  # `workmux add --agent codex`, which launches the codex sandbox in the new
-  # worktree pane (the launcher exposes the worktree's shared git dir to the
-  # sandbox via the WORKTREE_* env vars supported by `bubblewrap-simple-app.nix`).
+  # `codex-worktree` is a thin workmux wrapper: it requires tmux and runs
+  # `workmux add --agent codex`, which launches codex in the new worktree
+  # pane.
   codexWorktree = mkWorkmuxWorktree {
     name = "codex-worktree";
     agentName = "codex";
     agentType = "codex";
-    innerPkg = codexBwrap;
+    innerPkg = pkgs.codex;
     workmuxPkg = osconfig.myconfig.ai.dev.workmux.package;
     mainRepoEnv = "WORKTREE_MAIN_REPO";
     gitDirEnv = "WORKTREE_GIT_DIR";
@@ -157,10 +146,9 @@ in
     # mysbx tier integration (see `mysbxCodexMounts` above). Gated on mysbx
     # being enabled too — the two features are independent, and the mounts
     # would otherwise be generated for a host that has no mysbx config file
-    # to carry them. The state dirs replace what the bubblewrap jail tiers
-    # bind rw (`writableDirs`): codex's sessions and history persist per
+    # to carry them. The state dirs persist codex's sessions and history per
     # repository in the sidecar (../../../../mysbx/docs/design/config.md D15)
-    # instead of dying with the tmpfs home.
+    # instead of dying with the sandbox's tmpfs home.
     myconfig.ai.dev.mysbx = lib.mkIf config.myconfig.ai.dev.mysbx.enable {
       extraTools = [ pkgs.codex ];
       agents.codex.command = "codex";
@@ -179,17 +167,7 @@ in
           enable = true;
           enableMcpIntegration = true;
         };
-        home.packages = [
-          codexBwrap
-          (pkgs.writeShellApplication {
-            name = "codex-tmp";
-            runtimeInputs = with pkgs; [ coreutils ];
-            text = ''
-              cd "$(mktemp -d)" && exec ${lib.getExe codexBwrap} "$@"
-            '';
-          })
-          codexWorktree.wrapper
-        ];
+        home.packages = [ codexWorktree.wrapper ];
       }
     ];
   };

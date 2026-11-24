@@ -550,9 +550,6 @@
           formatterExcludeRegexes = map (d: "^${d}/") formatterExcludeDirs; # pre-commit
         in
         eachDefaultSystem (system: {
-          # Per-invocation QEMU agent runners are evaluated directly from
-          # modules/myconfig.ai.dev/sandboxes/myconfig.ai.qemu-agent-sandbox/runner.nix.
-          # They are intentionally not exported as flake packages.
           # might be overwritten in priv
           packages.myconfig-iso = self.mkMyconfigISO {
             inherit system;
@@ -730,7 +727,7 @@
               fixtures = {
                 piSandboxSubtrees = ./modules/myconfig.ai.dev/programs/pi-sandbox-subtrees.nix;
                 piMcpServers = ./modules/myconfig.ai.dev/programs/pi-mcp-servers.nix;
-                sandboxToolsModule = ./modules/myconfig.ai.dev/sandboxes/myconfig.ai.sandboxTools.nix;
+                sandboxToolsModule = ./modules/myconfig.ai.dev/myconfig.ai.dev.sandboxTools.nix;
                 litellmForwarderModule = ./modules/myconfig.ai.dev/myconfig.ai.dev.litellm-forwarder.nix;
                 orcaModule = ./modules/myconfig.ai.dev/services.orca.nix;
               };

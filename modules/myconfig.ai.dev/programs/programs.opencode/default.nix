@@ -1,110 +1,29 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# opencode and its wrappers (opencode/opencodeBwrap,
-# agent-bubblewrap-opencode, worktree variants), plus the mysbx tier
-# integration: opencode's config is mounted into mysbx sandboxes from
-# a dereferenced store tree built by the shared
+# opencode, plus the mysbx tier integration: opencode's config is mounted
+# into mysbx sandboxes from a dereferenced store tree built by the shared
 # ../../../mysbx flake lib (nix/sandbox-config.nix) helper (bd myconfig-ooh).
 {
   config,
   lib,
   pkgs,
   inputs,
-  jail,
   ...
 }:
 let
   osconfig = config;
 
   callLib = file: import file { inherit lib pkgs; };
-  callJailLib =
-    file:
-    import file {
-      inherit
-        lib
-        pkgs
-        jail
-        osconfig
-        ;
-    };
-  jail-app = callJailLib ../../fns/bubblewrap-app.nix;
-
-  # The shared mysbx sandbox-config helper (the dereferenced-store-tree
-  # machinery, bd myconfig-ooh); consumed like the entry scripts consume
-  # ../../../../mysbx/nix/mux-entry-lib.nix.
-  sandboxConfigLib = inputs.mysbx.lib.sandboxConfigLib {
-    inherit lib;
-    runCommand = pkgs.runCommand;
-  };
-  mkWorkmuxWorktree = callLib ../../fns/workmux-worktree.nix;
-
-  # Make the `workmux` binary available inside the sandboxes (for the
-  # `workmux set-window-status` status hooks and `workmux merge`/`remove` from
-  # a worktree pane) whenever workmux is enabled.
-  workmuxDevTools = lib.optional osconfig.myconfig.ai.dev.workmux.enable osconfig.myconfig.ai.dev.workmux.package;
-
-  # home-manager uses `useGlobalPkgs`, so `pkgs.opencode` is the same package
-  # `programs.opencode.package` defaults to. Building the wrappers at the
-  # NixOS scope lets us register the workmux named agents from here.
-  opencodeBwrap = callLib ../../fns/bubblewrap-simple-app.nix {
-    name = "opencode";
-    pkg = pkgs.opencode;
-    writableDirs = [
-      ".config/opencode"
-      ".config/mcp"
-    ];
-    extraRuntimeInputs = workmuxDevTools;
-  };
-  # `agent-bubblewrap-opencode` is an alternative to `opencodeBwrap` that uses the
-  # jail.nix library instead of a hand-rolled bubblewrap wrapper. See
-  # `../../fns/bubblewrap-app.nix` for the shared defaults.
-  agent-bubblewrap-opencode = jail-app {
-    name = "agent-bubblewrap-opencode";
-    pkg = pkgs.opencode;
-    userDataDirs = [
-      ".config/opencode"
-      ".local/share/opencode"
-      ".local/state/opencode"
-      ".config/mcp"
-    ];
-    extraDevTools = workmuxDevTools;
-  };
-  # Worktree variant of `agent-bubblewrap-opencode`: additionally binds the linked main
-  # repository read-only and remounts its shared `.git` read-write, resolved
-  # at runtime from the WORKTREE_* env vars set by the workmux launcher.
-  agent-bubblewrap-opencode-worktree-inner = jail-app {
-    name = "agent-bubblewrap-opencode-worktree-inner";
-    pkg = pkgs.opencode;
-    userDataDirs = [
-      ".config/opencode"
-      ".local/share/opencode"
-      ".local/state/opencode"
-      ".config/mcp"
-    ];
-    extraDevTools = workmuxDevTools;
-    extraReadOnlyEnvPaths = [ "WORKTREE_MAIN_REPO" ];
-    extraReadWriteEnvPaths = [ "WORKTREE_GIT_DIR" ];
-  };
   opencodeWorktree = mkWorkmuxWorktree {
     name = "opencode-worktree";
     agentName = "opencode";
     agentType = "opencode";
-    innerPkg = opencodeBwrap;
+    innerPkg = pkgs.opencode;
     workmuxPkg = osconfig.myconfig.ai.dev.workmux.package;
     mainRepoEnv = "WORKTREE_MAIN_REPO";
     gitDirEnv = "WORKTREE_GIT_DIR";
   };
-  agentBubblewrapOpencodeWorktree = mkWorkmuxWorktree {
-    name = "agent-bubblewrap-opencode-worktree";
-    agentName = "agent-bubblewrap-opencode";
-    agentType = "opencode";
-    innerPkg = agent-bubblewrap-opencode-worktree-inner;
-    workmuxPkg = osconfig.myconfig.ai.dev.workmux.package;
-    mainRepoEnv = "WORKTREE_MAIN_REPO";
-    gitDirEnv = "WORKTREE_GIT_DIR";
-  };
-
   # --- mysbx integration (../../../../mysbx) -------------------------------------
   #
   # opencode is wired into the `mysbx` sandbox tier the same way pi is
@@ -274,16 +193,14 @@ in
   };
   config = lib.mkIf config.myconfig.ai.dev.opencode.enable {
     myconfig.ai.dev.workmux.agents.opencode = opencodeWorktree.agent;
-    myconfig.ai.dev.workmux.agents.agent-bubblewrap-opencode = agentBubblewrapOpencodeWorktree.agent;
 
     # mysbx tier integration (see `mysbxOpencodeMounts` above). Gated on
     # mysbx being enabled too: the two features are independent, and the
     # mounts would otherwise be generated for a host that has no mysbx
-    # config file to carry them. The state dirs replace what the
-    # bubblewrap jail tiers bind rw (`userDataDirs`): opencode's session
-    # and TUI state persist per repository in the sidecar
+    # config file to carry them. The state dirs persist opencode's session
+    # and TUI state per repository in the sidecar
     # (../../../../mysbx/docs/design/config.md D15) instead of dying with the
-    # tmpfs home.
+    # sandbox's tmpfs home.
     myconfig.ai.dev.mysbx = lib.mkIf config.myconfig.ai.dev.mysbx.enable {
       extraTools = [ pkgs.opencode ];
       # The agent registry entry (bd myconfig-fv4h): `opencode` is a
@@ -583,24 +500,7 @@ in
           ];
           home.packages = [
             pkgs.opencode-desktop
-            opencodeBwrap
-            agent-bubblewrap-opencode
-            (pkgs.writeShellApplication {
-              name = "opencode-tmp";
-              runtimeInputs = with pkgs; [ coreutils ];
-              text = ''
-                cd "$(mktemp -d)" && exec ${lib.getExe opencodeBwrap} "$@"
-              '';
-            })
-            (pkgs.writeShellApplication {
-              name = "agent-bubblewrap-opencode-tmp";
-              runtimeInputs = with pkgs; [ coreutils ];
-              text = ''
-                cd "$(mktemp -d)" && exec ${lib.getExe agent-bubblewrap-opencode} "$@"
-              '';
-            })
             opencodeWorktree.wrapper
-            agentBubblewrapOpencodeWorktree.wrapper
           ];
         }
       )

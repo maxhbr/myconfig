@@ -179,10 +179,8 @@ in
     # beads follows this module's enable gate, the same way the agent CLIs
     # are gated: a host without beads keeps its sandbox closures unchanged.
     #
-    # `myconfig.ai.dev.sandboxTools.extraPackages` reaches every tier that
-    # consumes the shared list (the `agent-bubblewrap-*`/nono jails, the
-    # `sandboxed-*` qemu runners,
-    # the gVisor image and mysbx).
+    # `myconfig.ai.dev.sandboxTools.extraPackages` reaches the mysbx
+    # dev-tool closure (the sandbox `PATH`).
     myconfig.ai.dev.sandboxTools.extraPackages = [ package ];
 
     myconfig.ai.dev.mysbx = lib.mkIf config.myconfig.ai.dev.mysbx.enable {
