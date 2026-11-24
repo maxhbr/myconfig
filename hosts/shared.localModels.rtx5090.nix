@@ -18,10 +18,15 @@
 let
   # Model IDs as exposed by `curl https://rtx5090.thing.wg0.maxhbr.local/v1/models`.
   models = [
+    "Inkling-2-Mini-IQ4_NL"
+    "Inkling-2-Mini-IQ4_NL-mmproj"
+    "Inkling-2-Mini-Q8_0"
+    "Inkling-2-Mini-Q8_0-mmproj"
     "InternScience-Agents-A1-Q4_K_M"
     "InternScience-Agents-A1-Q4_K_M-mmproj"
-    "Nanbeige4.3-33B-AD-Q5_K_M"
-    "Nanbeige4.3-33B-AD-Q6_K-Q5_K"
+    "Nanbeige4.3-33B-Q4_K_M"
+    "Nanbeige4.3-33B-Q5_K_M"
+    "Nanbeige4.3-33B-Q6_K_S"
     "Nex-N2.5-mini-Q4_K_L"
     "Nex-N2.5-mini-Q4_K_L-mmproj"
     "Qwen3.5-9B-Q5_K_M"

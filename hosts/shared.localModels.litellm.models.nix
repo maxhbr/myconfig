@@ -23,11 +23,41 @@
     maxOutputTokens = 32768;
   }
   {
+    name = "gfx1151:Inkling-2-Mini-IQ4_NL";
+    contextWindow = 1048576;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:Inkling-2-Mini-IQ4_NL-mmproj";
+    contextWindow = 1048576;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:Inkling-2-Mini-Q8_0";
+    contextWindow = 1048576;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:Inkling-2-Mini-Q8_0-mmproj";
+    contextWindow = 1048576;
+    maxOutputTokens = 65536;
+  }
+  {
     name = "gfx1151:InternScience-Agents-A1-Q4_K_M";
     contextWindow = 262144;
     maxOutputTokens = 65536;
   }
   "gfx1151:InternScience-Agents-A1-Q8_0"
+  {
+    name = "gfx1151:Kolibri-1.1-Q8_0";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:Kolibri-1.1-Q8_0-nothink";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
   {
     name = "gfx1151:MiniMax-M2.7-UD-IQ4_NL";
     contextWindow = 131072;
@@ -75,8 +105,26 @@
   }
   "gfx1151:NVIDIA-Nemotron-3-Nano-Omni-Q8_0"
   "gfx1151:NVIDIA-Nemotron-3-Super-120B-A12B-Q5_K_M"
-  "gfx1151:Nanbeige4.3-33B-AD-Q5_K_M"
-  "gfx1151:Nanbeige4.3-33B-AD-Q6_K-Q5_K"
+  {
+    name = "gfx1151:Nanbeige4.3-33B-Q4_K_M";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:Nanbeige4.3-33B-Q5_K_M";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:Nanbeige4.3-33B-Q6_K_S";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:Nanbeige4.3-33B-Q8_0";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
   "gfx1151:Nex-N2.5-mini-Q4_K_L"
   "gfx1151:Nex-N2.5-mini-Q6_K_L"
   "gfx1151:Nex-N2.5-mini-Q6_K_L-mmproj"
@@ -329,6 +377,26 @@
     maxOutputTokens = 32768;
   }
   {
+    name = "gfx1151:ROCm0:Inkling-2-Mini-IQ4_NL";
+    contextWindow = 1048576;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:ROCm0:Inkling-2-Mini-IQ4_NL-mmproj";
+    contextWindow = 1048576;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:ROCm0:Inkling-2-Mini-Q8_0";
+    contextWindow = 1048576;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:ROCm0:Inkling-2-Mini-Q8_0-mmproj";
+    contextWindow = 1048576;
+    maxOutputTokens = 65536;
+  }
+  {
     name = "gfx1151:ROCm0:InternScience-Agents-A1-Q4_K_M";
     contextWindow = 262144;
     maxOutputTokens = 65536;
@@ -381,8 +449,26 @@
   }
   "gfx1151:ROCm0:NVIDIA-Nemotron-3-Nano-Omni-Q8_0"
   "gfx1151:ROCm0:NVIDIA-Nemotron-3-Super-120B-A12B-Q5_K_M"
-  "gfx1151:ROCm0:Nanbeige4.3-33B-AD-Q5_K_M"
-  "gfx1151:ROCm0:Nanbeige4.3-33B-AD-Q6_K-Q5_K"
+  {
+    name = "gfx1151:ROCm0:Nanbeige4.3-33B-Q4_K_M";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:ROCm0:Nanbeige4.3-33B-Q5_K_M";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:ROCm0:Nanbeige4.3-33B-Q6_K_S";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "gfx1151:ROCm0:Nanbeige4.3-33B-Q8_0";
+    contextWindow = 262144;
+    maxOutputTokens = 65536;
+  }
   "gfx1151:ROCm0:Nex-N2.5-mini-Q4_K_L"
   "gfx1151:ROCm0:Nex-N2.5-mini-Q6_K_L"
   "gfx1151:ROCm0:Nex-N2.5-mini-Q6_K_L-mmproj"
@@ -742,6 +828,26 @@
     maxOutputTokens = 65536;
   }
   {
+    name = "rtx5090:Inkling-2-Mini-IQ4_NL";
+    contextWindow = 1048576;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "rtx5090:Inkling-2-Mini-IQ4_NL-mmproj";
+    contextWindow = 1048576;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "rtx5090:Inkling-2-Mini-Q8_0";
+    contextWindow = 1048576;
+    maxOutputTokens = 65536;
+  }
+  {
+    name = "rtx5090:Inkling-2-Mini-Q8_0-mmproj";
+    contextWindow = 1048576;
+    maxOutputTokens = 65536;
+  }
+  {
     name = "rtx5090:InternScience-Agents-A1-Q4_K_M";
     contextWindow = 262144;
     maxOutputTokens = 65536;
@@ -751,16 +857,41 @@
     contextWindow = 262144;
     maxOutputTokens = 65536;
   }
-  "rtx5090:Nanbeige4.3-33B-AD-Q5_K_M"
-  "rtx5090:Nanbeige4.3-33B-AD-Q6_K-Q5_K"
-  "rtx5090:Nex-N2.5-mini-Q4_K_L"
-  "rtx5090:Nex-N2.5-mini-Q4_K_L-mmproj"
+  {
+    name = "rtx5090:Nanbeige4.3-33B-Q4_K_M";
+    contextWindow = 65536;
+    maxOutputTokens = 16384;
+  }
+  {
+    name = "rtx5090:Nanbeige4.3-33B-Q5_K_M";
+    contextWindow = 65536;
+    maxOutputTokens = 16384;
+  }
+  {
+    name = "rtx5090:Nanbeige4.3-33B-Q6_K_S";
+    contextWindow = 32768;
+    maxOutputTokens = 8192;
+  }
+  {
+    name = "rtx5090:Nex-N2.5-mini-Q4_K_L";
+    contextWindow = 262144;
+    maxOutputTokens = 262144;
+  }
+  {
+    name = "rtx5090:Nex-N2.5-mini-Q4_K_L-mmproj";
+    contextWindow = 262144;
+    maxOutputTokens = 262144;
+  }
   {
     name = "rtx5090:Qwen3.5-9B-Q5_K_M";
     contextWindow = 262144;
     maxOutputTokens = 65536;
   }
-  "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL"
+  {
+    name = "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL";
+    contextWindow = 262144;
+    maxOutputTokens = 262144;
+  }
   {
     name = "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-MTP";
     contextWindow = 184320;
@@ -786,10 +917,26 @@
     contextWindow = 184320;
     maxOutputTokens = 46080;
   }
-  "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-instruct-general"
-  "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-instruct-reasoning"
-  "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-thinking-coding"
-  "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-thinking-general"
+  {
+    name = "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-instruct-general";
+    contextWindow = 262144;
+    maxOutputTokens = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-instruct-reasoning";
+    contextWindow = 262144;
+    maxOutputTokens = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-thinking-coding";
+    contextWindow = 262144;
+    maxOutputTokens = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-thinking-general";
+    contextWindow = 262144;
+    maxOutputTokens = 262144;
+  }
   {
     name = "rtx5090:Qwen3.8-27B-ABL-Q5_K_M";
     contextWindow = 262144;
@@ -993,10 +1140,6 @@
     maxOutputTokens = 65536;
   }
   {
-    name = "trustedtokens/Qwen/Qwen3.5-397B-A17B-FP8";
-    contextWindow = 131072;
-  }
-  {
     name = "trustedtokens/Qwen/Qwen3.6-35B-A3B-FP8";
     contextWindow = 262144;
     maxOutputTokens = 262144;
@@ -1007,24 +1150,24 @@
     maxOutputTokens = 1000000;
   }
   {
-    name = "trustedtokens/deepseek-ai/DeepSeek-V4-Flash-0731";
-    contextWindow = 400000;
-  }
-  {
-    name = "trustedtokens/deepseek-ai/DeepSeek-V4-Pro-0813";
-    contextWindow = 200000;
-  }
-  {
-    name = "trustedtokens/deepseek-ai/DeepSeek-V4.1-Flash";
+    name = "trustedtokens/deepseek-ai/DeepSeek-V4.1-Flash-1017";
     contextWindow = 1048576;
+    maxOutputTokens = 1048576;
   }
   {
-    name = "trustedtokens/google/gemma-4-31B-it";
-    contextWindow = 121984;
+    name = "trustedtokens/google/diffusiongemma-26B-A4B-it";
+    contextWindow = 262144;
+    maxOutputTokens = 262144;
   }
   {
-    name = "trustedtokens/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B";
-    contextWindow = 1048576;
+    name = "trustedtokens/google/gemma-4-26B-A4B-it";
+    contextWindow = 262144;
+    maxOutputTokens = 262144;
+  }
+  {
+    name = "trustedtokens/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B";
+    contextWindow = 262144;
+    maxOutputTokens = 262144;
   }
   {
     name = "trustedtokens/openai/gpt-oss-120b";
@@ -1032,14 +1175,79 @@
     maxOutputTokens = 131072;
   }
   {
+    name = "trustedtokens/tng-internal/Alibaba-NLP/gte-Qwen2-7B-instruct";
+    contextWindow = 32768;
+    maxOutputTokens = 32768;
+  }
+  {
+    name = "trustedtokens/tng-internal/BAAI/bge-large-en-v1.5";
+    contextWindow = 512;
+    maxOutputTokens = 512;
+  }
+  {
+    name = "trustedtokens/tng-internal/Qwen/Qwen3-Embedding-8B";
+    contextWindow = 40960;
+    maxOutputTokens = 40960;
+  }
+  {
+    name = "trustedtokens/tng-internal/Qwen/Qwen3Guard-Gen-8B";
+    contextWindow = 32768;
+    maxOutputTokens = 32768;
+  }
+  {
+    name = "trustedtokens/tng-internal/auto";
+    contextWindow = 1000000;
+    maxOutputTokens = 1000000;
+  }
+  {
+    name = "trustedtokens/tng-internal/intfloat/e5-large-v2";
+    contextWindow = 512;
+    maxOutputTokens = 512;
+  }
+  {
+    name = "trustedtokens/tng-internal/intfloat/multilingual-e5-large";
+    contextWindow = 512;
+    maxOutputTokens = 512;
+  }
+  {
+    name = "trustedtokens/tng-internal/llmrails/ember-v1";
+    contextWindow = 512;
+    maxOutputTokens = 512;
+  }
+  {
+    name = "trustedtokens/tng-internal/mistralai/Mistral-Small-3.2-24B-Instruct-2506";
+    contextWindow = 30001;
+    maxOutputTokens = 30001;
+  }
+  {
+    name = "trustedtokens/tng-internal/thenlper/gte-large";
+    contextWindow = 512;
+    maxOutputTokens = 512;
+  }
+  {
+    name = "trustedtokens/tng-internal/tngtech/olmocr-7B-faithful";
+    contextWindow = 8192;
+    maxOutputTokens = 8192;
+  }
+  {
+    name = "trustedtokens/tng-internal/zai-org/GLM-5.2-long-context";
+    contextWindow = 1048576;
+    maxOutputTokens = 1048576;
+  }
+  {
+    name = "trustedtokens/tng-internal/zai-org/GLM-5.3-long-context";
+    contextWindow = 1048576;
+    maxOutputTokens = 1048576;
+  }
+  {
     name = "trustedtokens/tngtech/DeepSeek-TNG-R1T2-Chimera";
-    contextWindow = 163840;
-    maxOutputTokens = 163840;
+    contextWindow = 65536;
+    maxOutputTokens = 65536;
   }
   {
     name = "trustedtokens/zai-org/GLM-5.2";
-    contextWindow = 1048576;
-    maxOutputTokens = 1048576;
+    contextWindow = 230000;
+    maxOutputTokens = 230000;
   }
   {
     name = "trustedtokens/zai-org/GLM-5.3";
