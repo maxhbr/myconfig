@@ -15,9 +15,24 @@
 # (rtx INI router on port 33656 included).
 #
 # Sampling follows the Unsloth guide (temp 1.0 / top-p 1.0 / top-k 0 /
-# min-p 0.0, --jinja with the embedded chat template, 1M context). Vision
-# via the Q8_0 mmproj projector on the :mmproj variants (validated against
-# the pinned build: `inkling2v` projector loads and ingests images).
+# min-p 0.0, --jinja with the embedded chat template, native 1M context).
+# Vision via the Q8_0 mmproj projector on the :mmproj variants (validated
+# against the pinned build: `inkling2v` projector loads and ingests images).
+#
+# Sizing: the KV cache costs ~32 KiB/token (f16 — measured: the 1M-ctx
+# f16 cache tried to allocate 32 GiB and OOM'd gfx1151 when another
+# model was resident), ~16 KiB/token (q8_0), ~8 KiB/token (q4_0).
+# Weights: Q8_0 ≈ 27.6 GB, IQ4_NL ≈ 14.6 GB. Every entry pins an
+# explicit ctxSize/cacheType pair sized for its backend:
+#   - gfx1151 (124 GiB GTT pool): 524288 ctx + q8_0 KV (Q8_0 ≈ 36 GB
+#     total). This is double the 262144 ROCm deep-context cap in
+#     doc/qwen38-gfx1151/profiles.md — that cap marks the *tested*
+#     configuration, not a hard limit, and the 8 GiB KV is nowhere
+#     near the pool.
+#   - rtx5090 (32 GB VRAM): IQ4_NL at 262144 ctx + q8_0 KV ≈ 19 GB;
+#     Q8_0 at 32768 ctx + q4_0 KV ≈ 28 GB — the tightest entry,
+#     mirroring Nanbeige4.3-33B-Q6_K_S; halve its ctxSize if it fails
+#     to load.
 #
 # Loop guardrails: the model card warns the model "sometimes became stuck in
 # long reasoning loops" and recommends output-token limits. The reasoning
@@ -56,7 +71,7 @@ let
     # `dspark` mirrors the guide's optional drafter; currently OFF — see the
     # header comment. When false, the entry serves the base model without
     # speculative decoding.
-    dspark:
+    dspark: ctxSize: cacheType:
     let
       mmproj = "mmproj-Inkling-2-Mini-${quant}.gguf";
     in
@@ -77,7 +92,10 @@ let
         ]
         ++ lib.optionals dspark [ "unsloth/Inkling-2-Mini-GGUF/dspark-Inkling-2-Mini-Q8_0.gguf" ];
       };
-      ctxSize = 1048576;
+      inherit
+        ctxSize
+        cacheType
+        ;
       parallel = 1;
       ttl = 1800;
       params = [
@@ -130,18 +148,19 @@ let
     };
 in
 {
-  # Same entry on both hosts: the rtx config serves it on Vulkan0/CUDA0
-  # (INI router + ad-hoc wrappers) and the gfx container on
-  # Vulkan0/ROCm0 (llama-swap); the shared-name dedup machinery in
-  # default.nix (scriptOnlyVulkan1Names, fromRtxModels, pull-models)
-  # treats it like any other shared model.
+  # Same names on both hosts (so the shared-name dedup machinery in
+  # default.nix — scriptOnlyVulkan1Names, fromRtxModels, pull-models —
+  # treats these like any other shared model), but backend-sized
+  # ctxSize/cacheType per the header: the rtx config serves its entries
+  # on Vulkan0/CUDA0 (INI router + ad-hoc wrappers), the gfx container
+  # serves the amd entries on Vulkan0/ROCm0 (llama-swap).
   rtxModels = [
-    (mkInkling "Q8_0" false)
-    (mkInkling "IQ4_NL" false)
+    (mkInkling "Q8_0" false 32768 "q4_0")
+    (mkInkling "IQ4_NL" false 262144 "q8_0")
   ];
 
   amdModels = [
-    (mkInkling "Q8_0" false)
-    (mkInkling "IQ4_NL" false)
+    (mkInkling "Q8_0" false 524288 "q8_0")
+    (mkInkling "IQ4_NL" false 524288 "q8_0")
   ];
 }
