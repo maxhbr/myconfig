@@ -121,7 +121,11 @@ writeShellApplication {
     # running" — leaving the default-shell unpinned and every pane
     # dead. Same reasoning (and the same fix) as
     # ../../modules/myconfig.ai.dev/myconfig.ai.workmux/jail.nix.
-    if ! tmux has-session -t "=$session" 2>/dev/null; then
+    #
+    # The trailing `:` forces session resolution: tmux splits a target at
+    # the first `.` — a repo basename containing one would otherwise be
+    # parsed as window.pane, and every `=$session` lookup would fail.
+    if ! tmux has-session -t "=$session:" 2>/dev/null; then
       tmux \
         set-option -g default-shell "$shell" \; \
         set-option -g default-command "$shell" \; \
@@ -148,9 +152,9 @@ writeShellApplication {
     # tmux, so it always attaches, never switches. The bootstrap above
     # runs once, outside the loop.
     ${muxLib.detachableLoop {
-      attach = ''tmux attach-session -t "=$session"'';
-      alive = ''tmux has-session -t "=$session"'';
-      execLine = ''exec tmux -S "$socket" attach-session -t "=$session"'';
+      attach = ''tmux attach-session -t "=$session:"'';
+      alive = ''tmux has-session -t "=$session:"'';
+      execLine = ''exec tmux -S "$socket" attach-session -t "=$session:"'';
     }}
   '';
 
