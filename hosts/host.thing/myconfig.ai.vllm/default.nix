@@ -7,12 +7,21 @@
 # instead of in each variant module, so the generated systemd unit does
 # not carry duplicate Wants=/After= entries.
 {
+  config,
+  lib,
+  ...
+}:
+{
   imports = [
     ./docker.vllm.cuda.nix
     ./docker.vllm.rocm.nix
   ];
 
-  config = {
+  # Gated on services.llama-swap.enable: an unconditional wants/after
+  # declaration creates a llama-swap.service with no ExecStart when the
+  # service is disabled, which systemd refuses to load ("bad unit file
+  # setting").
+  config = lib.mkIf config.services.llama-swap.enable {
     systemd.services.llama-swap = {
       wants = [
         "podman.service"
