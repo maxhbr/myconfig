@@ -727,7 +727,9 @@ let
     # spelling (the crate's profile fallback parses `mysbx-once`;
     # the schema refuses the value too, so the two spellings stay
     # in sync). The agent aliases below own the same bin/ slot.
-    name != "once" && !builtins.elem name onceAliasKinds && builtins.match "[a-z][a-z0-9-]*" name != null;
+    name != "once"
+    && !builtins.elem name onceAliasKinds
+    && builtins.match "[a-z][a-z0-9-]*" name != null;
 
   # Kinds that get a one-shot alias binary (below): `mysbx-pi` ==
   # `mysbx-once --bubblewrap --pi`. Reserved so a profile of the
@@ -759,15 +761,17 @@ let
   # CMD`, `--session`, …) pass straight through.
   onceAliases = map (
     kind:
-    pkgs.runCommand "mysbx-${kind}" {
-      nativeBuildInputs = [ pkgs.makeBinaryWrapper ];
-      meta.mainProgram = "mysbx-${kind}";
-    } ''
-      mkdir -p $out/bin
-      makeBinaryWrapper ${lib.getExe cfg.package} $out/bin/mysbx-${kind} \
-        --set MYSBX_ONCE 1 \
-        --add-flags "--bubblewrap --${kind}"
-    ''
+    pkgs.runCommand "mysbx-${kind}"
+      {
+        nativeBuildInputs = [ pkgs.makeBinaryWrapper ];
+        meta.mainProgram = "mysbx-${kind}";
+      }
+      ''
+        mkdir -p $out/bin
+        makeBinaryWrapper ${lib.getExe cfg.package} $out/bin/mysbx-${kind} \
+          --set MYSBX_ONCE 1 \
+          --add-flags "--bubblewrap --${kind}"
+      ''
   ) onceAliasKinds;
 in
 {

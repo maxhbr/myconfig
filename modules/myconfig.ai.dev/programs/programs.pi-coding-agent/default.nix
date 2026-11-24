@@ -1165,7 +1165,6 @@ let
     printf 'export { default } from "./src/index.ts";\n' > $out/index.ts
   '';
 
-
   # The `/mysbx-inform` skill (bd myconfig-a2nj): a GENERATED skill,
   # not a static one — its whole point is that the sandbox's per-run
   # state is BAKED into the skill text, so the in-sandbox agent never
@@ -1218,7 +1217,6 @@ let
     mainRepoEnv = "WORKTREE_MAIN_REPO";
     gitDirEnv = "WORKTREE_GIT_DIR";
   };
-
 
   # --- mysbx integration (../../../../mysbx) -------------------------------------
   #
