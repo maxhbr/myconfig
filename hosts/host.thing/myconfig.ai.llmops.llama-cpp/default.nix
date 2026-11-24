@@ -12,7 +12,10 @@ let
   gemma4 = import ./gemma4.nix { inherit modelsPullDir; };
   minimaxM2_7 = import ./MiniMax-M2.7-GGUF.nix { inherit modelsPullDir; };
   nemotron3Super = import ./Nemotron-3-Super.nix { inherit modelsPullDir; };
-  kolibri1_1 = import ./Kolibri-1.1.nix { inherit modelsPullDir; };
+  kolibri1_1 = import ./Kolibri-1.1.nix {
+    inherit modelsPullDir;
+    inherit (pkgs) llama-cpp-kolibri;
+  };
   # Disabled (too large to serve): amdModels is empty, see
   # ./MiMo-V2.6-Flash.nix. Keep the import so the definitions do not
   # bit-rot; re-add `++ withGroup "MoE" mimoV2_6_flash.amdModels` to
@@ -214,19 +217,28 @@ let
       };
     };
     models =
-      map (
-        model:
-        model
-        // {
-          devices = [
-            "Vulkan0"
-            "ROCm0"
-          ];
-        }
-      ) (amdModels ++ fromRtxModels)
+      map
+        (
+          model:
+          model
+          // {
+            devices = [
+              "Vulkan0"
+              "ROCm0"
+            ];
+          }
+        )
+        (
+          # Kolibri-1.1 carries its own single-backend devices (ROCm0 only:
+          # the fork pin has no Vulkan round-nvfp4 kernel, so a forced
+          # Vulkan0 entry would generate a broken wrapper), like the
+          # candidates below.
+          builtins.filter (m: m.name != "Kolibri-1.1-Q8_0") (amdModels ++ fromRtxModels)
+        )
       # Candidate profiles carry their own single-backend `devices` and
       # per-model options (serverPackage/extraEnv/noMmap); they must NOT be
       # forced to ["Vulkan0" "ROCm0"], so they are appended AFTER the map.
+      ++ kolibri1_1.amdModels
       ++ qwen3_8_27B.candidateModels;
   };
   rtx-llama-cpp-config = {
@@ -265,17 +277,23 @@ let
       }
     ) rtxModels;
     scriptOnlyModels =
-      map (
-        model:
-        model
-        // {
-          devices = [
-            "Vulkan1"
-          ];
-        }
-      ) amdModels
+      map
+        (
+          model:
+          model
+          // {
+            devices = [
+              "Vulkan1"
+            ];
+          }
+        )
+        # Kolibri-1.1 must NOT get a Vulkan1 wrapper (its fork pin has
+        # no Vulkan round-nvfp4 kernel); appended after the map so it
+        # keeps its own devices (ROCm0), like the multi-GPU models.
+        (builtins.filter (m: m.name != "Kolibri-1.1-Q8_0") amdModels)
       # Multi-GPU models already carry their own `devices` list (e.g.
       # "Vulkan0,Vulkan1") and must not have it overridden.
+      ++ kolibri1_1.amdModels
       ++ qwen3_8_27B-multiGpu
       ++ qwen3_6_35B-A3B-multiGpu
       ++ hy3-multiGpu

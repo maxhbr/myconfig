@@ -65,6 +65,15 @@ Published as provider **`gfx1151`**. Also the scrape target of the
 (`myconfig.observability.llama-swap-metrics.nix`) — reachable at
 `https://gfx1151.thing.wg0.maxhbr.local/metrics` via Caddy.
 
+One model is **ROCm-only inside the swap**: `Kolibri-1.1-Q8_0` is
+served by a per-model fork pin (`serverPackage =
+llama-cpp-kolibri`, from `nixpkgs.overlays.llama-cpp-kolibri.nix` —
+PR ggml-org/llama.cpp#32891 pinned at `5f4d222`), because no
+mainline build loads the Kolibri-1.1 layout. The fork has no Vulkan
+`round-nvfp4` kernel, so the model gets no Vulkan device (unlike
+every other swap entry); it is also excluded from the rtx INI router
+(the 74.4 GiB Q8_0 weights do not fit the RTX 5090).
+
 ### 3. Container engine launchers — ports 22545 / 22549
 
 vLLM, NInfer and SGLang run as rootless **podman** containers,
