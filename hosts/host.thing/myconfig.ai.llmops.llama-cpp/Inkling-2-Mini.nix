@@ -156,7 +156,10 @@ in
   # serves the amd entries on Vulkan0/ROCm0 (llama-swap).
   rtxModels = [
     (mkInkling "Q8_0" false 32768 "q4_0")
-    (mkInkling "IQ4_NL" false 262144 "q8_0")
+    # q4_0 KV (not q8_0): the 262144-ctx q8_0 allocation OOM'd CUDA0 at
+    # load (weights load to 100%, then llama-server exits 1 — the
+    # 32768/q4_0 Q8_0 entry loads fine on the same GPU).
+    (mkInkling "IQ4_NL" false 262144 "q4_0")
   ];
 
   amdModels = [
