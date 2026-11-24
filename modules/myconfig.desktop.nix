@@ -29,7 +29,7 @@ in
           sxiv
           # kitty
           alacritty
-          wezterm
+          # wezterm: managed via myconfig.desktop.programs.wezterm
           mupdf
           evince
           foliate
