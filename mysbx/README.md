@@ -514,7 +514,11 @@ default is the flat `default-agent = "<kind>"` key the generated user
 config seeds from `myconfig.ai.dev.mysbx.defaultAgent`, overridable
 per repository by the sidecar layer and per invocation by
 `mysbx --agent <kind>`, the `--<kind>` shorthands (`mysbx --pi`) or
-`--no-agent` (`docs/design/cli.md` D32). The entry scripts are
+`--no-agent` (`docs/design/cli.md` D32). For the one-shot form the
+myconfig module installs thin alias binaries — `mysbx-pi`,
+`mysbx-hermes`, `mysbx-opencode` — each `mysbx-once --bubblewrap
+--<kind>` (the successors of the removed `agent-bubblewrap-*` jail
+wrappers). The entry scripts are
 agent-agnostic: the resolved kind, command and arguments reach them
 as `MYSBX_AGENT_*` env, and `herdr` starts that agent in the
 relocated workspace's root pane, `workmux` in a vertical split below

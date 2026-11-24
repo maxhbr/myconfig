@@ -726,8 +726,17 @@ let
     # `once` would collide with the base once entry's argv[0]
     # spelling (the crate's profile fallback parses `mysbx-once`;
     # the schema refuses the value too, so the two spellings stay
-    # in sync).
-    name != "once" && builtins.match "[a-z][a-z0-9-]*" name != null;
+    # in sync). The agent aliases below own the same bin/ slot.
+    name != "once" && !builtins.elem name onceAliasKinds && builtins.match "[a-z][a-z0-9-]*" name != null;
+
+  # Kinds that get a one-shot alias binary (below): `mysbx-pi` ==
+  # `mysbx-once --bubblewrap --pi`. Reserved so a profile of the
+  # same name cannot collide with an alias in `home.packages`.
+  onceAliasKinds = [
+    "pi"
+    "hermes"
+    "opencode"
+  ];
 
   profileWrappers = lib.mapAttrs (
     name: profile:
@@ -739,6 +748,27 @@ let
         "podman-krun"
       ] enabledBackends) "mysbx-${name}" false name
   ) cfg.profiles;
+
+  # `mysbx-<kind>` — thin one-shot agent aliases, the successors of
+  # the removed per-agent jail wrappers (`agent-bubblewrap-pi` and
+  # friends): `mysbx-pi` == `mysbx-once --bubblewrap --pi`. They wrap
+  # the SAME base `bin/mysbx` `mysbx-once` wraps — the once marker is
+  # set the same way (nix/mysbx.nix; argv[0] is NOT used, the wrapper
+  # execs the plain program path) — with the bubblewrap backend and
+  # the agent kind as leading flags, so further arguments (`run --
+  # CMD`, `--session`, …) pass straight through.
+  onceAliases = map (
+    kind:
+    pkgs.runCommand "mysbx-${kind}" {
+      nativeBuildInputs = [ pkgs.makeBinaryWrapper ];
+      meta.mainProgram = "mysbx-${kind}";
+    } ''
+      mkdir -p $out/bin
+      makeBinaryWrapper ${lib.getExe cfg.package} $out/bin/mysbx-${kind} \
+        --set MYSBX_ONCE 1 \
+        --add-flags "--bubblewrap --${kind}"
+    ''
+  ) onceAliasKinds;
 in
 {
   imports = [
@@ -2869,12 +2899,13 @@ in
 
     home-manager.sharedModules = [
       {
-        # The base wrapper plus every flavor of `profiles.<name>`
-        # (bd myconfig-xl93): a flavor's derivation name is the crate's
+        # The base wrapper, every flavor of `profiles.<name>`
+        # (bd myconfig-xl93) — a flavor's derivation name is the crate's
         # (`mysbx-0.1.0`) for both — build-pkg-for-host.sh matches on
         # it — while the BINARIES differ (`mysbx` vs `mysbx-<profile>`),
-        # so the two symlinkJoins never collide in `bin/`.
-        home.packages = [ cfg.package ] ++ builtins.attrValues profileWrappers;
+        # so the two symlinkJoins never collide in `bin/` — and the
+        # one-shot agent aliases (`mysbx-pi`, …).
+        home.packages = [ cfg.package ] ++ builtins.attrValues profileWrappers ++ onceAliases;
       }
     ];
 
