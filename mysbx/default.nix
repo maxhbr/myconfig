@@ -770,7 +770,7 @@ let
         mkdir -p $out/bin
         makeBinaryWrapper ${lib.getExe cfg.package} $out/bin/mysbx-${kind} \
           --set MYSBX_ONCE 1 \
-          --add-flags "--bubblewrap --${kind}"
+          --add-flags "--bubblewrap --herdr --${kind}"
       ''
   ) onceAliasKinds;
 in
