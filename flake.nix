@@ -664,6 +664,12 @@
                   # The beads-server bd shim: a plain script executed by the
                   # unittest suites (bd myconfig-y294).
                   "misc/beads-server/tests/fake-bd.sh"
+                  # fail2ban textfile exporter: installed as a bare script and
+                  # run by systemd, so neither writeShellApplication's shellcheck
+                  # pass nor any build step covers it. Its regression test is
+                  # wired as the `fail2ban-textfile-test` check below.
+                  "modules/myconfig.observability/scripts/fail2ban-textfile.sh"
+                  "tests/fail2ban-textfile.sh"
                 ];
               in
               pkgs.stdenv.mkDerivation {
@@ -677,6 +683,38 @@
                 checkPhase = ''
                   shfmt -d -s -i 4 -ci ${files}
                   shellcheck -x ${files}
+                '';
+                installPhase = ''
+                  mkdir "$out"
+                '';
+              };
+
+            # Regression test for the fail2ban textfile exporter
+            # (modules/myconfig.observability/scripts/fail2ban-textfile.sh).
+            # The exporter is a bare script run by systemd, so nothing in a
+            # normal build exercises it; the suite drives it through a stubbed
+            # fail2ban-client fixture (multi-jail, malformed, empty, and
+            # status/jail-failure scenarios) and asserts both the rendered
+            # Prometheus text and the `fail2ban_up 0` degradation path.
+            fail2ban-textfile-test =
+              let
+                pkgs = inputs.nixpkgs.legacyPackages."${system}";
+              in
+              pkgs.stdenv.mkDerivation {
+                name = "fail2ban-textfile-test";
+                src = ./.;
+                doCheck = true;
+                nativeBuildInputs = with pkgs; [
+                  bash
+                  diffutils
+                  gnugrep
+                  gnused
+                  coreutils
+                  findutils
+                ];
+                checkPhase = ''
+                  patchShebangs tests/fail2ban-textfile.sh
+                  bash tests/fail2ban-textfile.sh
                 '';
                 installPhase = ''
                   mkdir "$out"
