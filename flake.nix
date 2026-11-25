@@ -612,8 +612,8 @@
                   "switch.sh"
                   # priv template bootstrap and branch publisher; plain
                   # scripts executed by a human and by CI respectively.
-                  "scripts/init-priv.sh"
-                  "scripts/update-priv.template-branch.sh"
+                  "scripts/priv.template.setup.sh"
+                  "scripts/priv.template.compute-branch.sh"
                   # priv template age/agenix secret management scripts;
                   # plain scripts executed by a human in the priv repo.
                   "scripts/priv.template/mk_age_master_key.sh"

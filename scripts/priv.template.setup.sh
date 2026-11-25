@@ -31,15 +31,19 @@ if ! git rev-parse --git-dir >/dev/null 2>&1; then
 fi
 
 # Prefer the published priv.template branch (kept current by CI via
-# scripts/update-priv.template-branch.sh); fall back to a local subtree
-# split for repositories where the branch was never pushed.
+# scripts/priv.template.compute-branch.sh). Always refresh from origin so
+# the local branch cannot go stale between CI pushes; a network-less
+# checkout falls back to whatever local branch exists, and a repository
+# where the branch was never pushed falls back to a local subtree split.
 template_source="branch"
-if git show-ref --verify --quiet "refs/heads/$branch_name"; then
-    :
-elif [[ -n "$(git ls-remote origin "refs/heads/$branch_name" | cut -f1)" ]]; then
+if git fetch origin "$branch_name" 2>/dev/null &&
+    [[ -n "$(git rev-parse --verify FETCH_HEAD 2>/dev/null)" ]]; then
     git fetch origin "$branch_name:$branch_name"
 else
-    template_source="split"
+    echo "Warn: could not fetch '$branch_name' from origin" >&2
+    if ! git show-ref --verify --quiet "refs/heads/$branch_name"; then
+        template_source="split"
+    fi
 fi
 
 if [[ $template_source == "split" ]]; then
@@ -54,7 +58,7 @@ fi
 if [[ $update_mode == "true" ]]; then
     target_dir="../priv"
     if [[ ! -e $target_dir ]]; then
-        echo "Error: '$target_dir' does not exist. Run init-priv.sh first to create it." >&2
+        echo "Error: '$target_dir' does not exist. Run priv.template.setup.sh first to create it." >&2
         exit 1
     fi
     if [[ ! -d "$target_dir/.git" ]]; then

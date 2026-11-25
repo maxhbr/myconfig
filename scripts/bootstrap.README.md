@@ -49,7 +49,7 @@ Optional environment variables:
 If you want to maintain custom configuration separate from the main repository:
 
 ```bash
-scripts/init-priv.sh
+scripts/priv.template.setup.sh
 ```
 
 This creates a `../priv` directory containing a git repository with the private configuration template. This allows you to:
@@ -59,7 +59,7 @@ This creates a `../priv` directory containing a git repository with the private 
 
 To test without creating the actual directory:
 ```bash
-scripts/init-priv.sh --test
+scripts/priv.template.setup.sh --test
 ```
 
 ### Updating Private Configuration
@@ -67,7 +67,7 @@ scripts/init-priv.sh --test
 After the myconfig template has been updated, you can pull new changes into your private config:
 
 ```bash
-scripts/init-priv.sh update
+scripts/priv.template.setup.sh update
 ```
 
 This will:

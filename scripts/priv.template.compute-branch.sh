@@ -6,9 +6,9 @@ set -euo pipefail
 #
 # Maintain the "priv.template" branch: an orphan-history rebuild of
 # ./scripts/priv.template/ produced with `git subtree split`, exactly
-# like scripts/init-priv.sh does on the fly. CI runs this after every
-# push so that init-priv.sh can import the published branch instead of
-# splitting locally.
+# like scripts/priv.template.setup.sh does on the fly. CI runs this
+# after every push so that priv.template.setup.sh can import the
+# published branch instead of splitting locally.
 #
 # The split is deterministic, so template commits normally only append
 # and the branch fast-forwards. Only a rewrite of myconfig's history
@@ -56,6 +56,6 @@ else
     git push --force-with-lease="$branch_ref:$old_sha" "$remote" "$split_branch:$branch_ref"
 fi
 
-# Mirror the pushed state into a local branch; init-priv.sh uses it only
-# when it matches the local template state.
+# Mirror the pushed state into a local branch; priv.template.setup.sh
+# uses it only when it matches the local template state.
 git branch -f "$branch" "$new_sha"
