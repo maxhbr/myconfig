@@ -18,7 +18,12 @@ let
         source = mkOption {
           default = null;
           type = types.nullOr types.path;
-          description = "local secret path";
+          description = ''
+            Local secret path. Either a **plaintext** file, which is
+            encrypted to the host key at build time, or an age file
+            (`*.age`) encrypted to this host's key, which is passed
+            through to agenix unchanged.
+          '';
         };
 
         dest = mkOption {
@@ -89,25 +94,31 @@ let
   mkEncryptedAgeFile =
     name:
     { source, unsafePubkeyOverwrite, ... }:
-    pkgs.runCommand "${name}.age"
-      {
-        nativeBuildInputs = [ pkgs.age ];
-      }
-      (
-        let
-          pubkeyArg =
-            if unsafePubkeyOverwrite == null then
-              "-r '${
-                myconfig.metadatalib.get.hosts."${config.networking.hostName
-                }".pubkeys."/etc/ssh/ssh_host_rsa_key.pub"
-              }'"
-            else
-              "-R '${unsafePubkeyOverwrite}'";
-        in
-        ''
-          age -a ${pubkeyArg} -o "$out" '${source}'
-        ''
-      );
+    # `source` may already be age ciphertext (e.g. committed *.age from
+    # the priv repo, encrypted to this host's key): pass it through
+    # instead of double-encrypting.
+    if lib.hasSuffix ".age" (toString source) then
+      source
+    else
+      pkgs.runCommand "${name}.age"
+        {
+          nativeBuildInputs = [ pkgs.age ];
+        }
+        (
+          let
+            pubkeyArg =
+              if unsafePubkeyOverwrite == null then
+                "-r '${
+                  myconfig.metadatalib.get.hosts."${config.networking.hostName
+                  }".pubkeys."/etc/ssh/ssh_host_rsa_key.pub"
+                }'"
+              else
+                "-R '${unsafePubkeyOverwrite}'";
+          in
+          ''
+            age -a ${pubkeyArg} -o "$out" '${source}'
+          ''
+        );
 
   validSecrets = filterAttrs (_name: info: info.source != null) cfg;
 
