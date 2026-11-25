@@ -61,6 +61,9 @@
         };
       };
       headless.enable = true;
+      # Reachable over the LAN (ssh/22 is open on every interface), so
+      # ban brute-force attempts and keep the evidence.
+      networking.hardening.enable = true;
       observability = {
         host_hostname = "nuc";
         client = {

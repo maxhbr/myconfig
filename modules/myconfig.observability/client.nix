@@ -63,11 +63,8 @@ in
 
       enabledCollectors = clientCfg.enabledNodeCollectors;
 
-      # Point the textfile collector at the directory managed by
-      # client.system-age.nix (and any other module that drops a
-      # `*.prom` file there). Only configure the flag when the
-      # system-age sub-module is actually enabled, otherwise leave
-      # node_exporter at its defaults.
+      # Other producers can reuse this directory; when systemAge is off
+      # they must configure the collector themselves.
       extraFlags = lib.optionals clientCfg.systemAge.enable [
         "--collector.textfile.directory=${clientCfg.systemAge.textfileDir}"
       ];

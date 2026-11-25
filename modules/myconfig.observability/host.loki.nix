@@ -42,6 +42,24 @@ let
             }
           ];
         }
+        # Attack counters derived from the dedicated journal sources that
+        # myconfig.networking.hardening adds (log_stream="sshd" / "kernel").
+        # Record only per-host totals. The dashboard extracts source IPs and
+        # destination ports on demand so scans don't create persistent series.
+        {
+          name = "myconfig-attacks";
+          interval = "1m";
+          rules = [
+            {
+              record = "loki:firewall_refused_connections_count";
+              expr = ''sum by (host) (count_over_time({job="systemd-journal", log_stream="kernel"} |= "refused connection:" [1m]))'';
+            }
+            {
+              record = "loki:ssh_auth_failures_count";
+              expr = ''sum by (host) (count_over_time({job="systemd-journal", log_stream="sshd"} |~ "Failed (password|publickey)" [1m]))'';
+            }
+          ];
+        }
       ];
     }
   );
