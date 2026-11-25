@@ -155,12 +155,13 @@ in
   # on Vulkan0/CUDA0 (INI router + ad-hoc wrappers), the gfx container
   # serves the amd entries on Vulkan0/ROCm0 (llama-swap).
   rtxModels = [
+    # Q8_0 only: the IQ4_NL file consistently fails to load on CUDA0 —
+    # weights reach 100%, then llama-server exits 1, under both q8_0 and
+    # q4_0 KV at 262144 ctx (the Q8_0 entry at 32768/q4_0 loads fine).
     (mkInkling "Q8_0" false 32768 "q4_0")
-    (mkInkling "IQ4_NL" false 262144 "q8_0")
   ];
 
   amdModels = [
     (mkInkling "Q8_0" false 524288 "q8_0")
-    (mkInkling "IQ4_NL" false 524288 "q8_0")
   ];
 }
