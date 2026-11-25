@@ -5,7 +5,7 @@ set -euo pipefail
 set -x
 hostname="$1"
 
-borgbackupDir="hosts/host.${hostname}/secrets/borgbackup"
+borgbackupDir="hosts/host.${hostname}/secrets-plain/borgbackup"
 if [[ ! -d "$borgbackupDir" ]]; then
   mkdir "$borgbackupDir"
   (
@@ -13,7 +13,7 @@ if [[ ! -d "$borgbackupDir" ]]; then
     ssh-keygen -f ssh_key -t ed25519 -C "Borg Backup"
     xkcdpass -n 12 > passphrase
   )
-  git add "$borgbackupDir"
+  "$(dirname "$0")/scripts/secrets-encrypt.sh"
 else
     echo "already exists!"
 fi

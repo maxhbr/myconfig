@@ -4,7 +4,7 @@
 set -ex
 hostname="$1"
 
-tlsDir="hosts/host.${hostname}/secrets/tls"
+tlsDir="hosts/host.${hostname}/secrets-plain/tls"
 
 if [[ ! -d "$tlsDir" ]]; then
     mkdir -p "$tlsDir"
@@ -13,5 +13,5 @@ if [[ ! -d "$tlsDir" ]]; then
         # -subj "/C=country/ST=statet/L=city/O=organization/CN=${hostname}" \
     cat "$tlsDir/nginx.crt" "$tlsDir/nginx.key" \
            | tee "$tlsDir/nginx.pem"
-    git add "$tlsDir"
+    "$(dirname "$0")/scripts/secrets-encrypt.sh"
 fi
