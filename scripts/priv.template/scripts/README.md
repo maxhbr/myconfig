@@ -57,8 +57,11 @@ prints the moved `*.nix` files).
 Each `*.age` file is encrypted to the master key
 (`AGE_MASTER_KEY`, default `~/myconfig/.age-master.key`) plus,
 when the target host can be derived from the path, that host's ssh host
-key from `hosts/metadata.json`
-(`hosts.<host>.pubkeys."/etc/ssh/ssh_host_rsa_key.pub"`) — the same key
+key. Host keys are resolved from the **merged** metadata — the priv
+repo's `hosts/metadata.json` on top of the public myconfig one
+(same semantics as the flake's `mkMetadata`: priv overrides, public
+contributes), via `MYCONFIG_REPO` or the sibling checkout:
+`hosts.<host>.pubkeys."/etc/ssh/ssh_host_rsa_key.pub"` — the same key
 `myconfig.secrets` encrypts to, so an `.age` source decrypts on the
 host with agenix's existing `age.identityPaths`, including the
 impermanence-host override.

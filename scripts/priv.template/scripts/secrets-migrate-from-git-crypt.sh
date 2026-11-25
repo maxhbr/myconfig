@@ -89,12 +89,12 @@ if [[ -f .gitattributes ]] && grep -q git-crypt .gitattributes; then
     sed -i '/git-crypt/d' .gitattributes
     if [[ -s .gitattributes ]]; then
         git add .gitattributes
+        echo "removed git-crypt lines from .gitattributes"
     else
         # the file was git-crypt only — drop it entirely
         git rm -qf .gitattributes
         echo "removed .gitattributes (was git-crypt only)"
     fi
-    echo "removed git-crypt lines from .gitattributes"
 fi
 if [[ -e .git-crypt ]]; then
     git rm -r --cached --quiet .git-crypt 2>/dev/null || true
