@@ -7,15 +7,19 @@
 # and journal budget) and only earns it on a host where "who ran what as
 # root" is a question worth answering.
 #
-# Two mechanisms, deliberately both:
+# Two mechanisms, the first opt-in:
 #
-#   * sudo I/O logging (`logSudoIO`) records a replayable per-session
-#     transcript: the command line AND everything it printed. It cannot be
-#     evaded by execing a second binary, because sudo itself writes it.
 #   * auditd execve rules (always on) record every exec with euid 0, by
 #     any path — including a direct `ssh root@host`, which never touches
 #     sudo. This is the part that covers deployment (`switch.sh` runs as
-#     root over ssh) and any post-exploitation shell.
+#     root over ssh) and any post-exploitation shell. It records the
+#     command and its arguments, which is what the dashboard reports.
+#   * sudo I/O logging (`logSudoIO`, off by default) additionally records
+#     a replayable per-session transcript: the command line AND everything
+#     it printed. It cannot be evaded by execing a second binary, because
+#     sudo itself writes it. Off by default because the output transcript
+#     is the bulky part and grows with whatever commands produce — not
+#     affordable next to a small root partition.
 #
 # Neither stops anything; they only record. An attacker who already has
 # root can stop the daemon — `security.audit.enable = "lock"` makes that
@@ -72,17 +76,23 @@ in
 
     logSudoIO = lib.mkOption {
       type = lib.types.bool;
-      default = true;
+      default = false;
       description = ''
         Turn on sudo's I/O logging: a per-session transcript with the
         command line and all of its input and output. This is the only
         mechanism that records what a command *printed*, which is usually
         what you want when reconstructing an incident.
 
-        WARNING: the transcripts are stored unencrypted and contain
-        whatever was typed or printed during the session, including any
-        secret that passed through the terminal. Set `iologDir` somewhere
-        with a retention policy you are comfortable with.
+        Off by default: the output transcript is the bulky part, grows with
+        whatever commands produce, and is not bounded by auditd's
+        `max_log_file`/`num_logs` rotation. The auditd execve rules already
+        record the command and its arguments, which is what the dashboard
+        reports.
+
+        WARNING: when enabled, the transcripts are stored unencrypted and
+        contain whatever was typed or printed during the session, including
+        any secret that passed through the terminal. Set `iologDir`
+        somewhere with a retention policy you are comfortable with.
       '';
     };
 
