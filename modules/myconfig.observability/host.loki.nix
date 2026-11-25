@@ -825,6 +825,10 @@ in
           reject_old_samples_max_age = "168h";
           retention_period = hostCfg.loki.retentionPeriod;
           allow_structured_metadata = true;
+          # The security dashboards extract one series per probed port / source
+          # IP at query time (topk over sum by (dpt|src)). A full TCP port scan
+          # alone can exceed the default of 500 and abort the query.
+          max_query_series = 66000;
         };
 
         # Recording rules are evaluated by the embedded ruler and the
