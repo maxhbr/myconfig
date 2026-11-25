@@ -1,7 +1,7 @@
 {
   "uid": "myconfig-security-attacks",
   "title": "Attacks and reachability",
-  "description": "Firewall-refused connection attempts and SSH brute-force activity on hosts that opt into myconfig.networking.hardening.",
+  "description": "Logged TCP SYN packets refused by the firewall and SSH authentication failures on hosts that opt into myconfig.networking.hardening. The firewall panels do not cover UDP or other dropped traffic.",
   "tags": ["myconfig", "security", "fail2ban", "firewall"],
   "schemaVersion": 39,
   "version": 1,
@@ -35,8 +35,8 @@
     {
       "id": 1,
       "type": "stat",
-      "title": "Refused connection attempts",
-      "description": "Packets that failed every firewall accept rule, i.e. connection attempts against a port nothing serves. Derived from the kernel 'refused connection:' log lines.",
+      "title": "Refused TCP connection attempts",
+      "description": "Counts one kernel 'refused connection:' log line per logged TCP SYN, even if the source address or destination port cannot be parsed.",
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
       "options": {
@@ -163,8 +163,8 @@
     {
       "id": 10,
       "type": "timeseries",
-      "title": "Refused connection attempts over time",
-      "description": "How often someone probes a closed port, per host.",
+      "title": "Refused TCP connection attempts over time",
+      "description": "Logged TCP SYN packets refused per second, by host.",
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "gridPos": { "h": 9, "w": 12, "x": 0, "y": 5 },
       "fieldConfig": {
@@ -234,8 +234,8 @@
       "id": 20,
       "type": "bargauge",
       "title": "Top attacking source IPs",
-      "description": "Source addresses behind refused connection attempts, selected range.",
-      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "description": "Top 10 source IPs by logged TCP refusals across the selected hosts and time range. Lines without a source address are excluded.",
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
       "options": {
         "displayMode": "gradient",
@@ -261,19 +261,19 @@
       },
       "targets": [
         {
-          "expr": "topk(10, sum by (src) (sum_over_time(loki:firewall_refused_by_source_count{host=~\"$host\"}[$__range])))",
+          "expr": "topk(10, sum by (src) (count_over_time({job=\"systemd-journal\", log_stream=\"kernel\", host=~\"$host\"} |= \"refused connection:\" | regexp \" SRC=(?P<src>[^ ]+)\" | src!=\"\" [$__range])))",
           "legendFormat": "{{src}}",
           "refId": "A",
-          "instant": true
+          "queryType": "instant"
         }
       ]
     },
     {
       "id": 21,
       "type": "bargauge",
-      "title": "Most probed destination ports",
-      "description": "Which ports scanners try. Anything not in the host's allow-list shows up here.",
-      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "title": "Most probed TCP destination ports",
+      "description": "Top 10 destination ports by logged TCP refusals across the selected hosts and time range. Lines without a numeric destination port are excluded.",
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
       "options": {
         "displayMode": "gradient",
@@ -299,10 +299,10 @@
       },
       "targets": [
         {
-          "expr": "topk(10, sum by (dpt) (sum_over_time(loki:firewall_refused_by_port_count{host=~\"$host\"}[$__range])))",
+          "expr": "topk(10, sum by (dpt) (count_over_time({job=\"systemd-journal\", log_stream=\"kernel\", host=~\"$host\"} |= \"refused connection:\" | regexp \" DPT=(?P<dpt>[0-9]+)( |$)\" | dpt!=\"\" [$__range])))",
           "legendFormat": "port {{dpt}}",
           "refId": "A",
-          "instant": true
+          "queryType": "instant"
         }
       ]
     },
@@ -311,7 +311,7 @@
       "id": 30,
       "type": "timeseries",
       "title": "Attack rate by host",
-      "description": "Combined refused connections plus SSH auth failures, per host.",
+      "description": "Logged TCP refusals and SSH authentication failures per minute, by host.",
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 22 },
       "fieldConfig": {
@@ -347,7 +347,7 @@
     {
       "id": 40,
       "type": "logs",
-      "title": "Refused connections (live tail)",
+      "title": "Refused TCP connections (live tail)",
       "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 10, "w": 12, "x": 0, "y": 30 },
       "options": {

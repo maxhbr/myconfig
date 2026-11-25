@@ -59,11 +59,8 @@ in
       type = lib.types.bool;
       default = true;
       description = ''
-        Log packets the firewall refuses. Without this a port scan or a
-        brute-force run leaves no trace on the host, which makes the
-        ban rule above the only evidence that something happened. This
-        is also the log stream the attacks dashboard parses for source
-        IPs and probed ports.
+        Log refused TCP connection attempts. The attacks dashboard parses
+        these kernel messages for source IPs and probed ports.
       '';
     };
 
@@ -89,11 +86,9 @@ in
       type = lib.types.bool;
       default = true;
       description = ''
-        Ship sshd and kernel journal streams to Loki in addition to the
-        priority-filtered generic stream. Required for the per-source-IP
-        and probed-port breakdowns: `Failed password`/`Failed publickey`
-        and `refused connection:` are logged at info, which the generic
-        source drops at the default `journalMinPriority`.
+        Ship only failed SSH password/public-key authentications and
+        firewall-refused TCP connection attempts in the dedicated Loki
+        streams. The generic journal priority filter remains unchanged.
       '';
     };
 
@@ -167,23 +162,31 @@ in
     myconfig.observability.client.alloy.extraConfig = lib.mkIf shipAttackLogs (
       let
         hostName = config.networking.hostName;
-        mkSource = label: matches: ''
+        mkSource = label: matches: messagePattern: ''
           loki.source.journal "${label}" {
             max_age       = "${config.myconfig.observability.client.alloy.journalMaxAge}"
             matches       = "${matches}"
             relabel_rules = loki.relabel.journal.rules
-            forward_to    = [loki.write.default.receiver]
+            forward_to    = [loki.process.${label}.receiver]
             labels        = {
               job          = "systemd-journal",
               log_stream   = "${label}",
               host         = "${hostName}",
             }
           }
+
+          loki.process "${label}" {
+            stage.match {
+              selector = `{log_stream="${label}"} !~ "${messagePattern}"`
+              action   = "drop"
+            }
+            forward_to = [loki.write.default.receiver]
+          }
         '';
       in
       lib.concatStringsSep "\n" [
-        (mkSource "sshd" "_SYSTEMD_UNIT=sshd.service")
-        (mkSource "kernel" "_TRANSPORT=kernel")
+        (mkSource "sshd" "_SYSTEMD_UNIT=sshd.service" "^Failed (password|publickey) for ")
+        (mkSource "kernel" "_TRANSPORT=kernel" "^refused connection: ")
       ]
     );
 
