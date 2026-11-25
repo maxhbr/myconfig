@@ -11,13 +11,23 @@ secrets-plain/                  gitignored plaintext, host-agnostic
 secrets/                        committed *.age ciphertext + secrets.nix (agenix manifest)
 ```
 
-Plaintext (`secrets-plain/`) is what the flake evaluates: nix cannot
-decrypt age at eval time, so `myconfig.secrets.<name>.source`,
-`builtins.readFile` and imported `*.nix` files must point there. The
-committed `*.age` files are encrypted backups/provisions of the same
-data; the agenix runtime (myconfig.secrets → age.secrets) re-encrypts
-the plaintext per host at build time, exactly as before the migration
-— only the at-rest-in-git protection changed (git-crypt → age).
+Plaintext (`secrets-plain/`) is what the flake evaluates by default:
+nix cannot decrypt age at eval time, so `builtins.readFile` and
+imported `*.nix` files (Kind B) must point there. For `myconfig.secrets`
+sources (Kind A) there are two equivalent forms:
+
+- `source = <secrets-plain/...>` — plaintext; `myconfig.secrets`
+  encrypts it to the host key at build time (the classic path), or
+- `source = <secrets/...age>` — the committed ciphertext itself,
+  encrypted to the target host's key by `secrets-encrypt.sh`;
+  `myconfig.secrets` detects the `.age` suffix and passes it to agenix
+  unchanged (no build-time re-encryption, no plaintext needed on the
+  eval machine).
+
+Both decrypt on the host identically. Prefer the `.age` form once a
+secret's consumers are migrated — the plaintext then only needs to
+exist on the machine that edits/encrypts secrets, not on every machine
+that evaluates the flake.
 
 ## One-time migration from git-crypt
 
@@ -49,8 +59,9 @@ Each `*.age` file is encrypted to the master key
 when the target host can be derived from the path, that host's ssh host
 key from `hosts/metadata.json`
 (`hosts.<host>.pubkeys."/etc/ssh/ssh_host_rsa_key.pub"`) — the same key
-`myconfig.secrets` encrypts to, so host-side agenix decryption keeps
-working with its existing `age.identityPaths`.
+`myconfig.secrets` encrypts to, so an `.age` source decrypts on the
+host with agenix's existing `age.identityPaths`, including the
+impermanence-host override.
 
 Back up the master key offline. Losing it makes every `*.age` file
 undecryptable; it is the replacement for the git-crypt "default" key.
