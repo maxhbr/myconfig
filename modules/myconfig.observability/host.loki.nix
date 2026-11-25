@@ -42,6 +42,40 @@ let
             }
           ];
         }
+        # Attack counters derived from the dedicated journal sources that
+        # myconfig.networking.hardening adds (log_stream="sshd" / "kernel").
+        # Recording rules rather than pure LogQL panels because the
+        # dashboard's stat/timeseries panels want Prometheus series, and
+        # because the log streams are dropped by the generic source's
+        # priority filter (both `Failed …` and `refused connection:` are
+        # logged at info).
+        {
+          name = "myconfig-attacks";
+          interval = "1m";
+          rules = [
+            {
+              record = "loki:firewall_refused_connections_count";
+              expr = ''sum by (host) (count_over_time({job="systemd-journal", log_stream="kernel"} |= "refused connection:" [1m]))'';
+            }
+            {
+              record = "loki:ssh_auth_failures_count";
+              expr = ''sum by (host) (count_over_time({job="systemd-journal", log_stream="sshd"} |~ "Failed (password|publickey)" [1m]))'';
+            }
+            # Per-source-IP and per-destination-port series. Kept as
+            # recording rules so the dashboard's topk panels stay cheap
+            # over long ranges; the batch size is bounded by the rule
+            # interval, so a scanner sweeping 65k ports produces a large
+            # but bounded label set.
+            {
+              record = "loki:firewall_refused_by_source_count";
+              expr = ''sum by (host, src) (count_over_time({job="systemd-journal", log_stream="kernel"} |= "refused connection:" | regexp "SRC=(?P<src>[^ ]+)" [1m]))'';
+            }
+            {
+              record = "loki:firewall_refused_by_port_count";
+              expr = ''sum by (host, dpt) (count_over_time({job="systemd-journal", log_stream="kernel"} |= "refused connection:" | regexp "DPT=(?P<dpt>[0-9]+)" [1m]))'';
+            }
+          ];
+        }
       ];
     }
   );

@@ -42,6 +42,9 @@
     myconfig = {
       desktop.enable = false;
       headless.enable = true;
+      # Reachable over the LAN (ssh/22 is open on every interface), so
+      # ban brute-force attempts and keep the evidence.
+      networking.hardening.enable = true;
       smart-home.enable = true;
       deployedServices.configureCaddy = true;
       # Podman is needed for the Dependency-Track containers (see

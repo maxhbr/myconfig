@@ -46,6 +46,9 @@
     myconfig = {
       desktop.enable = false;
       headless.enable = true;
+      # Reachable over the LAN (ssh/22 is open on every interface), so
+      # ban brute-force attempts and keep the evidence.
+      networking.hardening.enable = true;
       # eno1 and the USB Wi-Fi dongle both land on 192.168.1.0/24, so with
       # both up the box is dual-homed on one subnet and the Wi-Fi IP is
       # unreachable from the LAN (replies for it egress eno1 → asymmetric

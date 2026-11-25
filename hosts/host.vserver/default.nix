@@ -40,15 +40,8 @@
       port = 22022;
     };
 
-    # stk
-    networking.firewall.allowedUDPPorts = [
-      2759
-      2757
-    ];
-    networking.firewall.allowedTCPPorts = [
-      2759
-      2757
-    ];
+    # This is the only publicly reachable host.
+    myconfig.networking.hardening.enable = true;
 
     # This value determines the NixOS release from which the default
     # settings for stateful data, like file locations and database versions

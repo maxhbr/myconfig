@@ -41,6 +41,16 @@ in
   config = lib.mkIf cfg.enable {
     services.dnsmasq.enable = true;
     services.dnsmasq.settings = {
+      # Bind to the interfaces actually served instead of the wildcard
+      # address. `listen-address` alone only filters in userspace: dnsmasq
+      # still holds 0.0.0.0:53, so any future firewall rule for 53 turns it
+      # into an open resolver. `bind-dynamic` rather than `bind-interfaces`
+      # because wg0 may not exist yet when dnsmasq starts.
+      interface = [
+        "lo"
+        "wg0"
+      ];
+      bind-dynamic = true;
       domain = cfg.domain;
       listen-address = [
         "127.0.0.1"

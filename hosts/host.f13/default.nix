@@ -381,6 +381,9 @@ in
     };
 
     myconfig = {
+      # Reachable over the LAN (ssh/22 is open on every interface), so
+      # ban brute-force attempts and keep the evidence.
+      networking.hardening.enable = true;
       # f13 docks into a station whose USB-Ethernet NIC lands on the same
       # subnet as the built-in Wi-Fi; prefer the wired link to avoid
       # dual-homing. (Previously the host-local ./networking.prefer-wired.nix.)

@@ -119,6 +119,9 @@
         btrfs_device = "/dev/mapper/enc-pv";
       };
       headless.enable = true;
+      # Reachable over the LAN (ssh/22 is open on every interface), so
+      # ban brute-force attempts and keep the evidence.
+      networking.hardening.enable = true;
       desktop = {
         enable = true;
         wayland = {
