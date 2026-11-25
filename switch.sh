@@ -155,13 +155,18 @@ flake_update_recursively() (
         log_error "flake.nix not found in $path"
         return
     fi
-    if grep -q '\.url = "path:' "$flake"; then
+    # Match only real input declarations: a `path:` URL mentioned in a
+    # comment (e.g. the wiring docs in mysbx/flake.nix) would otherwise be
+    # extracted as an input and recursed into.
+    local path_inputs
+    path_inputs="$(grep '\.url = "path:' "$flake" | grep -v '^[[:space:]]*#' || true)"
+    if [[ -n $path_inputs ]]; then
         local resolved_path
         resolved_path="$(realpath "$path")"
         if [[ $(basename "$resolved_path") == "myconfig" && $(hostname) != "$LEAD_HOST" ]]; then
             log_info "skip recursing beyond myconfig flake on host $(hostname) (not $LEAD_HOST)"
         else
-            grep '\.url = "path:' "$flake" | sed s/.*path:// | sed 's/".*//g' |
+            printf '%s\n' "$path_inputs" | sed s/.*path:// | sed 's/".*//g' |
                 while read -r flake_path; do
                     if [[ $flake_path != /* ]]; then
                         flake_path="$(realpath "$path/$flake_path")"
