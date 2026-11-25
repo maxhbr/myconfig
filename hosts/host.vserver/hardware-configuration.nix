@@ -28,6 +28,21 @@
     fsType = "ext4";
   };
 
-  swapDevices = [ { device = "/dev/disk/by-uuid/37c71082-1377-474e-a5a0-f4988dbacf1b"; } ];
-
+  # Swap is encrypted with a fresh random key on every boot, so its
+  # contents never survive a reboot and nothing on the VPS disk can be
+  # read back out of the swap area.
+  #
+  # This deliberately replaces the generated `swapDevices = [ { device =
+  # "/dev/disk/by-uuid/<swap-uuid>"; } ]`. nixpkgs asserts against
+  # by-uuid/by-label here, because the plain mapping erases the
+  # partition's UUID and label on every boot. /dev/sda2 is addressed by
+  # kernel device name instead; confirm it on the host before relying on
+  # it (see doc/TODOs/vserver-swap-encryption.md, which also records why
+  # /dev/disk/by-partuuid/... is the better spelling).
+  swapDevices = [
+    {
+      device = "/dev/sda2";
+      randomEncryption = true;
+    }
+  ];
 }
