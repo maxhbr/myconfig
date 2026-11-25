@@ -162,6 +162,25 @@ diverged when it does change — use the JSON snapshot to localise diffs.
   `runtimeInputs` or changing whitespace inside a `writeShellApplication`
   text changes the outPath and breaks the diff.
 
+## Reaching Grafana / Loki
+
+The observability host is **nuc**. Grafana itself only listens on
+`127.0.0.1:3000` on nuc; the reachable entry point is the Caddy vhost over
+the wg0 mesh:
+
+- **Grafana UI**: `https://grafana.nuc.wg0.maxhbr.local` (anonymous access
+  is enabled as Viewer; sign in for edit access)
+- **Loki API**: `http://10.199.199.9:3100` (nuc's wg address; `/ready`,
+  `/loki/api/v1/query`, `/loki/api/v1/query_range`)
+- **VictoriaMetrics**: `http://10.199.199.9:8428`, basic auth
+  `vmagent:<basicAuthPasswordFile content>`
+
+If DNS for `*.wg0.maxhbr.local` does not resolve where you run the query,
+pin the host: `curl --resolve grafana.nuc.wg0.maxhbr.local:443:10.199.199.9 ...`.
+Dashboard JSON models can be fetched/fixed via the API without a browser:
+`/api/dashboards/uid/<uid>` and `POST /api/ds/query` (the latter is how to
+verify what a panel actually sends to Loki).
+
 ## Git Hygiene
 
 ### Adding New Files
