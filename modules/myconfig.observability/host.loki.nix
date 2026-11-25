@@ -60,6 +60,38 @@ let
             }
           ];
         }
+        # Privileged-exec counters derived from the audit journal source
+        # that myconfig.security.audit adds (log_stream="audit"). Audit
+        # records arrive through audisp-syslog at LOG_INFO, so they are
+        # invisible to the generic priority-filtered source.
+        #
+        # An exec produces several audit records sharing one audit ID: a
+        # SYSCALL record (carrying `exe=` and `key=`) and a separate EXECVE
+        # record (carrying argv). They cannot be filtered on the same line,
+        # so these rules match the SYSCALL record only; the dashboard reads
+        # argv out of EXECVE records on demand.
+        #
+        # The rule key separates login-attributed root execs (`root_exec`,
+        # auid>=1000) from root's own logins (`root_login_exec`, auid=0 —
+        # e.g. the root@host path switch.sh deploys over).
+        {
+          name = "myconfig-root-activity";
+          interval = "1m";
+          rules = [
+            {
+              record = "loki:root_exec_count";
+              expr = ''sum by (host) (count_over_time({job="systemd-journal", log_stream="audit"} |~ `type=SYSCALL.*key="root_exec"` [1m]))'';
+            }
+            {
+              record = "loki:root_login_exec_count";
+              expr = ''sum by (host) (count_over_time({job="systemd-journal", log_stream="audit"} |~ `type=SYSCALL.*key="root_login_exec"` [1m]))'';
+            }
+            {
+              record = "loki:sudo_invocation_count";
+              expr = ''sum by (host) (count_over_time({job="systemd-journal", log_stream="audit"} |~ `type=SYSCALL.*exe="/run/wrappers/bin/sudo"` [1m]))'';
+            }
+          ];
+        }
       ];
     }
   );
@@ -843,6 +875,22 @@ in
           options.path = pkgs.runCommand "logs-dashboards" { } ''
             mkdir -p $out
             cp ${logsDashboardFile} $out/logs.json
+          '';
+        }
+        # The root-activity dashboard reads this host's recorded series, so
+        # it is provisioned here rather than by myconfig.security.audit:
+        # the audit producer runs on the audited host, which is not the
+        # host running Grafana. Gating it on the producer would leave the
+        # dashboard missing on the one machine that can display it.
+        {
+          name = "myconfig-security-root-activity";
+          type = "file";
+          disableDeletion = true;
+          updateIntervalSeconds = 60;
+          folder = "Security";
+          options.path = pkgs.runCommand "security-root-activity-dashboards" { } ''
+            mkdir -p $out
+            cp ${./dashboards/security-root-activity.json} $out/security-root-activity.json
           '';
         }
       ];

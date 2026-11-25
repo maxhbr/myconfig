@@ -42,6 +42,9 @@
 
     # This is the only publicly reachable host.
     myconfig.networking.hardening.enable = true;
+    # Record every privileged exec: this host is deployed as root over ssh
+    # and is the only one reachable from the internet.
+    myconfig.security.audit.enable = true;
 
     # This value determines the NixOS release from which the default
     # settings for stateful data, like file locations and database versions
