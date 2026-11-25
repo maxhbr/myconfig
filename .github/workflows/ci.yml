@@ -49,6 +49,21 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  update-priv-template-branch:
+    # Rebuild the orphan-history priv.template branch from
+    # scripts/priv.template/ and publish it, so that
+    # scripts/init-priv.sh can import it instead of splitting
+    # locally. Pushes only when the template content changed.
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
+    - run: ./scripts/update-priv.template-branch.sh origin
+
   build-os:
     runs-on: ubuntu-latest
 

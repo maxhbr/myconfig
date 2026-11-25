@@ -610,6 +610,10 @@
                 pkgs = inputs.nixpkgs.legacyPackages."${system}";
                 files = pkgs.lib.concatStringsSep " " [
                   "switch.sh"
+                  # priv template bootstrap and branch publisher; plain
+                  # scripts executed by a human and by CI respectively.
+                  "scripts/init-priv.sh"
+                  "scripts/update-priv.template-branch.sh"
                   # Home-manager activation harness (runs a host's real
                   # activation against a throwaway HOME) plus the
                   # agent-skills integration check driven by it.
