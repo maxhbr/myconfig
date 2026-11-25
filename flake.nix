@@ -614,6 +614,22 @@
                   # scripts executed by a human and by CI respectively.
                   "scripts/init-priv.sh"
                   "scripts/update-priv.template-branch.sh"
+                  # priv template age/agenix secret management scripts;
+                  # plain scripts executed by a human in the priv repo.
+                  "scripts/priv.template/mk_age_master_key.sh"
+                  "scripts/priv.template/scripts/secrets-migrate-from-git-crypt.sh"
+                  "scripts/priv.template/scripts/secrets-encrypt.sh"
+                  "scripts/priv.template/scripts/secrets-decrypt.sh"
+                  "scripts/priv.template/scripts/secrets-verify.sh"
+                  # updated keygen scripts writing into the age layout
+                  "scripts/priv.template/mk_ssh_keypair.sh"
+                  "scripts/priv.template/mk_wireguard_keypair.sh"
+                  "scripts/priv.template/mk_syncthing_keypair.sh"
+                  "scripts/priv.template/mk_borgbackup_keys.sh"
+                  "scripts/priv.template/mk_gpg_keypair.sh"
+                  "scripts/priv.template/mk_tls_keypair.sh"
+                  "scripts/priv.template/mk_nix_binary_cache_key.sh"
+                  "scripts/priv.template/mk_step-ca_keys.sh"
                   # Home-manager activation harness (runs a host's real
                   # activation against a throwaway HOME) plus the
                   # agent-skills integration check driven by it.

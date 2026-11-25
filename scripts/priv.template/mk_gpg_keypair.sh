@@ -4,7 +4,9 @@
 set -ex
 hostname="${1:?Usage: $0 <hostname>}"
 
-gpgDir="hosts/host.${hostname}/secrets/gpg"
+# plaintext lives in the gitignored secrets-plain/ tree; the committed
+# secrets/gpg/*.age ciphertext is produced by scripts/secrets-encrypt.sh
+gpgDir="hosts/host.${hostname}/secrets-plain/gpg"
 if [[ ! -d "$gpgDir" ]]; then
     mkdir -p "$gpgDir"
     chmod 700 "$gpgDir"
@@ -21,7 +23,7 @@ Expire-Date: 0
 EOF
     GNUPGHOME="$gpgDir" gpg --armor --export > "$gpgDir/public.asc"
     GNUPGHOME="$gpgDir" gpg --armor --export-secret-keys > "$gpgDir/private.asc"
-    git add "$gpgDir"
+    "$(dirname "$0")/scripts/secrets-encrypt.sh"
 else
     echo "already exists!"
 fi

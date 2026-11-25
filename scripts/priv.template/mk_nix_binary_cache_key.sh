@@ -20,7 +20,7 @@ set -x
 
 hostname="${1:?Usage: $0 <hostname>}"
 
-cacheDir="hosts/host.${hostname}/secrets/nix-binary-cache"
+cacheDir="hosts/host.${hostname}/secrets-plain/nix-binary-cache"
 myconfigRepo="${MYCONFIG_REPO:-/home/mhuber/myconfig/myconfig}"
 metadataJson="${myconfigRepo}/hosts/metadata.json"
 
@@ -34,7 +34,7 @@ nix-store --generate-binary-cache-key "${hostname}-1" \
     "${cacheDir}/secret.key" \
     "${cacheDir}/public.key"
 chmod 0400 "${cacheDir}/secret.key"
-git add "${cacheDir}"
+"$(dirname "$0")/scripts/secrets-encrypt.sh"
 
 publicKey="$(<"${cacheDir}/public.key")"
 if [[ -f ${metadataJson} ]]; then

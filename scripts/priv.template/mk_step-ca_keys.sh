@@ -40,7 +40,7 @@ fi
 
 # Where the keys live inside the priv repo. Caller is expected to be in
 # the priv repo root (consistent with the other mk_*.sh scripts).
-caDir="hosts/host.${hostname}/secrets/step-ca"
+caDir="hosts/host.${hostname}/secrets-plain/step-ca"
 
 # Where the public repo lives. Default mirrors the path used by
 # scripts/priv.template/flake.nix:7. Override with MYCONFIG_REPO=... if
@@ -114,5 +114,5 @@ else
 fi
 
 # ---- 5. Stage in git -------------------------------------------------------
-git add "${caDir}"
+"$(dirname "$0")/scripts/secrets-encrypt.sh"
 echo "Done. Inspect ${caDir}/ and add the priv-overlay source = ... wiring."

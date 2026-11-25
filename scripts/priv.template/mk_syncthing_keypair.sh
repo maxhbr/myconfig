@@ -4,10 +4,10 @@
 set -ex
 hostname="$1"
 
-syncthingDir="hosts/host.${hostname}/secrets/syncthing"
+syncthingDir="hosts/host.${hostname}/secrets-plain/syncthing"
 if [[ ! -f "$syncthingDir/key.pem" ]]; then
     syncthing -generate="${syncthingDir}"
-    git add "$syncthingDir"
+    "$(dirname "$0")/scripts/secrets-encrypt.sh"
 else
     echo "already exists!"
 fi
