@@ -93,6 +93,26 @@ let
             default = false;
           };
         }
+        # ... and a thinkrail option-surface stub: the real
+        # programs.thinkrail.nix reads the parent flake's `inputs`
+        # module argument (the mysbx tier's sandboxConfigLib), which
+        # this minimal evaluation does not pass — but the
+        # `muxThinkrail*` scenarios below only need the surface the
+        # mysbx default reads
+        # (`myconfig.ai.dev.thinkrail.enable`/`package`). The package
+        # default is a STAND-IN: plain nixpkgs carries no `thinkrail`
+        # (that package lives in the myconfig overlay), and the
+        # availability gate only distinguishes null from non-null.
+        {
+          options.myconfig.ai.dev.thinkrail = {
+            enable = lib.mkEnableOption "myconfig.ai.dev.thinkrail";
+            package = lib.mkOption {
+              type = lib.types.package;
+              default = pkgs.hello;
+              defaultText = "pkgs.thinkrail on real hosts";
+            };
+          };
+        }
         ../default.nix
         {
           nixpkgs.hostPlatform = system;
@@ -302,6 +322,14 @@ let
       { myconfig.ai.dev.orca.enable = true; }
       { myconfig.ai.dev.mysbx.config.multiplexer = "orca"; }
     ];
+    # ... and `thinkrail` too: available when the option-surface stub
+    # above is enabled (the package gate picks up
+    # `myconfig.ai.dev.thinkrail.package`), a refused EVAL otherwise —
+    # the same both-halves coverage `muxOrca` gives the orca tier.
+    muxThinkrail = generated [
+      { myconfig.ai.dev.thinkrail.enable = true; }
+      { myconfig.ai.dev.mysbx.config.multiplexer = "thinkrail"; }
+    ];
     # The nono backend (mysbx-rs/src/nono.rs): the selection reaches
     # the generated layer as the `backend` key, like any other backend.
     nonoBackend = generated [
@@ -420,6 +448,20 @@ let
     muxOrcaUnavailable = failedAssertions [
       { myconfig.ai.dev.mysbx.config.multiplexer = "orca"; }
     ];
+    # The thinkrail gate, both directions: a selection without the
+    # module's package fails the availability assertion, and one WITH
+    # it (the stub's enable flips the mysbx default from null to a
+    # package) must not — the same happy-path direction
+    # `muxAvailableAsserts` covers for herdr.
+    muxThinkrailUnavailable = failedAssertions [
+      { myconfig.ai.dev.mysbx.config.multiplexer = "thinkrail"; }
+    ];
+    muxThinkrailAvailableAsserts = failedAssertions [
+      {
+        myconfig.ai.dev.mysbx.config.multiplexer = "thinkrail";
+        myconfig.ai.dev.thinkrail.enable = true;
+      }
+    ];
     # ... and a selection that IS available must not produce that
     # assertion (the gate must not fire on the happy path).
     muxAvailableAsserts = failedAssertions [
@@ -481,7 +523,9 @@ let
     let
       unavailable = scenarios.muxUnavailable;
       orcaUnavailable = scenarios.muxOrcaUnavailable;
+      thinkrailUnavailable = scenarios.muxThinkrailUnavailable;
       available = scenarios.muxAvailableAsserts;
+      thinkrailAvailable = scenarios.muxThinkrailAvailableAsserts;
       backendDisabled = scenarios.backendKrunDisabled;
       qemuDisabled = scenarios.backendQemuDisabled;
       backendAvailable = scenarios.backendPodmanEnabledAsserts;
@@ -495,6 +539,10 @@ let
       throw "mysbx generated-config test: selecting the unavailable `aoe` multiplexer did not fail an assertion (failed: ${names})"
     else if !(builtins.any (m: lib.hasInfix "multiplexer" m) orcaUnavailable) then
       throw "mysbx generated-config test: selecting the unavailable `orca` multiplexer did not fail an assertion (failed: ${orcaNames})"
+    else if !(builtins.any (m: lib.hasInfix "multiplexer" m) thinkrailUnavailable) then
+      throw "mysbx generated-config test: selecting the unavailable `thinkrail` multiplexer did not fail an assertion (failed: ${builtins.concatStringsSep "\n" thinkrailUnavailable})"
+    else if builtins.any (m: lib.hasInfix "multiplexer" m) thinkrailAvailable then
+      throw "mysbx generated-config test: the availability gate fired for an AVAILABLE thinkrail (failed: ${builtins.concatStringsSep "\n" thinkrailAvailable})"
     else if builtins.any (m: lib.hasInfix "multiplexer" m) available then
       throw "mysbx generated-config test: the availability gate fired for an AVAILABLE multiplexer (failed: ${builtins.concatStringsSep "\n" available})"
     else if !(builtins.any (m: lib.hasInfix "backend is not enabled" m) backendDisabled) then
@@ -1011,6 +1059,7 @@ pkgs.runCommand "mysbx-generated-config-test"
       muxHerdr
       muxTmux
       muxOrca
+      muxThinkrail
       nonoBackend
       krunBackend
       krunNestedOn
@@ -1148,6 +1197,11 @@ pkgs.runCommand "mysbx-generated-config-test"
     # AppImage via `myconfig.ai.dev.orca.package`.
     grep -q '^multiplexer = "orca"$' "$muxOrca" \
       || fail "the orca selection is missing" "$muxOrca"
+    # ... `thinkrail` with the stub enabled: the selection reaches the
+    # layer, and the package gate found a package via
+    # `myconfig.ai.dev.thinkrail.package`.
+    grep -q '^multiplexer = "thinkrail"$' "$muxThinkrail" \
+      || fail "the thinkrail selection is missing" "$muxThinkrail"
     # ... and the nono backend selection reaches the generated layer
     # as the `backend` key.
     grep -q '^backend = "nono"$' "$nonoBackend" \

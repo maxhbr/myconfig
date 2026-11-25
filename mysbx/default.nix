@@ -52,6 +52,7 @@ let
     "herdr"
     "aoe"
     "orca"
+    "thinkrail"
     "none"
     # backend values (backends::NAMES)
     "bubblewrap"
@@ -395,6 +396,19 @@ let
         }
       else
         null;
+    # `thinkrail`: like orca, the payload is not a terminal but a
+    # server — the ThinkRail engine host (HTTP+WS, the browser UI the
+    # operator opens from the host). See ./nix/thinkrail-entry.nix
+    # for the headless/network/state decisions. No tmux: thinkrail
+    # is not a tmux front end.
+    thinkrail =
+      if cfg.thinkrail.package != null then
+        pkgs.callPackage ./nix/thinkrail-entry.nix {
+          thinkrail = cfg.thinkrail.package;
+          inherit payloadShell;
+        }
+      else
+        null;
   };
 
   # The binaries the SELECTED multiplexer's panes need on the sandbox
@@ -433,6 +447,9 @@ let
       # ./nix/orca-entry.nix already started. The key must exist or the
       # `.${cfg.config.multiplexer}` lookup below would throw.
       orca = [ ];
+      # The programs module ships the CLI on PATH when enabled; this
+      # row also covers hosts that pin the package without the module.
+      thinkrail = [ cfg.thinkrail.package ];
     }
     .${cfg.config.multiplexer}
   );
@@ -980,9 +997,10 @@ in
       defaultText = literalExpression "pkgs.tmux";
       description = ''
         The tmux that runs *inside* the sandbox: the server of the
-        `tmux`, `workmux` and `aoe` multiplexers — `orca` is not one
-        of them, its payload is the Orca runtime server (see
-        ./nix/orca-entry.nix) — and the `tmux` on the sandbox
+        `tmux`, `workmux` and `aoe` multiplexers — `orca` and
+        `thinkrail` are not among them, their payloads are servers
+        (see ./nix/orca-entry.nix, ./nix/thinkrail-entry.nix) — and
+        the `tmux` on the sandbox
         `PATH` when one of them is selected.
 
         Unlike the other multiplexer packages this is never `null`:
@@ -1105,6 +1123,35 @@ in
         ./nix/orca-entry.nix for the display/network/state decisions.
 
         `null` means "this host does not carry orca": no entry is
+        pinned, and a configuration selecting it is a refused run
+        instead of a silent plain shell.
+      '';
+    };
+
+    thinkrail.package = mkOption {
+      type = types.nullOr types.package;
+      # Gated on the thinkrail module being ENABLED, not merely
+      # present — the same reasoning as `orca.package`: a selection
+      # nobody asked for should not pull the binary into every mysbx
+      # host's closure.
+      default =
+        if (config.myconfig.ai.dev.thinkrail.enable or false) then
+          config.myconfig.ai.dev.thinkrail.package
+        else
+          null;
+      defaultText = literalExpression "config.myconfig.ai.dev.thinkrail.package (when that module is enabled, else null)";
+      description = ''
+        The thinkrail CLI package (modules/myconfig.ai.dev/programs/programs.thinkrail.nix)
+        that runs *inside* the sandbox when
+        `config.multiplexer = "thinkrail"`
+        (./docs/design/config.md D17): the payload is the ThinkRail
+        engine host (`thinkrail --no-open --host 127.0.0.1`), whose
+        web UI the operator opens from a host browser. The session
+        must run in the foreground on `bubblewrap` with shared networking —
+        see ./nix/thinkrail-entry.nix for the headless/network/state
+        decisions.
+
+        `null` means "this host does not carry thinkrail": no entry is
         pinned, and a configuration selecting it is a refused run
         instead of a silent plain shell.
       '';
@@ -1303,11 +1350,14 @@ in
       # store path is the same inside the image as on the host.
       muxEntries = mkOption {
         type = types.attrsOf types.package;
-        default = lib.filterAttrs (name: entry: entry != null && name != "orca") muxEntries;
+        default = lib.filterAttrs (
+          name: entry: entry != null && name != "orca" && name != "thinkrail"
+        ) muxEntries;
         defaultText = literalExpression ''
-          every available multiplexer entry except orca (its
-          appimage-run FHS env and loopback pairing endpoint are not
-          verified inside a container)'';
+          every available multiplexer entry except orca and thinkrail
+          (orca's appimage-run FHS env and loopback pairing endpoint
+          are not verified inside a container; thinkrail's web UI has
+          no inbound port mapping through pasta)'';
         description = ''
           The multiplexer entry scripts the podman backends can start,
           keyed by the `multiplexer` value. Each is baked into
@@ -2187,6 +2237,7 @@ in
               "herdr"
               "aoe"
               "orca"
+              "thinkrail"
               "none"
             ];
             # `"workmux"` where the integration is wired, the plain
@@ -2202,7 +2253,8 @@ in
               Which terminal multiplexer the INTERACTIVE payload of
               every sandbox of this user is
               (./docs/design/config.md D17, ./docs/design/cli.md D11):
-              `tmux`, `workmux`, `herdr`, `aoe`, `orca`, or `none` for a plain
+              `tmux`, `workmux`, `herdr`, `aoe`, `orca`, `thinkrail`,
+              or `none` for a plain
               interactive shell. `mysbx run -- CMD` is unaffected — a
               one-shot command starts no session.
 
@@ -2214,7 +2266,8 @@ in
               The selected multiplexer must be available on this host,
               i.e. its package option must be set
               (`workmux.package`, `herdr.package`, `aoe.package`,
-              `orca.package`; `tmux` always is). An unavailable
+              `orca.package`, `thinkrail.package`; `tmux` always is).
+              An unavailable
               selection is an evaluation error here, and a refused run
               for a sidecar that names one — never a silently started
               plain shell.

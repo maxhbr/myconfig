@@ -73,12 +73,29 @@ pub enum Multiplexer {
     /// (stablyai/orca `docs/reference/headless-linux-server.md`), see
     /// the entry script `../../nix/orca-entry.nix`.
     Orca,
+    /// ThinkRail (<https://github.com/JetBrains/thinkrail>), the
+    /// agentic IDE around the pi coding agent
+    /// (../../programs.thinkrail.nix). The second non-terminal
+    /// payload: the CLI boots the engine host — an HTTP+WS server —
+    /// in-process, and the operator drives it from a browser
+    /// OUTSIDE the sandbox via the URL it prints on readiness
+    /// (the documented `--no-open` remote form). See the entry
+    /// script `../../nix/thinkrail-entry.nix`.
+    Thinkrail,
 }
 
 impl Multiplexer {
     /// The accepted spellings, in the order the schema error lists
     /// them. Public so the CLI and the tests name the same set.
-    pub const NAMES: &'static [&'static str] = &["tmux", "workmux", "herdr", "aoe", "orca", "none"];
+    pub const NAMES: &'static [&'static str] = &[
+        "tmux",
+        "workmux",
+        "herdr",
+        "aoe",
+        "orca",
+        "thinkrail",
+        "none",
+    ];
 
     fn parse(s: &str, at: &str) -> Result<Multiplexer, Error> {
         match s {
@@ -88,6 +105,7 @@ impl Multiplexer {
             "herdr" => Ok(Multiplexer::Herdr),
             "aoe" => Ok(Multiplexer::Aoe),
             "orca" => Ok(Multiplexer::Orca),
+            "thinkrail" => Ok(Multiplexer::Thinkrail),
             other => Err(Error::Schema(format!(
                 "{at}: invalid multiplexer `{other}`, expected one of {}",
                 Multiplexer::NAMES
@@ -119,6 +137,7 @@ impl Multiplexer {
             Multiplexer::Herdr => "herdr",
             Multiplexer::Aoe => "aoe",
             Multiplexer::Orca => "orca",
+            Multiplexer::Thinkrail => "thinkrail",
         }
     }
 
@@ -138,6 +157,7 @@ impl Multiplexer {
             Multiplexer::Herdr => Some("MYSBX_MUX_ENTRY_HERDR"),
             Multiplexer::Aoe => Some("MYSBX_MUX_ENTRY_AOE"),
             Multiplexer::Orca => Some("MYSBX_MUX_ENTRY_ORCA"),
+            Multiplexer::Thinkrail => Some("MYSBX_MUX_ENTRY_THINKRAIL"),
         }
     }
 
@@ -153,6 +173,7 @@ impl Multiplexer {
             Multiplexer::Herdr => Some("MYSBX_PODMAN_MUX_ENTRY_HERDR"),
             Multiplexer::Aoe => Some("MYSBX_PODMAN_MUX_ENTRY_AOE"),
             Multiplexer::Orca => Some("MYSBX_PODMAN_MUX_ENTRY_ORCA"),
+            Multiplexer::Thinkrail => Some("MYSBX_PODMAN_MUX_ENTRY_THINKRAIL"),
         }
     }
 
@@ -200,6 +221,11 @@ impl Multiplexer {
     ///   pane running plain tmux lands on it — keep the mux dir.
     ///   `requireSocketDir` also `mkdir`s it, so the subtree grant is
     ///   a no-op either way without mediation noise.
+    /// - thinkrail: the same shape as orca — the engine host listens
+    ///   on TCP loopback, no unix socket of its own below the home,
+    ///   but the entry validates `TMUX_TMPDIR` (a pane running plain
+    ///   tmux lands on it, and the in-IDE terminal panes are plain
+    ///   shells on the pinned `SHELL`).
     /// - herdr: NOT a tmux server — its API sockets are
     ///   `$HOME/.config/herdr/herdr.sock` (server) and
     ///   `.../herdr-client.sock` (the client passes it over SSH),
@@ -1663,6 +1689,7 @@ mod tests {
             ("herdr", Multiplexer::Herdr),
             ("aoe", Multiplexer::Aoe),
             ("orca", Multiplexer::Orca),
+            ("thinkrail", Multiplexer::Thinkrail),
             ("none", Multiplexer::None),
         ] {
             let c = Config::parse(&format!("multiplexer = \"{text}\"\n")).unwrap();
@@ -1672,7 +1699,7 @@ mod tests {
             assert_eq!(want.name(), text);
         }
         // Every accepted spelling is in NAMES, and nothing else is.
-        assert_eq!(Multiplexer::NAMES.len(), 6);
+        assert_eq!(Multiplexer::NAMES.len(), 7);
     }
 
     #[test]
@@ -1726,7 +1753,7 @@ mod tests {
                 }
             }
         }
-        assert_eq!(seen.len(), 5);
+        assert_eq!(seen.len(), 6);
     }
 
     #[test]

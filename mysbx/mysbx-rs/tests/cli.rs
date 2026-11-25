@@ -2363,6 +2363,7 @@ fn init_records_the_user_layers_multiplexer_in_the_sidecar() {
         Multiplexer::Herdr,
         Multiplexer::Aoe,
         Multiplexer::Orca,
+        Multiplexer::Thinkrail,
     ] {
         let (inv, _, sidecar) = fixture_uninited(&format!("init-mux-{mux}"), &["init"]);
         std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
@@ -2467,12 +2468,13 @@ fn fixture_mux(
 /// Every multiplexer that starts a session — the set these tests run
 /// over, taken from the CLI's own enum so a new variant cannot be
 /// added without deciding what these tests say about it.
-const SESSION_MUXES: [Multiplexer; 5] = [
+const SESSION_MUXES: [Multiplexer; 6] = [
     Multiplexer::Tmux,
     Multiplexer::Workmux,
     Multiplexer::Herdr,
     Multiplexer::Aoe,
     Multiplexer::Orca,
+    Multiplexer::Thinkrail,
 ];
 
 /// The wrapper pin of `mux` and a synthetic entry path for it. The pin
@@ -2590,6 +2592,7 @@ fn dry_run_run_form_is_never_a_multiplexer_session() {
                             | "herdr"
                             | "aoe"
                             | "orca"
+                            | "thinkrail"
                     )
                 })
                 .collect::<Vec<_>>()
@@ -14710,6 +14713,132 @@ fn orca_multiplexer_is_refused_on_nono_and_podman_gvisor() {
         stdout.ends_with("true\n"),
         "the one-shot payload is the command: {stdout}"
     );
+}
+
+#[test]
+fn thinkrail_requires_bubblewrap() {
+    for &backend in mysbx::backends::NAMES {
+        let (inv, _, sidecar) = fixture(&format!("thinkrail-{backend}"), &[]);
+        std::fs::write(
+            sidecar.join("config.toml"),
+            format!("backend = \"{backend}\"\nnetwork = \"shared\"\n"),
+        )
+        .unwrap();
+        let (code, stdout, stderr) =
+            thinkrail_run(&inv, &["--multiplexer", "thinkrail", "--dry-run"]);
+        if backend == "bubblewrap" {
+            assert_eq!(code, 0, "{stderr}");
+            assert!(stdout.contains("--share-net\n"), "{stdout}");
+            assert!(
+                stdout.ends_with(&format!("{THINKRAIL_TEST_ENTRY}\n")),
+                "{stdout}"
+            );
+            continue;
+        }
+        assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "{backend}: {stderr}");
+        assert!(
+            stderr.contains(&format!(
+                "multiplexer = \"thinkrail\" is not supported on the `{backend}` backend"
+            )),
+            "{backend}: {stderr}"
+        );
+        if backend == "nono" {
+            assert!(stderr.contains("Landlock"), "{stderr}");
+        }
+        assert!(stdout.is_empty(), "{backend}: {stdout}");
+    }
+}
+
+const THINKRAIL_TEST_ENTRY: &str = "/nix/store/aaaa-thinkrail-entry";
+
+fn thinkrail_run(inv: &Invocation, args: &[&str]) -> (i32, String, String) {
+    let out = spawn_with_args(inv, args)
+        .env("MYSBX_MUX_ENTRY_THINKRAIL", THINKRAIL_TEST_ENTRY)
+        .output()
+        .expect("failed to spawn the mysbx binary");
+    (
+        out.status.code().unwrap(),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+#[test]
+fn thinkrail_refuses_non_shared_network_before_cloning() {
+    for (name, value) in [
+        ("none", "\"none\""),
+        ("proxy-only", "\"proxy-only\""),
+        ("public", "\"public\""),
+        ("false", "false"),
+    ] {
+        let (inv, _, sidecar) = fixture(&format!("thinkrail-network-{name}"), &[]);
+        std::fs::write(
+            sidecar.join("config.toml"),
+            format!("backend = \"bubblewrap\"\nmultiplexer = \"thinkrail\"\nnetwork = {value}\n"),
+        )
+        .unwrap();
+        for args in [
+            &["--session", "review"][..],
+            &["--session", "review", "--dry-run"][..],
+        ] {
+            let (code, stdout, stderr) = thinkrail_run(&inv, args);
+            assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "{name}: {stderr}");
+            assert!(
+                stderr.contains("requires network = \"shared\""),
+                "{name}: {stderr}"
+            );
+            assert!(stdout.is_empty(), "{stdout}");
+            assert!(!sidecar.join(mysbx::session::CLONES_DIR).exists());
+        }
+    }
+}
+
+#[test]
+fn thinkrail_refuses_detached_startup() {
+    let (inv, _, sidecar) = fixture("thinkrail-detach", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nmultiplexer = \"thinkrail\"\n",
+    )
+    .unwrap();
+    for args in [
+        &["--detach"][..],
+        &["--detach", "--dry-run"][..],
+        &["--detachable", "--dry-run"][..],
+    ] {
+        let (code, stdout, stderr) = thinkrail_run(&inv, args);
+        assert_eq!(code, mysbx::EXIT_INFRASTRUCTURE, "{args:?}: {stderr}");
+        assert!(
+            stderr.contains("does not support --detach or --detachable"),
+            "{stderr}"
+        );
+        assert!(stdout.is_empty(), "{stdout}");
+    }
+}
+
+#[test]
+fn thinkrail_does_not_affect_a_podman_one_shot() {
+    let (inv, _, sidecar) = fixture("thinkrail-run-unaffected", &[]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"podman-gvisor\"\nmultiplexer = \"thinkrail\"\n",
+    )
+    .unwrap();
+    let out = spawn_with_args(&inv, &["run", "--dry-run", "--", "true"])
+        .env("MYSBX_PODMAN", "/synth/bin/podman")
+        .env("MYSBX_PODMAN_IMAGE", "localhost/test:latest")
+        .env("MYSBX_MUX_ENTRY_THINKRAIL", THINKRAIL_TEST_ENTRY)
+        .output()
+        .expect("failed to spawn the mysbx binary");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "{stderr}");
+    assert!(stdout.starts_with("/synth/bin/podman\n"), "{stdout}");
+    assert!(
+        stdout.ends_with("localhost/test:latest\ntrue\n"),
+        "{stdout}"
+    );
+    assert!(!stdout.contains(THINKRAIL_TEST_ENTRY), "{stdout}");
 }
 
 #[test]

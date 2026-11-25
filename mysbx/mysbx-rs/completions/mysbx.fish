@@ -361,7 +361,7 @@ complete -c mysbx -n '__mysbx_no_verb' -l dry-run -d 'Print the exact bwrap invo
 complete -c mysbx -n '__mysbx_no_verb' -l verbose -d 'Print the run configuration before running'
 complete -c mysbx -n '__mysbx_no_verb' -l detach -d 'Start the bare form under a dtach master; returns once the run is up (mysbx attach reconnects)'
 complete -c mysbx -n '__mysbx_no_verb' -l detachable -d 'The same as --detach, then attach the current terminal immediately (needs a terminal on stdin)'
-complete -c mysbx -n '__mysbx_no_verb' -l multiplexer -x -a 'tmux workmux herdr aoe orca none' -d 'The multiplexer of THIS interactive run (bare form only)'
+complete -c mysbx -n '__mysbx_no_verb' -l multiplexer -x -a 'tmux workmux herdr aoe orca thinkrail none' -d 'The multiplexer of THIS interactive run (bare form only)'
 # The `--<mux>` shorthands (bd myconfig-6tt): pure aliases of
 # `--multiplexer <value>`, bare form only like the long form. Written
 # out one by one (no fish loop): the mysbx-completions check greps
@@ -371,6 +371,7 @@ complete -c mysbx -n '__mysbx_no_verb' -l workmux -d 'Alias of --multiplexer wor
 complete -c mysbx -n '__mysbx_no_verb' -l herdr -d 'Alias of --multiplexer herdr (bd myconfig-6tt)'
 complete -c mysbx -n '__mysbx_no_verb' -l aoe -d 'Alias of --multiplexer aoe (bd myconfig-6tt)'
 complete -c mysbx -n '__mysbx_no_verb' -l orca -d 'Alias of --multiplexer orca (bd myconfig-6tt)'
+complete -c mysbx -n '__mysbx_no_verb' -l thinkrail -d 'Alias of --multiplexer thinkrail (bd myconfig-6tt)'
 complete -c mysbx -n '__mysbx_no_verb' -l none -d 'Alias of --multiplexer none: the plain shell (bd myconfig-6tt)'
 complete -c mysbx -n '__mysbx_no_verb' -l backend -x -a 'bubblewrap podman-gvisor nono podman-krun krun' -d 'The backend of THIS run (overrides the config layers for one run)'
 # The `--<backend>` shorthands (bd myconfig-6tt): pure aliases of

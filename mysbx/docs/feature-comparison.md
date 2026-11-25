@@ -260,10 +260,10 @@ wrapper, `nix/browser.nix`) goes on the bwrap/nono `PATH` through
 | `qemu` | `agent-qemu-herdr`, `agent-qemu-workmux-tmux` | `builders.nix` |
 | `gvisor` | `defaultCommand` = herdr in the container. `shell` / `logs` attach to a running session | `gvisor-agent-sandbox/README.md` |
 | `microvm` | host-side workmux `microvm-<agent>` panes. `agent-run herdr` in the guest | `microvm/workmux.nix`, `agents.nix` |
-| `mysbx/bubblewrap` | `multiplexer = tmux \| workmux \| herdr \| aoe \| orca \| none`. Tmux socket dir `/mysbx-home/.mysbx-tmux`; herdr has a separate API dir. `--multiplexer` sets the choice for one run. The generated user layer defaults to `workmux` where that integration is enabled | `config.md` D16/D17, `cli.md` D14 |
-| `mysbx/nono` | the same except `orca`. `--allow-unix-socket-dir-bind` + pathname AF_UNIX mediation; old 0.74.0 rate-limit observations are not current 0.80.0 guarantees | `nono.rs`, current guide |
-| `mysbx/podman-gvisor`, `mysbx/podman-krun` | `tmux \| workmux \| herdr \| aoe \| none`, from image entries (`podman.muxEntries`). tmux dir `/mysbx-home/.mysbx-tmux` (gvisor), `/dev/shm/mysbx-tmux` (podman-krun). `orca` refused | `podman_gvisor.rs` |
-| `mysbx/krun`, `mysbx/microvm-qemu` | `tmux \| workmux \| herdr \| aoe \| none`, pinned direct guest entries; `orca` refused; sockets guest-local | `krun.rs`, shared guest init |
+| `mysbx/bubblewrap` | `multiplexer = tmux \| workmux \| herdr \| aoe \| orca \| thinkrail \| none`. Tmux socket dir `/mysbx-home/.mysbx-tmux`; herdr has a separate API dir. `--multiplexer` sets the choice for one run. The generated user layer defaults to `workmux` where that integration is enabled | `config.md` D16/D17, `cli.md` D14 |
+| `mysbx/nono` | the same except `orca` and `thinkrail`. `--allow-unix-socket-dir-bind` + pathname AF_UNIX mediation; old 0.74.0 rate-limit observations are not current 0.80.0 guarantees | `nono.rs`, current guide |
+| `mysbx/podman-gvisor`, `mysbx/podman-krun` | `tmux \| workmux \| herdr \| aoe \| none`, from image entries (`podman.muxEntries`). tmux dir `/mysbx-home/.mysbx-tmux` (gvisor), `/dev/shm/mysbx-tmux` (podman-krun). `orca` and `thinkrail` refused | `podman_gvisor.rs` |
+| `mysbx/krun`, `mysbx/microvm-qemu` | `tmux \| workmux \| herdr \| aoe \| none`, pinned direct guest entries; `orca` and `thinkrail` refused; sockets guest-local | `krun.rs`, shared guest init |
 
 Default private sockets are not a blanket no-persistence guarantee:
 `state-dirs = [".config/herdr"]` is accepted and persists herdr's API

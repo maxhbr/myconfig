@@ -1110,8 +1110,8 @@ fn split_global_flags_traced(args: &[String]) -> Result<(Flags, Selections, &[St
             {
                 // bd myconfig-6tt: the `--<mux>` shorthands of the
                 // D14 flag — `--tmux`, `--workmux`, `--herdr`,
-                // `--aoe`, `--orca`, `--none` == `--multiplexer
-                // <mux>`. Pure aliases: they parse into the SAME
+                // `--aoe`, `--orca`, `--thinkrail`, `--none` ==
+                // `--multiplexer <mux>`. Pure aliases: they parse into the SAME
                 // `Flags::multiplexer` field with the same closed
                 // set (`config::Multiplexer::NAMES` — iterated, never
                 // re-listed), so every later rule — the bare-form
@@ -3316,6 +3316,46 @@ fn sandbox_pipeline(
         let invoked = profile::invoked();
         if invoked.as_deref() != Some(wanted) {
             return profile::refuse(wanted, invoked.as_deref());
+        }
+    }
+
+    // ThinkRail needs a host-reachable loopback listener and a visible
+    // startup URL. Check the effective configuration before setting up
+    // egress, cloning, or launching dtach, including in dry runs.
+    if matches!(payload, bwrap::Payload::Shell)
+        && merged.multiplexer == config::Multiplexer::Thinkrail
+    {
+        if backend != "bubblewrap" {
+            eprintln!(
+                "mysbx: multiplexer = \"thinkrail\" is not supported on the `{backend}` backend"
+            );
+            if backend == "nono" {
+                eprintln!("  Landlock denies the nested mounts required by the ThinkRail package");
+            } else {
+                eprintln!("  the ThinkRail web UI needs the host's loopback network");
+            }
+            eprintln!(
+                "  switch the backend to `bubblewrap` for a ThinkRail session, or select another multiplexer"
+            );
+            return EXIT_INFRASTRUCTURE;
+        }
+        if !merged.network.is_shared() {
+            eprintln!(
+                "mysbx: multiplexer = \"thinkrail\" requires network = \"shared\"; got network = \"{}\"",
+                merged.network.name()
+            );
+            eprintln!("  the host browser cannot reach the ThinkRail UI without shared loopback");
+            return EXIT_INFRASTRUCTURE;
+        }
+        if matches!(
+            mode,
+            RunMode::Detached | RunMode::Detachable | RunMode::DetachedInner
+        ) {
+            eprintln!(
+                "mysbx: multiplexer = \"thinkrail\" does not support --detach or --detachable"
+            );
+            eprintln!("  run it in the foreground to see the URL ThinkRail prints at startup");
+            return EXIT_INFRASTRUCTURE;
         }
     }
 
@@ -10434,6 +10474,7 @@ mod tests {
             ("--herdr", config::Multiplexer::Herdr),
             ("--aoe", config::Multiplexer::Aoe),
             ("--orca", config::Multiplexer::Orca),
+            ("--thinkrail", config::Multiplexer::Thinkrail),
             ("--none", config::Multiplexer::None),
         ] {
             let args = s(&[text, "--dry-run"]);
