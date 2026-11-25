@@ -1,54 +1,77 @@
 #!/usr/bin/env bash
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-#
-# Emit fail2ban jail counters as Prometheus textfile metrics for the
-# node_exporter textfile collector.
-#
-# fail2ban has no built-in Prometheus endpoint, and its own counters are
-# monotonic across restarts only because fail2ban persists them in
-# /var/lib/fail2ban/fail2ban.sqlite3. We therefore scrape `fail2ban-client
-# status <jail>` and re-publish the two monotonic counters under _total
-# names (Prometheus convention) plus per-jail info metrics.
-#
-# `Currently banned` is a gauge, so it is published as-is. `Total banned`
-# and `Total failed` are the persisted totals and are published as
-# counters; node_exporter's textfile collector does not compute rates for
-# them, so the dashboard uses increase()/rate() over the raw values.
 set -euo pipefail
+shopt -s extglob
 
-@fail2banClient@ status >/dev/null
+client=${1:?expected fail2ban-client path}
+directory=${2:?expected textfile directory}
 
-{
-    echo "# HELP fail2ban_up Whether the fail2ban server answered."
-    echo "# TYPE fail2ban_up gauge"
-    printf 'fail2ban_up 1\n'
+# Require exactly one matching line: an empty "Jail list:" is valid,
+# but a missing line must not turn a broken response into a healthy scrape.
+field() {
+    local pattern='^[|`[:blank:]-]*'"$1"':[[:blank:]]*(.*)$'
+    local line value
+    while IFS= read -r line; do
+        [[ $line =~ $pattern ]] || continue
+        [[ ! ${value+x} ]] || return 1
+        value=${BASH_REMATCH[1]}
+    done <<<"$2"
+    [[ ${value+x} ]] || return 1
+    printf '%s\n' "${value%%+([[:blank:]])}"
+}
 
-    # `fail2ban-client status` (no jail) lists the jails in the only
-    # bracket-enclosed line; each jail is comma+space separated.
-    jails="$(
-        @fail2banClient@ status |
-            sed -n 's/^.*Jail list:[[:space:]]*\(.*\)$/\1/p' |
-            tr ',' '\n' |
-            sed 's/^[[:space:]]*//;s/[[:space:]]*$//' |
-            grep -v '^$' || true
-    )"
+counts=('Currently banned' 'Total banned' 'Total failed')
+families=(currently_banned total_banned total_failed)
+types=(gauge counter counter)
+help=('Number of IPs currently banned in this jail.'
+    'Total number of bans handed out by this jail.'
+    'Total number of failures observed by this jail.')
+samples=()
 
-    for jail in $jails; do
-        out="$(@fail2banClient@ status "$jail")"
+collect() {
+    local status list count jail label i value
+    local -a jails
+    local -A seen=()
+    status=$("$client" status) || return 1
+    list=$(field 'Jail list' "$status") || return 1
+    count=$(field 'Number of jail' "$status") || return 1
+    IFS=, read -ra jails <<<"$list"
+    [[ $count == "${#jails[@]}" && $list != *, ]] || return 1
 
-        num() { sed -n "s/^.*$1:[[:space:]]*\([0-9][0-9]*\).*$/\1/p" <<<"$out"; }
-
-        printf '# HELP fail2ban_jail_currently_banned Number of IPs currently banned in this jail.\n'
-        printf '# TYPE fail2ban_jail_currently_banned gauge\n'
-        printf 'fail2ban_jail_currently_banned{jail="%s"} %s\n' "$jail" "$(num 'Currently banned')"
-
-        printf '# HELP fail2ban_jail_total_banned Total number of bans handed out by this jail.\n'
-        printf '# TYPE fail2ban_jail_total_banned counter\n'
-        printf 'fail2ban_jail_total_banned{jail="%s"} %s\n' "$jail" "$(num 'Total banned')"
-
-        printf '# HELP fail2ban_jail_total_failed Total number of failed authentications observed by this jail.\n'
-        printf '# TYPE fail2ban_jail_total_failed counter\n'
-        printf 'fail2ban_jail_total_failed{jail="%s"} %s\n' "$jail" "$(num 'Total failed')"
+    for jail in "${jails[@]}"; do
+        jail=${jail##+([[:blank:]])}
+        jail=${jail%%+([[:blank:]])}
+        [[ -n $jail && ! $jail =~ [[:cntrl:]] ]] || return 1
+        [[ ! ${seen[$jail]+x} ]] || return 1
+        seen[$jail]=1
+        status=$("$client" status "$jail") || return 1
+        label=${jail//\\/\\\\}
+        label=${label//\"/\\\"}
+        for i in "${!counts[@]}"; do
+            value=$(field "${counts[i]}" "$status") || return 1
+            [[ $value =~ ^[0-9]+$ ]] || return 1
+            samples[i]+="fail2ban_jail_${families[i]}{jail=\"$label\"} $value"$'\n'
+        done
     done
-} > "$1"
+    return 0
+}
+
+if collect; then up=1; else up=0; fi
+
+# Stage beside the destination, outside node_exporter's *.prom glob.
+stage=$(mktemp -- "$directory/.fail2ban.XXXXXXXX")
+trap 'rm -f -- "$stage"' EXIT
+{
+    printf '# HELP fail2ban_up Whether all fail2ban jail statistics were collected.\n'
+    printf '# TYPE fail2ban_up gauge\nfail2ban_up %s\n' "$up"
+    if ((up)); then
+        for i in "${!samples[@]}"; do
+            printf '# HELP fail2ban_jail_%s %s\n' "${families[i]}" "${help[i]}"
+            printf '# TYPE fail2ban_jail_%s %s\n' "${families[i]}" "${types[i]}"
+            printf '%s' "${samples[i]}"
+        done
+    fi
+} >"$stage"
+chmod 0644 "$stage"
+mv -fT -- "$stage" "$directory/fail2ban.prom"

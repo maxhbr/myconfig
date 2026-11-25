@@ -12,34 +12,27 @@
 #   * `exportMetrics` publishes fail2ban's jail counters through the
 #     node_exporter textfile collector. fail2ban has no Prometheus
 #     endpoint of its own.
-#   * `shipAttackLogs` adds dedicated Alloy journal sources for sshd and
-#     the kernel. The generic journal source filters at
-#     `journalMinPriority` (default: warning), which would drop both the
-#     sshd auth failures and the firewall's `refused connection:` lines —
-#     they are logged at info. Loki recording rules on the observability
-#     host (host.loki.nix) turn those two streams into Prometheus series.
+#   * `shipAttackLogs` forwards SSH failures and refused TCP connections
+#     that the generic warning-level journal source would miss. Loki
+#     records per-host totals; Grafana queries the logs for IPs and ports.
 {
   config,
   lib,
   pkgs,
-  myconfig,
+  utils,
   ...
 }:
 let
   cfg = config.myconfig.networking.hardening;
 
-  # node_exporter runs as a DynamicUser and reads this directory through
-  # --collector.textfile.directory (wired by myconfig.observability.client
-  # from the systemAge textfileDir).
-  textfileDir = config.myconfig.observability.client.systemAge.textfileDir;
+  systemAge = config.myconfig.observability.client.systemAge;
+  inherit (systemAge) textfileDir;
 
   clientEnabled = config.myconfig.observability.client.enable;
   alloyEnabled = clientEnabled && config.myconfig.observability.client.alloy.enable;
 
-  exportMetrics = cfg.exportMetrics && clientEnabled;
+  exportMetrics = cfg.exportMetrics && clientEnabled && config.services.fail2ban.enable;
   shipAttackLogs = cfg.shipAttackLogs && alloyEnabled;
-
-  fail2banPackage = config.services.fail2ban.package;
 in
 {
   options.myconfig.networking.hardening = {
@@ -108,40 +101,30 @@ in
     services.fail2ban.enable = lib.mkDefault cfg.banSshAuthFailures;
 
     # ─── fail2ban metrics ────────────────────────────────────────────────
-    # The directory is normally created by myconfig.observability.client's
-    # systemAge sub-module; this rule only matters when that is off.
-    systemd.tmpfiles.rules =
-      lib.mkIf (exportMetrics && !config.myconfig.observability.client.systemAge.enable)
-        [
-          "d ${textfileDir} 0755 root root - -"
-        ];
+    # systemAge normally configures the shared directory and its collector.
+    systemd.tmpfiles.rules = lib.mkIf (exportMetrics && !systemAge.enable) [
+      "d ${textfileDir} 0755 root root - -"
+    ];
+    services.prometheus.exporters.node.extraFlags = lib.mkIf (exportMetrics && !systemAge.enable) [
+      "--collector.textfile.directory=${textfileDir}"
+    ];
 
-    systemd.services.myconfig-fail2ban-metrics = lib.mkIf (exportMetrics && cfg.banSshAuthFailures) {
+    systemd.services.myconfig-fail2ban-metrics = lib.mkIf exportMetrics {
       description = "Publish fail2ban jail counters as node_exporter textfile metrics";
       after = [ "fail2ban.service" ];
       wants = [ "fail2ban.service" ];
       serviceConfig = {
         Type = "oneshot";
-        ExecStart = pkgs.writeShellScript "myconfig-fail2ban-metrics" ''
-          set -eu
-          # fail2ban may still be starting; skip rather than publish a
-          # half-written or stale file.
-          if ! ${fail2banPackage}/bin/fail2ban-client status >/dev/null 2>&1; then
-            exit 0
-          fi
-          tmp="$(mktemp "${textfileDir}/.fail2ban.XXXXXX")"
-          trap 'rm -f "$tmp"' EXIT
-          bash ${pkgs.writeText "fail2ban-textfile.sh" (builtins.readFile ./myconfig.observability/scripts/fail2ban-textfile.sh)} "$tmp"
-          # node_exporter is a DynamicUser and reads this directory
-          # unprivileged, so the sample must be world-readable (mktemp
-          # creates it 0600).
-          chmod 0644 "$tmp"
-          mv -f "$tmp" "${textfileDir}/fail2ban.prom"
-        '';
+        ExecStart = utils.escapeSystemdExecArgs [
+          pkgs.runtimeShell
+          ./myconfig.observability/scripts/fail2ban-textfile.sh
+          "${config.services.fail2ban.package}/bin/fail2ban-client"
+          textfileDir
+        ];
       };
     };
 
-    systemd.timers.myconfig-fail2ban-metrics = lib.mkIf (exportMetrics && cfg.banSshAuthFailures) {
+    systemd.timers.myconfig-fail2ban-metrics = lib.mkIf exportMetrics {
       description = "Periodically refresh fail2ban textfile metrics";
       wantedBy = [ "timers.target" ];
       timerConfig = {
