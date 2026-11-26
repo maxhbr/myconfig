@@ -30,6 +30,7 @@ in
           # this user or the `agnt-embedded` agent user.
           pyocd
           openocd
+          probe-rs-tools
         ];
       }
     ];
@@ -54,7 +55,9 @@ in
       stlink
       dfu-util
       teensy-udev-rules
-      segger-jlink-headless
+      # JLink_Linux_V970_x86_64.tgz is currently unfetchable (segger.com
+      # rejects resume, not in the tarball mirror); re-enable once it builds.
+      # segger-jlink-headless
     ];
     # Extra “belt-and-suspenders” rules for very common probes:
     services.udev.extraRules = ''
