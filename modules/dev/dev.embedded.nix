@@ -23,6 +23,13 @@ in
           # picocom
           # minicom
           tio
+
+          # Host-side probe clients: mysbx's private `/dev` keeps every
+          # sandbox away from the ttyACM/hidraw nodes, so `pyocd
+          # gdbserver`, `west flash` and friends run on the host — as
+          # this user or the `agnt-embedded` agent user.
+          pyocd
+          openocd
         ];
       }
     ];
