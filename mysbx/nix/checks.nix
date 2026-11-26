@@ -2538,10 +2538,12 @@ in
   # pi-mcp-servers.nix generator gates on `servers != {}`), NOT by the
   # `myconfig.ai.dev.mysbx.mcp` option — that option only seeds
   # `programs.mcp.enable` so hosts without opencode/claude-code still
-  # build the registry. So the reference host asserts the MOUNTED case
-  # (test-f13 seeds context7 through programs.mcp.servers.nix), and the
-  # opt-out arm below EMPTIES the registry (not the option) to prove the
-  # mount disappears with it.
+  # build the registry. The shared registry ships no server by default,
+  # so this check seeds its own reference server through the same
+  # `home-manager.sharedModules` option a host would use: the seeded
+  # variants assert the MOUNTED case, the plain host (nothing seeded
+  # anywhere) doubles as the empty-registry arm and must carry no
+  # mount at all.
   #
   # Both legitimate owners of the dest are asserted: pi's integration
   # (reference host) and thinkrail's (the thinkrail-only variant, pi
@@ -2552,37 +2554,44 @@ in
       mcpDest = "/mysbx-home/.pi/agent/mcp.json";
       mountsOf = cfg: builtins.filter (m: m.dest == mcpDest) cfg.myconfig.ai.dev.mysbx.config.mounts;
       cfg = self.nixosConfigurations.test-f13.config;
-      # The thinkrail-only variant, as in mysbx-pi-mounts-test above.
-      thinkrailOnlyCfg =
+      # The reference server this check seeds itself: the shared
+      # registry (programs.mcp.servers.nix) ships none by default.
+      seedRefServer = {
+        home-manager.sharedModules = [
+          {
+            programs.mcp.servers.ref = {
+              url = "https://ref.invalid/mcp";
+            };
+          }
+        ];
+      };
+      # The mounted arm: the reference host plus the seeded server.
+      mountedCfg =
+        (self.nixosConfigurations.test-f13.extendModules {
+          modules = [ seedRefServer ];
+        }).config;
+      # The thinkrail-only variant, as in mysbx-pi-mounts-test above:
+      # pi disabled, thinkrail the sole owner of the dest.
+      thinkrailMountedCfg =
         (self.nixosConfigurations.test-f13.extendModules {
           modules = [
+            seedRefServer
             {
               myconfig.ai.dev.pi-coding-agent.enable = lib.mkForce false;
             }
           ];
         }).config;
-      # The empty-registry arm: overrides the shared seed so the
-      # generator renders nothing, and the mount must vanish. (Turning
-      # off `myconfig.ai.dev.mysbx.mcp` instead would change nothing —
+      # The empty-registry arm is the PLAIN reference host: nothing
+      # seeds a server anywhere, so the generator renders nothing and
+      # the mount must vanish. (Turning off
+      # `myconfig.ai.dev.mysbx.mcp` instead would change nothing —
       # it gates the registry's existence, not the mount.)
-      emptyRegistryCfg =
-        (self.nixosConfigurations.test-f13.extendModules {
-          modules = [
-            {
-              home-manager.sharedModules = [
-                {
-                  programs.mcp.servers = lib.mkForce { };
-                }
-              ];
-            }
-          ];
-        }).config;
-      # The rendered registry, for the eval assertion that it is
-      # non-empty. (The build phase below realises the mounted file
-      # itself, via `mountedFile`.)
+      # The rendered registry of the mounted arm, for the eval
+      # assertion that it is non-empty. (The build phase below realises
+      # the mounted file itself, via `mountedFile`.)
       piMcp = (
         import (fixture "piMcpServers") {
-          inherit (self.nixosConfigurations.test-f13) config;
+          inherit (mountedCfg) config;
           inherit lib pkgs;
         }
       );
@@ -2652,9 +2661,9 @@ in
         &&
           (builtins.fromJSON (builtins.readFile (toString fixtureMcp.json))).mcpServers.fixture.exposure
           == "hidden";
-      piMounts = mountsOf cfg;
-      trMounts = mountsOf thinkrailOnlyCfg;
-      emptyMounts = mountsOf emptyRegistryCfg;
+      piMounts = mountsOf mountedCfg;
+      trMounts = mountsOf thinkrailMountedCfg;
+      emptyMounts = mountsOf cfg;
       # The drift catcher needs EVERY owner's tree, not just pi's:
       # thinkrail's mount points into thinkrail's own derivation, and
       # removing its `extraFiles` entry would leave the mount count and
@@ -2762,8 +2771,8 @@ in
         for f in "$mountedFile" "$trMountedFile"; do
           test -f "$f" || fail "$f is missing from its sandbox-config tree, or is a directory (subtree/extraFiles drift)"
           # The rendered content must carry the seeded server.
-          jq -e '.mcpServers.context7.url' "$f" >/dev/null \
-            || fail "$f does not name mcpServers.context7.url: $(cat "$f")"
+          jq -e '.mcpServers.ref.url' "$f" >/dev/null \
+            || fail "$f does not name mcpServers.ref.url: $(cat "$f")"
         done
 
         # The renderer regression fixture: every render rule of the
