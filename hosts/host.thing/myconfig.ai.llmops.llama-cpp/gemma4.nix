@@ -190,9 +190,6 @@ in
           ];
         };
       };
-      aliases = [
-        "hermes-fallback"
-      ];
       ttl = 300;
     }
     {

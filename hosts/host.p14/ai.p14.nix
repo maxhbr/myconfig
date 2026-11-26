@@ -28,6 +28,9 @@
         };
         dev = {
           enable = true;
+          # Routed through this host's local LiteLLM proxy
+          # (../shared.litellm.proxy.nix), which forwards to thing.
+          defaultHugeModel = "gfx1151:Qwen3.6-35B-A3B-Q8_0";
           opencode.enable = true;
           pi-coding-agent = {
             enable = true;

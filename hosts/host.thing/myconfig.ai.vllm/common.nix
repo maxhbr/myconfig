@@ -298,8 +298,6 @@ let
           aliases = [
             servedModelName
             "localhost:${toString port}"
-            "vllm:hermes"
-            "vllm:opencode"
           ]
           ++ (extraConfig.aliases or [ ]);
           cmdStop = "${runtimeBin} stop ${containerName}";

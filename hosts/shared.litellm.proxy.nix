@@ -25,8 +25,9 @@
 #     does not enforce API keys.
 #
 # Model names match those published by thing's LiteLLM (e.g.
-# "gfx1151:hermes", "hermes", "opencode", …) so that tools and agents
-# configured for thing work unchanged against this local proxy.
+# "gfx1151:Qwen3.6-35B-A3B-Q8_0", "rtx5090:Qwen3.5-9B-Q5_K_M", …) so that
+# tools and agents configured for thing work unchanged against this local
+# proxy.
 #
 # A host importing this file must NOT also import
 # hosts/shared.localModels.{litellm,rtx5090,gfx1151}.nix — those register

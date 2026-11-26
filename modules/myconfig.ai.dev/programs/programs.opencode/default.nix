@@ -198,6 +198,20 @@ in
   options.myconfig = with lib; {
     ai.dev.opencode = {
       enable = mkEnableOption "myconfig.ai.dev.opencode";
+
+      # Extra settings deep-merged over the generated `programs.opencode.settings`
+      # — the umbrella (../../default.nix) seeds the `model` and
+      # `agents.title.model` defaults from `defaultHugeModel`/
+      # `defaultFastModel` here.
+      settings = mkOption {
+        type = types.attrs;
+        default = { };
+        description = ''
+          Extra opencode settings, deep-merged over the generated
+          `programs.opencode.settings` (last-wins per key; `mkForce` on the
+          caller side wins over anything here).
+        '';
+      };
     };
   };
   config = lib.mkIf config.myconfig.ai.dev.opencode.enable {
@@ -291,172 +305,175 @@ in
             # record, 1.19.0 rejects the whole document on an unknown
             # top-level key rather than ignoring it; putting a 1.x package
             # behind this block would need the v1 spellings back.)
-            settings = {
-              # `false` (v1) and `"disable"` (v2) mean the same thing; the
-              # schema of neither version accepts the other's spelling.
-              "update" = "disable";
-              "share" = "disabled";
-              # Ordered rule list: the LAST matching rule wins, so the broad
-              # `ask` comes first and the allowlist after it (v1 was a map per
-              # tool, v2 an ordered array; `bash` is called `shell` in v2).
-              #
-              # `external_directory` restores the v1 posture: v2 allows paths
-              # outside the project by DEFAULT and only asks when a rule says
-              # so, so without this rule an upgrade silently widens what the
-              # agent may touch.
-              "permissions" = lib.mkForce (
-                [
-                  {
-                    action = "shell";
-                    resource = "*";
-                    effect = "ask";
-                  }
-                ]
-                ++
-                  lib.map
-                    (cmd: {
+            settings = lib.mkMerge [
+              {
+                # `false` (v1) and `"disable"` (v2) mean the same thing; the
+                # schema of neither version accepts the other's spelling.
+                "update" = "disable";
+                "share" = "disabled";
+                # Ordered rule list: the LAST matching rule wins, so the broad
+                # `ask` comes first and the allowlist after it (v1 was a map per
+                # tool, v2 an ordered array; `bash` is called `shell` in v2).
+                #
+                # `external_directory` restores the v1 posture: v2 allows paths
+                # outside the project by DEFAULT and only asks when a rule says
+                # so, so without this rule an upgrade silently widens what the
+                # agent may touch.
+                "permissions" = lib.mkForce (
+                  [
+                    {
                       action = "shell";
-                      resource = cmd;
-                      effect = "allow";
-                    })
-                    [
-                      "head *"
-                      "tail *"
-                      "git add *"
-                      "git status *"
-                      "git log *"
-                      "git diff *"
-                      "nix flake check *"
-                      "nix flake *"
-                      "nix fmt"
-                      "nix fmt *"
-                      "nix build --dry-run *"
-                      "nix-instantiate *"
-                      "go build *"
-                      "go test *"
-                      "go generate *"
-                      "go fmt *"
-                      "go vet *"
-                      "npm run dev *"
-                      "npm run build *"
-                      "npm run lint *"
-                      "npm test *"
-                      "ls *"
-                      "grep *"
-                      "rg *"
-                      "find *"
-                      "mkdir *"
-                    ]
-                ++ [
+                      resource = "*";
+                      effect = "ask";
+                    }
+                  ]
+                  ++
+                    lib.map
+                      (cmd: {
+                        action = "shell";
+                        resource = cmd;
+                        effect = "allow";
+                      })
+                      [
+                        "head *"
+                        "tail *"
+                        "git add *"
+                        "git status *"
+                        "git log *"
+                        "git diff *"
+                        "nix flake check *"
+                        "nix flake *"
+                        "nix fmt"
+                        "nix fmt *"
+                        "nix build --dry-run *"
+                        "nix-instantiate *"
+                        "go build *"
+                        "go test *"
+                        "go generate *"
+                        "go fmt *"
+                        "go vet *"
+                        "npm run dev *"
+                        "npm run build *"
+                        "npm run lint *"
+                        "npm test *"
+                        "ls *"
+                        "grep *"
+                        "rg *"
+                        "find *"
+                        "mkdir *"
+                      ]
+                  ++ [
+                    {
+                      action = "edit";
+                      resource = "*";
+                      effect = "ask";
+                    }
+                    {
+                      action = "external_directory";
+                      resource = "*";
+                      effect = "ask";
+                    }
+                  ]
+                );
+                # `disabled_providers` (v1, deprecated) is a provider policy in
+                # v2. The v1 field is still normalised by both versions, but the
+                # policy is the native spelling and it is what `policies` is for.
+                "policies" = [
                   {
-                    action = "edit";
-                    resource = "*";
-                    effect = "ask";
+                    action = "provider.use";
+                    resource = "opencode";
+                    effect = "deny";
                   }
-                  {
-                    action = "external_directory";
-                    resource = "*";
-                    effect = "ask";
-                  }
-                ]
-              );
-              # `disabled_providers` (v1, deprecated) is a provider policy in
-              # v2. The v1 field is still normalised by both versions, but the
-              # policy is the native spelling and it is what `policies` is for.
-              "policies" = [
-                {
-                  action = "provider.use";
-                  resource = "opencode";
-                  effect = "deny";
-                }
-              ];
-              "providers" = lib.mkMerge [
-                (lib.mkIf (osconfig.myconfig.ai.llmops.localModels != [ ]) (
-                  builtins.listToAttrs (
-                    lib.map (
-                      model:
-                      let
-                        hostPort = "${model.host}:${toString model.port}";
-                        providerName = if model.name != null then model.name else hostPort;
-                        models = flattenModels (if model.models != [ ] then model.models else [ providerName ]);
-                      in
-                      {
-                        name = "local-${providerName}";
-                        value = {
-                          "package" = "aisdk:@ai-sdk/openai-compatible";
-                          "name" = "${hostPort}";
-                          "settings" = {
-                            "baseURL" = "http://${hostPort}/v1";
+                ];
+                "providers" = lib.mkMerge [
+                  (lib.mkIf (osconfig.myconfig.ai.llmops.localModels != [ ]) (
+                    builtins.listToAttrs (
+                      lib.map (
+                        model:
+                        let
+                          hostPort = "${model.host}:${toString model.port}";
+                          providerName = if model.name != null then model.name else hostPort;
+                          models = flattenModels (if model.models != [ ] then model.models else [ providerName ]);
+                        in
+                        {
+                          name = "local-${providerName}";
+                          value = {
+                            "package" = "aisdk:@ai-sdk/openai-compatible";
+                            "name" = "${hostPort}";
+                            "settings" = {
+                              "baseURL" = "http://${hostPort}/v1";
+                            };
+                            "models" = builtins.listToAttrs (
+                              lib.map (m: {
+                                name = m.name;
+                                value = mkModelEntry m.name m.contextWindow;
+                              }) models
+                            );
                           };
-                          "models" = builtins.listToAttrs (
-                            lib.map (m: {
-                              name = m.name;
-                              value = mkModelEntry m.name m.contextWindow;
-                            }) models
-                          );
+                        }
+                      ) osconfig.myconfig.ai.llmops.localModels
+                    )
+                  ))
+                  (lib.mkIf osconfig.services.litellm.enable (
+                    let
+                      opencodeModels = builtins.listToAttrs (
+                        lib.map (
+                          model:
+                          let
+                            cw = contextWindowLookup.${model.model_name} or null;
+                          in
+                          {
+                            name = model.model_name;
+                            value = mkModelEntry model.model_name cw;
+                          }
+                        ) osconfig.services.litellm.settings.model_list
+                      );
+                      # `host` may be a wildcard (e.g. "0.0.0.0") for external
+                      # exposure; rewrite to localhost for in-host clients.
+                      litellmHost =
+                        if osconfig.services.litellm.host == "0.0.0.0" then "localhost" else osconfig.services.litellm.host;
+                    in
+                    {
+                      "${osconfig.networking.hostName}-litellm" = {
+                        "package" = "aisdk:@ai-sdk/openai-compatible";
+                        "name" = "LiteLLM (${osconfig.networking.hostName})";
+                        "settings" = {
+                          "baseURL" = "http://${litellmHost}:${toString osconfig.services.litellm.port}/v1";
                         };
-                      }
-                    ) osconfig.myconfig.ai.llmops.localModels
-                  )
-                ))
-                (lib.mkIf osconfig.services.litellm.enable (
-                  let
-                    opencodeModels = builtins.listToAttrs (
-                      lib.map (
-                        model:
-                        let
-                          cw = contextWindowLookup.${model.model_name} or null;
-                        in
-                        {
-                          name = model.model_name;
-                          value = mkModelEntry model.model_name cw;
-                        }
-                      ) osconfig.services.litellm.settings.model_list
-                    );
-                    # `host` may be a wildcard (e.g. "0.0.0.0") for external
-                    # exposure; rewrite to localhost for in-host clients.
-                    litellmHost =
-                      if osconfig.services.litellm.host == "0.0.0.0" then "localhost" else osconfig.services.litellm.host;
-                  in
-                  {
-                    "${osconfig.networking.hostName}-litellm" = {
-                      "package" = "aisdk:@ai-sdk/openai-compatible";
-                      "name" = "LiteLLM (${osconfig.networking.hostName})";
-                      "settings" = {
-                        "baseURL" = "http://${litellmHost}:${toString osconfig.services.litellm.port}/v1";
+                        "models" = opencodeModels;
                       };
-                      "models" = opencodeModels;
-                    };
-                  }
-                ))
-                (lib.mkIf osconfig.services.llama-swap.enable (
-                  let
-                    llamaSwapModels = builtins.listToAttrs (
-                      lib.map (
-                        model:
-                        let
-                          cw = contextWindowLookup.${model} or null;
-                        in
-                        {
-                          name = model;
-                          value = mkModelEntry model cw;
-                        }
-                      ) (builtins.attrNames osconfig.services.llama-swap.settings.models)
-                    );
-                  in
-                  {
-                    "llama-swap" = {
-                      "package" = "aisdk:@ai-sdk/openai-compatible";
-                      "name" = "llama-swap";
-                      "settings" = {
-                        "baseURL" = "http://localhost:${toString osconfig.services.llama-swap.port}/v1";
+                    }
+                  ))
+                  (lib.mkIf osconfig.services.llama-swap.enable (
+                    let
+                      llamaSwapModels = builtins.listToAttrs (
+                        lib.map (
+                          model:
+                          let
+                            cw = contextWindowLookup.${model} or null;
+                          in
+                          {
+                            name = model;
+                            value = mkModelEntry model cw;
+                          }
+                        ) (builtins.attrNames osconfig.services.llama-swap.settings.models)
+                      );
+                    in
+                    {
+                      "llama-swap" = {
+                        "package" = "aisdk:@ai-sdk/openai-compatible";
+                        "name" = "llama-swap";
+                        "settings" = {
+                          "baseURL" = "http://localhost:${toString osconfig.services.llama-swap.port}/v1";
+                        };
+                        "models" = llamaSwapModels;
                       };
-                      "models" = llamaSwapModels;
-                    };
-                  }
-                ))
-              ];
-            };
+                    }
+                  ))
+                ];
+              }
+              osconfig.myconfig.ai.dev.opencode.settings
+            ];
             # Terminal-client settings live in `cli.json` as of OpenCode 2, and
             # its `theme` is an object (`{ name, mode }`), not the v1 scalar.
             # `mode = "system"` keeps following the terminal's light/dark mode

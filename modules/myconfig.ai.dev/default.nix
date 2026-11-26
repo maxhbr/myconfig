@@ -32,8 +32,20 @@ in
         Model name of the default huge (hosted flagship) model routed
         through the LiteLLM proxy. Used as the umbrella default for the
         agent tools' model options (pi-coding-agent's `defaultModel`,
-        hermes' `model.default`). Null (default) leaves those unset, so
+        hermes' `model.default`, opencode's `settings.model` and aichat's
+        `settings.model`). Null (default) leaves those unset, so
         hosts that want one set it explicitly.
+      '';
+    };
+
+    defaultFastModel = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = ''
+        Model name of the default fast/cheap model routed through the
+        LiteLLM proxy. Used as the umbrella default for the agent tools'
+        auxiliary-model options (currently opencode's title agent,
+        `agents.title.model`). Null (default) leaves those unset.
       '';
     };
   };
@@ -89,6 +101,20 @@ in
         };
         hermes = {
           model.default = lib.mkIf (cfg.defaultHugeModel != null) (lib.mkDefault cfg.defaultHugeModel);
+        };
+        # opencode/aichat model defaults: the same `defaultHugeModel`
+        # through the local LiteLLM proxy provider (`<hostname>-litellm`,
+        # registered by the respective program modules). The
+        # `mkDefault` lets a host override per-tool with a plain `=`.
+        opencode.settings =
+          lib.optionalAttrs (cfg.defaultHugeModel != null) {
+            model = lib.mkDefault "${config.networking.hostName}-litellm/${cfg.defaultHugeModel}";
+          }
+          // lib.optionalAttrs (cfg.defaultFastModel != null) {
+            agents.title.model = lib.mkDefault "${config.networking.hostName}-litellm/${cfg.defaultFastModel}";
+          };
+        aichat.settings = lib.optionalAttrs (cfg.defaultHugeModel != null) {
+          model = lib.mkDefault "${config.networking.hostName}-litellm:${cfg.defaultHugeModel}";
         };
         claude-code.enable = true;
         codex.enable = true;

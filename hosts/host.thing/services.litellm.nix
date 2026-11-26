@@ -11,20 +11,6 @@
     # overrides the 127.0.0.1 lib.mkForce in
     # modules/myconfig.ai.llmops/services.litellm.nix.
     host = lib.mkOverride 49 "0.0.0.0";
-    settings.router_settings = {
-      model_group_alias = {
-        "hermes" = "gfx1151:hermes";
-        "hermes-fallback" = "gfx1151:hermes-fallback";
-        "opencode-fast" = "gfx1151:opencode-fast";
-        "opencode-fast-fallback" = "gfx1151:opencode-fast-fallback";
-        "opencode" = "gfx1151:opencode";
-        "opencode-fallback" = "gfx1151:opencode-fallback";
-        "opencode-slow" = "gfx1151:opencode-slow";
-        "opencode-slow-fallback" = "gfx1151:opencode-slow-fallback";
-
-        "sidekick" = "rtx5090:sidekick";
-      };
-    };
   };
 
   # Allow peers to reach LiteLLM on port 4000 via wg0.

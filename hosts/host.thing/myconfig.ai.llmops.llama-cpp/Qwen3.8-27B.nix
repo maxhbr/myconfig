@@ -409,9 +409,6 @@ in
       ];
       cacheType = "q8_0";
       ctxSize = 131072; # ~128k context — fits in RTX 5090 24 GB with Q6_K model (~17 GB)
-      aliases = [
-        "opencode"
-      ];
       parallel = 1;
       ttl = 900;
       # DISABLED: the full-ctx variant (184320 ctx) fails to load on
@@ -546,11 +543,7 @@ in
         "3"
       ];
       variants = recommended_variants_Qwen3_8-27B // {
-        precise-coding-tasks = {
-          aliases = [
-            "opencode"
-          ];
-        };
+        precise-coding-tasks = { };
         q8_0 = {
           cacheType = "q8_0";
         };
@@ -574,11 +567,7 @@ in
         "{\"preserve_thinking\":true}"
       ];
       variants = recommended_variants_Qwen3_8-27B // {
-        precise-coding-tasks = {
-          aliases = [
-            "opencode-fallback"
-          ];
-        };
+        precise-coding-tasks = { };
         q8_0 = {
           cacheType = "q8_0";
         };
