@@ -739,6 +739,10 @@ in
       ) config.myconfig.wireguard
     );
 
+    # never ban the wireguard mesh (`wg0`, 10.199.199.0/24), e.g. when
+    # a client flaps its ssh keys
+    services.fail2ban.ignoreIP = [ "10.199.199.0/24" ];
+
     # Roaming probe: switches same-LAN peers between "ghost" (off-LAN,
     # all traffic relays via rendezvous) and "direct" (on-LAN, per-peer
     # /32 + endpoint). The static Nix config is the off-LAN-safe
