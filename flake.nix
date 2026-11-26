@@ -471,9 +471,7 @@
         nixosConfigurations = {
           test-f13 = self.nixosConfigurationsGen.host-f13 [ self.test-host-module ] { };
           test-p14 = self.nixosConfigurationsGen.host-p14 [ self.test-host-module ] { };
-          test-workstation = self.nixosConfigurationsGen.host-workstation
-            [ self.test-host-module ]
-            { };
+          test-workstation = self.nixosConfigurationsGen.host-workstation [ self.test-host-module ] { };
           test-vserver = self.nixosConfigurationsGen.host-vserver [ self.test-host-module ] { };
           test-nas = self.nixosConfigurationsGen.host-nas [ self.test-host-module ] { };
           test-nuc = self.nixosConfigurationsGen.host-nuc [ self.test-host-module ] { };
