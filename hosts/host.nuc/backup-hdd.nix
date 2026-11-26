@@ -9,8 +9,9 @@
 # Browse snapshots:         restic-restic snapshots
 # Mount latest:             restic-restic mount /mnt/restore
 #
-# Prerequisite (in priv/ repo): set the source for the secret stub:
-#   myconfig.secrets."restic".source = ./path/to/plaintext-password;
+# Prerequisite (in priv/ repo): set the source for the secret stub to
+# the committed ciphertext:
+#   myconfig.secrets."restic".source = ./secrets/restic.age;
 #
 # Paths and priorities:
 #   /var/lib/hass             — critical (Home Assistant)

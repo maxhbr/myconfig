@@ -40,6 +40,8 @@ Rules:
 1. **Committed `.age` is the only sanctioned form for real secrets.**
    Every runtime secret lives as `<x>/secrets/**.age`, encrypted to the
    target host's ssh host key plus the master age key.
+   `myconfig.secrets` only accepts `.age` sources — plaintext sources
+   fail evaluation.
 2. **Plaintext never enters git.** The gitignored `secrets-plain/`
    trees are work material for the secret-*editing* machine only.
    Install the guard once per clone:
@@ -96,16 +98,13 @@ Recipients: every `*.age` file is encrypted to
 
 ### Consumption paths on a host
 
-- **`myconfig.secrets.<name>.source = ./secrets/**.age`** (preferred):
-  `myconfig.secrets` detects the `.age` suffix and passes
-  the file through to agenix unchanged. agenix decrypts during
+- **`myconfig.secrets.<name>.source = ./secrets/**.age`** (the only
+  accepted form): `myconfig.secrets` detects the `.age` suffix and
+  passes the file through to agenix unchanged, which decrypts during
   activation (`agenixNewGeneration`) into `dest`
   (default `/run/agenix/<name>`, root-owned, 0400). No plaintext is
-  needed at eval or build time anywhere.
-- **plaintext source form** (`source = <secrets-plain/...>`):
-  `myconfig.secrets` encrypts it to the host key at build time. It
-  works, but requires plaintext on every evaluating machine — do not
-  use it in this repo; commit the `.age` instead.
+  needed at eval or build time anywhere. Any non-`.age` source is
+  rejected at eval time with a hard error.
 - **bootstrap identities**: materialized before agenix by an early
   activation script (see optiplex), because agenix itself depends on
   them.
