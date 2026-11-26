@@ -147,7 +147,7 @@ impl Session {
 /// (D2): the committed state, never a dirty working tree — the
 /// session is a commit-based handoff. The session branch continues at
 /// `refs/remotes/origin/agent/mysbx/NAME` when an earlier session of
-/// the same name left the branch in the host repo via `fetch` (D6) —
+/// the same name left the branch in the host repo via `session fetch` (D6) —
 /// destroying and recreating a session must not silently fork its
 /// own branch — and is new at HEAD otherwise.
 #[derive(Debug, Clone, PartialEq, Eq)]

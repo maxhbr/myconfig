@@ -60,7 +60,8 @@ bare form opens the session picker
 ([`docs/design/tui.md`](./docs/design/tui.md) T8); a bare form
 with flags still dispatches straight into the run. The
 forms whose state that cannot carry (`init`, `edit`, `status`, the
-session/worktree groups, `fetch`/`merge`/`push`/`diff`, `attach`,
+session/worktree groups (including the session handoff verbs),
+`attach`,
 `--session`, `--result`/`--timeout`, `--detach`) are refused with
 exit `70`. When the teardown finds a linked worktree with
 uncommitted changes it keeps the whole temp root and names it on
@@ -104,8 +105,9 @@ writes the outcome to the per-session file
 
 The session's work comes back through the **handoff verbs**
 ([`docs/design/workspace.md`](./docs/design/workspace.md) D6) —
-`mysbx fetch <name>`, `mysbx merge <name>`, `mysbx push <name>
-[REMOTE]`, `mysbx diff <name>`, all host-side git plumbing that
+`mysbx session fetch <name>`, `mysbx session merge <name>`,
+`mysbx session push <name> [REMOTE]`, `mysbx session diff <name>`,
+all host-side git plumbing that
 starts no sandbox and takes the session as their one positional:
 `fetch` fast-forwards the session branch `agent/mysbx/<name>` into
 the host repo (fully-qualified, no force marker, no tags — a
@@ -118,11 +120,12 @@ session's changes since it diverged from the host HEAD (the
 three-dot form). `--dry-run` prints the exact git commands instead
 of running them.
 
-The **session noun group**
-([`docs/design/workspace.md`](./docs/design/workspace.md) D7) is the
-one closed exception to cli.md D3's single-verb rule —
-`mysbx session list`, `mysbx session destroy NAME [--force]` and
-`mysbx session hunk NAME`, three verbs, not an open tree. `list` prints one line per `clones/` entry
+The handoff verbs are part of the **session noun group**
+([`docs/design/workspace.md`](./docs/design/workspace.md) D7) — the
+one closed exception to cli.md D3's single-verb rule:
+`mysbx session list`, `mysbx session destroy NAME [--force]`,
+`mysbx session hunk NAME` and the four handoff verbs above, seven
+verbs, not an open tree. `list` prints one line per `clones/` entry
 with the name, the session branch and the ahead-count — the commits
 in the session branch that the host repo does not have — and marks
 entries without `.git` as debris of an interrupted creation.
@@ -133,12 +136,13 @@ sidecar root, never `/`), refuses while the session branch holds
 commits the host repo does not have — fetch or merge them first —
 unless `--force` is given, then plain-`rm -rf`s the standalone clone
 (and its per-session result file) without touching the host repo or
-the host-local `agent/mysbx/NAME` branch a `fetch` left behind. `hunk`
-opens the session's diff — the same range `mysbx diff <name>` shows,
-with the same implicit fetch — in the interactive `hunk` diff viewer
-(exec'd, its exit code propagates). All three start no sandbox;
-`--dry-run` prints the exact probe and removal commands instead of
-running them.
+the host-local `agent/mysbx/NAME` branch a `session fetch` left
+behind. `hunk`
+opens the session's diff — the same range `mysbx session diff <name>`
+shows, with the same implicit fetch — in the interactive `hunk` diff viewer
+(exec'd, its exit code propagates). All seven start no sandbox;
+`--dry-run` prints the exact git, probe and removal commands instead
+of running them.
 
 The **worktree noun group**
 ([`docs/design/worktree.md`](./docs/design/worktree.md) W1) is the

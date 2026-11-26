@@ -450,7 +450,8 @@ session** exists beside it as the opt-in alternative (`--session NAME`:
 an isolated clone under `<sidecar>/clones/NAME`, bound rw at the repo's
 own path while the host repo is not mounted at all) — decided in
 [workspace.md](./workspace.md), which owns the session lifecycle, the
-mount rules of a clone run and the `fetch` / `merge` / `push` / `diff`
+mount rules of a clone run and the `session fetch` / `session merge` /
+`session push` / `session diff`
 handoff. The live mode above is unchanged by that decision and stays
 the default.
 

@@ -254,8 +254,9 @@ default (`config.md` D13). `--session NAME` selects an isolated clone at
 `<repo>.mysbx/clones/NAME`, branch `agent/mysbx/NAME`, with its own
 worktrees and result file. Configured mounts are forced `ro`, `--rw` is
 refused, and host repo/git metadata/worktrees, persisted state and the
-per-repo SSH key are omitted. Host-side `fetch` / `merge` / `push` /
-`diff` and `session list` / `destroy` / `hunk` provide the handoff.
+per-repo SSH key are omitted. Host-side `session fetch` /
+`session merge` / `session push` / `session diff` and
+`session list` / `destroy` / `hunk` provide the handoff.
 `run --result` and detached interactive runs do **not** automatically
 force clone mode; a clone is still opt-in via `--session`.
 

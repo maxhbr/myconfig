@@ -21,7 +21,8 @@ Vocabulary, on top of [`../../CONTEXT.md`](../../CONTEXT.md):
 
 ## The problem
 
-The workspace model's handoff verbs (`fetch`/`merge`/`push`/`diff`,
+The workspace model's handoff verbs (`session fetch`/`session merge`/
+`session push`/`session diff`,
 [workspace.md](./workspace.md) D6) and the session verbs (D7) are
 host-side: they resolve the repo from the cwd and run git against it.
 But from inside a mysbx sandbox the cwd is a *clone* (a live run binds
@@ -49,7 +50,7 @@ open tree — a fourth is a decision, not a given.
 - **`mysbx worktree diff NAME`** — the THREE-DOT diff of the worktree's
   branch against its base branch — the changes on the branch since it
   diverged, not the base's own drift (the same semantic as
-  `mysbx diff`, workspace.md D6, applied to worktrees).
+  `mysbx session diff`, workspace.md D6, applied to worktrees).
 - **`mysbx worktree hunk NAME`** — run the interactive `hunk` diff
   viewer on that same three-dot diff, exec'd like `$EDITOR` is for
   `mysbx edit` (D12): mysbx hands the terminal over, the tool's own

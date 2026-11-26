@@ -8465,7 +8465,7 @@ fn session_destroy_refuses_unmerged_work_then_succeeds_after_merge() {
 fn session_destroy_force_discards_and_keeps_the_ferry_branch() {
     // `--force` overrides ONLY the unmerged-work refusal: the work is
     // discarded (the message says so), while a host-local
-    // agent/mysbx/NAME branch a fetch left is KEPT — it is the
+    // agent/mysbx/NAME branch a `session fetch` left is KEPT — it is the
     // operator's imported copy, and deleting it silently would
     // contradict the unmerged-work guard (D7).
     let Some((inv, repo, sidecar)) = session_fixture("session-destroy-force", &["fix-1"]) else {

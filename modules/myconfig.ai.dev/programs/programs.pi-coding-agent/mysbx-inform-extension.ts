@@ -212,7 +212,8 @@ runs of this session but are \`session destroy\`'s to remove, and
 host repo and host worktrees are not mounted at all. No state-dirs
 are bound in a session: everything outside the clone and its
 worktrees is ephemeral. Bring work back to the host repo through the
-handoff verbs (\`mysbx fetch\` / \`merge\` / \`push\` from the
+handoff verbs (\`mysbx session fetch\` / \`session merge\` / \`session
+push\` from the
 host), not through shared state.`
       : "";
 

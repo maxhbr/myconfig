@@ -86,7 +86,7 @@ else. The **first** `--session NAME` run creates the clone:
 3. The session branch, by exact-ref precedence:
    - `refs/remotes/origin/agent/mysbx/NAME` exists in the fresh clone —
      an earlier session of the same name left the branch in the host repo
-     via `fetch` (D6) — the session **continues at that existing tip**:
+     via `session fetch` (D6) — the session **continues at that existing tip**:
      `git checkout --no-track -b agent/mysbx/NAME
      refs/remotes/origin/agent/mysbx/NAME`. Destroying and recreating a
      session must not silently fork its own branch.
@@ -195,15 +195,23 @@ one file per session so parallel sessions cannot overwrite each other's
 results. A live `--result` run keeps `<repo>.mysbx/result.json`. The
 pointer line goes to stderr in both cases (cli.md D9/D17).
 
-### D6: The handoff is host-side: `fetch`, `merge`, `push`, `diff`
+### D6: The handoff is host-side: `mysbx session fetch` / `merge` / `push` / `diff`
 
-Four subcommands, all **host-side**: they do git plumbing between the
+Four verbs, all **host-side**: they do git plumbing between the
 host repo and the clone, start no sandbox, and take the session as their
 one positional argument. There is no `--repo` flag — the host repo is the
 one the current directory resolves to (cli.md D1), like every other verb.
-Their mechanics adopt the gvisor spec verbatim:
+Their mechanics adopt the gvisor spec verbatim.
 
-- **`mysbx fetch NAME`** — the fast-forward-only refspec:
+**Superseded in spelling, not in substance.** These verbs were first
+implemented as flat subcommands (`mysbx fetch NAME` etc.); they now sit
+inside the `session` group of D7 — `mysbx session fetch NAME` etc., the
+flat spellings are gone (a clean exit-2 unknown command, cli.md D8).
+Same move, same rationale as the D3 noun groups: the noun carries the
+scope — the handoff acts ON a session, so `session` is where it
+belongs. Nothing else of the contract below changed.
+
+- **`mysbx session fetch NAME`** — the fast-forward-only refspec:
   `git -C <repo> fetch --no-tags <clone>
   refs/heads/agent/mysbx/NAME:refs/heads/agent/mysbx/NAME`. Both sides
   fully qualified, no `+` force marker anywhere (a branch literally named
@@ -217,7 +225,7 @@ Their mechanics adopt the gvisor spec verbatim:
   destructive replacement is never automatic. The host repo learns
   nothing permanent about the clone — the fetch names the clone path
   once, no remote is configured.
-- **`mysbx merge NAME [--no-ff|--ff|--squash] [-- GIT-MERGE-ARGS…]`** —
+- **`mysbx session merge NAME [--no-ff|--ff|--squash] [-- GIT-MERGE-ARGS…]`** —
   refuse a detached HEAD and a dirty host working tree first (the merge
   lands in the currently checked-out branch); `--no-ff` is the default,
   `--ff`/`--squash`/explicit git-merge args pass through; then the
@@ -228,7 +236,7 @@ Their mechanics adopt the gvisor spec verbatim:
   in the merge; a recreated session then correctly starts at HEAD again.
   On conflict the ref stays, with the recovery hint (resolve, then
   `git branch -D agent/mysbx/NAME`).
-- **`mysbx push NAME [REMOTE]`** — the implicit `fetch` first (the pushed
+- **`mysbx session push NAME [REMOTE]`** — the implicit `fetch` first (the pushed
   ref is current; a diverged host-local branch fails the push before
   anything is published), then
   `git -C <repo> push <remote> refs/heads/agent/mysbx/NAME:refs/heads/agent/mysbx/NAME`
@@ -236,7 +244,7 @@ Their mechanics adopt the gvisor spec verbatim:
   **host repo's own** `origin`: publishing goes through the host repo's
   configured remotes with host-side credentials. The clone never talks to
   a network remote.
-- **`mysbx diff NAME`** — the implicit `fetch` (like `push`), then
+- **`mysbx session diff NAME`** — the implicit `fetch` (like `push`), then
   `git -C <repo> diff HEAD...refs/heads/agent/mysbx/NAME` — the
   **three-dot** form: the changes on the session branch since it diverged
   from the host's HEAD, not the host's own drift.
@@ -245,11 +253,14 @@ Failure wording follows the gvisor spec: a diverged or rewound
 host-local branch, a missing clone, a dirty tree, a detached HEAD are
 each named as such; git's own diagnostics pass through.
 
-### D7: `mysbx session list` / `mysbx session destroy` / `mysbx session hunk` — the one noun-group verb
+### D7: The `session` noun group — `list`, `destroy`, `hunk`, `fetch`, `merge`, `push`, `diff`
 
 [cli.md](./cli.md) D3 ("single verbs, no nested command trees") gains one
-**closed** exception: the `session` group, three verbs, not an open tree —
-a fourth verb is a decision, not a given.
+**closed** exception: the `session` group — seven verbs, not an open tree
+— an eighth verb is a decision, not a given. It began as three (list,
+destroy, hunk); the handoff verbs of D6 moved in, and the group is the
+better home for the same reason D3 tolerates noun groups at all: the
+noun carries the scope.
 
 - **`mysbx session list`** — `clones/` is the registry: one line per
   entry with the name, the session branch, and the ahead-count (commits
@@ -287,9 +298,9 @@ a fourth verb is a decision, not a given.
   blocks, and its probe is advisory. The clone is plain `rm -rf`'d —
   it is standalone, no worktree bookkeeping, the host repo is
   untouched. A host-local `agent/mysbx/NAME` branch
-  left by a `fetch` is **not** deleted: it is the operator's imported
-  copy, and deleting it silently would contradict the unmerged-work
-  guard this verb exists to enforce.
+  left by a `session fetch` is **not** deleted: it is the operator's
+  imported copy, and deleting it silently would contradict the
+  unmerged-work guard this verb exists to enforce.
 - **`mysbx session hunk NAME`** (bd myconfig-g2t) — the diff of D6's
   `diff` verb in the interactive `hunk` viewer: the implicit fetch, then
   `hunk diff HEAD...refs/heads/agent/mysbx/NAME` exec'd with the host
@@ -299,6 +310,15 @@ a fourth verb is a decision, not a given.
   plain `hunk` on PATH, no pin; `--dry-run` prints the exact fetch and
   `hunk` commands). A session without a `.git` (debris) is refused — it
   has no branch to review.
+
+**A session literally named like a sub-verb is unreachable via the
+group.** The sub-verb position is reserved before the NAME position,
+so a session named `list`, `destroy`, `hunk`, `fetch`, `merge`, `push`
+or `diff` answers the verb it spells, never a NAME — and the NAME
+grammar does not exclude these spellings. This shadowing is the
+accepted consequence of the closed grammar: the seven names are
+general-purpose words an operator of this tool has no reason to give
+a session, and trading them away keeps the group's shape fixed.
 
 ### D8: Unattended runs force clone mode
 
@@ -330,7 +350,9 @@ Filed as beads, discovered from this decision:
 1. Implementation: `--session`, clone creation, the clone-run argv
    (forced-ro mounts, no `__worktrees` bind, no state binds, per-session
    result file).
-2. Implementation: the handoff verbs `fetch` / `merge` / `push` / `diff`.
+2. Implementation: the handoff verbs `session fetch` / `session merge` /
+   `session push` / `session diff` (moved under the group post-implementation,
+   workspace.md D6/D7).
 3. Implementation: `session list` / `session destroy` with the guards
    above.
 4. Decision: `state-dirs` in clone runs — per-session backing

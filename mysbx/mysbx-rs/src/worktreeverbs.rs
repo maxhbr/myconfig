@@ -29,7 +29,7 @@
 //!   `-` when no honest number can be computed.
 //! - **`diff NAME`** — the THREE-DOT diff `<base>...<branch>` (W3):
 //!   the changes on the worktree's branch since it diverged from its
-//!   base — the same semantic as `mysbx diff` (workspace.md D6),
+//!   base — the same semantic as `mysbx session diff` (workspace.md D6),
 //!   applied to worktrees. The base is workmux's own record,
 //!   `branch.<branch>.workmux-base` of the host repo's config, with
 //!   the main/HEAD fallback chain for a worktree no workmux
@@ -282,7 +282,7 @@ pub fn ahead_count(worktree: &Path, base: &str, branch: &str) -> Option<u32> {
 /// `git -C <worktree> diff <base>...<branch>` — the THREE-DOT diff of
 /// W1/W3: the changes on the worktree's branch since it diverged from
 /// its base, not the base's own drift (the same semantic as
-/// `mysbx diff`, workspace.md D6 — a two-dot diff would report the
+/// `mysbx session diff`, workspace.md D6 — a two-dot diff would report the
 /// base's unpushed commits as removals the worktree "made").
 pub fn diff_argv(worktree: &Path, base: &str, branch: &str) -> Vec<String> {
     vec![
@@ -436,7 +436,7 @@ pub fn dry_run_argv(repo: &Repo) -> Vec<Vec<String>> {
 
 /// `mysbx worktree diff NAME` (W1/W3): the three-dot diff of the
 /// named worktree's branch against its base. git's own exit code and
-/// diagnostics pass through — the same contract as `mysbx diff`
+/// diagnostics pass through — the same contract as `mysbx session diff`
 /// (workspace.md D6): the diff's output on stdout IS the answer the
 /// operator asked for.
 pub fn diff(args: &[String], dry_run: bool) -> i32 {
@@ -735,7 +735,7 @@ mod tests {
     fn the_diff_is_the_three_dot_form() {
         // W1/W3: the three-dot diff — the changes since the
         // divergence, not the base's own drift (the same semantic as
-        // `mysbx diff`, workspace.md D6).
+        // `mysbx session diff`, workspace.md D6).
         assert_eq!(
             diff_argv(Path::new("/synth/repo__worktrees/fix-1"), "main", "fix-1"),
             vec![

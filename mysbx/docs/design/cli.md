@@ -47,30 +47,41 @@ is still discovered); plain `init` never touches the config at all.
 
 Subcommands are single verbs (`init`, `run`, `edit`, `version`, `help`). No
 nested command trees — three exceptions: the `session` noun group
-(`session list`, `session destroy`, `session hunk`), a closed set defined by
-[workspace.md](./workspace.md) D7, the `worktree` noun group
-(`worktree list`, `worktree diff`, `worktree hunk`), a closed set defined by
-[worktree.md](./worktree.md) W1, and `diagnose` (D29). Rationale: the
-surface is small and
-stays memorable; nesting would only pay off with many more commands —
-and the noun groups are the places where a noun carries its own
-meaning (“destroy the session”, not “destroy the repo”; “diff the
-worktree”, not “diff the repo”; “diagnose egress”, not “diagnose the
-proxy-only channel”).
+(`session list`, `session destroy`, `session hunk`, plus the handoff verbs
+`session fetch`, `session merge`, `session push`, `session diff`), a closed
+set defined by [workspace.md](./workspace.md) D7, the `worktree` noun
+group (`worktree list`, `worktree diff`, `worktree hunk`), a closed set
+defined by [worktree.md](./worktree.md) W1, and `diagnose` (D29).
+Rationale: the surface is small and
+stays memorable, and the noun groups are the places where a noun
+carries its own meaning (“destroy the
+session”, not “destroy the repo”; “diff the worktree”, not “diff the
+repo”; “diagnose egress”, not “diagnose the proxy-only channel”).
+
+**Superseded, in part.** This decision originally stopped at “nesting
+would only pay off with many more commands” and kept the handoff verbs
+flat (`mysbx fetch NAME` etc.). The handoff verbs have since moved
+under `session` (workspace.md D6/D7) — by this decision's own noun
+rationale: the handoff acts ON a session, so `session` is where it
+belongs — and the flat spellings are gone. What stands is the rule
+itself: nesting exists only as the closed noun groups, never as an
+open tree.
 
 Currently implemented: `init`, `edit` (D12), `version`, `help`, the bare
 form (entering the sandbox, see D2), `run -- COMMAND` for
 non-interactive use, `run --result -- COMMAND` (D17) for the
 machine-readable-outcome form, `gui [ARG...]` (D15), the opt-in session
-picker `tui` ([tui.md](./tui.md) T1), the handoff verbs
-`fetch NAME` / `merge NAME` / `push NAME [REMOTE]` / `diff NAME`
-([workspace.md](./workspace.md) D6 — the host-side git plumbing between
-the host repo and a session's clone; no sandbox is started, the session
-is the one positional and `--dry-run` prints the git commands), the
-session noun group `session list` / `session destroy NAME [--force]` /
+picker `tui` ([tui.md](./tui.md) T1), the session
+noun group with its handoff verbs `session fetch NAME` /
+`session merge NAME` / `session push NAME [REMOTE]` /
+`session diff NAME` ([workspace.md](./workspace.md) D6 — the host-side
+git plumbing between the host repo and a session's clone; no sandbox is
+started, the session is the one positional and `--dry-run` prints the
+git commands), the session noun group's `session list` /
+`session destroy NAME [--force]` /
 `session hunk NAME` ([workspace.md](./workspace.md) D7 — the first D3
 exception above), the
-session noun group's worktree sibling `worktree list` /
+worktree noun group `worktree list` /
 `worktree diff NAME` / `worktree hunk NAME`
 ([worktree.md](./worktree.md) W1 — the second D3 exception: read-only
 inspection of the host's workmux worktrees in `<repo>__worktrees`,
@@ -908,8 +919,9 @@ inherited from its caller; after the payload, the teardown runs:
 
 **Refused with exit `70` and a `mysbx-once:` message** (the forms
 whose state the temp root cannot carry): `init`, `edit`, `status`,
-the session and worktree noun groups, `fetch`/`merge`/`push`/
-`diff`, `attach`, `ssh-pubkey`, `--session`, `--result`/`--timeout`,
+the session and worktree noun groups — including the
+`session fetch`/`merge`/`push`/`diff` handoff verbs — `attach`,
+`ssh-pubkey`, `--session`, `--result`/`--timeout`,
 `--detach`/`--detachable`. **Allowed**: the bare form — which
 launches the session picker ([tui.md](./tui.md) T8) — `run --
 CMD`, `tui` (the gate allows the verb), `gui` (the window's inner

@@ -33,7 +33,7 @@
 //!   `--force` is given. The clone is plain `rm -rf`'d — it is
 //!   standalone, no worktree bookkeeping, the host repo is
 //!   untouched. A host-local `agent/mysbx/NAME` branch left by a
-//!   `fetch` (D6) is NOT deleted: it is the operator's imported copy,
+//!   `session fetch` (D6) is NOT deleted: it is the operator's imported copy,
 //!   and deleting it silently would contradict the unmerged-work
 //!   guard this verb exists to enforce.
 //! - **`session hunk NAME`** — the diff of `mysbx session diff NAME`
@@ -676,7 +676,7 @@ pub fn destroy(args: &[String], dry_run: bool) -> i32 {
             session.branch
         );
     }
-    // A host-local session branch of a fetch (D6) is deliberately
+    // A host-local session branch of a `session fetch` (D6) is deliberately
     // NOT deleted: it is the operator's imported copy (D7).
     0
 }

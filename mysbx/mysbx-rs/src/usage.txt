@@ -136,7 +136,8 @@ Commands:
                 standalone, no worktree bookkeeping), the per-session
                 result file `clones/NAME.json` goes with it, the
                 host repo is untouched and a host-local
-                `agent/mysbx/NAME` branch left by a fetch is kept —
+                `agent/mysbx/NAME` branch left by a `session fetch` is
+                kept —
                 it is the operator's imported copy. With --dry-run
                 the exact probe and removal commands are printed
                 instead, and nothing is removed
