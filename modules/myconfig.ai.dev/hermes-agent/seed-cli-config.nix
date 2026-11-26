@@ -55,7 +55,7 @@
   baseUrl,
   # Placeholder key the loopback proxy accepts (upstream value: `local-key`).
   apiKey,
-  # Default model name; written only when the config has none.
+  # Default model name (or `null`); written only when the config has none.
   defaultModel,
   # Named `providers.<key>` entry for the model picker, or `null` for the
   # sandbox tier (which must stay minimal). Shape:
@@ -125,8 +125,12 @@ let
         model["provider"] = "custom"
         model["base_url"] = route["base_url"]
         model["api_key"] = route["api_key"]
+        # `route["default"]` is null when no default model is configured
+        # (myconfig.ai.dev.hermes.model.default = null): only seed it when
+        # the route actually carries one.
         if not (model.get("default") or default_keep):
-            model["default"] = route["default"]
+            if route["default"] is not None:
+                model["default"] = route["default"]
         elif default_keep and not model.get("default"):
             model["default"] = default_keep
         config["model"] = model
@@ -211,11 +215,13 @@ let
   seedConfig = (pkgs.formats.yaml { }).generate "hermes-mysbx-config.yaml" (
     {
       model = {
-        default = defaultModel;
         provider = "custom";
         base_url = baseUrl;
         api_key = apiKey;
-      };
+      }
+      // (lib.optionalAttrs (defaultModel != null) {
+        default = defaultModel;
+      });
     }
     // lib.optionalAttrs (providerEntry != null) {
       providers."${providerEntry.key}" = {

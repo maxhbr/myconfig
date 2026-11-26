@@ -59,7 +59,6 @@ let
       hf_spec = [ "unsloth/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf" ];
     };
     ctxSize = 262144;
-    aliases = [ "sidekick" ];
     ttl = 300;
   };
 
@@ -93,7 +92,6 @@ let
           target_directory = modelsPullDir;
           hf_spec = [ "unsloth/Qwen3.5-122B-A10B-GGUF/Q5_K_M" ];
         };
-        aliases = [ ];
         ttl = 1800;
       }
     ]

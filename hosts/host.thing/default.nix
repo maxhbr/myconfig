@@ -37,7 +37,6 @@
       networking.firewall.allowedTCPPorts = [ 22022 ];
       networking.firewall.allowedUDPPorts = [ 22022 ];
     }
-    ./programs.opencode.nix
     ./myconfig.agentUsers.nix
     ../shared.deployedServices.nix
     ./services.caddy.nix
@@ -160,6 +159,13 @@
         };
 
         dev.enable = true;
+        # Model defaults for every agent harness (hermes, pi, opencode,
+        # aichat), routed through this host's own LiteLLM (the providers
+        # `gfx1151:`/`rtx5090:` are thing's GPU backends):
+        #   - huge: qwen3.5-122B-A10B on the gfx1151 llama.cpp router
+        #   - fast: Qwen3.6-35B-A3B-UD-Q5_K_XL on the rtx5090 router
+        dev.defaultHugeModel = "gfx1151:qwen3.5-122B-A10B-Q5_K_M";
+        dev.defaultFastModel = "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL";
         dev.mysbx.enable = true;
         dev.mysbx = {
           config = {

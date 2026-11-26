@@ -110,7 +110,7 @@ let
         if config.services.litellm.enable then
           (lib.unique (lib.map (m: m.model_name) config.services.litellm.settings.model_list))
         else
-          [ cfg.model.default ];
+          lib.optionals (cfg.model.default != null) [ cfg.model.default ];
     };
     externalSkillDirs = cfg.skills.externalDirs;
   };
@@ -124,18 +124,23 @@ in
     # route as the host gateway without running a gateway themselves.
     model = {
       default = mkOption {
-        type = types.str;
-        default = "hermes";
+        type = types.nullOr types.str;
+        default = null;
         description = ''
-          Default model name. Routed through the model provider's base_url
-          (LiteLLM by default, which maps "hermes" → gfx1151:hermes on
-          thing).
+          Default model name, routed through the model provider's base_url
+          (LiteLLM by default). Null leaves it to the umbrella option
+          `myconfig.ai.dev.defaultHugeModel` (when that is set) or, failing
+          that, to hermes' own resolution.
         '';
       };
       fallback = mkOption {
-        type = types.str;
-        default = "hermes-fallback";
-        description = "Fallback model name (used when the primary fails).";
+        type = types.nullOr types.str;
+        default = null;
+        description = ''
+          Fallback model name (used when the primary fails). Null disables
+          the explicit `fallback_model` block — hermes then keeps its own
+          fallback resolution.
+        '';
       };
       baseUrl = mkOption {
         type = types.str;

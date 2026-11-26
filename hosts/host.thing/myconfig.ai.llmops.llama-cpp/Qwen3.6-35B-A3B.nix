@@ -78,10 +78,6 @@ in
         hf_spec = [ "unsloth/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf" ];
       };
       variants = recommended_variants_Qwen3_6-35B-A3B;
-      aliases = [
-        "hermes"
-        "opencode-fast-fallback"
-      ];
       ttl = 900;
     }
     {
@@ -122,10 +118,6 @@ in
       params = [
         "--chat-template-kwargs"
         "{\"preserve_thinking\":true}"
-      ];
-      aliases = [
-        "hermes"
-        "opencode-fast"
       ];
       ctxSize = 262144;
       # 4 slots sharing ONE 262144-token KV pool instead of four private
@@ -172,9 +164,6 @@ in
       params = [
         "--chat-template-kwargs"
         "{\"preserve_thinking\":true}"
-      ];
-      aliases = [
-        "opencode-slow-fallback"
       ];
       ctxSize = 262144;
       parallel = 4;

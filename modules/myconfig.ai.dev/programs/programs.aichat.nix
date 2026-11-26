@@ -8,6 +8,19 @@
   options.myconfig = with lib; {
     ai.dev.aichat = {
       enable = mkEnableOption "myconfig.ai.dev.aichat";
+
+      # Extra settings deep-merged over the generated config — the
+      # umbrella (../../default.nix) seeds the `model` default from
+      # `myconfig.ai.dev.defaultHugeModel` here.
+      settings = mkOption {
+        type = types.attrs;
+        default = { };
+        description = ''
+          Extra aichat settings (deep-merged over the generated
+          `programs.aichat.settings`), e.g. the umbrella-seeded `model`
+          default.
+        '';
+      };
     };
   };
   config = lib.mkIf config.myconfig.ai.dev.aichat.enable {
@@ -16,39 +29,42 @@
         programs.aichat = {
           enable = true;
           package = pkgs.aichat;
-          settings = {
-            clients =
-              lib.optionals config.services.litellm.enable [
-                {
-                  type = "openai-compatible";
-                  name = "${config.networking.hostName}-litellm";
-                  api_base = "http://localhost:${toString config.services.litellm.port}/v1";
-                  models = builtins.map (model: {
-                    name = model.model_name;
-                  }) config.services.litellm.settings.model_list;
-                }
-              ]
-              ++ lib.optionals (config.myconfig.ai.llmops.localModels != [ ]) (
-                map (
-                  model:
-                  let
-                    hostPort = "${model.host}:${toString model.port}";
-                    providerName = if model.name != null then model.name else hostPort;
-                    # localModels may contain plain strings or
-                    # `{ name, kind ? null }` submodules (computed kind tag
-                    # is unused here); flatten both shapes.
-                    rawModels = if model.models != [ ] then model.models else [ providerName ];
-                    modelNames = map (m: if builtins.isAttrs m then m.name else m) rawModels;
-                  in
+          settings = lib.mkMerge [
+            {
+              clients =
+                lib.optionals config.services.litellm.enable [
                   {
                     type = "openai-compatible";
-                    name = "local-${providerName}";
-                    api_base = "http://${hostPort}/v1";
-                    models = map (modelName: { name = modelName; }) modelNames;
+                    name = "${config.networking.hostName}-litellm";
+                    api_base = "http://localhost:${toString config.services.litellm.port}/v1";
+                    models = builtins.map (model: {
+                      name = model.model_name;
+                    }) config.services.litellm.settings.model_list;
                   }
-                ) config.myconfig.ai.llmops.localModels
-              );
-          };
+                ]
+                ++ lib.optionals (config.myconfig.ai.llmops.localModels != [ ]) (
+                  map (
+                    model:
+                    let
+                      hostPort = "${model.host}:${toString model.port}";
+                      providerName = if model.name != null then model.name else hostPort;
+                      # localModels may contain plain strings or
+                      # `{ name, kind ? null }` submodules (computed kind tag
+                      # is unused here); flatten both shapes.
+                      rawModels = if model.models != [ ] then model.models else [ providerName ];
+                      modelNames = map (m: if builtins.isAttrs m then m.name else m) rawModels;
+                    in
+                    {
+                      type = "openai-compatible";
+                      name = "local-${providerName}";
+                      api_base = "http://${hostPort}/v1";
+                      models = map (modelName: { name = modelName; }) modelNames;
+                    }
+                  ) config.myconfig.ai.llmops.localModels
+                );
+            }
+            config.myconfig.ai.dev.aichat.settings
+          ];
         };
       }
     ];

@@ -16,7 +16,6 @@
   config = {
     myconfig.ai.dev.hermes = {
       enable = true;
-      model.default = "hermes";
       service = {
         enable = true;
         hassUrl = "http://hass.nuc.wg0.maxhbr.local";

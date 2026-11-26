@@ -19,14 +19,6 @@
 # route (`model.*`) sits at the top level of the tree because the sandbox
 # tiers use it without running a service; everything else is under
 # `service.*`.
-#
-# NOTE: `hermesServiceCfg.settings` declares `compression` twice (once with
-# `summary_provider`/`summary_model`, once with `enabled`/`threshold`).
-# This is intentional and works because the upstream `services.hermes-agent`
-# `settings` option uses a deep-merge type (`recursiveUpdate`), which
-# combines both blocks into a single
-# `{ enabled, threshold, summary_provider, summary_model }` attrset —
-# verified by force-enabling the module.
 {
   config,
   lib,
@@ -54,58 +46,69 @@ let
     group = serviceCfg.group;
     createUser = false;
     stateDir = stateDir;
-    settings = {
-      model = {
-        default = cfg.model.default;
-        provider = "custom";
-        base_url = litellmBaseUrl;
-        api_key = "local-key";
-      };
-      fallback_model = {
-        model = cfg.model.fallback;
-        provider = "custom";
-        base_url = litellmBaseUrl;
-        api_key = "local-key";
-      };
-      compression = {
-        summary_provider = hermesServiceCfg.settings.model.provider;
-        summary_model = hermesServiceCfg.settings.model.default;
-      };
-      custom_providers =
-        let
-          custom_local_providers = lib.concatMap (
-            provider:
-            let
-              hostPort = "${provider.host}:${toString provider.port}";
-              providerName = if provider.name != null then provider.name else hostPort;
-              rawModels = if provider.models != [ ] then provider.models else [ providerName ];
-              # localModels may contain plain strings or
-              # `{ name, kind ? null }` submodules (kind is computed by
-              # the publisher and unused here); flatten both shapes.
-              modelNames = lib.map (m: if builtins.isAttrs m then m.name else m) rawModels;
-            in
-            lib.map (modelName: {
-              name = "${providerName} / ${modelName}";
-              base_url = "http://${hostPort}/v1";
-              model = modelName;
-              api_key = "local-key";
-            }) modelNames
-          ) config.myconfig.ai.llmops.localModels;
-        in
-        custom_local_providers;
-      terminal.backend = "local";
-      terminal.cwd = "${stateDir}/workspace";
-      compression = {
-        enabled = true;
-        threshold = 0.85;
-      };
-      toolsets = serviceCfg.toolsets;
-    }
-    // (lib.optionalAttrs serviceCfg.telegram.enable {
-      telegram = {
-        require_mention = serviceCfg.telegram.requireMention;
-      };
-    });
+    settings =
+      (
+        {
+          model = {
+            default = cfg.model.default;
+            provider = "custom";
+            base_url = litellmBaseUrl;
+            api_key = "local-key";
+          };
+          # compression: enabled/threshold turn history compression on,
+          # summary_provider/summary_model pin the summaries to the same
+          # custom route (the old file declared these as two blocks merged
+          # by the upstream deep-merge; one block is equivalent).
+          compression = {
+            enabled = true;
+            threshold = 0.85;
+            summary_provider = "custom";
+          }
+          // (lib.optionalAttrs (cfg.model.default != null) {
+            summary_model = cfg.model.default;
+          });
+        }
+        // (lib.optionalAttrs (cfg.model.fallback != null) {
+          fallback_model = {
+            model = cfg.model.fallback;
+            provider = "custom";
+            base_url = litellmBaseUrl;
+            api_key = "local-key";
+          };
+        })
+      )
+      // {
+        custom_providers =
+          let
+            custom_local_providers = lib.concatMap (
+              provider:
+              let
+                hostPort = "${provider.host}:${toString provider.port}";
+                providerName = if provider.name != null then provider.name else hostPort;
+                rawModels = if provider.models != [ ] then provider.models else [ providerName ];
+                # localModels may contain plain strings or
+                # `{ name, kind ? null }` submodules (kind is computed by
+                # the publisher and unused here); flatten both shapes.
+                modelNames = lib.map (m: if builtins.isAttrs m then m.name else m) rawModels;
+              in
+              lib.map (modelName: {
+                name = "${providerName} / ${modelName}";
+                base_url = "http://${hostPort}/v1";
+                model = modelName;
+                api_key = "local-key";
+              }) modelNames
+            ) config.myconfig.ai.llmops.localModels;
+          in
+          custom_local_providers;
+        terminal.backend = "local";
+        terminal.cwd = "${stateDir}/workspace";
+        toolsets = serviceCfg.toolsets;
+      }
+      // (lib.optionalAttrs serviceCfg.telegram.enable {
+        telegram = {
+          require_mention = serviceCfg.telegram.requireMention;
+        };
+      });
     extraPackages = serviceCfg.extraPackages;
     environmentFiles =
       let
