@@ -63,8 +63,8 @@ function __mysbx_tokens
 end
 
 # Whether a `--` separator has been typed: everything after it is the
-# payload (run, cli.md D4) or git's own arguments (merge, D6) — none
-# of mysbx's grammar to complete.
+# payload (run, cli.md D4) or git's own arguments (session merge,
+# D6) — none of mysbx's grammar to complete.
 function __mysbx_past_dd
     contains -- -- (commandline -opc)
 end
@@ -103,12 +103,6 @@ function __mysbx_in_destroy
     contains -- destroy (__mysbx_tokens)
 end
 
-function __mysbx_in_merge
-    __mysbx_past_dd
-    and return 1
-    contains -- merge (__mysbx_tokens)
-end
-
 function __mysbx_in_init
     __mysbx_past_dd
     and return 1
@@ -133,15 +127,27 @@ function __mysbx_in_podman_load_image
     contains -- podman-load-image (__mysbx_tokens)
 end
 
-# After `merge NAME` (usage.txt): the strategy flags need the NAME,
-# they are the argument tail of the verb, not head position.
+# The merge position: the group spelling only — the flat
+# `mysbx merge` is an unknown command now, so only `session merge`
+# triggers the strategy flags.
+function __mysbx_in_merge
+    __mysbx_past_dd
+    and return 1
+    set -l t (__mysbx_tokens)
+    test "$t[1]" = session
+    and test "$t[2]" = merge
+end
+
+# After `session merge NAME` (usage.txt): the strategy flags need
+# the NAME, they are the argument tail of the verb, not head
+# position.
 function __mysbx_merge_named
     __mysbx_past_dd
     and return 1
     set -l t (__mysbx_tokens)
-    set -q t[1]
-    and test "$t[1]" = merge
-    and set -q t[2]
+    test "$t[1]" = session
+    and test "$t[2]" = merge
+    and set -q t[3]
 end
 
 # The sub-verb position of the session group (workspace.md D7) and
@@ -164,10 +170,12 @@ function __mysbx_expects_worktree_verb
     and not set -q t[2]
 end
 
-# The NAME position: the first positional of the four handoff verbs
-# (workspace.md D6) and of `session destroy` (D7) — session names;
-# `worktree diff` / `worktree hunk` (worktree.md W1) — worktree
-# handles, via [`__mysbx_expects_worktree_name`].
+# The NAME position: the first positional of the session group's
+# name-taking sub-verbs — the four handoff verbs (workspace.md D6,
+# now `session fetch|merge|push|diff`) and `session destroy` /
+# `session hunk` (D7) — session names; `worktree diff` /
+# `worktree hunk` (worktree.md W1) — worktree handles, via
+# [`__mysbx_expects_worktree_name`].
 function __mysbx_expects_name
     __mysbx_past_dd
     and return 1
@@ -175,12 +183,10 @@ function __mysbx_expects_name
     set -q t[1]
     or return 1
     switch "$t[1]"
-        case fetch merge push diff
-            not set -q t[2]
-            and return 0
-            return 1
         case session
-            test "$t[2]" = destroy -o "$t[2]" = hunk
+            test "$t[2]" = destroy -o "$t[2]" = hunk \
+                -o "$t[2]" = fetch -o "$t[2]" = merge \
+                -o "$t[2]" = push -o "$t[2]" = diff
             and not set -q t[3]
             and return 0
             return 1
@@ -203,16 +209,15 @@ function __mysbx_expects_worktree_name
     and not set -q t[3]
 end
 
-# The REMOTE position of `push NAME [REMOTE]` (D6).
+# The REMOTE position of `session push NAME [REMOTE]` (D6).
 function __mysbx_expects_remote
     __mysbx_past_dd
     and return 1
     set -l t (__mysbx_tokens)
-    set -q t[1]
-    or return 1
-    test "$t[1]" = push
-    and set -q t[2]
-    and not set -q t[3]
+    test "$t[1]" = session
+    and test "$t[2]" = push
+    and set -q t[3]
+    and not set -q t[4]
 end
 
 # The existing session names of the repo the current directory
@@ -309,8 +314,9 @@ function __mysbx_worktrees
     end
 end
 
-# The remotes of the host repo, for `push NAME [REMOTE]` (D6: the
-# host repo's own remotes; `git remote` walks up to the same repo).
+# The remotes of the host repo, for `session push NAME [REMOTE]`
+# (D6: the host repo's own remotes; `git remote` walks up to the
+# same repo).
 function __mysbx_remotes
     command git remote 2>/dev/null
 end
@@ -318,19 +324,15 @@ end
 # Subcommands (usage.txt "Commands") — offered in the bare/global
 # position only: the dispatcher takes the verb as its first positional.
 # `run -- CMD` and the bare form are the two faces of one pipeline;
-# `gui` re-invokes mysbx in a terminal window; the handoff verbs and
-# the session group are host-side (no sandbox is started).
+# `gui` re-invokes mysbx in a terminal window; the session group
+# (with the handoff verbs, D6) is host-side (no sandbox is started).
 complete -c mysbx -f -n '__mysbx_no_verb' -a run -d 'Run one command in the sandbox: mysbx run [flags] -- CMD...'
 complete -c mysbx -f -n '__mysbx_no_verb' -a gui -d 'Run mysbx ARG... in a new terminal window (needs a graphical session)'
 complete -c mysbx -f -n '__mysbx_no_verb' -a init -d 'Create the sidecar directory next to the current repo (idempotent)'
 complete -c mysbx -f -n '__mysbx_no_verb' -a edit -d 'Open the sidecar config.toml in $EDITOR (creates it first)'
-complete -c mysbx -f -n '__mysbx_no_verb' -a fetch -d 'Fast-forward the session branch agent/mysbx/NAME into the host repo'
-complete -c mysbx -f -n '__mysbx_no_verb' -a merge -d 'Merge the fetched session branch into the current branch (--no-ff default)'
-complete -c mysbx -f -n '__mysbx_no_verb' -a push -d 'Push the session branch through the host repo remote (fetches it first)'
-complete -c mysbx -f -n '__mysbx_no_verb' -a diff -d 'Three-dot diff of the host HEAD against the session branch'
 complete -c mysbx -f -n '__mysbx_no_verb' -a version -d 'Print the version'
 complete -c mysbx -f -n '__mysbx_no_verb' -a help -d 'Print this help'
-complete -c mysbx -f -n '__mysbx_no_verb' -a session -d 'The session group: list | destroy | hunk'
+complete -c mysbx -f -n '__mysbx_no_verb' -a session -d 'The session group: list | destroy | hunk | fetch | merge | push | diff'
 complete -c mysbx -f -n '__mysbx_no_verb' -a worktree -d 'The worktree group: list | diff | hunk'
 complete -c mysbx -f -n '__mysbx_no_verb' -a status -d 'The one-command overview: init state, effective config, sessions, worktrees'
 complete -c mysbx -f -n '__mysbx_no_verb' -a attach -d 'Connect this terminal to the detached run of the live repo (or of --session NAME)'
@@ -340,11 +342,16 @@ complete -c mysbx -f -n '__mysbx_no_verb' -a tui -d 'The session picker: one row
 complete -c mysbx -f -n '__mysbx_no_verb' -a ssh-pubkey -d 'Print the sandbox ssh keypair\'s public key (GitHub deploy key / gitolite keydir value)'
 complete -c mysbx -f -n '__mysbx_no_verb' -a podman-load-image -d 'Load the agent container image into Podman (--force, --test, --image <ref>)'
 
-# The session sub-verbs (workspace.md D7 — a closed group, not an open
-# tree).
+# The session sub-verbs (workspace.md D7 — a closed group of seven,
+# not an open tree): the three originals plus the four handoff verbs
+# that moved in from the flat spellings (D6).
 complete -c mysbx -f -n '__mysbx_expects_session_verb' -a list -d 'The sessions of the current repo (the clones/ registry)'
 complete -c mysbx -f -n '__mysbx_expects_session_verb' -a destroy -d 'Remove the named session clone (guarded removal)'
 complete -c mysbx -f -n '__mysbx_expects_session_verb' -a hunk -d 'The session diff in the interactive hunk viewer'
+complete -c mysbx -f -n '__mysbx_expects_session_verb' -a fetch -d 'Fast-forward the session branch agent/mysbx/NAME into the host repo'
+complete -c mysbx -f -n '__mysbx_expects_session_verb' -a merge -d 'Merge the fetched session branch into the current branch (--no-ff default)'
+complete -c mysbx -f -n '__mysbx_expects_session_verb' -a push -d 'Push the session branch through the host repo remote (fetches it first)'
+complete -c mysbx -f -n '__mysbx_expects_session_verb' -a diff -d 'Three-dot diff of the host HEAD against the session branch'
 
 # The worktree sub-verbs (docs/design/worktree.md W1 — a closed
 # group, like the session one).
@@ -452,14 +459,15 @@ complete -c mysbx -f -n '__mysbx_in_diagnose' -a egress -d 'Read the proxy-only 
 complete -c mysbx -f -n '__mysbx_in_diagnose; and contains -- egress (__mysbx_tokens)' -l run -r -d 'Narrow to one run pid'
 complete -c mysbx -f -n '__mysbx_in_diagnose; and contains -- egress (__mysbx_tokens)' -l json -d 'Print one JSON object per run'
 
-# The NAME position of the handoff verbs and of `session destroy` /
-# `session hunk`: the existing sessions of the registry (a new NAME is
-# still typable — a completion offers, it never forbids).
+# The NAME position of the session handoff verbs (D6) and of
+# `session destroy` / `session hunk` (D7): the existing sessions of
+# the registry (a new NAME is still typable — a completion offers,
+# it never forbids).
 complete -c mysbx -f -n '__mysbx_expects_name' -a '(__mysbx_sessions)' -d 'Existing session (the first --session run creates one)'
 
 # The NAME position of `worktree diff` / `worktree hunk`: the host
 # worktree handles of the `__worktrees` registry (W2).
 complete -c mysbx -f -n '__mysbx_expects_worktree_name' -a '(__mysbx_worktrees)' -d 'Existing host worktree handle (workmux add creates one)'
 
-# The REMOTE of `push NAME [REMOTE]` (default: origin).
+# The REMOTE of `session push NAME [REMOTE]` (default: origin).
 complete -c mysbx -f -n '__mysbx_expects_remote' -a '(__mysbx_remotes)' -d 'git remote of the host repo (default: origin)'
