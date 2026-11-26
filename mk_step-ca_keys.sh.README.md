@@ -52,11 +52,11 @@ priv overlay must supply matching `source = ...` paths:
 | `step-ca-intermediate-ca-crt` | PEM intermediate cert | `/run/step-ca-intermediate-ca-crt` | `step-ca:step-ca 0444` |
 | `step-ca-intermediate-ca-key` | encrypted PEM intermediate key | `/run/step-ca-intermediate-ca-key` | `step-ca:step-ca 0400` |
 
-The secrets framework (`modules/myconfig.secrets.nix`) encrypts each
-plaintext at Nix eval time using vserver's
-`/etc/ssh/ssh_host_rsa_key.pub` (looked up from
-`hosts/metadata.json`) and produces a per-host `.age` file in vserver's
-nix store. Plaintext never leaves `../priv/`.
+The secrets framework (`modules/myconfig.secrets.nix`) passes each
+committed `.age` file (encrypted by `secrets-encrypt.sh` to vserver's
+`/etc/ssh/ssh_host_rsa_key.pub`, looked up from
+`hosts/metadata.json`) through to agenix, which decrypts it on the
+host. Plaintext never leaves `../priv/`.
 
 `root_ca_key` and `root_ca_key_password` are **not** deployed — they
 stay in the priv repo as cold storage for intermediate rotation /
