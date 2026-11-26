@@ -129,7 +129,7 @@ These are documented, not yet fixed.
 | VM | Purpose | Defined in |
 |---|---|---|
 | `ai-gpu-vm` (Ubuntu 24.04) | RTX 5090 VFIO passthrough for CUDA workloads not supported on NixOS host | `rtx-vm/` (libvirt/virsh; bind/unbind via `scripts/bind-gpu-to-vfio.sh`) |
-| mysbx agent sandboxes | hermes service (microvm, autostart), krun / microvm-qemu / microvm-ch dev sandboxes | `myconfig.ai.dev.mysbx.nix` |
+| mysbx agent sandboxes | hermes service (microvm, autostart), krun / microvm-qemu / microvm-ch dev sandboxes | `myconfig.ai.dev.mysbx` options (base config), `myconfig.dev.embedded` profile (modules/dev/dev.embedded.nix) |
 
 ## WireGuard access
 

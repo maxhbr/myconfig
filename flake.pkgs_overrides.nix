@@ -299,5 +299,30 @@
         ];
       });
     })
+
+    # gcc-arm-embedded: the prebuilt ARM toolchain tarball bundles its own
+    # arm-none-eabi-gdb (17.2) plus `include/gdb/`, `share/gdb/**` and gdb's
+    # info pages. nixpkgs' `gdb` is built `--enable-targets=all`, so it
+    # already debugs arm-none-eabi (and riscv64 et al.) and is pulled into
+    # the same mysbx buildEnv on p14/thing. Both ship the same subpaths with
+    # *differing* content (`include/gdb/jit-reader.h`, `share/gdb/python/*`,
+    # `share/info/{gdb,annotate,ctf-spec,sframe-spec,stabs}.info`), which
+    # `pkgs.buildEnv` refuses to merge (identical files would be fine, but
+    # these differ between gdb 17.2 and the 15.3.rel2 tarball's bundled copy):
+    #   pkgs.buildEnv error: two given paths contain a conflicting subpath:
+    #     gdb-17.2/include/gdb/jit-reader.h
+    #     gcc-arm-embedded-15.3.rel2/include/gdb/jit-reader.h
+    # dragging mysbx-tools and the whole toplevel build into a cascade.
+    # Strip the bundled gdb files; the multitarget `pkgs.gdb` in the same env
+    # fully replaces them.
+    (_final: prev: {
+      gcc-arm-embedded = prev.gcc-arm-embedded.overrideAttrs (_old: {
+        installPhase = (prev.gcc-arm-embedded.installPhase or "") + ''
+          rm -rf $out/include/gdb $out/share/gdb
+          rm -f $out/bin/arm-none-eabi-gdb $out/bin/arm-none-eabi-gdb-add-index
+          rm -f $out/share/info/{gdb,annotate,ctf-spec,sframe-spec,stabs}.info $out/share/info/dir
+        '';
+      });
+    })
   ];
 }

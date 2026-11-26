@@ -39,7 +39,6 @@
     }
     ./programs.opencode.nix
     ./myconfig.agentUsers.nix
-    ./myconfig.ai.dev.mysbx.nix
     ../shared.deployedServices.nix
     ./services.caddy.nix
     ./services.forgejo.nix
@@ -198,6 +197,9 @@
         core.enable = true;
         difftastic.enable = true;
         rust.enable = true;
+        # The embedded toolchain for host and `mysbx-embedded` sandbox
+        # (modules/dev/dev.embedded.nix) — thing is the firmware workstation.
+        embedded.enable = true;
       };
       virtualisation.enable = true;
     };
