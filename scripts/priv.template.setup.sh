@@ -55,6 +55,31 @@ else
     split_branch="$branch_name"
 fi
 
+if [[ $update_mode != "true" && $use_test_dir == "false" && -e ../priv ]]; then
+    # An existing ../priv whose history shares a common ancestor with
+    # the template is exactly what 'update' handles, so fall through to
+    # it instead of failing.
+    target_dir="../priv"
+    if [[ ! -d $target_dir/.git ]]; then
+        echo "Error: '$target_dir' exists but is not a git repository" >&2
+        exit 1
+    fi
+    if [[ -z "$(git -C "$target_dir" rev-list --all --max-count=1 2>/dev/null)" ]]; then
+        echo "Error: '$target_dir' has no commits" >&2
+        exit 1
+    fi
+    # make the template branch's commits (and ref) visible to priv so
+    # merge-base can compare the two histories
+    git -C "$target_dir" fetch -q "$myconfig" "$split_branch"
+    if [[ -z "$(git -C "$target_dir" merge-base HEAD FETCH_HEAD 2>/dev/null)" ]]; then
+        echo "Error: Target '$target_dir' already exists and shares no common" >&2
+        echo "       ancestor with '$split_branch'. Use 'update' explicitly if a" >&2
+        echo "       merge is intended." >&2
+        exit 1
+    fi
+    update_mode=true
+fi
+
 if [[ $update_mode == "true" ]]; then
     target_dir="../priv"
     if [[ ! -e $target_dir ]]; then

@@ -57,6 +57,11 @@ This creates a `../priv` directory containing a git repository with the private 
 - Update the template via git subtree (merge-conflict based updates)
 - Maintain a parallel git repository next to myconfig
 
+If `../priv` already exists and its git history shares a common ancestor
+with the template branch, the script falls through to the update flow
+(backup + merge) instead of failing. A `../priv` with an unrelated history
+still errors — use `update` explicitly if such a merge is intended.
+
 To test without creating the actual directory:
 ```bash
 scripts/priv.template.setup.sh --test
