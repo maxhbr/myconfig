@@ -41,12 +41,12 @@ check_index() {
     while IFS= read -r -d '' f; do
         echo "ERROR: plaintext secret is tracked by git: $f" >&2
         bad=1
-    done < <(git ls-files -z | grep -zE '(^|/)secrets-plain/')
+    done < <(git ls-files -z | grep -zE '(^|/)secrets-plain/' | grep -zvE '\.nix$')
     if ((bad)); then
         echo "untrack it with: git rm --cached -- <file>" >&2
         exit 1
     fi
-    if git diff --cached --name-only -z | grep -zE '(^|/)secrets-plain/'; then
+    if git diff --cached --name-only -z | grep -zE '(^|/)secrets-plain/' | grep -zvE '\.nix$'; then
         echo "ERROR: plaintext secrets staged for commit — unstage them:" >&2
         exit 1
     fi
@@ -57,6 +57,9 @@ check_pairing() {
     bad=0
     while IFS= read -r -d '' f; do
         rel="${f#./}"
+        # nix files under secrets-plain/ are not secrets and stay
+        # unencrypted — no .age counterpart expected
+        [[ $rel == *.nix ]] && continue
         if [[ $rel == secrets-plain/* ]]; then
             age="secrets/${rel#secrets-plain/}.age"
         else
