@@ -304,7 +304,8 @@ pub fn run(args: Vec<String>) -> i32 {
         // verb arm runs (D14 for `--multiplexer`, D16 for
         // `--ro`/`--rw`, the D8/D17 extension for `--result`/
         // `--timeout`, the D1 `--session` for the handoff verbs of
-        // workspace.md D6 — a handoff names its session positionally,
+        // workspace.md D6, nested under `session` — a handoff names
+        // its session positionally,
         // and is not a run; detach.md B2 for `--detach`/
         // `--detachable` — a detached run is the bare form's
         // interactive payload, and no other verb starts one; `attach`
@@ -344,10 +345,6 @@ pub fn run(args: Vec<String>) -> i32 {
                         | "edit"
                         | "version"
                         | "help"
-                        | "fetch"
-                        | "merge"
-                        | "push"
-                        | "diff"
                         | "session"
                         | "worktree"
                         | "status"
@@ -382,22 +379,10 @@ pub fn run(args: Vec<String>) -> i32 {
             // passes it through verbatim).
             gui(flags, &rest[1..])
         }
-        // The host-side handoff verbs of the workspace model
-        // (workspace.md D6): git plumbing between the host repo and a
-        // session's clone — no sandbox is started. They sit BEFORE the
-        // generic `flags.any()` arm on purpose: `--dry-run` is valid
-        // with them (cli.md D9 — it prints the git commands instead
-        // of running them), while `--verbose` is refused — there is
-        // no run to report on (the run-scoped flags are refused by
-        // the arm above: a handoff is not a run, there is no
-        // workspace to choose and no payload).
-        Some("fetch") if flags.verbose => reject_verbose("fetch"),
-        Some("merge") if flags.verbose => reject_verbose("merge"),
-        Some("push") if flags.verbose => reject_verbose("push"),
-        Some("diff") if flags.verbose => reject_verbose("diff"),
         // The session noun group (workspace.md D7) — the one CLOSED
-        // nested-verb exception to cli.md D3, three verbs, not an open
-        // tree. Host-side like the handoff verbs: no sandbox is
+        // nested-verb exception to cli.md D3, seven verbs, not an open
+        // tree. Host-side like the handoff verbs of workspace.md D6
+        // (`fetch`/`merge`/`push`/`diff` live here now): no sandbox is
         // started, the repo is the one the cwd resolves to, `--dry-run`
         // prints the exact commands (cli.md D9) and `--verbose` is
         // refused — there is no run to report on.
@@ -510,19 +495,29 @@ pub fn run(args: Vec<String>) -> i32 {
                 Some("list") => sessionverbs::list(&rest[2..], flags.dry_run),
                 Some("destroy") => sessionverbs::destroy(&rest[2..], flags.dry_run),
                 Some("hunk") => sessionverbs::hunk(&rest[2..], flags.dry_run),
-                // The group is closed: a fourth verb is a decision,
+                // The handoff verbs of workspace.md D6, nested here
+                // now (the flat spellings are gone): `rest[2..]` —
+                // past `session` and the sub-verb — is the tail
+                // `handoff::verb` parses.
+                Some("fetch") => handoff::verb(&rest[2..], handoff::Kind::Fetch, flags.dry_run),
+                Some("merge") => handoff::verb(&rest[2..], handoff::Kind::Merge, flags.dry_run),
+                Some("push") => handoff::verb(&rest[2..], handoff::Kind::Push, flags.dry_run),
+                Some("diff") => handoff::verb(&rest[2..], handoff::Kind::Diff, flags.dry_run),
+                // The group is closed: an eighth verb is a decision,
                 // not a given — unknown members are usage errors
-                // naming the three that exist (D7).
+                // naming the seven that exist (D7).
                 Some(other) => {
                     eprintln!("mysbx session: unknown session verb: {other}");
                     eprintln!(
-                        "  the session group is closed: list, destroy, hunk (workspace.md D7)"
+                        "  the session group is closed: list, destroy, hunk, fetch, merge, push, diff (workspace.md D7)"
                     );
                     eprintln!("try `mysbx --help`");
                     2
                 }
                 None => {
-                    eprintln!("mysbx session: a verb is required: list, destroy or hunk");
+                    eprintln!(
+                        "mysbx session: a verb is required: list, destroy, hunk, fetch, merge, push or diff"
+                    );
                     eprintln!("try `mysbx --help`");
                     2
                 }
@@ -560,10 +555,6 @@ pub fn run(args: Vec<String>) -> i32 {
             2
         }
         Some("podman-load-image") => loadimage::run(&rest[1..]),
-        Some("fetch") => handoff::verb(&rest[1..], handoff::Kind::Fetch, flags.dry_run),
-        Some("merge") => handoff::verb(&rest[1..], handoff::Kind::Merge, flags.dry_run),
-        Some("push") => handoff::verb(&rest[1..], handoff::Kind::Push, flags.dry_run),
-        Some("diff") => handoff::verb(&rest[1..], handoff::Kind::Diff, flags.dry_run),
         // The run-scoped flags are only meaningful for the bare form and
         // `run`: on `init` `--dry-run` would promise side-effect-freeness
         // while files are still created, and there is no run to report on
@@ -649,8 +640,10 @@ pub fn run(args: Vec<String>) -> i32 {
 ///   dead parent cannot remove the temp root after the detached
 ///   run ends.
 /// * The host-side verbs (`init`, `edit`, `status`, the session and
-///   worktree noun groups, the fetch/merge/push/diff handoff verbs,
-///   `attach`, `ssh-pubkey`) read or write the HOST sidecar and the
+///   worktree noun groups — including the session fetch/merge/push/
+///   diff handoff verbs and their flat spellings, kept as guard
+///   entries of [`crate::once::REFUSED`]), `attach`, `ssh-pubkey`)
+///   read or write the HOST sidecar and the
 ///   host repo's session/worktree state — exactly what once-mode
 ///   promises not to touch.
 ///

@@ -7739,7 +7739,7 @@ fn fetch_briges_the_session_branch_into_the_host_repo() {
         return;
     };
     let mut inv = inv;
-    inv.args = vec!["fetch", "fix-1"];
+    inv.args = vec!["session", "fetch", "fix-1"];
     let (code, _, stderr) = run_binary(&inv);
     assert_eq!(code, 0, "stderr: {stderr}");
     // The exact tip: the host-local branch IS the session tip.
@@ -7784,7 +7784,7 @@ fn a_fetch_of_a_diverged_host_branch_is_rejected_without_touching_it() {
     };
     // Fetch once — then advance the HOST branch independently.
     let mut inv0 = inv;
-    inv0.args = vec!["fetch", "fix-1"];
+    inv0.args = vec!["session", "fetch", "fix-1"];
     let (code, _, stderr) = run_binary(&inv0);
     assert_eq!(code, 0, "stderr: {stderr}");
     let inv = inv0;
@@ -7815,7 +7815,7 @@ fn a_fetch_of_a_diverged_host_branch_is_rejected_without_touching_it() {
     assert!(git_in(&clone, &["add", "session2.txt"]));
     assert!(git_in(&clone, &["commit", "-m", "more session work"]));
     let mut inv = inv;
-    inv.args = vec!["fetch", "fix-1"];
+    inv.args = vec!["session", "fetch", "fix-1"];
     let (code, _, stderr) = run_binary(&inv);
     assert_eq!(code, 70, "stderr: {stderr}");
     assert!(stderr.contains("diverged"), "{stderr}");
@@ -7843,7 +7843,7 @@ fn merge_consumes_the_exact_ref_and_deletes_the_ferry_copy() {
         return;
     };
     let mut inv = inv;
-    inv.args = vec!["merge", "fix-1"];
+    inv.args = vec!["session", "merge", "fix-1"];
     let (code, _, stderr) = run_binary(&inv);
     assert_eq!(code, 0, "stderr: {stderr}");
     // The work IS in the current branch, via a merge commit (--no-ff).
@@ -7881,7 +7881,7 @@ fn merge_refuses_a_dirty_host_tree_and_a_detached_head() {
     };
     std::fs::write(repo.join("dirty.txt"), "uncommitted").unwrap();
     let mut inv = inv;
-    inv.args = vec!["merge", "fix-1"];
+    inv.args = vec!["session", "merge", "fix-1"];
     let (code, _, stderr) = run_binary(&inv);
     assert_eq!(code, 70, "stderr: {stderr}");
     assert!(stderr.contains("dirty"), "{stderr}");
@@ -7918,7 +7918,7 @@ fn merge_passes_the_strategy_through() {
         return;
     };
     let mut inv = inv;
-    inv.args = vec!["merge", "fix-1", "--squash"];
+    inv.args = vec!["session", "merge", "fix-1", "--squash"];
     let (code, _, stderr) = run_binary(&inv);
     assert_eq!(code, 0, "stderr: {stderr}");
     // A squashed merge leaves no merge commit but the changes are in.
@@ -7938,7 +7938,7 @@ fn merge_passes_the_strategy_through() {
     })
     .unwrap();
     let mut inv2 = inv2;
-    inv2.args = vec!["merge", "fix-1", "--", "-m", "the session work"];
+    inv2.args = vec!["session", "merge", "fix-1", "--", "-m", "the session work"];
     let (code, _, stderr) = run_binary(&inv2);
     assert_eq!(code, 0, "stderr: {stderr}");
     let msg = Command::new("git")
@@ -7987,7 +7987,7 @@ fn push_goes_through_the_host_repos_own_origin() {
         &["push", "origin", "refs/heads/main:refs/heads/main"]
     ));
     let mut inv = inv;
-    inv.args = vec!["push", "fix-1"];
+    inv.args = vec!["session", "push", "fix-1"];
     let (code, _, stderr) = run_binary(&inv);
     assert_eq!(code, 0, "stderr: {stderr}");
     // The upstream now has the session branch at the session tip.
@@ -8010,7 +8010,7 @@ fn push_goes_through_the_host_repos_own_origin() {
         &repo,
         &["remote", "add", "backup", &upstream.display().to_string()]
     ));
-    inv.args = vec!["push", "fix-1", "backup"];
+    inv.args = vec!["session", "push", "fix-1", "backup"];
     let (code, _, stderr) = run_binary(&inv);
     assert_eq!(code, 0, "stderr: {stderr}");
 }
@@ -8034,7 +8034,7 @@ fn diff_reports_the_session_changes_since_the_divergence() {
     assert!(git_in(&repo, &["add", "host.txt"]));
     assert!(git_in(&repo, &["commit", "-m", "host work"]));
     let mut inv = inv;
-    inv.args = vec!["diff", "fix-1"];
+    inv.args = vec!["session", "diff", "fix-1"];
     let (code, stdout, stderr) = run_binary(&inv);
     // git diff's own exit code propagates — 0 for a plain diff whose
     // output IS the answer (differences do not make it fail).
@@ -8061,10 +8061,10 @@ fn a_handoff_dry_run_prints_the_git_commands_and_runs_nothing() {
         return;
     };
     for (args, verb_line) in [
-        (vec!["--dry-run", "fetch", "fix-1"], "fetch"),
-        (vec!["--dry-run", "merge", "fix-1"], "merge"),
-        (vec!["--dry-run", "push", "fix-1"], "push"),
-        (vec!["--dry-run", "diff", "fix-1"], "diff"),
+        (vec!["--dry-run", "session", "fetch", "fix-1"], "fetch"),
+        (vec!["--dry-run", "session", "merge", "fix-1"], "merge"),
+        (vec!["--dry-run", "session", "push", "fix-1"], "push"),
+        (vec!["--dry-run", "session", "diff", "fix-1"], "diff"),
     ] {
         let (code, stdout, stderr) = run_binary_with(&inv, &args);
         assert_eq!(code, 0, "{args:?}: stderr: {stderr}");
@@ -8114,7 +8114,7 @@ fn the_merge_dry_run_shows_the_ff_default_and_the_ferry_deletion() {
         return;
     };
     let mut inv = inv;
-    inv.args = vec!["--dry-run", "merge", "fix-1"];
+    inv.args = vec!["--dry-run", "session", "merge", "fix-1"];
     let (code, stdout, stderr) = run_binary(&inv);
     assert_eq!(code, 0, "stderr: {stderr}");
     let lines: Vec<&str> = stdout.lines().collect();
@@ -8149,19 +8149,19 @@ fn handoff_usage_errors_exit_2() {
     // push remote, an unknown push flag, a repeated merge strategy.
     let (inv, _, _) = fixture_user_backend("handoff-usage", &[]);
     for args in [
-        vec!["fetch"],
-        vec!["merge"],
-        vec!["push"],
-        vec!["diff"],
-        vec!["fetch", "a/b"],
-        vec!["fetch", ""],
-        vec!["fetch", ".."],
-        vec!["diff", "fix-1", "extra"],
-        vec!["fetch", "fix-1", "extra"],
-        vec!["push", "fix-1", "origin", "backup"],
-        vec!["push", "fix-1", "--repo", "/tmp"],
-        vec!["push", "fix-1", "--"],
-        vec!["merge", "fix-1", "--ff", "--squash"],
+        vec!["session", "fetch"],
+        vec!["session", "merge"],
+        vec!["session", "push"],
+        vec!["session", "diff"],
+        vec!["session", "fetch", "a/b"],
+        vec!["session", "fetch", ""],
+        vec!["session", "fetch", ".."],
+        vec!["session", "diff", "fix-1", "extra"],
+        vec!["session", "fetch", "fix-1", "extra"],
+        vec!["session", "push", "fix-1", "origin", "backup"],
+        vec!["session", "push", "fix-1", "--repo", "/tmp"],
+        vec!["session", "push", "fix-1", "--"],
+        vec!["session", "merge", "fix-1", "--ff", "--squash"],
     ] {
         let (code, _, stderr) = run_binary_with(&inv, &args);
         assert_eq!(code, 2, "{args:?}: {stderr}");
@@ -8177,10 +8177,10 @@ fn handoff_refuses_unknown_sessions_and_run_scoped_flags() {
     // run — there is no workspace to choose and no payload.
     let (inv, _, _) = fixture_user_backend("handoff-unknown", &[]);
     for args in [
-        vec!["fetch", "fix-1"],
-        vec!["merge", "fix-1"],
-        vec!["push", "fix-1"],
-        vec!["diff", "fix-1"],
+        vec!["session", "fetch", "fix-1"],
+        vec!["session", "merge", "fix-1"],
+        vec!["session", "push", "fix-1"],
+        vec!["session", "diff", "fix-1"],
     ] {
         let (code, _, stderr) = run_binary_with(&inv, &args);
         assert_eq!(code, 70, "{args:?}: {stderr}");
@@ -8194,12 +8194,12 @@ fn handoff_refuses_unknown_sessions_and_run_scoped_flags() {
         );
     }
     for args in [
-        vec!["--session", "fix-1", "fetch", "fix-1"],
-        vec!["--verbose", "fetch", "fix-1"],
-        vec!["--ro", "/tmp", "diff", "fix-1"],
-        vec!["--result", "merge", "fix-1"],
-        vec!["--timeout", "5", "push", "fix-1"],
-        vec!["--multiplexer", "tmux", "fetch", "fix-1"],
+        vec!["--session", "fix-1", "session", "fetch", "fix-1"],
+        vec!["--verbose", "session", "fetch", "fix-1"],
+        vec!["--ro", "/tmp", "session", "diff", "fix-1"],
+        vec!["--result", "session", "merge", "fix-1"],
+        vec!["--timeout", "5", "session", "push", "fix-1"],
+        vec!["--multiplexer", "tmux", "session", "fetch", "fix-1"],
     ] {
         let (code, _, stderr) = run_binary_with(&inv, &args);
         assert_eq!(code, 2, "{args:?}: {stderr}");
@@ -8208,11 +8208,65 @@ fn handoff_refuses_unknown_sessions_and_run_scoped_flags() {
 }
 
 #[test]
+fn the_flat_handoff_spellings_are_unknown_commands() {
+    // There are NO aliases: the flat spellings the verbs had before
+    // they moved under `session` are gone outright — a clean exit-2
+    // unknown-verb usage error naming nothing, never a dispatch into
+    // the verb (which would defeat the closed group of D7).
+    let (inv, _, _) = fixture_user_backend("handoff-flat-gone", &[]);
+    for verb in ["fetch", "merge", "push", "diff"] {
+        let (code, _o, e) = run_binary_with(&inv, &[verb, "fix-1"]);
+        assert_eq!(code, 2, "verb {verb}, stderr: {e}");
+        assert!(
+            e.contains(&format!("unknown command: {verb}")),
+            "verb {verb}, stderr: {e}"
+        );
+    }
+}
+
+#[test]
+fn the_session_group_names_all_seven_verbs_in_its_usage_errors() {
+    // D7's closed set is seven members now: an unknown sub-verb and
+    // a bare `session` are usage errors naming ALL of them — list,
+    // destroy, hunk, fetch, merge, push, diff.
+    let (inv, _, _) = fixture_user_backend("session-group-seven", &[]);
+    let (code, _, stderr) = run_binary_with(&inv, &["session", "bogus"]);
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(stderr.contains("unknown session verb: bogus"), "{stderr}");
+    assert!(
+        stderr.contains("list, destroy, hunk, fetch, merge, push, diff"),
+        "{stderr}"
+    );
+    let (code, _, stderr) = run_binary_with(&inv, &["session"]);
+    assert_eq!(code, 2, "stderr: {stderr}");
+    assert!(
+        stderr.contains("a verb is required: list, destroy, hunk, fetch, merge, push or diff"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn session_handoff_verbs_refuse_verbose() {
+    // The group's own `--verbose` refusal covers the nested handoff
+    // verbs too: no sandbox starts, there is no run to report on.
+    let (inv, _, _) = fixture_user_backend("session-handoff-verbose", &[]);
+    for verb in ["fetch", "merge", "push", "diff"] {
+        let (code, _, stderr) = run_binary_with(&inv, &["--verbose", "session", verb, "fix-1"]);
+        assert_eq!(code, 2, "verb {verb}, stderr: {stderr}");
+        assert!(
+            stderr.contains("--verbose"),
+            "verb {verb}, stderr: {stderr}"
+        );
+    }
+}
+
+#[test]
 fn a_handoff_started_inside_a_session_clone_is_refused() {
     // workspace.md D9, the handoff side: the verbs belong to the
     // HOST side of a session; started inside the clone, the resolver
     // refuses with the error naming the owning repo and the session.
-    let (mut inv, _, sidecar) = fixture_user_backend("handoff-inside-clone", &["fetch", "fix-1"]);
+    let (mut inv, _, sidecar) =
+        fixture_user_backend("handoff-inside-clone", &["session", "fetch", "fix-1"]);
     let clone = sidecar.join("clones").join("fix-1");
     std::fs::create_dir_all(&clone).unwrap();
     inv.cwd = clone.clone();
@@ -8331,7 +8385,7 @@ fn session_list_after_fetch_and_merge_counts_zero() {
     assert!(git_in(&fix, &["add", "s1.txt"]));
     assert!(git_in(&fix, &["commit", "-m", "session work"]));
     let mut inv_fetch = inv.clone();
-    inv_fetch.args = vec!["fetch", "fix-1"];
+    inv_fetch.args = vec!["session", "fetch", "fix-1"];
     let (code, _, stderr) = run_binary(&inv_fetch);
     assert_eq!(code, 0, "stderr: {stderr}");
     let mut inv = inv;
@@ -8348,7 +8402,7 @@ fn session_list_after_fetch_and_merge_counts_zero() {
     );
     // …and after the merge, with the ferry ref deleted, still 0.
     let mut inv_merge = inv.clone();
-    inv_merge.args = vec!["merge", "fix-1"];
+    inv_merge.args = vec!["session", "merge", "fix-1"];
     let (code, _, stderr) = run_binary(&inv_merge);
     assert_eq!(code, 0, "stderr: {stderr}");
     let (code, stdout, stderr) = run_binary(&inv);
@@ -8384,11 +8438,11 @@ fn session_destroy_refuses_unmerged_work_then_succeeds_after_merge() {
     assert_eq!(code, 70, "stderr: {stderr}");
     assert!(stderr.contains("refusing to destroy"), "{stderr}");
     assert!(stderr.contains("agent/mysbx/fix-1"), "{stderr}");
-    assert!(stderr.contains("mysbx merge fix-1"), "{stderr}");
+    assert!(stderr.contains("mysbx session merge fix-1"), "{stderr}");
     assert!(fix.join(".git").is_dir(), "nothing was removed");
     // The merge hands the work over; then the destroy succeeds.
     let mut inv_merge = inv.clone();
-    inv_merge.args = vec!["merge", "fix-1"];
+    inv_merge.args = vec!["session", "merge", "fix-1"];
     let (code, _, stderr) = run_binary(&inv_merge);
     assert_eq!(code, 0, "stderr: {stderr}");
     let (code, stdout, stderr) = run_binary(&inv);
@@ -8422,7 +8476,7 @@ fn session_destroy_force_discards_and_keeps_the_ferry_branch() {
     assert!(git_in(&fix, &["add", "s1.txt"]));
     assert!(git_in(&fix, &["commit", "-m", "session work"]));
     let mut inv_fetch = inv;
-    inv_fetch.args = vec!["fetch", "fix-1"];
+    inv_fetch.args = vec!["session", "fetch", "fix-1"];
     let (code, _, stderr) = run_binary(&inv_fetch);
     assert_eq!(code, 0, "stderr: {stderr}");
     let mut inv = inv_fetch;
@@ -8578,7 +8632,7 @@ fn a_session_dry_run_prints_the_commands_and_removes_nothing() {
     // …of a merged session it is the plan: the probe command, then
     // the removal (rm, the same format).
     let mut inv_merge = inv.clone();
-    inv_merge.args = vec!["merge", "fix-1"];
+    inv_merge.args = vec!["session", "merge", "fix-1"];
     let (code, _, stderr) = run_binary(&inv_merge);
     assert_eq!(code, 0, "stderr: {stderr}");
     let (code, stdout, stderr) =
@@ -8609,7 +8663,7 @@ fn a_session_dry_run_prints_the_commands_and_removes_nothing() {
 #[test]
 fn session_hunk_dry_run_prints_the_fetch_and_the_invocation() {
     // D7/cli.md D9: the exact commands of `session hunk` — the
-    // implicit fetch of `mysbx diff` (D6), then the `hunk` invocation
+    // implicit fetch of `mysbx session diff` (D6), then the `hunk` invocation
     // with the same three-dot range — one argument per line, the
     // executable first, and nothing runs: no fetch happens, the host
     // repo keeps no agent/mysbx/NAME branch.
@@ -8625,7 +8679,7 @@ fn session_hunk_dry_run_prints_the_fetch_and_the_invocation() {
     let lines: Vec<&str> = stdout.lines().collect();
     // The fetch command first: `git -C <repo> fetch --no-tags
     // <clone> <refspec>` — the exact D6 mechanics, shared with
-    // `mysbx diff`.
+    // `mysbx session diff`.
     assert_eq!(lines[0], "git", "{stdout}");
     assert_eq!(lines[1], "-C", "{stdout}");
     assert_eq!(lines[2], repo.to_string_lossy(), "{stdout}");
@@ -8708,7 +8762,7 @@ fn session_hunk_execs_hunk_over_the_fetched_range() {
     // with the host repo as the working directory — a stand-in on
     // PATH receives the exact argv (`diff HEAD...refs/heads/…`), its
     // exit code propagates unchanged, and the fetched ref is the
-    // session's current tip (the same contract `mysbx diff` gives).
+    // session's current tip (the same contract `mysbx session diff` gives).
     let Some((inv, repo, sidecar, clone)) = handoff_fixture("session-hunk-exec", |clone| {
         std::fs::write(clone.join("session.txt"), "work").unwrap();
         assert!(git_in(clone, &["add", "session.txt"]));
@@ -8748,7 +8802,7 @@ fn session_hunk_execs_hunk_over_the_fetched_range() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     // The stand-in's own exit code propagated unchanged (cli.md D8).
     assert_eq!(out.status.code(), Some(3), "stderr: {stderr}");
-    // The exec'd argv: the range of `mysbx diff`, in the host repo.
+    // The exec'd argv: the range of `mysbx session diff`, in the host repo.
     assert_eq!(
         std::fs::read_to_string(&record).unwrap(),
         format!(
@@ -14737,7 +14791,7 @@ fn nono_with_dest_remap_mount_is_bound_by_bwrap() {
     assert!(
         stdout
             .lines()
-            .zip(stdout.lines().skip(1).skip(0))
+            .zip(stdout.lines().skip(1))
             .any(|(a, b)| a == "--ro-bind" && b == &mount_src),
         "bwrap binds the remap source: {stdout}"
     );
@@ -20897,10 +20951,6 @@ fn sidecar_override_is_refused_for_every_non_run_verb() {
         "status",
         "attach",
         "ssh-pubkey",
-        "fetch",
-        "merge",
-        "push",
-        "diff",
         "session",
         "worktree",
         "doctor",
@@ -21190,10 +21240,6 @@ fn config_override_is_refused_for_every_non_run_verb() {
         "status",
         "attach",
         "ssh-pubkey",
-        "fetch",
-        "merge",
-        "push",
-        "diff",
         "session",
         "worktree",
         "doctor",

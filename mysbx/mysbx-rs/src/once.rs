@@ -72,10 +72,14 @@ pub fn active() -> bool {
 /// sidecar (deleted with it — no consumable outcome); `--session`
 /// creates the clone in the temp sidecar (the session registry is
 /// the host's, the clone would vanish); the session/worktree noun
-/// groups and the fetch/merge/push/diff handoff verbs are host-side
-/// state machines over the sidecar; `attach` and `--detach`/
-/// `--detachable` detach the run from the parent that owns the
-/// teardown.
+/// groups are host-side state machines over the sidecar — the
+/// `fetch`/`merge`/`push`/`diff` entries below survive ONLY as
+/// guards: their flat spellings are usage errors of the plain CLI
+/// now (they live under `session` there), but under `mysbx-once`
+/// a stray flat verb must get the deliberate exit-70 refusal of
+/// this list, not the generic dispatch's exit 2; `attach` and
+/// `--detach`/`--detachable` detach the run from the parent that
+/// owns the teardown.
 pub const REFUSED: &[&str] = &[
     "init",
     "edit",

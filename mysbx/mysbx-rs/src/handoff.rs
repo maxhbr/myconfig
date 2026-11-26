@@ -1,14 +1,16 @@
 // Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 // SPDX-License-Identifier: MIT
 //! The host-side handoff verbs of the workspace model
-//! (docs/design/workspace.md, D6): `fetch`, `merge`, `push`, `diff`.
+//! (docs/design/workspace.md, D6), nested under the session group:
+//! `session fetch`, `session merge`, `session push`, `session diff`.
 //!
 //! Four subcommands that do git plumbing between the host repo and a
 //! session's clone — none of them starts a sandbox. Each takes the
 //! session as its ONE positional argument; there is no `--session`
 //! flag (the session is what the verb is about) and no `--repo` flag
 //! (the host repo is the one the cwd resolves to, cli.md D1, like
-//! every other verb).
+//! every other verb). The dispatcher's spelling is
+//! `mysbx session <verb> NAME …` (`rest[2..]` is this module's tail).
 //!
 //! The mechanics adopt the gvisor spec verbatim
 //! (`myconfig.ai.gvisor-agent-sandbox/rust/src/session.rs`,
@@ -243,24 +245,25 @@ impl Kind {
     /// same pairing rule usage.txt follows, cli.md D5).
     fn usage(self) -> String {
         match self {
-            Kind::Fetch => "usage: mysbx fetch NAME".to_string(),
+            Kind::Fetch => "usage: mysbx session fetch NAME".to_string(),
             Kind::Merge => {
-                "usage: mysbx merge NAME [--no-ff|--ff|--squash] [-- GIT-MERGE-ARGS...]".to_string()
+                "usage: mysbx session merge NAME [--no-ff|--ff|--squash] [-- GIT-MERGE-ARGS...]"
+                    .to_string()
             }
-            Kind::Push => "usage: mysbx push NAME [REMOTE]".to_string(),
-            Kind::Diff => "usage: mysbx diff NAME".to_string(),
+            Kind::Push => "usage: mysbx session push NAME [REMOTE]".to_string(),
+            Kind::Diff => "usage: mysbx session diff NAME".to_string(),
         }
     }
 
     /// The verb's name, for the `mysbx <verb>:` prefix of its usage
     /// errors — the position-typed prefix every subcommand parser
-    /// uses (`run`, `gui`).
+    /// uses (`run`, `gui`), nested under `session` like the verbs.
     fn name(self) -> &'static str {
         match self {
-            Kind::Fetch => "fetch",
-            Kind::Merge => "merge",
-            Kind::Push => "push",
-            Kind::Diff => "diff",
+            Kind::Fetch => "session fetch",
+            Kind::Merge => "session merge",
+            Kind::Push => "session push",
+            Kind::Diff => "session diff",
         }
     }
 }
@@ -292,7 +295,10 @@ impl MergeArgs {
             match args[i].as_str() {
                 "--no-ff" | "--ff" | "--squash" => {
                     if out.ff_set {
-                        eprintln!("mysbx merge: repeated merge-strategy flag: {}", args[i]);
+                        eprintln!(
+                            "mysbx session merge: repeated merge-strategy flag: {}",
+                            args[i]
+                        );
                         eprintln!("{}", kind.usage());
                         return Err(2);
                     }
@@ -332,12 +338,12 @@ impl PushArgs {
         let mut out = Self::default();
         for arg in args {
             if arg.starts_with('-') {
-                eprintln!("mysbx push: unknown push option: {arg}");
+                eprintln!("mysbx session push: unknown push option: {arg}");
                 eprintln!("{}", kind.usage());
                 return Err(2);
             }
             if out.remote.is_some() {
-                eprintln!("mysbx push: push accepts at most one remote: {arg}");
+                eprintln!("mysbx session push: push accepts at most one remote: {arg}");
                 eprintln!("{}", kind.usage());
                 return Err(2);
             }
@@ -531,7 +537,7 @@ pub fn verb(args: &[String], kind: Kind, dry_run: bool) -> i32 {
     match kind {
         Kind::Fetch => {
             eprintln!(
-                "mysbx: fetched {} into {}; merge it with `mysbx merge {name}`",
+                "mysbx: fetched {} into {}; merge it with `mysbx session merge {name}`",
                 session.branch,
                 repo.root.display()
             );

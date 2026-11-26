@@ -4,7 +4,7 @@ Usage:
   mysbx [--detach] [--dry-run] [--verbose] [--multiplexer <mux>] [--agent <kind>] [--backend <name>] [--session <name>] [--sidecar <path>] [--config <path>] [--ro <path>]... [--rw <path>]...
   mysbx run [--dry-run] [--verbose] [--result] [--timeout <seconds>] [--backend <name>] [--session <name>] [--sidecar <path>] [--config <path>] [--ro <path>]... [--rw <path>]... -- COMMAND...
   mysbx gui [ARG...]
-  mysbx fetch | merge | push | diff NAME [verb-arguments...]
+  mysbx session fetch | session merge | session push | session diff NAME [verb-arguments...]
   mysbx session list | session destroy NAME [--force] | session hunk NAME
   mysbx worktree list | worktree diff NAME | worktree hunk NAME
   mysbx status
@@ -23,8 +23,9 @@ The same binary, second name:
                 private temp dir for one run and are removed when it
                 ends (an existing <repo>.mysbx is ignored, not loaded);
                 the forms that need persistent state — init, edit,
-                status, the session/worktree groups, fetch/merge/push/
-                diff, attach, ssh-pubkey, --session, --sidecar,
+                status, the session/worktree groups (including the
+                session fetch/merge/push/diff handoff verbs), attach,
+                ssh-pubkey, --session, --sidecar,
                 --config, --result/--timeout, --detach/--detachable — are
                 refused with exit 70 (D22)
 
@@ -74,7 +75,8 @@ Commands:
                 $EDITOR (or $VISUAL); creates it first when missing,
                 like `init` would. The host-wide user config is
                 not what this edits
-  fetch NAME    bring the session branch agent/mysbx/NAME of the
+  session fetch NAME
+                bring the session branch agent/mysbx/NAME of the
                 named session into the host repo — a fast-forward-only
                 fetch of the session's clone, fully qualified on both
                 sides, no tags: an absent host-local branch is
@@ -86,7 +88,7 @@ Commands:
                 is started; the repo is the one the current directory
                 resolves to. With --dry-run the exact git commands
                 are printed instead
-  merge NAME [--no-ff|--ff|--squash] [-- GIT-MERGE-ARGS...]
+  session merge NAME [--no-ff|--ff|--squash] [-- GIT-MERGE-ARGS...]
                 merge the fetched session branch into the currently
                 checked-out branch of the host repo. Refuses a
                 detached HEAD and a dirty host tree first; --no-ff is
@@ -97,14 +99,15 @@ Commands:
                 success the fetched host-local ref is deleted again
                 (it was the ferry copy); on conflict it stays, with
                 the recovery hint. No sandbox is started
-  push NAME [REMOTE]
+  session push NAME [REMOTE]
                 publish the session branch: the implicit fetch
                 first (the pushed ref is current), then
                 `git push REMOTE refs/heads/…:refs/heads/…` through
                 the HOST REPO's own remotes — REMOTE defaults to its
                 `origin`. Explicit, non-forced, fully qualified.
                 git's own exit code and diagnostics pass through
-  diff NAME     the changes on the session branch since it diverged
+  session diff NAME
+                the changes on the session branch since it diverged
                 from the host's HEAD: the implicit fetch, then the
                 THREE-DOT diff `git diff
                 HEAD...refs/heads/agent/mysbx/NAME` — not the host's
@@ -138,8 +141,8 @@ Commands:
                 the exact probe and removal commands are printed
                 instead, and nothing is removed
   session hunk NAME
-                the session's diff — the same range `mysbx diff NAME`
-                shows — in the interactive `hunk` viewer: the implicit
+                the session's diff — the same range `mysbx session
+                diff NAME` shows — in the interactive `hunk` viewer: the implicit
                 fast-forward fetch of the session branch into the host
                 repo, then `hunk diff
                 HEAD...refs/heads/agent/mysbx/NAME` exec'd with the
@@ -300,7 +303,8 @@ Options:
                 would print. With `--session`, the git commands of the
                 clone creation are printed in the same format before
                 the argv when this is the session's first run. With the
-                handoff verbs (fetch/merge/push/diff), the exact git
+                session handoff verbs (session fetch, session merge,
+                session push, session diff), the exact git
                 commands of the handoff are printed in the same format
                 instead of run; with the session verbs (session list,
                 session destroy, session hunk) the exact probe and

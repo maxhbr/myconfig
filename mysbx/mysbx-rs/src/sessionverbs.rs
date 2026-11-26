@@ -4,8 +4,10 @@
 //! (docs/design/workspace.md, D7): `session list` /
 //! `session destroy` / `session hunk` — the ONE closed
 //! nested-verb exception to cli.md D3's "single verbs, no nested
-//! command trees" rule. Three verbs, not an open tree: a fourth is a
-//! decision, not a given.
+//! command trees" rule — plus the handoff verbs of workspace.md D6,
+//! nested here as `session fetch` / `session merge` /
+//! `session push` / `session diff`. Seven verbs, not an open
+//! tree: an eighth is a decision, not a given.
 //!
 //! Neither verb starts a sandbox. All operate on the repo the cwd
 //! resolves to (cli.md D1 — there is no `--repo` flag, like every
@@ -34,8 +36,8 @@
 //!   `fetch` (D6) is NOT deleted: it is the operator's imported copy,
 //!   and deleting it silently would contradict the unmerged-work
 //!   guard this verb exists to enforce.
-//! - **`session hunk NAME`** — the diff of `mysbx diff NAME` (D6's
-//!   implicit fetch, then the THREE-DOT range
+//! - **`session hunk NAME`** — the diff of `mysbx session diff NAME`
+//!   (D6's implicit fetch, then the THREE-DOT range
 //!   `HEAD...refs/heads/agent/mysbx/NAME`) in the interactive `hunk`
 //!   viewer, exec'd like `$EDITOR` is for `mysbx edit` (cli.md D12,
 //!   the `worktree hunk` precedent of docs/design/worktree.md W4):
@@ -574,7 +576,7 @@ pub fn destroy(args: &[String], dry_run: bool) -> i32 {
                     eprintln!(
                         "mysbx: refusing to destroy session {name}: the session branch {} \
                          holds commits the host repo does not have — fetch or merge them \
-                         first (`mysbx merge {name}`), or pass --force to discard them",
+                         first (`mysbx session merge {name}`), or pass --force to discard them",
                         session.branch
                     );
                     return crate::EXIT_INFRASTRUCTURE;
@@ -685,8 +687,8 @@ pub fn destroy(args: &[String], dry_run: bool) -> i32 {
 /// session branch since it diverged from the host's HEAD, not the
 /// host's own drift. The invocation mysbx execs, run with the HOST
 /// repo as the working directory — the fetched session branch lives
-/// there, like the `git -C <repo> diff` of `mysbx diff` (D6); the
-/// `--dry-run` block prints it without the cwd note, which is an
+/// there, like the `git -C <repo> diff` of `mysbx session diff`
+/// (D6); the `--dry-run` block prints it without the cwd note, which is an
 /// environment fact, not an argument.
 pub fn hunk_argv(session: &Session) -> Vec<String> {
     vec![
@@ -696,8 +698,8 @@ pub fn hunk_argv(session: &Session) -> Vec<String> {
 }
 
 /// `mysbx session hunk NAME` (D7): the interactive `hunk` review of
-/// the session's diff — the implicit fetch of `mysbx diff` (D6:
-/// `git -C <repo> fetch --no-tags <clone> <refspec>`), then the same
+/// the session's diff — the implicit fetch of `mysbx session diff`
+/// (D6: `git -C <repo> fetch --no-tags <clone> <refspec>`), then the same
 /// three-dot range in the viewer, exec'd like `$EDITOR` is for
 /// `mysbx edit` (cli.md D12, the `worktree hunk` precedent of
 /// docs/design/worktree.md W4) — the tool replaces this process,
@@ -754,7 +756,7 @@ pub fn hunk(args: &[String], dry_run: bool) -> i32 {
         return crate::EXIT_INFRASTRUCTURE;
     }
 
-    // 4. the implicit fetch of `mysbx diff` (D6): the reviewed ref is
+    // 4. the implicit fetch of `mysbx session diff` (D6): the reviewed ref is
     // current — the exact fetched host-local ref
     // `refs/heads/agent/mysbx/NAME`, never a stale or absent one.
     let fetch = crate::handoff::fetch_argv(&repo, &session);
@@ -1230,7 +1232,8 @@ mod tests {
     #[test]
     fn the_hunk_invocation_is_the_diff_range() {
         // D6's three-dot range in the interactive viewer — the same
-        // range `mysbx diff` shows, `HEAD...refs/heads/<branch>`.
+        // range `mysbx session diff` shows,
+        // `HEAD...refs/heads/<branch>`.
         assert_eq!(
             hunk_argv(&synth_session()),
             vec![
