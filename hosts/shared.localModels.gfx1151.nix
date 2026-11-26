@@ -19,8 +19,6 @@ let
   # Model IDs as exposed by `curl https://gfx1151.thing.wg0.maxhbr.local/v1/models`.
   models = [
     "Hy3-Q2_K_L"
-    "Inkling-2-Mini-IQ4_NL"
-    "Inkling-2-Mini-IQ4_NL-mmproj"
     "Inkling-2-Mini-Q8_0"
     "Inkling-2-Mini-Q8_0-mmproj"
     "InternScience-Agents-A1-Q4_K_M"
@@ -101,8 +99,6 @@ let
     "Qwen3.8-Flash-Next-UD-Q4_K_XL-mmproj"
     "Qwen3.8-Flash-Next-UD-Q4_K_XL-sequential"
     "ROCm0:Hy3-Q2_K_L"
-    "ROCm0:Inkling-2-Mini-IQ4_NL"
-    "ROCm0:Inkling-2-Mini-IQ4_NL-mmproj"
     "ROCm0:Inkling-2-Mini-Q8_0"
     "ROCm0:Inkling-2-Mini-Q8_0-mmproj"
     "ROCm0:InternScience-Agents-A1-Q4_K_M"
