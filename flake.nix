@@ -457,56 +457,35 @@
             nixosModules = [ self.nixosModules.core ] ++ moreModules;
           };
 
+        # Shared marker module for the `test-*` configurations below: they
+        # evaluate a host without the private repo, so declared secrets have
+        # no `source` by design and the corresponding warning is silenced.
+        test-host-module = {
+          myconfig.secretsWarnOnMissingSource = false;
+        };
+
         ##########################################################################
         ## configurations ########################################################
         ##########################################################################
 
         nixosConfigurations = {
-          test-f13 = self.nixosConfigurationsGen.host-f13 [
-            { myconfig.secretsWarnOnMissingSource = false; }
-          ] { };
-          test-p14 = self.nixosConfigurationsGen.host-p14 [
-            { myconfig.secretsWarnOnMissingSource = false; }
-          ] { };
-          test-workstation = self.nixosConfigurationsGen.host-workstation [
-            { myconfig.secretsWarnOnMissingSource = false; }
-          ] { };
-          test-vserver = self.nixosConfigurationsGen.host-vserver [
-            { myconfig.secretsWarnOnMissingSource = false; }
-          ] { };
-          test-nas = self.nixosConfigurationsGen.host-nas [
-            { myconfig.secretsWarnOnMissingSource = false; }
-          ] { };
-          test-nuc = self.nixosConfigurationsGen.host-nuc [
-            { myconfig.secretsWarnOnMissingSource = false; }
-          ] { };
-          test-r6c = self.nixosConfigurationsGen.host-r6c [
-            { myconfig.secretsWarnOnMissingSource = false; }
-          ] { };
-          test-odroid = self.nixosConfigurationsGen.host-odroid [
-            { myconfig.secretsWarnOnMissingSource = false; }
-          ] { };
-          test-roc = self.nixosConfigurationsGen.host-roc [
-            { myconfig.secretsWarnOnMissingSource = false; }
-          ] { };
-          test-t6 = self.nixosConfigurationsGen.host-t6 [
-            { myconfig.secretsWarnOnMissingSource = false; }
-          ] { };
-          # test-pi4 = self.nixosConfigurationsGen.host-pi4 [
-          #   { myconfig.secretsWarnOnMissingSource = false; }
-          # ] { };
-          # test-pi3a = self.nixosConfigurationsGen.host-pi3a [
-          #   { myconfig.secretsWarnOnMissingSource = false; }
-          # ] { };
-          test-thing = self.nixosConfigurationsGen.host-thing [
-            { myconfig.secretsWarnOnMissingSource = false; }
-          ] { };
-          test-futro = self.nixosConfigurationsGen.host-futro [
-            { myconfig.secretsWarnOnMissingSource = false; }
-          ] { };
-          test-optiplex = self.nixosConfigurationsGen.host-optiplex [
-            { myconfig.secretsWarnOnMissingSource = false; }
-          ] { };
+          test-f13 = self.nixosConfigurationsGen.host-f13 [ self.test-host-module ] { };
+          test-p14 = self.nixosConfigurationsGen.host-p14 [ self.test-host-module ] { };
+          test-workstation = self.nixosConfigurationsGen.host-workstation
+            [ self.test-host-module ]
+            { };
+          test-vserver = self.nixosConfigurationsGen.host-vserver [ self.test-host-module ] { };
+          test-nas = self.nixosConfigurationsGen.host-nas [ self.test-host-module ] { };
+          test-nuc = self.nixosConfigurationsGen.host-nuc [ self.test-host-module ] { };
+          test-r6c = self.nixosConfigurationsGen.host-r6c [ self.test-host-module ] { };
+          # test-odroid = self.nixosConfigurationsGen.host-odroid [ self.test-host-module ] { };
+          # test-roc = self.nixosConfigurationsGen.host-roc [ self.test-host-module ] { };
+          # test-t6 = self.nixosConfigurationsGen.host-t6 [ self.test-host-module ] { };
+          # test-pi4 = self.nixosConfigurationsGen.host-pi4 [ self.test-host-module ] { };
+          # test-pi3a = self.nixosConfigurationsGen.host-pi3a [ self.test-host-module ] { };
+          test-thing = self.nixosConfigurationsGen.host-thing [ self.test-host-module ] { };
+          test-futro = self.nixosConfigurationsGen.host-futro [ self.test-host-module ] { };
+          test-optiplex = self.nixosConfigurationsGen.host-optiplex [ self.test-host-module ] { };
 
           # container = nixpkgs.lib.nixosSystem {
           #   system = "x86_64-linux";
