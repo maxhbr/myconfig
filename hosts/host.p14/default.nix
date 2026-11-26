@@ -12,7 +12,6 @@
   imports = [
     ./ai.p14.nix
     ./hermes-agent.nix
-    ./myconfig.ai.dev.mysbx.nix
     ./myconfig.agentUsers.nix
     ./services.caddy.nix
     ./services.forgejo-token.nix
