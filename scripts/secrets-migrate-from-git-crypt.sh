@@ -13,6 +13,8 @@
 #   1. verifies a master age key exists (scripts/mk_age_master_key.sh)
 #   2. moves every git-tracked plaintext secret from `<x>/secrets/` to
 #      the parallel gitignored `<x>/secrets-plain/` tree and untracks it
+#      — except `*.nix`, which contains no secrets: it stays tracked and
+#      unencrypted where it is
 #   3. hands over to scripts/secrets-encrypt.sh, which writes the
 #      committed `<x>/secrets/*.age` ciphertext and the agenix manifest
 #   4. drops git-crypt (.gitattributes filter lines, .git-crypt/ keyring)
@@ -23,9 +25,10 @@
 # files and the manifest are preserved.
 #
 # NOTE: `nix` cannot read the moved plaintext at eval time from another
-# machine. Kind-B consumers (builtins.readFile, imports of
-# **/secrets-plain/**.nix) must be re-pointed by hand afterwards; the
-# script lists them.
+# machine. Kind-B consumers doing builtins.readFile on moved files must
+# be re-pointed to their secrets-plain/ path by hand afterwards; the
+# script logs every move. Imports of `*.nix` files keep working — those
+# files are not moved.
 
 set -euo pipefail
 
@@ -44,15 +47,16 @@ fi
 
 # ---- 2. move tracked plaintext out of git -----------------------------
 
-moved_nix=()
 moved=0
 while IFS= read -r -d '' f; do
     rel="${f#./}"
 
-    # keep: agenix manifest, ciphertext, already-migrated trees
+    # keep: ciphertext, already-migrated trees
     [[ $rel == *.age ]] && continue
-    [[ $rel == secrets/secrets.nix ]] && continue
     [[ $rel == *secrets-plain/* ]] && continue
+    # nix files are not secrets: keep them tracked and unencrypted
+    # where they are, so imports keep working
+    [[ $rel == *.nix ]] && continue
 
     plain="${rel/\/secrets\///secrets-plain/}"
     if [[ $rel == secrets/* ]]; then
@@ -74,9 +78,6 @@ while IFS= read -r -d '' f; do
     git rm --cached --quiet -- "$rel"
     echo "moved: $rel -> $plain"
     moved=$((moved + 1))
-    if [[ $rel == *.nix ]]; then
-        moved_nix+=("$rel -> $plain")
-    fi
 done < <(git ls-files -z | grep -zE '(^|/)secrets/')
 
 # ---- 3. ciphertext + manifest -----------------------------------------
@@ -117,13 +118,6 @@ git add .gitignore
 
 echo
 echo "moved $moved file(s) out of git tracking."
-if ((${#moved_nix[@]})); then
-    echo
-    echo "!! Nix files were moved — re-point their import/readFile sites:"
-    for m in "${moved_nix[@]}"; do
-        echo "   $m"
-    done
-fi
 echo
 echo "git-crypt history stays valid ciphertext in old commits; rotate any"
 echo "secret whose git-crypt key file may have left this repository."

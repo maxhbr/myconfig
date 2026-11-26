@@ -102,6 +102,8 @@ recipients_for() {
 
 encrypt_one() {
     local rel="$1" out
+    # nix files are not secrets: they stay tracked and unencrypted
+    [[ $rel == *.nix ]] && return
     if [[ $rel == secrets-plain/* ]]; then
         out="secrets/${rel#secrets-plain/}"
     else
@@ -128,7 +130,9 @@ encrypt_one() {
 
 encrypted=0
 while IFS= read -r -d '' f; do
-    encrypt_one "${f#./}"
+    rel="${f#./}"
+    [[ $rel == *.nix ]] && continue
+    encrypt_one "$rel"
     encrypted=$((encrypted + 1))
 done < <(find . -path ./.git -prune -o -type f -path '*/secrets-plain/*' -print0)
 echo "processed $encrypted plaintext file(s)."

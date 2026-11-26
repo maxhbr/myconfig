@@ -40,7 +40,12 @@ git status && git commit                      # review, then commit
 
 Afterwards, re-point consumers that referenced the moved `secrets/`
 paths to their `secrets-plain/` counterparts (the migration script
-prints the moved `*.nix` files).
+prints every move).
+
+`*.nix` files under `secrets/` contain no secrets (they wire up
+`myconfig.secrets` entries and imports), so the migration leaves them
+tracked and unencrypted where they are; `secrets-encrypt.sh` and
+`secrets-verify.sh` ignore them.
 
 ## Daily use
 
