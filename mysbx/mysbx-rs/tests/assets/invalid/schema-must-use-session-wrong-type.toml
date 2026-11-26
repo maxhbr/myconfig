@@ -1,0 +1,2 @@
+# The wrong shape of the D35 key: a string where a boolean belongs.
+must-use-session = "yes"

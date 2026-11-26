@@ -1046,6 +1046,118 @@ fn a_run_without_any_profile_key_is_untouched_by_the_gate() {
     );
 }
 
+// ---- the must-use-session gate (config.md D35) ---------------------------
+
+#[test]
+fn a_must_use_session_sidecar_refuses_a_live_run_and_admits_a_session_run() {
+    // The gate's both halves, the profile gate's shape (D30): a
+    // sidecar demanding `must-use-session = true` refuses a bare
+    // run (exit 70 — the live-repo bind would mount untracked
+    // secrets the key means to keep out), and a `--session` run
+    // passes the gate. The refusal is audited by `--dry-run` too.
+    let (inv, _, sidecar) = fixture("must-use-session-gate", &["--dry-run"]);
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nmust-use-session = true\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 70, "stdout: {stdout}");
+    assert!(stdout.is_empty(), "nothing is created: {stdout}");
+    assert!(
+        stderr.contains("must-use-session"),
+        "the message names the configured key: {stderr}"
+    );
+    assert!(
+        stderr.contains("--session"),
+        "the message offers the fix: {stderr}"
+    );
+    // A `run -- CMD` without `--session` is refused identically:
+    // the live-repo bind is the one thing it shares with the bare
+    // form.
+    let (inv, _, _) = fixture("must-use-session-run", &["run", "--", "true"]);
+    let sidecar = inv.cwd.parent().unwrap().join("repo.mysbx");
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nmust-use-session = true\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 70, "stdout: {stdout}");
+    assert!(stderr.contains("must-use-session"), "{stderr}");
+}
+
+#[test]
+fn a_must_use_session_demand_admits_a_dry_run_of_a_session_run() {
+    // The positive half: with the demand set, `--session NAME
+    // --dry-run` passes the gate and reaches the argv print — the
+    // run the key admits is exactly the clone run (workspace.md
+    // D3: the host repo is not mounted at all).
+    let Some((inv, repo, sidecar)) = git_session_fixture(
+        "must-use-session-admits",
+        &["--session", "fix-1", "--dry-run"],
+    ) else {
+        return; // no git on PATH: skip, like the other session tests
+    };
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nmust-use-session = true\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 0, "stderr: {stderr}");
+    assert!(stdout.contains("bwrap"), "the argv prints: {stdout}");
+    // A dry run creates nothing — the clone directory stays absent
+    // (cli.md D9), the gate held only the LIVE run back.
+    assert!(!sidecar.join("clones").join("fix-1").exists());
+    let _ = repo;
+}
+
+#[test]
+fn the_must_use_session_gate_folds_sidecar_wins() {
+    // The layering (D35): either layer may set the key and the
+    // SIDECAR wins on conflict — a user layer demanding it
+    // host-wide does not force a repo whose sidecar lifts it, and
+    // the reverse fold admits the demand a user layer alone wrote.
+    let (inv, _, sidecar) = fixture("must-use-session-fold", &["--dry-run"]);
+    std::fs::create_dir_all(inv.xdg.join("mysbx")).unwrap();
+    std::fs::write(
+        inv.xdg.join("mysbx/config.toml"),
+        "must-use-session = true\n",
+    )
+    .unwrap();
+    std::fs::write(
+        sidecar.join("config.toml"),
+        "backend = \"bubblewrap\"\nmust-use-session = false\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(
+        code, 0,
+        "the sidecar's false lifts the user demand: {stderr}"
+    );
+    assert!(stdout.contains("bwrap"), "the argv prints: {stdout}");
+}
+
+#[test]
+fn a_user_layer_must_use_session_demand_refuses_and_the_parent_chain_carries_it() {
+    // The user layer ALONE may demand clone mode (the host-wide
+    // spelling), and it folds through the parent chain like any
+    // other key: an ancestor's demand reaches the merged config.
+    let (inv, _, _) = fixture("must-use-session-user-layer", &["--dry-run"]);
+    let xdg_cfg = inv.xdg.join("mysbx");
+    std::fs::create_dir_all(&xdg_cfg).unwrap();
+    std::fs::write(xdg_cfg.join("base.toml"), "must-use-session = true\n").unwrap();
+    std::fs::write(
+        xdg_cfg.join("config.toml"),
+        "backend = \"bubblewrap\"\nparent = \"base.toml\"\n",
+    )
+    .unwrap();
+    let (code, stdout, stderr) = run_binary(&inv);
+    assert_eq!(code, 70, "stdout: {stdout}");
+    assert!(stderr.contains("must-use-session"), "{stderr}");
+}
+
 // ---- the implicit worktrees sibling bind ---------------------------------
 
 #[test]

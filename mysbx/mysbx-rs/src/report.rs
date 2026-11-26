@@ -377,6 +377,20 @@ pub fn lines(r: &Report<'_>) -> Vec<String> {
         ));
     }
 
+    // The clone-mode demand (config.md D35): said out loud for the
+    // same reason the profile gate's refusal is — a sidecar ALONE
+    // can set it, and the operator who typed a bare `mysbx` and got
+    // a refusal reads here what the configuration demands. On an
+    // admitted run (a clone run) the line names the demand too, so
+    // the report of the run states which mount shape it enforces.
+    if r.merged.must_use_session {
+        p(
+            "must-use-session: on — only `--session` clone runs are admitted \
+           (D35)"
+                .to_string(),
+        );
+    }
+
     // The workspace of this run (workspace.md D1): the live repo —
     // the default, said out loud like the multiplexer is, because
     // "which tree does this run write" is a property of every run —
@@ -967,6 +981,7 @@ mod tests {
             store: None,
             profile: None,
             default_agent: None,
+            must_use_session: false,
             multiplexer: Multiplexer::None,
             display: Display::Off,
         };

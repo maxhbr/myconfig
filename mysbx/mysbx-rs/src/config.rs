@@ -705,6 +705,19 @@ pub struct Config {
     /// a payload from mysbx's own closure and resolves to the
     /// `MYSBX_AGENT_*` environment the entry scripts read.
     pub default_agent: Option<String>,
+    /// Whether the live repo must not be mounted at all
+    /// (`must-use-session`, docs/design/config.md D35): a layer may
+    /// DEMAND clone mode, never GRANT host access — a session's
+    /// clone (workspace.md D3) is the one mount shape that keeps
+    /// untracked secrets (`.env`, git-crypt files) out of the
+    /// sandbox, so the key refuses every run that would mount the
+    /// live repo. `None` means "not decided by this layer", like
+    /// `nested-virt`: either layer may set it and the sidecar wins
+    /// when both do (the user layer may demand it host-wide, a
+    /// repo's sidecar per repo). The enforcement is start-time,
+    /// step 4-bis of the pipeline (lib.rs), like the profile gate
+    /// of D30.
+    pub must_use_session: Option<bool>,
 }
 
 impl Default for Config {
@@ -733,6 +746,7 @@ impl Default for Config {
             parent: None,
             profile: None,
             default_agent: None,
+            must_use_session: None,
         }
     }
 }
@@ -789,6 +803,7 @@ impl Config {
         "cpus",
         "pids-limit",
         "store",
+        "must-use-session",
     ];
 
     /// Parse a configuration from TOML text.
@@ -921,6 +936,14 @@ impl Config {
                 // every `[[mounts]]` path gets.
                 "parent" => {
                     config.parent = Some(host_path(string(value, "parent")?, "parent")?)
+                }
+                // must-use-session (D35): a plain boolean, tri-state
+                // in a layer like `nested-virt`. The value names no
+                // command and no path; the refusal of a session-less
+                // run is composed at step 4-bis of the pipeline
+                // (lib.rs), where the `--session` flag is known.
+                "must-use-session" => {
+                    config.must_use_session = Some(boolean(value, "must-use-session")?)
                 }
                 // The config key D22 replaced: the sandbox's own SSH
                 // keypair is ALWAYS generated now, so the key decides
@@ -2049,6 +2072,23 @@ mod tests {
             e.to_string().contains("only the `~/` prefix is supported"),
             "{e}"
         );
+    }
+
+    #[test]
+    fn must_use_session_parses_as_a_boolean_and_rejects_other_shapes() {
+        // D35: a plain boolean key, tri-state in a layer like
+        // `nested-virt` — an omitted key decides nothing, and the
+        // off default is applied after the merge.
+        assert_eq!(Config::parse("").unwrap().must_use_session, None);
+        let c = Config::parse("must-use-session = true\n").unwrap();
+        assert_eq!(c.must_use_session, Some(true));
+        let c = Config::parse("must-use-session = false\n").unwrap();
+        assert_eq!(c.must_use_session, Some(false));
+        // A wrong type names the key, like every other schema error.
+        let e = Config::parse("must-use-session = \"yes\"\n").unwrap_err();
+        let msg = e.to_string();
+        assert!(matches!(e, Error::Schema(_)), "{msg}");
+        assert!(msg.contains("must-use-session"), "{msg}");
     }
 
     #[test]

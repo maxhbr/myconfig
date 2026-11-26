@@ -534,6 +534,12 @@ let
     }) (lib.sort builtins.lessThan (builtins.attrNames cfg.config.hostServices));
   }
   // lib.optionalAttrs (cfg.config.nestedVirt != null) { nested-virt = cfg.config.nestedVirt; }
+  # The D35 clone-mode demand: seeded host-wide the same way — a
+  # repo holding untracked secrets makes the session-only shape
+  # mandatory for every checkout of it on this host.
+  // lib.optionalAttrs (cfg.config.mustUseSession != null) {
+    "must-use-session" = cfg.config.mustUseSession;
+  }
   // lib.optionalAttrs (cfg.config.memory != null) { inherit (cfg.config) memory; }
   // lib.optionalAttrs (cfg.config.scratchSize != null) { "scratch-size" = cfg.config.scratchSize; }
   // lib.optionalAttrs (cfg.config.cpus != null) { inherit (cfg.config) cpus; }
@@ -2178,6 +2184,23 @@ in
               with one of those two backends runs — every other
               backend warns and drops the key. Off by default:
               nested VMX widens the host KVM attack surface.
+            '';
+          };
+          mustUseSession = mkOption {
+            type = types.nullOr types.bool;
+            default = null;
+            description = ''
+              Demand clone mode for every sandbox of this user
+              (./docs/design/config.md D35): rendered into the
+              generated user config as the `must-use-session` key,
+              which the crate enforces at start — a run is refused
+              (exit 70) unless it carries `--session NAME`, because
+              a live run's one implicit bind is the repo itself,
+              tracked AND untracked files alike. The mount shape that
+              keeps untracked secrets (`.env`, git-crypt working
+              copies) out of the sandbox. `null` (the default) seeds
+              nothing: a repo sidecar decides per repo, and the
+              sidecar wins on conflict, like `backend`.
             '';
           };
           multiplexer = mkOption {

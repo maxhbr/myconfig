@@ -83,6 +83,7 @@ fn every_asset_is_exercised() {
         "invalid/schema-profile-empty.toml",
         "invalid/schema-profile-once.toml",
         "invalid/schema-profile-wrong-type.toml",
+        "invalid/schema-must-use-session-wrong-type.toml",
         "invalid/syntax-duplicate-key.toml",
         "invalid/syntax-missing-value.toml",
         "invalid/syntax-unterminated-string.toml",
@@ -195,6 +196,8 @@ fn full_config() {
     // display (D18): tri-state like `backend`; this layer asks for the
     // waypipe channel.
     assert_eq!(c.display, Some(Display::Waypipe));
+    // must-use-session (D35): this layer demands clone mode.
+    assert_eq!(c.must_use_session, Some(true));
 
     assert_eq!(c.mounts.len(), 2);
     assert_eq!(c.mounts[0].path, "/home/user/.config/pi");
@@ -277,6 +280,17 @@ fn profile_refusals_name_the_key() {
         assert!(matches!(e, Error::Schema(_)), "{rel}: {msg}");
         assert!(msg.contains("profile"), "{rel}: {msg}");
     }
+}
+
+#[test]
+fn must_use_session_refusals_name_the_key() {
+    // D35's wrong shape: the boolean key given a string — a Schema
+    // error naming `must-use-session`, like every other schema edge
+    // (config.md D11).
+    let e = load_err("invalid/schema-must-use-session-wrong-type.toml");
+    let msg = e.to_string();
+    assert!(matches!(e, Error::Schema(_)), "{msg}");
+    assert!(msg.contains("must-use-session"), "{msg}");
 }
 
 #[test]

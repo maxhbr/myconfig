@@ -2817,6 +2817,7 @@ mod tests {
             store: None,
             profile: None,
             default_agent: None,
+            must_use_session: false,
             multiplexer: Multiplexer::None,
             display: Display::Off,
         }

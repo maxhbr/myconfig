@@ -21,6 +21,11 @@ profile = "assistant"
 # resolve the kind to the command they start.
 default-agent = "pi"
 
+# Clone-mode demand (config.md D35): refuse every run that would mount
+# the repo itself — only `--session` clone runs are admitted, so
+# untracked secrets (`.env`, git-crypt files) stay out of the sandbox.
+must-use-session = true
+
 network = true
 
 # Nested virtualization (config.md D27): hand a `microvm-qemu` run

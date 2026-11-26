@@ -2310,3 +2310,61 @@ DIFFERENT ports in two trusted layers is a merge refusal, not a
 first-win — either silent resolution would drop a row an operator
 wrote, and one selector cannot select two forwards. A name repeated
 within ONE file is a schema error.
+
+### D35: `must-use-session` — refuse every run that would mount the repo itself
+
+Either layer may demand clone mode (workspace.md D1): a `true`
+refuses every run of this configuration that does not carry
+`--session NAME`, because a live run's one implicit bind is the
+repo itself (D13) — tracked AND untracked files alike:
+
+```toml
+must-use-session = true
+```
+
+**Why a key at all.** The live mount is the workspace's whole
+point (D13: "always mounted read-write at its real host path"),
+so it cannot be removed — but it is also the one mount a session
+clone does not carry (workspace.md D3: the clone is bound at the
+repo's path, the host repo is not mounted at all). A repo holding
+secrets that never enter git — `.env` files, git-crypt-encrypted
+working copies, key material in untracked scripts — has exactly
+one mount shape that keeps them out of the sandbox, and this key
+makes that shape mandatory instead of a habit.
+
+**The gate is start-time, not config-time.** Like the profile gate
+of D30 the refusal sits at step 4-bis of the pipeline (lib.rs) —
+post-merge, before the session clone and before the `--dry-run`
+early return — so a dry run audits the refusal too, and it covers
+every run mode: the bare form, `run -- CMD`, the inner of a
+detached run (the live-repo bind is the one thing they share) and
+once-mode, which mounts the live repo and refuses `--session`
+outright (cli.md D22) — a host-wide demand (the user layer is the
+only one once-mode reads) therefore refuses once-runs with the same
+message, and the ephemeral temp sidecar can never demand anything.
+The host-side verbs (`status`, `doctor`, the session and worktree
+noun groups, `ssh-pubkey`) bypass the gate by construction — they
+start no sandbox.
+
+**An accident barrier, not a security boundary.** The invoking
+user can edit the sidecar and remove the key (the same trust
+level as every configuration, D5); what the gate protects is the
+default shape of a run — an agent started bare on such a repo
+cannot reach the untracked secrets, and a `--session` run is the
+only one that starts. Like `profile` (D30) the key DEMANDS, it
+never GRANTS: nothing about the sandbox's confinement changes,
+only which workspace it may write.
+
+**Layering: either layer, sidecar wins, no hard error.** Like
+`backend` and `profile` the key is not a host-access grant, so
+there is no `network`-style narrowing rule: whichever layer is
+later in the merge order wins when both decide (the sidecar; in
+a parent chain, the child — D29). A user layer may demand clone
+mode host-wide and a single repo's sidecar may lift it (or the
+reverse) — both layers are trusted (D7), and the key is an
+accident barrier either way.
+
+**Scope: `--session` only.** The gate checks `flags.session`
+alone: `--ro <path>` additions remain legal next to a session
+(workspace.md D4 allows `--ro`, refuses `--rw`), and no other
+flag composes a live-repo mount away.

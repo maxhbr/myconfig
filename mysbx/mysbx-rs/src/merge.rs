@@ -229,6 +229,13 @@ pub struct Merged {
     /// the sandbox as the `MYSBX_AGENT_*` environment the entry
     /// scripts read.
     pub default_agent: Option<String>,
+    /// The merged [`Config::must_use_session`] demand (config.md
+    /// D35): resolved once from the layers' tri-state values — the
+    /// later layer wins where it decided, like `backend` — and
+    /// `false` when neither layer demanded it, so nothing downstream
+    /// of the merge may re-decide it. Enforced at start (step 4-bis
+    /// in lib.rs): a `true` refuses every run without `--session`.
+    pub must_use_session: bool,
 }
 
 impl Merged {
@@ -592,6 +599,13 @@ fn fold_two(
         // the pinned registry, never a command, so a disagreement is
         // resolved, never refused.
         default_agent: later.default_agent.or(earlier.default_agent),
+        // must-use-session (config.md D35): the later layer wins
+        // where it decided, like `backend` — the key refuses a
+        // session-less run, an accident barrier over which mount the
+        // run writes, so a disagreement between two trusted layers
+        // is resolved, never refused (the child repo may demand what
+        // the parent host config does not, and the reverse).
+        must_use_session: later.must_use_session.or(earlier.must_use_session),
         // The chain is consumed by the fold: the folded layer has no
         // parent of its own.
         parent: None,
@@ -1360,6 +1374,15 @@ pub fn merge(
         // decide and `None` (no agent) when neither does. The CLI
         // resolves the kind against the pin at run time.
         default_agent: sidecar.default_agent.or(user.default_agent),
+        // must-use-session (config.md D35): the later layer wins
+        // where it decided, like `backend` — the key demands clone
+        // mode (an accident barrier, never a host-access grant),
+        // so the sidecar wins when both layers decide and `false`
+        // when neither does.
+        must_use_session: sidecar
+            .must_use_session
+            .or(user.must_use_session)
+            .unwrap_or(false),
     })
 }
 
@@ -1783,6 +1806,58 @@ mod tests {
         )
         .unwrap();
         assert!(!merged.nested_virt);
+    }
+
+    #[test]
+    fn must_use_session_merges_later_layer_wins_and_default_off() {
+        // D35: like `backend` — either layer may set it, the later
+        // (sidecar) layer wins where it decided, and both layers
+        // silent default to false.
+        let merged = merge(
+            Config::default(),
+            Config::default(),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert!(!merged.must_use_session, "off by default");
+
+        let mut u = Config::default();
+        u.must_use_session = Some(true);
+        let merged = merge(
+            u,
+            Config::default(),
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert!(merged.must_use_session, "a user-config true demands");
+
+        let mut s = Config::default();
+        s.must_use_session = Some(true);
+        let merged = merge(
+            Config::default(),
+            s,
+            &user_file(),
+            &sidecar_file(),
+            &no_home(),
+        )
+        .unwrap();
+        assert!(merged.must_use_session, "a sidecar true demands");
+
+        // The sidecar wins when both layers decide — a repo may
+        // demand clone mode even when the host-wide layer does not,
+        // and a repo sidecar may lift a host-wide demand it does
+        // not share (both layers are trusted, D7; the key is an
+        // accident barrier, not a host-access grant).
+        let mut u = Config::default();
+        u.must_use_session = Some(true);
+        let mut s = Config::default();
+        s.must_use_session = Some(false);
+        let merged = merge(u, s, &user_file(), &sidecar_file(), &no_home()).unwrap();
+        assert!(!merged.must_use_session, "the sidecar's false wins");
     }
 
     #[test]

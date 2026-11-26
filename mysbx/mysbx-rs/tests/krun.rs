@@ -59,6 +59,7 @@ fn base(network: bool) -> Merged {
         store: Some(mysbx::config::Store::Host),
         profile: None,
         default_agent: None,
+        must_use_session: false,
         multiplexer: Multiplexer::None,
         display: mysbx::config::Display::Off,
     }

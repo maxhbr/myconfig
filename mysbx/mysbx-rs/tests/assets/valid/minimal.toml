@@ -49,6 +49,13 @@
 # the sandbox; needs krun or microvm-qemu, refused elsewhere.
 # store = "host"                 # host | baked
 #
+# Clone-mode demand (D35): refuse every run that would mount the repo
+# itself — a session clone (workspace.md D3) is the only writable bind
+# of a clone run, so untracked secrets (`.env`, git-crypt files) stay
+# out of the sandbox. Either layer may set it; the sidecar wins.
+#
+# must-use-session = true
+#
 # The network allowlist (D21): backend-agnostic, enforced by `nono` and
 # refused by a backend that cannot enforce it.
 #

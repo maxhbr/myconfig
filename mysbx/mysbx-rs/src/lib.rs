@@ -3312,6 +3312,36 @@ fn sandbox_pipeline(
         }
     }
 
+    // 4-bis. the must-use-session gate (config.md D35): the merged
+    // demand refuses every run that would mount the LIVE repo —
+    // a live run's repo bind (workspace.md D1) is the one mount a
+    // session clone does not carry (D3: the host repo is not
+    // mounted at all), so the key is how a repo with untracked
+    // secrets (`.env`, git-crypt files) keeps them out of the
+    // sandbox. Like every 4-series refusal this sits BEFORE the
+    // session clone and BEFORE the `--dry-run` early return, so a
+    // dry run audits the refusal too — and it covers all run
+    // modes: a `run -- CMD` without `--session` is refused like the
+    // bare form (the live-repo bind is the one thing they share),
+    // and so is ONCE-mode — it mounts the live repo too, refuses
+    // `--session` outright (cli.md D22), and its temp sidecar is no
+    // escape: the USER layer is still the real one, so a host-wide
+    // demand refuses once-runs with the same message (the temp
+    // sidecar can never demand anything, only the user layer
+    // reaches once-mode).
+    if merged.must_use_session && flags.session.is_none() {
+        eprintln!(
+            "mysbx: this repository's configuration demands a session clone \
+             (must-use-session = true, docs/design/config.md D35): a live run would \
+             mount the repo itself, including untracked files the configuration \
+             means to keep out of the sandbox"
+        );
+        eprintln!(
+            "  start one with: mysbx --session <name>, or remove/comment the `must-use-session` key"
+        );
+        return EXIT_INFRASTRUCTURE;
+    }
+
     // 4h. the podman backends' `--detach` refusal (detach.md B9,
     // bd myconfig-cad): the container name is per repo root and
     // the argv carries `--replace`, so any later podman run in the
@@ -9242,6 +9272,13 @@ const SIDECAR_TEMPLATE_ROOT: &str = r#"# mysbx sidecar config
 # `host` everywhere else — write the key only to override that.
 #
 # store = "host"                 # host | baked
+#
+# Clone-mode demand (D35): refuse every run that would mount the repo
+# itself — a session clone (workspace.md D3) is the only writable bind
+# of a clone run, so untracked secrets (`.env`, git-crypt files) stay
+# out of the sandbox. Either layer may set it; the sidecar wins.
+#
+# must-use-session = true
 #
 # The network allowlist (D21): backend-agnostic, enforced by `nono` and
 # refused by a backend that cannot enforce it.

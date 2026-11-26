@@ -398,6 +398,16 @@ let
       { myconfig.ai.dev.mysbx.config.nestedVirt = true; }
     ];
     nestedVirtOff = generated [ { myconfig.ai.dev.mysbx.config.nestedVirt = false; } ];
+    # The D35 must-use-session key: `null` (the default) leaves the
+    # decision to the sidecar, so the generated layer carries no key;
+    # an explicit host-wide demand reaches the TOML as
+    # `must-use-session`.
+    mustUseSessionOn = generated [
+      { myconfig.ai.dev.mysbx.config.mustUseSession = true; }
+    ];
+    mustUseSessionOff = generated [
+      { myconfig.ai.dev.mysbx.config.mustUseSession = false; }
+    ];
     # The network policy (docs/design/config.md D20): the option takes
     # the three canonical values AND stays a bool, so a host that keeps
     # the `true` default renders `network = true` unchanged (the bool
@@ -1021,6 +1031,8 @@ pkgs.runCommand "mysbx-generated-config-test"
       scratchDirectOnly
       nestedVirtOn
       nestedVirtOff
+      mustUseSessionOn
+      mustUseSessionOff
       networkProxyOnly
       networkDefault
       sandboxToolsEnv
@@ -1210,6 +1222,16 @@ pkgs.runCommand "mysbx-generated-config-test"
       || fail "the nestedVirt = false seed is missing" "$nestedVirtOff"
     if grep -q '^nested-virt' "$nonoBackend"; then
       fail "the null nestedVirt default leaked a key" "$nonoBackend"
+    fi
+
+    # ... the D35 must-use-session key: an explicit option reaches the
+    # layer, and the null default leaves it out (the sidecar decides).
+    grep -q '^must-use-session = true$' "$mustUseSessionOn" \
+      || fail "the mustUseSession = true seed is missing" "$mustUseSessionOn"
+    grep -q '^must-use-session = false$' "$mustUseSessionOff" \
+      || fail "the mustUseSession = false seed is missing" "$mustUseSessionOff"
+    if grep -q '^must-use-session' "$nonoBackend"; then
+      fail "the null mustUseSession default leaked a key" "$nonoBackend"
     fi
 
     # ... the D20 network policy: a proxy-only selection reaches the
