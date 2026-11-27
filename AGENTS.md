@@ -66,7 +66,8 @@ The CI workflow runs these checks:
 ### Finding Build Log Files
 Build log files for each host are stored in the parent directory:
 - Use symlink: `../_results/result.<hostname>.log` (e.g., `../_results/result.f13.log`)
-- Direct access: `../_logs/YYYY-MM-DD-myconfig-<hostname>.log`
+- Direct access: `../_logs/YYYY-MM-DD-myconfig-<hostname>-HHMMSS.log`
+  (one file per run of `switch.sh`/`test.sh`)
 - The logs directory `../_logs/` contains historical build logs for all hosts
 - All build artifacts (`result.<hostname>` out-links, `.du`, `.diff`,
   `.sbom/`, log symlinks, ...) created by `switch.sh` and `test.sh` live in

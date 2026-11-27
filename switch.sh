@@ -637,10 +637,10 @@ main() {
     local logsDir="../_logs"
     mkdir -p "$logsDir"
     local logfile
-    logfile="$logsDir/$(date +%Y-%m-%d)-myconfig-${target}.log"
+    # One log file per run: the time suffix keeps runs on the same day apart.
+    logfile="$logsDir/$(date +%Y-%m-%d)-myconfig-${target}-$(date +%H%M%S).log"
     ln -sfn "$(basename "$logfile")" "$logsDir/latest-myconfig-${target}.log"
-    echo -e "\n\n\n\n\n\n\n" >>"$logfile"
-    exec &> >(tee -a "$logfile")
+    exec &> >(tee "$logfile")
     log_info "starting with...\nMODE=$MODE\nCOMMAND=$COMMAND\ntarget=$target\nverbose=$verbose\n"
     ################################################################################
 

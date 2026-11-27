@@ -25,7 +25,8 @@
 # Notes:
 #   * Nothing on the running system is changed (no activation, no profile
 #     switch, no out-link). The build artefact is left in the Nix store only.
-#   * A log file is written to `../_logs/<date>-myconfig-test-<host>.log`
+#   * A log file is written to
+#     `../_logs/<date>-myconfig-test-<host>-<HHMMSS>.log`
 #     (matching the convention of `switch.sh`) and a symlink
 #     `../_results/result.test-<host>.log` points at the most recent run.
 #   * Exit status is non-zero if either the flake check or the build fails.
@@ -73,9 +74,9 @@ fi
 # Setup logging (mirrors switch.sh convention).
 logsDir="../_logs"
 mkdir -p "$logsDir"
-logfile="$logsDir/$(date +%Y-%m-%d)-myconfig-${host_name}.log"
-echo -e "\n\n\n\n\n\n\n" >>"$logfile"
-exec > >(tee -a "$logfile") 2>&1
+# One log file per run: the time suffix keeps runs on the same day apart.
+logfile="$logsDir/$(date +%Y-%m-%d)-myconfig-${host_name}-$(date +%H%M%S).log"
+exec > >(tee "$logfile") 2>&1
 
 mkdir -p ../_results
 latest_logfile="../_results/result.${host_name}.log"
