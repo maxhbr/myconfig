@@ -56,8 +56,13 @@ in
       (lib.mkIf (hasVariant "nvidia") {
         home-manager.sharedModules = [
           {
-            home.packages = with pkgs.cudaPackages; [
-              cudatoolkit
+            # The deprecated merged `cudatoolkit` bundles cuda_gdb, whose
+            # `share/gdb/python/**` collides with the multitarget `pkgs.gdb`
+            # dev.embedded ships in the same home.packages (buildEnv refuses
+            # to merge the differing files). Rebuild the merge without
+            # cuda_gdb — cuda-gdb stays available via cudaPackages.cuda_gdb.
+            home.packages = [
+              (pkgs.cudaPackages.cudatoolkit.override { cuda_gdb = pkgs.emptyDirectory; })
             ];
           }
         ];
