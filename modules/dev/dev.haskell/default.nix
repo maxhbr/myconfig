@@ -22,19 +22,16 @@ in
     # The ghc env already exposes hlint; a second one would collide in
     # the strict mysbx tool env.
     myconfig.ai.dev.sandboxTools.extraPackages = [ ghc ];
+    # `ghc` is the ghcWithPackages env above — it already exposes
+    # hlint's binary, so no standalone hlint here.
+    myconfig.dev.envs.haskell.packages = with pkgs; [
+      stack
+      sourceHighlight
+      haskell-language-server
+      ghc
+      pandoc
+    ];
     home-manager.users.mhuber = {
-      home.packages =
-        with pkgs;
-        [
-          stack
-          sourceHighlight
-          haskell-language-server
-        ]
-        ++ (with haskellPackages; [
-          ghc
-          hlint
-          pandoc
-        ]);
       home.file = {
         ".ghci".source = ./ghci;
         ".stack/config.yaml".source = ./stack/config.yaml;

@@ -30,6 +30,7 @@ in
     ./dev.difftastic.nix
     ./dev.elixir.nix
     ./dev.embedded.nix
+    ./dev.envs.nix
     ./dev.go.nix
     ./dev.haskell
     ./dev.network.nix

@@ -73,12 +73,11 @@ let
 
   # Binutils for artifact inspection: objdump/readelf/size on the ELF
   # files the toolchains emit (`arm-none-eabi-*` are in gcc-arm-embedded
-  # itself; plain objdump covers host builds). Host-side this collides
-  # with dev.rust's `llvmPackages_latest.bintools` in home-manager's
-  # buildEnv — both install bin/objdump, bin/addr2line, ... — so hosts
-  # with dev.rust enabled rely on the LLVM wrapper instead. The mysbx
-  # profile never pulls dev.rust's bintools, so it always keeps GNU
-  # binutils.
+  # itself; plain objdump covers host builds). The `embedded-dev-env`
+  # session prepends its packages to PATH, and a GNU objdump would
+  # shadow dev.rust's LLVM bintools there, so hosts with dev.rust
+  # enabled keep the LLVM wrapper instead. The mysbx profile never
+  # pulls dev.rust's bintools, so it always keeps GNU binutils.
   binutilsHost = lib.optionals (!config.myconfig.dev.rust.enable) [
     pkgs.binutils
   ];
@@ -87,11 +86,7 @@ in
 {
   config = lib.mkIf cfg.enable {
     myconfig.ai.dev.mysbx.profiles.embedded.extraTools = tools ++ binutilsSandbox;
-    home-manager.sharedModules = [
-      {
-        home.packages = tools ++ binutilsHost;
-      }
-    ];
+    myconfig.dev.envs.embedded.packages = tools ++ binutilsHost;
     users.groups.plugdev = { };
     users.users."${user}".extraGroups = lib.mkAfter [
       "dialout"
