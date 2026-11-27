@@ -737,76 +737,9 @@
     contextWindow = 65536;
     maxOutputTokens = 16384;
   }
-  {
-    name = "gfx1151:hermes";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:hermes-fallback";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:opencode";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:opencode-fallback";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "gfx1151:opencode-fast";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  "gfx1151:opencode-fast-fallback"
-  {
-    name = "gfx1151:opencode-slow-fallback";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
   "gfx1151:qwen3.5-122B-A10B-Q5_K_M"
-  {
-    name = "gfx1151:sidekick";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "hermes";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "hermes-fallback";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
   "localhost:22545:localhost:22545"
   "localhost:22546:localhost:22546"
-  {
-    name = "opencode";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "opencode-fallback";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "opencode-fast";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  "opencode-fast-fallback"
-  {
-    name = "opencode-slow-fallback";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
   {
     name = "rtx5090:Inkling-2-Mini-Q8_0";
     contextWindow = 32768;
@@ -842,14 +775,26 @@
     contextWindow = 32768;
     maxOutputTokens = 8192;
   }
-  "rtx5090:Nex-N2.5-mini-Q4_K_L"
-  "rtx5090:Nex-N2.5-mini-Q4_K_L-mmproj"
+  {
+    name = "rtx5090:Nex-N2.5-mini-Q4_K_L";
+    contextWindow = 262144;
+    maxOutputTokens = 262144;
+  }
+  {
+    name = "rtx5090:Nex-N2.5-mini-Q4_K_L-mmproj";
+    contextWindow = 262144;
+    maxOutputTokens = 262144;
+  }
   {
     name = "rtx5090:Qwen3.5-9B-Q5_K_M";
     contextWindow = 262144;
     maxOutputTokens = 65536;
   }
-  "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL"
+  {
+    name = "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL";
+    contextWindow = 262144;
+    maxOutputTokens = 262144;
+  }
   {
     name = "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-MTP";
     contextWindow = 184320;
@@ -875,10 +820,26 @@
     contextWindow = 184320;
     maxOutputTokens = 46080;
   }
-  "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-instruct-general"
-  "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-instruct-reasoning"
-  "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-thinking-coding"
-  "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-thinking-general"
+  {
+    name = "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-instruct-general";
+    contextWindow = 262144;
+    maxOutputTokens = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-instruct-reasoning";
+    contextWindow = 262144;
+    maxOutputTokens = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-thinking-coding";
+    contextWindow = 262144;
+    maxOutputTokens = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-thinking-general";
+    contextWindow = 262144;
+    maxOutputTokens = 262144;
+  }
   {
     name = "rtx5090:Qwen3.8-27B-ABL-Q5_K_M";
     contextWindow = 262144;
@@ -1058,28 +1019,6 @@
     name = "rtx5090:gemma-4-31B-it-qat-q4_0-nothink";
     contextWindow = 65536;
     maxOutputTokens = 16384;
-  }
-  "rtx5090:hermes"
-  {
-    name = "rtx5090:hermes-fallback";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "rtx5090:opencode";
-    contextWindow = 131072;
-    maxOutputTokens = 32768;
-  }
-  "rtx5090:opencode-fast-fallback"
-  {
-    name = "rtx5090:sidekick";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
-  }
-  {
-    name = "sidekick";
-    contextWindow = 262144;
-    maxOutputTokens = 65536;
   }
   {
     name = "trustedtokens/Qwen/Qwen3.6-35B-A3B-FP8";

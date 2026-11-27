@@ -18,8 +18,6 @@
 let
   # Model IDs as exposed by `curl https://rtx5090.thing.wg0.maxhbr.local/v1/models`.
   models = [
-    "Inkling-2-Mini-IQ4_NL"
-    "Inkling-2-Mini-IQ4_NL-mmproj"
     "Inkling-2-Mini-Q8_0"
     "Inkling-2-Mini-Q8_0-mmproj"
     "InternScience-Agents-A1-Q4_K_M"
